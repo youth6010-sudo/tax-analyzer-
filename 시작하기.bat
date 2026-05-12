@@ -1,37 +1,28 @@
 @echo off
-chcp 65001 >nul
-title 종합소득세 분석 - 서버 실행
+REM Same as 시작.bat
 cd /d "%~dp0"
+set "PATH=%PATH%;C:\Program Files\nodejs"
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo.
-  echo [오류] Node.js 가 설치되어 있지 않습니다.
-  echo        https://nodejs.org  에서 LTS 버전을 설치한 뒤 다시 실행하세요.
-  echo.
+  echo Node.js not found. Install from https://nodejs.org LTS then run again.
   pause
   exit /b 1
 )
 
-if not exist "node_modules" (
-  echo.
-  echo 처음 실행입니다. 필요한 파일을 받는 중입니다 ^(2~5분 걸릴 수 있음^)...
-  echo.
+if not exist "node_modules\" (
+  echo First run: npm install ^(may take a few minutes^)...
   call npm install
   if errorlevel 1 (
-    echo.
-    echo [오류] 설치에 실패했습니다. 인터넷 연결을 확인하세요.
+    echo npm install failed.
     pause
     exit /b 1
   )
 )
 
-echo.
-echo ========================================
-echo   준비되었습니다.
-echo   브라우저 주소창에 입력:  http://localhost:3000
-echo   이 창을 닫으면 프로그램이 종료됩니다.
-echo ========================================
-echo.
+echo Starting server. Browser opens when http://127.0.0.1:3000 is ready.
+echo Close this window to stop the server.
+start "" /MIN powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\wait-and-open.ps1"
+
 call npm run dev
 pause

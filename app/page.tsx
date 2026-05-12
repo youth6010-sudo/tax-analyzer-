@@ -837,7 +837,7 @@ export default function Home() {
                                 </span>
                                 <span className="text-gray-300 text-[10px]">/</span>
                                 <span className="inline-block bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold text-[11px]">
-                                  소득 {formatPct(100 - matched.simpleRateGeneral)}
+                                  소득 {formatPct(matched.simpleRateGeneral === null ? null : 100 - matched.simpleRateGeneral)}
                                 </span>
                               </div>
                             : <span className="text-gray-300">-</span>}
