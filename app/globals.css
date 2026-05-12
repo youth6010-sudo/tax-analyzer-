@@ -1,0 +1,366 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ─── 인쇄 전용 요소 ── */
+.print-only { display: none; }
+
+/* ─── JPG 캡처 모드 (@media print 와 완전 동일) ──────────── */
+body[data-capture] {
+  background: white !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+body[data-capture] header,
+body[data-capture] button { display: none !important; }
+body[data-capture] .no-print { display: none !important; }
+body[data-capture] .print-only { display: block !important; }
+body[data-capture] main { background: white !important; min-height: unset !important; }
+body[data-capture] .max-w-6xl,
+body[data-capture] .max-w-5xl { max-width: 100% !important; padding: 0 14px !important; margin: 0 !important; }
+
+/* 여백 — print 와 동일 */
+body[data-capture] .py-6 { padding-top: 3px !important; padding-bottom: 3px !important; }
+body[data-capture] .py-5 { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }
+body[data-capture] .py-4 { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }
+body[data-capture] .py-3 { padding-top: 2px !important; padding-bottom: 2px !important; }
+body[data-capture] .py-2, body[data-capture] .py-2\.5 { padding-top: 1.5px !important; padding-bottom: 1.5px !important; }
+body[data-capture] .py-1, body[data-capture] .py-1\.5 { padding-top: 1px !important; padding-bottom: 1px !important; }
+body[data-capture] .p-5  { padding: 4px !important; }
+body[data-capture] .p-4  { padding: 3px !important; }
+body[data-capture] .p-3  { padding: 2.5px !important; }
+body[data-capture] .p-2, body[data-capture] .p-2\.5 { padding: 2px !important; }
+body[data-capture] .px-5, body[data-capture] .px-6 { padding-left: 3px !important; padding-right: 3px !important; }
+body[data-capture] .px-4 { padding-left: 3px !important; padding-right: 3px !important; }
+body[data-capture] .px-3 { padding-left: 2.5px !important; padding-right: 2.5px !important; }
+body[data-capture] .px-2 { padding-left: 2px !important; padding-right: 2px !important; }
+body[data-capture] .px-1 { padding-left: 1px !important; padding-right: 1px !important; }
+body[data-capture] .mb-4, body[data-capture] .mb-3 { margin-bottom: 2px !important; }
+body[data-capture] .mb-2, body[data-capture] .mb-1 { margin-bottom: 1px !important; }
+body[data-capture] .mt-1, body[data-capture] .mt-0\.5 { margin-top: 1px !important; }
+
+/* space-y / gap */
+body[data-capture] .space-y-6 > * + *, body[data-capture] .space-y-5 > * + * { margin-top: 4px !important; }
+body[data-capture] .space-y-4 > * + * { margin-top: 3px !important; }
+body[data-capture] .space-y-3 > * + * { margin-top: 2px !important; }
+body[data-capture] .space-y-2 > * + * { margin-top: 1.5px !important; }
+body[data-capture] .space-y-1 > * + *, body[data-capture] .space-y-1\.5 > * + * { margin-top: 1px !important; }
+body[data-capture] .gap-6, body[data-capture] .gap-5 { gap: 3px !important; }
+body[data-capture] .gap-4 { gap: 2.5px !important; }
+body[data-capture] .gap-3 { gap: 2px !important; }
+body[data-capture] .gap-2 { gap: 1.5px !important; }
+
+/* 텍스트 크기 */
+body[data-capture] .text-2xl  { font-size: 14px !important; line-height: 1.2 !important; }
+body[data-capture] .text-xl   { font-size: 12px !important; line-height: 1.2 !important; }
+body[data-capture] .text-lg   { font-size: 11px !important; line-height: 1.2 !important; }
+body[data-capture] .text-base { font-size: 10px !important; line-height: 1.3 !important; }
+body[data-capture] .text-sm   { font-size: 9.5px !important; line-height: 1.3 !important; }
+body[data-capture] .text-xs   { font-size: 9px !important; line-height: 1.3 !important; }
+
+/* 카드 */
+body[data-capture] .rounded-3xl,
+body[data-capture] .rounded-2xl,
+body[data-capture] .rounded-xl,
+body[data-capture] .rounded-lg,
+body[data-capture] .rounded-full { border-radius: 4px !important; box-shadow: none !important; }
+body[data-capture] .shadow,
+body[data-capture] .shadow-sm,
+body[data-capture] .shadow-md   { box-shadow: none !important; }
+
+/* 그리드 */
+body[data-capture] .grid-cols-4 { grid-template-columns: repeat(4,1fr) !important; }
+body[data-capture] .grid-cols-3 { grid-template-columns: repeat(3,1fr) !important; }
+body[data-capture] .grid-cols-2 { grid-template-columns: repeat(2,1fr) !important; }
+body[data-capture] .sm\:grid-cols-4 { grid-template-columns: repeat(4,1fr) !important; }
+body[data-capture] .sm\:grid-cols-3 { grid-template-columns: repeat(3,1fr) !important; }
+body[data-capture] .sm\:grid-cols-2 { grid-template-columns: repeat(2,1fr) !important; }
+body[data-capture] .grid { gap: 3px !important; }
+
+/* 배경 — print 색상과 동일 */
+body[data-capture] .bg-blue-50,
+body[data-capture] .bg-blue-50\/40   { background-color: #f0f4fd !important; }
+body[data-capture] .bg-orange-50     { background-color: #fdf7f0 !important; }
+body[data-capture] .bg-green-50      { background-color: #f0faf4 !important; }
+body[data-capture] .bg-indigo-50     { background-color: #f2f0fd !important; }
+body[data-capture] .bg-amber-50,
+body[data-capture] .bg-amber-50\/60  { background-color: #fdf9f0 !important; }
+body[data-capture] .bg-gray-50,
+body[data-capture] .bg-gray-50\/40   { background-color: #f8f8f8 !important; }
+body[data-capture] .bg-red-50        { background-color: #fdf2f2 !important; }
+body[data-capture] .bg-purple-50     { background-color: #f7f2fd !important; }
+body[data-capture] .bg-sky-50        { background-color: #f0f8fd !important; }
+body[data-capture] .bg-blue-100      { background-color: #dde9f9 !important; }
+body[data-capture] .bg-amber-100     { background-color: #faefd5 !important; }
+body[data-capture] .bg-green-100     { background-color: #d8f5e3 !important; }
+body[data-capture] .bg-red-100       { background-color: #fde0e0 !important; }
+body[data-capture] .bg-indigo-100    { background-color: #e0defa !important; }
+body[data-capture] .bg-gray-800      { background-color: #6b7280 !important; color: #ffffff !important; }
+body[data-capture] .bg-blue-600      { background-color: #5b8de8 !important; color: #ffffff !important; }
+body[data-capture] .bg-amber-500     { background-color: #e8a838 !important; color: #ffffff !important; }
+body[data-capture] mark              { background-color: #fef9d9 !important; color: inherit !important; }
+body[data-capture] .bg-orange-100    { background-color: #fef3e2 !important; }
+body[data-capture] .bg-yellow-200    { background-color: #fef9d9 !important; }
+
+/* 테두리 색상 */
+body[data-capture] .border-blue-400   { border-color: #93c5fd !important; }
+body[data-capture] .border-amber-400  { border-color: #fcd34d !important; }
+body[data-capture] .border-orange-100 { border-color: #fde8c8 !important; }
+body[data-capture] .border-blue-100   { border-color: #bfdbfe !important; }
+body[data-capture] .border-blue-200   { border-color: #bfdbfe !important; }
+body[data-capture] .border-green-400  { border-color: #86efac !important; }
+body[data-capture] .border-red-400    { border-color: #fca5a5 !important; }
+
+/* 텍스트 색상 */
+body[data-capture] .text-blue-700,
+body[data-capture] .text-blue-800     { color: #2563eb !important; }
+body[data-capture] .text-amber-700,
+body[data-capture] .text-amber-800    { color: #b45309 !important; }
+body[data-capture] .text-green-700    { color: #15803d !important; }
+body[data-capture] .text-indigo-600,
+body[data-capture] .text-indigo-700   { color: #4338ca !important; }
+body[data-capture] .text-orange-500   { color: #c2410c !important; }
+body[data-capture] .text-red-700      { color: #b91c1c !important; }
+
+/* 비율 바 */
+body[data-capture] .h-3, body[data-capture] .h-4 { height: 5px !important; }
+
+/* 입력창 → 텍스트처럼 */
+body[data-capture] input {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  font-size: 9px !important;
+}
+/* 페이지 분할 방지 */
+body[data-capture] .no-break { break-inside: avoid !important; }
+
+/* 테이블 셀 세로 정렬 — 숫자 내려가는 문제 방지 */
+body[data-capture] td,
+body[data-capture] th { vertical-align: middle !important; }
+/* items-baseline → center 보정 (특정 클래스만) */
+body[data-capture] .items-baseline { align-items: center !important; }
+
+/* ── 인쇄 헤더 제목·로고 크기 (축소 방지) ── */
+body[data-capture] .print-header-title {
+  font-size: 14px !important;
+  line-height: 1.25 !important;
+}
+body[data-capture] .print-header-taxpayer {
+  font-size: 19px !important;
+  line-height: 1.2 !important;
+}
+body[data-capture] .print-header-date {
+  font-size: 9px !important;
+}
+body[data-capture] .print-header-logo {
+  /* 기준(22.8px) × 1.8 × 1.2 = 출력 로고 +20% */
+  height: calc(22.8px * 1.8 * 1.2) !important;
+  max-height: calc(22.8px * 1.8 * 1.2) !important;
+  width: auto !important;
+}
+
+/* ─── 인쇄 스타일 (A4 한 장) ─────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    background: white !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* 화면 전용 숨김 */
+  .no-print, header, button { display: none !important; }
+
+  /* 인쇄 전용 표시 */
+  .print-only { display: block !important; }
+
+  /* 메인 */
+  main {
+    background: white !important;
+    min-height: unset !important;
+  }
+
+  /* 컨테이너 */
+  .max-w-6xl, .max-w-5xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 여백 */
+  .py-6 { padding-top: 3px !important; padding-bottom: 3px !important; }
+  .py-5 { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }
+  .py-4 { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }
+  .py-3 { padding-top: 2px !important; padding-bottom: 2px !important; }
+  .py-2, .py-2\.5 { padding-top: 1.5px !important; padding-bottom: 1.5px !important; }
+  .py-1, .py-1\.5 { padding-top: 1px !important; padding-bottom: 1px !important; }
+  .p-5 { padding: 4px !important; }
+  .p-4 { padding: 3px !important; }
+  .p-3 { padding: 2.5px !important; }
+  .p-2, .p-2\.5 { padding: 2px !important; }
+  .px-5, .px-6 { padding-left: 3px !important; padding-right: 3px !important; }
+  .px-4 { padding-left: 3px !important; padding-right: 3px !important; }
+  .px-3 { padding-left: 2.5px !important; padding-right: 2.5px !important; }
+  .px-2 { padding-left: 2px !important; padding-right: 2px !important; }
+  .px-1 { padding-left: 1px !important; padding-right: 1px !important; }
+  .mb-4, .mb-3 { margin-bottom: 2px !important; }
+  .mb-2, .mb-1 { margin-bottom: 1px !important; }
+  .mt-1, .mt-0\.5 { margin-top: 1px !important; }
+
+  /* space-y */
+  .space-y-6 > * + * { margin-top: 4px !important; }
+  .space-y-5 > * + * { margin-top: 4px !important; }
+  .space-y-4 > * + * { margin-top: 3px !important; }
+  .space-y-3 > * + * { margin-top: 2px !important; }
+  .space-y-2 > * + * { margin-top: 1.5px !important; }
+  .space-y-1, .space-y-1\.5 > * + * { margin-top: 1px !important; }
+
+  /* gap */
+  .gap-6, .gap-5 { gap: 3px !important; }
+  .gap-4 { gap: 2.5px !important; }
+  .gap-3 { gap: 2px !important; }
+  .gap-2 { gap: 1.5px !important; }
+
+  /* 카드 */
+  .rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-full {
+    border-radius: 4px !important;
+    box-shadow: none !important;
+  }
+  .shadow, .shadow-sm, .shadow-md { box-shadow: none !important; }
+
+  /* 그리드: 강제 다단 */
+  .sm\:grid-cols-4 { grid-template-columns: repeat(4,1fr) !important; }
+  .sm\:grid-cols-3 { grid-template-columns: repeat(3,1fr) !important; }
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2,1fr) !important; }
+  .grid-cols-4 { grid-template-columns: repeat(4,1fr) !important; }
+  .grid-cols-3 { grid-template-columns: repeat(3,1fr) !important; }
+  .grid-cols-2 { grid-template-columns: repeat(2,1fr) !important; }
+  .grid { gap: 3px !important; }
+
+  /* 텍스트 크기 */
+  .text-2xl  { font-size: 14px !important; line-height: 1.2 !important; }
+  .text-xl   { font-size: 12px !important; line-height: 1.2 !important; }
+  .text-lg   { font-size: 11px !important; line-height: 1.2 !important; }
+  .text-base { font-size: 10px !important; line-height: 1.3 !important; }
+  .text-sm   { font-size: 9.5px !important; line-height: 1.3 !important; }
+  .text-xs   { font-size: 9px !important;  line-height: 1.3 !important; }
+
+  /* 페이지 분할 방지 */
+  .no-break { page-break-inside: avoid !important; break-inside: avoid !important; }
+  table     { page-break-inside: avoid !important; break-inside: avoid !important; }
+  tr        { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* ── 인쇄 전용 부드러운 색상 ────────────────────────────── */
+
+  /* 배경 - 극히 연한 파스텔 */
+  .bg-blue-50, .bg-blue-50\/40   { background-color: #f0f4fd !important; }
+  .bg-orange-50                  { background-color: #fdf7f0 !important; }
+  .bg-green-50                   { background-color: #f0faf4 !important; }
+  .bg-indigo-50                  { background-color: #f2f0fd !important; }
+  .bg-amber-50, .bg-amber-50\/60 { background-color: #fdf9f0 !important; }
+  .bg-gray-50, .bg-gray-50\/40   { background-color: #f8f8f8 !important; }
+  .bg-red-50                     { background-color: #fdf2f2 !important; }
+  .bg-purple-50                  { background-color: #f7f2fd !important; }
+  .bg-sky-50                     { background-color: #f0f8fd !important; }
+
+  /* 배지 배경 */
+  .bg-blue-100  { background-color: #dde9f9 !important; }
+  .bg-amber-100 { background-color: #faefd5 !important; }
+  .bg-green-100 { background-color: #d8f5e3 !important; }
+  .bg-red-100   { background-color: #fde0e0 !important; }
+  .bg-indigo-100{ background-color: #e0defa !important; }
+
+  /* 테이블 헤더/푸터 - 짙은 검정 대신 중간 회색 */
+  .bg-gray-800  { background-color: #6b7280 !important; color: #ffffff !important; }
+  .bg-blue-600  { background-color: #5b8de8 !important; color: #ffffff !important; }
+  .bg-amber-500 { background-color: #e8a838 !important; color: #ffffff !important; }
+
+  /* 형광펜 - 아주 연한 노랑/오렌지 */
+  mark           { background-color: #fef9d9 !important; color: inherit !important; }
+  .bg-orange-100 { background-color: #fef3e2 !important; }
+  .bg-yellow-200 { background-color: #fef9d9 !important; }
+
+  /* 강조 테두리 부드럽게 */
+  .border-blue-400   { border-color: #93c5fd !important; }
+  .border-amber-400  { border-color: #fcd34d !important; }
+  .border-orange-100 { border-color: #fde8c8 !important; }
+  .border-blue-100   { border-color: #bfdbfe !important; }
+  .border-blue-200   { border-color: #bfdbfe !important; }
+  .border-green-400  { border-color: #86efac !important; }
+  .border-red-400    { border-color: #fca5a5 !important; }
+
+  /* 텍스트 색상 - 채도 낮추기 */
+  .text-blue-700, .text-blue-800 { color: #2563eb !important; }
+  .text-amber-700, .text-amber-800 { color: #b45309 !important; }
+  .text-green-700  { color: #15803d !important; }
+  .text-indigo-600, .text-indigo-700 { color: #4338ca !important; }
+  .text-orange-500 { color: #c2410c !important; }
+  .text-red-700    { color: #b91c1c !important; }
+
+  /* 비율 바 */
+  .print-bar, .h-3, .h-4 { height: 5px !important; }
+
+  /* 구분선 */
+  .border-dashed { border-style: solid !important; }
+
+  /* 시뮬레이션 첫 장 유지 */
+  .simulation-section { page-break-before: avoid !important; }
+
+  /* ── 2페이지: 항목별 비율분석 ─────────── */
+  .exp-detail-page { page-break-before: always !important; }
+
+  /* 불필요한 요소 숨기기 */
+  .no-print { display: none !important; }
+
+  /* 인쇄 시 입력창 → 텍스트처럼 */
+  input {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    font-size: 9px !important;
+  }
+
+  /* ── 인쇄 헤더 제목·로고 크기 (축소 방지) ── */
+  .print-header-title {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+  .print-header-taxpayer {
+    font-size: 19px !important;
+    line-height: 1.2 !important;
+  }
+  .print-header-date {
+    font-size: 9px !important;
+  }
+  .print-header-logo {
+    height: calc(22.8px * 1.8 * 1.2) !important;
+    max-height: calc(22.8px * 1.8 * 1.2) !important;
+    width: auto !important;
+  }
+}

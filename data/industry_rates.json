@@ -1,0 +1,31 @@
+{
+  "_comment": "2025년 귀속 업종코드별 경비율 데이터 (국세청 기준)",
+  "_structure": {
+    "code": "업종코드 (6자리)",
+    "name": "업태명",
+    "simpleRateGeneral": "단순경비율 일반율 (%)",
+    "simpleRateExcess": "단순경비율 초과율 (%)",
+    "standardRate": "기준경비율 일반율 (%)"
+  },
+  "011001": {
+    "code": "011001",
+    "name": "농업, 임업 및 어업",
+    "simpleRateGeneral": 93.5,
+    "simpleRateExcess": 93.5,
+    "standardRate": 9.7
+  },
+  "523013": {
+    "code": "523013",
+    "name": "소매업",
+    "simpleRateGeneral": 92.5,
+    "simpleRateExcess": 89.4,
+    "standardRate": 14.5
+  },
+  "749303": {
+    "code": "749303",
+    "name": "사업서비스업",
+    "simpleRateGeneral": 65.1,
+    "simpleRateExcess": 65.1,
+    "standardRate": 16.3
+  }
+}
