@@ -14,7 +14,7 @@ async function run(args) {
 }
 
 async function main() {
-  const msg = process.argv.slice(2).join(' ') || '개발 반영: 기능 및 수정 사항';
+  const msg = process.argv.slice(2).join(' ') || 'chore: snapshot';
   if (!fs.existsSync(path.join(root, '.git'))) {
     await run(['init', '-b', 'main']);
   }

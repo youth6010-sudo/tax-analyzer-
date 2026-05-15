@@ -62,7 +62,11 @@ for r in range(1, ws.nrows):
     except Exception as e:
         pass
 
-out_path = r'C:\Users\ADMIN\Desktop\tax-analyzer\public\industry_rates.json'
+# 이 스크립트가 있는 폴더(tax-analyzer) 기준 — 옮겨도 바탕화면에 폴더가 생기지 않음
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_out_dir = os.path.join(_script_dir, 'public')
+os.makedirs(_out_dir, exist_ok=True)
+out_path = os.path.join(_out_dir, 'industry_rates.json')
 with open(out_path, 'w', encoding='utf-8') as f:
     json.dump(result, f, ensure_ascii=False, indent=2)
 

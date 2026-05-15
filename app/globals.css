@@ -93,6 +93,56 @@ body[data-capture] .sm\:grid-cols-3 { grid-template-columns: repeat(3,1fr) !impo
 body[data-capture] .sm\:grid-cols-2 { grid-template-columns: repeat(2,1fr) !important; }
 body[data-capture] .grid { gap: 3px !important; }
 
+/* JPG 캡처: 전기·당기 분석 제목·전체 합계(맨 위) 축소 */
+body[data-capture] .analysis-section-print-top {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+  margin-bottom: 2px !important;
+}
+body[data-capture] .simulation-section {
+  /* 한 장에 들어오면 전기와 이어서; 부족할 때만 블록 통째로 다음 장 */
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+/* 화면과 동일한 큰 제목(업종코드별 분석·시뮬레이션 제목) */
+body[data-capture] .analysis-screen-title.text-2xl {
+  font-size: 1.5rem !important;
+  line-height: 1.25 !important;
+}
+body[data-capture] .print-summary-total {
+  padding: 10px 12px !important;
+  margin-top: 4px !important;
+  margin-bottom: 2px !important;
+  border-width: 2px !important;
+}
+body[data-capture] .print-summary-total-heading {
+  font-size: 13px !important;
+  margin-bottom: 8px !important;
+  line-height: 1.3 !important;
+}
+body[data-capture] .print-summary-total .grid {
+  gap: 8px !important;
+}
+body[data-capture] .print-summary-total-cell {
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+}
+body[data-capture] .print-summary-total-cell p {
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  margin-bottom: 2px !important;
+}
+body[data-capture] .print-summary-total-cell .font-mono,
+body[data-capture] .print-summary-total-cell .text-base {
+  font-size: 15px !important;
+  line-height: 1.25 !important;
+}
+body[data-capture] .print-summary-total-cell .font-black,
+body[data-capture] .print-summary-total-cell .text-2xl {
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+}
+
 /* 배경 — print 색상과 동일 */
 body[data-capture] .bg-blue-50,
 body[data-capture] .bg-blue-50\/40   { background-color: #f0f4fd !important; }
@@ -329,11 +379,15 @@ body[data-capture] .print-header-logo {
   /* 구분선 */
   .border-dashed { border-style: solid !important; }
 
-  /* 시뮬레이션 첫 장 유지 */
-  .simulation-section { page-break-before: avoid !important; }
+  /* 시뮬레이션(당기): 한 장에 들어오면 전기와 같은 장. 부족할 때만 통째로 다음 장. 상세분석은 .exp-detail-page 등 별도 */
+  .simulation-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 
-  /* ── 2페이지: 항목별 비율분석 ─────────── */
+  /* ── 인쇄 부속: 첫 부속(전기 상세)은 새 장, 당기는 그 다음에 이어 붙임 ── */
   .exp-detail-page { page-break-before: always !important; }
+  .exp-detail-follow-ny { page-break-before: auto !important; margin-top: 1rem !important; }
 
   /* 불필요한 요소 숨기기 */
   .no-print { display: none !important; }
@@ -362,5 +416,50 @@ body[data-capture] .print-header-logo {
     height: calc(22.8px * 1.8 * 1.2) !important;
     max-height: calc(22.8px * 1.8 * 1.2) !important;
     width: auto !important;
+  }
+
+  /* 전기·당기: 인쇄 제목 + 전체 합계(맨 위) — 첫 장에 들어오게 묶음·축소 */
+  .analysis-section-print-top {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 2px !important;
+  }
+  /* 화면과 동일한 큰 제목 — 일반 .text-2xl 인쇄 축소보다 우선 */
+  .analysis-screen-title.text-2xl {
+    font-size: 1.5rem !important;
+    line-height: 1.25 !important;
+  }
+  .print-summary-total {
+    padding: 10px 12px !important;
+    margin-top: 4px !important;
+    margin-bottom: 2px !important;
+    border-width: 2px !important;
+  }
+  .print-summary-total-heading {
+    font-size: 13px !important;
+    margin-bottom: 8px !important;
+    line-height: 1.3 !important;
+  }
+  .print-summary-total .grid {
+    gap: 8px !important;
+  }
+  .print-summary-total-cell {
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+  }
+  .print-summary-total-cell p {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    margin-bottom: 2px !important;
+  }
+  .print-summary-total-cell .font-mono,
+  .print-summary-total-cell .text-base {
+    font-size: 15px !important;
+    line-height: 1.25 !important;
+  }
+  .print-summary-total-cell .font-black,
+  .print-summary-total-cell .text-2xl {
+    font-size: 20px !important;
+    line-height: 1.2 !important;
   }
 }

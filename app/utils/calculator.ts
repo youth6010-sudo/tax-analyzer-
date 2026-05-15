@@ -1,9 +1,57 @@
 import type { TaxReportData, AnalysisResult, IndustryRate, ExpenseItem, SimulationInput, SimulationResult } from '../types';
 
+const FETCH_TIMEOUT_MS = 180_000;
+const MIN_RATE_KEYS = 10;
+
+function validateRates(data: Record<string, IndustryRate>): void {
+  const keys = Object.keys(data);
+  if (keys.length < MIN_RATE_KEYS) {
+    throw new Error(`업종코드 데이터가 비정상입니다. (항목 수 ${keys.length})`);
+  }
+}
+
+function parseRatesJson(text: string): Record<string, IndustryRate> {
+  if (text.length < 200) {
+    throw new Error('업종코드 파일이 비어 있거나 너무 짧습니다. public/industry_rates.json 을 확인하세요.');
+  }
+  const data = JSON.parse(text) as Record<string, IndustryRate>;
+  validateRates(data);
+  return data;
+}
+
+async function fetchRatesOnce(
+  url: string,
+  cache: RequestCache,
+  signal: AbortSignal
+): Promise<Record<string, IndustryRate>> {
+  const response = await fetch(url, { cache, signal });
+  if (!response.ok) {
+    throw new Error(`업종코드 데이터를 불러올 수 없습니다. (HTTP ${response.status})`);
+  }
+  const text = await response.text();
+  return parseRatesJson(text);
+}
+
+/**
+ * public/industry_rates.json 로드.
+ * 첫 요청 실패·비정상 응답 시 캐시 무시 URL로 한 번 더 시도합니다.
+ */
 export async function loadIndustryRates(): Promise<Record<string, IndustryRate>> {
-  const response = await fetch('/industry_rates.json?v=' + Date.now(), { cache: 'no-store' });
-  if (!response.ok) throw new Error('업종코드 데이터를 불러올 수 없습니다.');
-  return response.json();
+  const ctl = new AbortController();
+  const to =
+    typeof window !== 'undefined' ? window.setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS) : undefined;
+  const signal = ctl.signal;
+  try {
+    try {
+      return await fetchRatesOnce('/industry_rates.json', 'default', signal);
+    } catch (firstErr) {
+      if (signal.aborted) throw firstErr;
+      const bust = `/industry_rates.json?r=${Date.now()}`;
+      return await fetchRatesOnce(bust, 'no-store', signal);
+    }
+  } finally {
+    if (to !== undefined) window.clearTimeout(to);
+  }
 }
 
 export function findIndustryRate(

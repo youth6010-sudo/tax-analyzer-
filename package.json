@@ -2,12 +2,20 @@
   "name": "tax-analyzer",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --max-old-space-size=8192 node_modules/next/dist/bin/next dev -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "node node_modules/next/dist/bin/next start -p 3000",
+    "stable": "npm run build && npm run start",
     "lint": "eslint",
-    "git:commit": "node scripts/dev-commit.cjs"
+    "git:commit": "node scripts/dev-commit.cjs",
+    "docker:up": "docker compose up --build",
+    "vercel:login": "npx vercel@latest login",
+    "vercel:link": "npx vercel@latest link",
+    "vercel:deploy": "npx vercel@latest deploy --prod"
   },
   "dependencies": {
     "dom-to-image-more": "^3.7.2",
