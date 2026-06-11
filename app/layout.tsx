@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "종합소득세 신고서 분석 도구",
-  description: "PDF 종합소득세 신고서를 업로드하여 업종별 단순경비율과 실제 소득율을 자동 비교 분석합니다.",
+  title: "세무 분석 도구",
+  description: "종합소득세 분석 및 세목별 담당자 검색 도구",
 };
 
 export default function RootLayout({

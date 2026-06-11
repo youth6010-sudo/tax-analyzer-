@@ -1,0 +1,4507 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-11T02:08:04.711Z",
+  "contacts": [
+    {
+      "id": "1",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "individual",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "가이아파일㈜영업소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "2",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜건축사사무소환인",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "3",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜삼양개발",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "4",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜삼현도시건축사사무소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "5",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜에스케이에스스페이스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "6",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜승리에스텍",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "7",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜유니로지스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "8",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜태감",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "9",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "밀크코브라㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "10",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "(사)부산펜싱클럽",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "11",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜코마린토탈솔루션",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "12",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜코메셀(구 대양글로벌)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "13",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜파라씨앤디",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "14",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "이로운진심(주)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "15",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "(주)녹색바구니(구.팀보)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "16",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "(주)원민(구.덕산빌딩)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "17",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "(주)하하아트홀",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "18",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "(주)깨끗(태지광택법인전환)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "19",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "삼양건기(김장현)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "20",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "삼양건기(김정애)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "21",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "아이스테이션",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "22",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "아트플루트",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "23",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "훈테크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "24",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "희테크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "25",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "신화건축사사무소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "26",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "준바이오",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "27",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "마리타임클로버",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "28",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "빈이네",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "29",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "벳케어동물센터",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "30",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "삼신운수(윤해연)외 4",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "31",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "하나로직스(하경일)외20",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "32",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "에스와이메탈",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "33",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "33카페",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "34",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "동의보쌈",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "35",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "리틀오스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "36",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "명동찌개마을(서동점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "37",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "명동찌개마을(센텀점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "38",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "명동찌개마을(해운대점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "39",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "태지광택(법인전환예정)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "40",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "명품한우",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "41",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "프랭크버거 일광신도시점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "42",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜늘행운",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "43",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜더푸른",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "44",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜위드리치(성실)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "45",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜로즈(성실)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "46",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "한국기술가치평가㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "47",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜하나디앤씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "48",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜심데코",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "49",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜지텍솔루션",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "50",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "도경산업개발㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "51",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜금도건설",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "52",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜에이스미디어",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "53",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜동그라미",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "54",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "삼일플렉스(주)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "55",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "(주)네모컴퍼니",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "56",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "(주)씨에프에스코리아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "57",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "(주)백야컴퍼니",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "58",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "㈜팀코리아(광주)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "59",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "(유)한빛이텍",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "60",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "(유)엠솔루션",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "61",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "유라영어교습소(면세)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "62",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "밴앤킴컬리지",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "63",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "볼트모아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "64",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "아이오틱스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "65",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "기훈TV",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "66",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "빌프랑",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "67",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "리딩리더영어교습소(면세)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "68",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "스카이라인(구.세다엔지니어링)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "69",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "은이석빈이네",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "70",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "엘코드",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "71",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "드림캐쳐",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "72",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "더프라이",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "73",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "올인원E&C",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "74",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "JH디자인컴퍼니(이정미)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "75",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "성재테크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "76",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "호경에프에스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "77",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "에이스머시너리(정균찬)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "78",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "도리F&B(미음가야밀면)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "79",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "소문난청국장",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "80",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "미야돈까스(시청)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "81",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "사,여백,찻잔",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "82",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "천돈가(윤삼식)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "83",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "비에스랩",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "84",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "그래비티스튜디오",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "85",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "서건특수강㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "86",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜아이런코리아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "87",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜다라팩토리",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "88",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜미씨난다",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "89",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜제이비아이",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "90",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "엘엠에스㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "91",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜엠에스파일",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "92",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜엠에스제이산업",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "93",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "(주)비포인트디자인그룹",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "94",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜현대플랜트",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "95",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "(주)에스제이티엘",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "96",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜금화엔터프라이즈",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "97",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜다함",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "98",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜고려의료관광개발",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "99",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "㈜쏠더랜드",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "100",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "트래블엔조이㈜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "101",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "(주)더좋은사람들",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "102",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "포르테 해운대-지점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "103",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "진방㈜/ 신고대리",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "104",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "상상",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "105",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "청우유통(전:김군과플랫폼)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "106",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "다이노스율하(12.31)폐업",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "107",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "남경",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "108",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "서교주차장",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "109",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "소중부동산",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "110",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "소중한부동산",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "111",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "유현주부동산",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "112",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "쥬소중부동산",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "113",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "보은이엔지",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "114",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "에스앤제이메디칼",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "115",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "삼성제일환경",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "116",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "전효선임대",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "117",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "더나인하우스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "118",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "쥬얼리무인모텔",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "119",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "리코스타PC카페",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "120",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "수일리",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "121",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "유하우스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "122",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "굣간(대구)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "123",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "제이에스인터내셔널",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "124",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "퍼스트",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "125",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "당신이소중한치과-면세",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "126",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "준 소아청소년과 의원",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "127",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "길수희임대-면세",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "128",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "박여종임대-면세",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "129",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "쥬막",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "130",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "전덕삼(전포)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "131",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "전덕삼.대구",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "132",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "가배원",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "133",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "굣간.전포(11.30)폐업",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "134",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜에이엘엠텍",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "135",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜백희(종사업자1)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "136",
+      "companyName": "㈜신진",
+      "manager": "리아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": "",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": []
+    },
+    {
+      "id": "137",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜제이원디앤씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "138",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜뉴세션",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "139",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "(주)와이엠에이펙스스포츠클럽",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "140",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜창동",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "141",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "주식회사 올바릇",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "142",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜HCI헬스케어인",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "143",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "부산발달지원센터",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "144",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜국민상사",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "145",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜국민타이어(동김해)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "146",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜국민타이어(서김해)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "147",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜국민타이어(신항)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "148",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜국민타이어 김해물류점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "149",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "(주)유얼",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "150",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "(주)유얼 기장점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "151",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜다온기술산업",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "152",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜다온기술산업(지점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "153",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "㈜동부종합중기",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "154",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "이노메카닉스(8/31폐업)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "155",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "이노메카닉스 부산지점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "156",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "우리펌프카",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "157",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "지엘테크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "158",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "메가타이어(이종군)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "159",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "메가타이어 서김해점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "160",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "국민타이어(김은정)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "161",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "삼사오컴퍼니",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "162",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "파니에(홍선우)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "163",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "파니에광안점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "164",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "힘찬종합보수9개-김미정",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "165",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "동광실업",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "166",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "수노아헤어 해운대장산점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "167",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "프린스한",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "168",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "하나가축약품",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "169",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "앤칸토",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "170",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "지클레어",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "171",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "이마트24 R광안리센터점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "172",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "미르엘",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "173",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "필로소피 그래픽 디자인 학원",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "174",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "필로소피 그래픽 디자인 교습소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "175",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "킷테앤혼자케(Kitte＆Honjake)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "176",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "수백당",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "177",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "냉삼대삼",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "178",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "닭도리탕 전문 도리당 재송센터점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "179",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "도리당 부산 광안점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "180",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜블레싱에이엠씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "181",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜더블유원에이엠씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "182",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜제이피링크에셋",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "183",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜아레드",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "184",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜로터스인베스트먼트(본점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "185",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜로터스인베스트먼트(지점)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "186",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜비엔케이개발",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "187",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜크리에이티브울림",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "188",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "주식회사 한솔플러스 창원거제지사",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "189",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "㈜경리업무를잘하는청년들 해운대점",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "190",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "해밀한의원(표현한)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "191",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "해밀리테일",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "192",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "선우건설기계",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "193",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "동백건설기계",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "194",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "연합건기",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "195",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "THE 큰 중장비",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "196",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "진우정밀",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "197",
+      "taxTypes": [
+        "vat",
+        "corporate"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "경리업무를잘하는청년들",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "198",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "다온",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "199",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "해인공인중개사사무소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "200",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "하라",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "201",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "옷걸이가좋다",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "202",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "오션글로비스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "203",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "하나운수(김무재)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "204",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "천일종합운수(배승혜)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "205",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "김병환부동산(간이)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "206",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "김승모색소폰실용음악학원",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "207",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "송지영부동산(주택임대)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "208",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "㈜모빌레치(신고대리?)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "209",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "잇쉬와잇샤의수제초콜릿(폐업예정)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "210",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "블루",
+      "companyName": "퍼팩트누수설비(폐업예정)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "211",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "미니슈퍼",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "212",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "벤타스",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "213",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "대운종합물류",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "214",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "크린토피아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "215",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "오니기리컴퍼니",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "216",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "민교식?종소세?",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "217",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "도순빌딩",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "218",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "제영테크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "219",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "김용화임대",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "220",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "세모컴퍼니",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "221",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "지오2",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "222",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "스테이S스터디카페",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "223",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "라비앙로즈",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "224",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "웰바이오텍",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "225",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "프런티어랩",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "226",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "다야",
+      "companyName": "이사의명품",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "227",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "박용국임대",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "228",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "씨엔에스오토",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "229",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "노랑씽크",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "230",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "기담향방",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "231",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "(주)진방",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "232",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "다산",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "233",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "금화",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "234",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "파워와이즈체스교구교습소",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "235",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "한유림부동산(주택임대)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "236",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "박혜련부동산(주택임대)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "237",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "이호숙부동산(간이1)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "238",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "이호숙부동산(간이2)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "239",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "주식회사 지비마린",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "240",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "윈터",
+      "companyName": "(주)고리길천",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "241",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "오케이(유종환)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "242",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "김유리부동산(간이)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "243",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "이기균부동산(간이)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "244",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "오핫딜",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "245",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "신진DS(신진대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "246",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "유병열부동산(국민타이어아버님)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "247",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "현대판매서비스(국민타이어대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "248",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "장왕기부동산(유얼대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "249",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "삼육(유얼대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "250",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "경보이리스(유얼대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "251",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "푸른하늘(유얼대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "252",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "하늘(유얼사모)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "253",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "유니모노(뉴세션대표)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "254",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "에스빈(제이원디앤씨배우자)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "255",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "라피에스타양산(우아한혼술식당)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "256",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "공두남(프린스한 어머니)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "257",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "국민타이어(이종군)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "258",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "조개대교(박은정)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "259",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "리아",
+      "companyName": "더블유케이",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "260",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "위드위치",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "261",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "청운",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "262",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "(주)에스티오코아",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "263",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "(주)코아에이엠씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "264",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "(주)코아피엠지",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "265",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "(주)한솔플러스(부동산)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "266",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "한솔짱아씨",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "267",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "이혜령부동산(해밀-표현한원장님 사모)",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "268",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "(주)윤컨설팅",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    },
+    {
+      "id": "269",
+      "taxTypes": [
+        "withholding"
+      ],
+      "businessEntityType": "",
+      "serviceTypes": [],
+      "manager": "페리",
+      "companyName": "주식회사 커넥트인",
+      "representative": "",
+      "businessNo": "",
+      "corporateNo": "",
+      "residentNo": "",
+      "phone": "",
+      "fax": ""
+    }
+  ]
+}
