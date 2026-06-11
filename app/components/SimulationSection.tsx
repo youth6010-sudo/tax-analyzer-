@@ -29,6 +29,9 @@ interface Props {
   currYear?: string;
   printInputExpenseDetail: boolean;
   onPrintInputExpenseDetailChange: (v: boolean) => void;
+  /** 인쇄·PDF·JPG: 시뮬레이션 블록을 새 페이지에서 시작 */
+  printSimulationNewPage: boolean;
+  onPrintSimulationNewPageChange: (v: boolean) => void;
   onSimSnapshot?: (s: SimPersist) => void;
   /** 과세연도 기준 총수입·경비 명세 블록 표시 (시뮬레이션 헤더 체크) */
   detailAnalysisNeeded?: boolean;
@@ -66,6 +69,8 @@ export default function SimulationSection({
   currYear,
   printInputExpenseDetail,
   onPrintInputExpenseDetailChange,
+  printSimulationNewPage,
+  onPrintSimulationNewPageChange,
   onSimSnapshot,
   detailAnalysisNeeded = false,
   onDetailAnalysisNeededChange,
@@ -180,7 +185,11 @@ export default function SimulationSection({
   const allSamePct   = rows.every(r => r.targetPct === rows[0].targetPct);
 
   return (
-    <div className="space-y-4 simulation-section bg-blue-50/40 rounded-3xl border border-blue-100 p-5 shadow-sm">
+    <div
+      className={`space-y-4 simulation-section bg-blue-50/40 rounded-3xl border border-blue-100 p-5 shadow-sm${
+        printSimulationNewPage ? ' simulation-print-new-page' : ''
+      }`}
+    >
 
       {/* ── 제목 | 특이사항 | 상세 분석 필요·인쇄 옵션 (한 줄) ── */}
       <div className="flex flex-nowrap items-center gap-2 sm:gap-3 w-full min-w-0 overflow-x-auto">
@@ -226,6 +235,15 @@ export default function SimulationSection({
               className="w-4 h-4 accent-blue-600 rounded shrink-0"
             />
             <span className="text-xs font-bold text-blue-800">입력지출상세 인쇄에 포함</span>
+          </label>
+          <label className="no-print flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/80 transition-colors whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={printSimulationNewPage}
+              onChange={e => onPrintSimulationNewPageChange(e.target.checked)}
+              className="w-4 h-4 accent-slate-600 rounded shrink-0"
+            />
+            <span className="text-xs font-bold text-slate-800">시뮬레이션 새 장에서 시작</span>
           </label>
         </div>
       </div>

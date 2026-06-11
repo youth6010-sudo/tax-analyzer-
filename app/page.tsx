@@ -224,6 +224,7 @@ export default function Home() {
   const [rowDetails, setRowDetails] = useState<Record<string, RowDetail>>({});
   const [printExpDetail, setPrintExpDetail] = useState(false);
   const [printInputExpenseDetail, setPrintInputExpenseDetail] = useState(false);
+  const [printSimulationNewPage, setPrintSimulationNewPage] = useState(false);
   const [nyRows, setNyRows] = useState<BusinessRow[]>(() => [makeNyRow()]);
   const [nyRowDetails, setNyRowDetails] = useState<Record<string, RowDetail>>({});
   const [nyAnalyzed, setNyAnalyzed] = useState(false);
@@ -286,6 +287,7 @@ export default function Home() {
       setAnalysisStale(false);
       setPrintExpDetail(!!m.printExpDetail);
       setPrintInputExpenseDetail(!!m.printInputExpenseDetail);
+      setPrintSimulationNewPage(!!m.printSimulationNewPage);
       if (Array.isArray(m.nyRows) && m.nyRows.length > 0) {
         bumpNyUidFromNyRowIds(m.nyRows.map(r => r.id));
         setNyRows(m.nyRows as BusinessRow[]);
@@ -333,6 +335,7 @@ export default function Home() {
           analyzed,
           printExpDetail,
           printInputExpenseDetail,
+          printSimulationNewPage,
           nyRows,
           nyRowDetails,
           nyAnalyzed,
@@ -356,6 +359,7 @@ export default function Home() {
     analyzed,
     printExpDetail,
     printInputExpenseDetail,
+    printSimulationNewPage,
     nyRows,
     nyRowDetails,
     nyAnalyzed,
@@ -388,6 +392,7 @@ export default function Home() {
       analyzed,
       printExpDetail,
       printInputExpenseDetail,
+      printSimulationNewPage,
       nyRows,
       nyRowDetails,
       nyAnalyzed,
@@ -561,6 +566,7 @@ export default function Home() {
     setRowDetails({});
     setPrintExpDetail(false);
     setPrintInputExpenseDetail(false);
+    setPrintSimulationNewPage(false);
     setNyRows([makeNyRow()]);
     setNyRowDetails({});
     setNyAnalyzed(false);
@@ -1289,6 +1295,8 @@ export default function Home() {
               currYear={currYear}
               printInputExpenseDetail={printInputExpenseDetail}
               onPrintInputExpenseDetailChange={setPrintInputExpenseDetail}
+              printSimulationNewPage={printSimulationNewPage}
+              onPrintSimulationNewPageChange={setPrintSimulationNewPage}
               onSimSnapshot={onSimSnapshot}
               detailAnalysisNeeded={nyDetailSectionOpen}
               onDetailAnalysisNeededChange={setNyDetailSectionOpen}

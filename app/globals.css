@@ -99,8 +99,10 @@ body[data-capture] .analysis-section-print-top {
   break-inside: avoid !important;
   margin-bottom: 2px !important;
 }
-body[data-capture] .simulation-section {
-  /* 한 장에 들어오면 전기와 이어서; 부족할 때만 블록 통째로 다음 장 */
+/* 시뮬: 기본은 인쇄 분할 허용(전기 직후 이어짐). '새 장' 체크 시에만 새 장 + 블록 유지 */
+body[data-capture] .simulation-section.simulation-print-new-page {
+  page-break-before: always !important;
+  break-before: page !important;
   page-break-inside: avoid !important;
   break-inside: avoid !important;
 }
@@ -379,8 +381,10 @@ body[data-capture] .print-header-logo {
   /* 구분선 */
   .border-dashed { border-style: solid !important; }
 
-  /* 시뮬레이션(당기): 한 장에 들어오면 전기와 같은 장. 부족할 때만 통째로 다음 장. 상세분석은 .exp-detail-page 등 별도 */
-  .simulation-section {
+  /* 시뮬: 기본은 분할 허용. '시뮬레이션 새 장에서 시작' 체크 시에만 새 장 + 가능하면 블록 한 장 유지 */
+  .simulation-section.simulation-print-new-page {
+    page-break-before: always !important;
+    break-before: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

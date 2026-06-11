@@ -32,6 +32,8 @@ export interface MainPersist {
   analyzed: boolean;
   printExpDetail: boolean;
   printInputExpenseDetail: boolean;
+  /** 인쇄·PDF·JPG: 당기 소득 시뮬레이션을 새 페이지에서 시작 */
+  printSimulationNewPage?: boolean;
   /** 과세연도(당기 연도 입력) 기준 총수입·경비 명세 — 시뮬레이션 아래 */
   nyRows?: { id: string; industryCode: string; totalRevenue: string; totalExpenses: string }[];
   nyRowDetails?: MainPersist['rowDetails'];
