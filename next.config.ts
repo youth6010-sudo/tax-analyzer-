@@ -9,10 +9,12 @@ const extraDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? "")
 const nextConfig: NextConfig = {
   /** Docker 등 자체 호스팅용 단일 실행 번들 (Vercel도 호환) */
   output: "standalone",
-  allowedDevOrigins: Array.from(new Set([...extraDevOrigins, "192.168.0.42"])),
+  allowedDevOrigins: Array.from(
+    new Set([...extraDevOrigins, "127.0.0.1", "::1", "[::1]", "192.168.0.42"]),
+  ),
   turbopack: {
     resolveAlias: {
-      canvas: './empty-module.js',
+      canvas: "./empty-module.js",
     },
   },
 };

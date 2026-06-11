@@ -2,7 +2,24 @@
 
 import { useState, useEffect, Fragment, useRef, useCallback, type ChangeEventHandler } from 'react';
 import SimulationSection from './components/SimulationSection';
-import { loadIndustryRates, findIndustryRate, formatKRW, formatPct } from './utils/calculator';
+import NextYearPlanSection, {
+  bumpNyCustomUidFromRowDetails,
+  resetNyCustomItemUid,
+} from './components/NextYearPlanSection';
+import ExpenseRatioTable from './components/ExpenseRatioTable';
+import IncomeRateStandardCompareBlock from './components/IncomeRateStandardCompareBlock';
+import {
+  EXPENSE_ITEMS,
+  customExpenseKey,
+  initExpenses,
+  mergeDetailExpenses,
+  sumExpenseInputs,
+  type RowDetail,
+} from './lib/expenseTableModel';
+import { fmt, toNum } from './lib/taxAmountFmt';
+import type { BusinessRow } from './lib/businessRowCompute';
+import { computeRow } from './lib/businessRowCompute';
+import { loadIndustryRates, formatKRW, formatPct } from './utils/calculator';
 import type { IndustryRate } from './types';
 import {
   LS_MAIN,
@@ -18,45 +35,72 @@ async function captureCanvas(): Promise<HTMLCanvasElement> {
   window.scrollTo(0, 0);
   document.body.setAttribute('data-capture', '');
 
-  await document.fonts.ready;
-  await new Promise(r => requestAnimationFrame(r));
-  await new Promise(r => requestAnimationFrame(r));
-  await new Promise(r => requestAnimationFrame(r));
-  await new Promise(r => setTimeout(r, 400));
+  const mainEl = document.querySelector('main') as HTMLElement | null;
+  if (!mainEl) {
+    document.body.removeAttribute('data-capture');
+    throw new Error('콘텐츠 영역을 찾을 수 없습니다.');
+  }
 
-  const mainEl = document.querySelector('main') as HTMLElement;
-  if (!mainEl) throw new Error('콘텐츠 영역을 찾을 수 없습니다.');
+  let wrapper: HTMLDivElement | null = null;
 
-  // 여백 래퍼 추가 — 캡처 이미지 양쪽 여백 확보
-  const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'background:#ffffff; padding: 0 20px 20px 20px; display:inline-block; width:100%;';
-  mainEl.parentNode!.insertBefore(wrapper, mainEl);
-  wrapper.appendChild(mainEl);
+  try {
+    await document.fonts.ready;
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 400));
 
-  void wrapper.getBoundingClientRect();
-  await new Promise(r => requestAnimationFrame(r));
+    wrapper = document.createElement('div');
+    wrapper.style.cssText =
+      'background:#ffffff; padding: 0 20px 20px 20px; display:inline-block; width:100%;';
+    const parent = mainEl.parentNode;
+    if (!parent) throw new Error('DOM 오류: main 부모가 없습니다.');
 
-  const html2canvas = (await import('html2canvas-pro')).default;
-  const canvas = await html2canvas(wrapper, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    removeContainer: true,
-    x: 0,
-    y: 0,
-    width: wrapper.scrollWidth,
-    height: wrapper.scrollHeight,
-    windowWidth: wrapper.scrollWidth,
-    windowHeight: wrapper.scrollHeight,
-  });
+    parent.insertBefore(wrapper, mainEl);
+    wrapper.appendChild(mainEl);
 
-  // 래퍼 해제 — DOM 복원
-  wrapper.parentNode!.insertBefore(mainEl, wrapper);
-  wrapper.remove();
+    void wrapper.getBoundingClientRect();
+    await new Promise(r => requestAnimationFrame(r));
 
-  return canvas;
+    const html2canvas = (await import('html2canvas-pro')).default;
+    const canvas = await html2canvas(wrapper, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      removeContainer: true,
+      x: 0,
+      y: 0,
+      width: wrapper.scrollWidth,
+      height: wrapper.scrollHeight,
+      windowWidth: wrapper.scrollWidth,
+      windowHeight: wrapper.scrollHeight,
+    });
+
+    if (wrapper.parentNode && mainEl.parentNode === wrapper) {
+      wrapper.parentNode.insertBefore(mainEl, wrapper);
+      wrapper.remove();
+    }
+    wrapper = null;
+
+    return canvas;
+  } finally {
+    if (wrapper != null) {
+      try {
+        if (mainEl.parentNode === wrapper && wrapper.parentNode) {
+          wrapper.parentNode.insertBefore(mainEl, wrapper);
+          wrapper.remove();
+        } else if (wrapper.parentNode) {
+          wrapper.remove();
+        }
+      } catch {
+        /* */
+      }
+      wrapper = null;
+    }
+    document.body.removeAttribute('data-capture');
+  }
 }
 
 /** Chrome·Edge 등: 저장 대화상자로 폴더·파일명 지정. 미지원 시 기본 다운로드 폴더로 저장. */
@@ -139,99 +183,15 @@ async function saveAsJPG(filename: string) {
   }
 }
 
-// ── 타입 ──────────────────────────────────────────────────
-interface BusinessRow {
-  id: string;
-  industryCode: string;
-  totalRevenue: string;
-  totalExpenses: string;
-}
-
-interface ComputedRow extends BusinessRow {
-  revNum: number;
-  expNum: number;
-  netIncome: number;
-  incomeRate: number;
-  expenseRate: number;
-  industryRate: IndustryRate | null;
-  baseIncome: number;
-  baseIncomeRate: number;
-  incomeRateDiff: number;
-  pastStdRatio: number;
-}
-
-// ── 필요경비 항목 ──────────────────────────────────────────
-const EXPENSE_ITEMS = [
-  { key: 'costOfGoods',   label: '매출원가',        hint: '상품·제품원가' },
-  { key: 'labor',         label: '노무비',          hint: '' },
-  { key: 'expenses',      label: '경비',            hint: '' },
-  { key: 'salary',        label: '급여',            hint: '급여·임금·제수당' },
-  { key: 'taxPublic',     label: '제세공과금',      hint: '' },
-  { key: 'rent',          label: '임차료',          hint: '' },
-  { key: 'interest',      label: '지급이자',        hint: '' },
-  { key: 'entertainment', label: '기업업무추진비',  hint: '' },
-  { key: 'donation',      label: '기부금',          hint: '' },
-  { key: 'depreciation',  label: '감가상각비',      hint: '' },
-  { key: 'vehicle',       label: '차량유지비',      hint: '' },
-  { key: 'commission',    label: '지급수수료',      hint: '' },
-  { key: 'supplies',      label: '소모품비',        hint: '' },
-  { key: 'welfare',       label: '복리후생비',      hint: '' },
-  { key: 'freight',       label: '운반비',          hint: '' },
-  { key: 'advertising',   label: '광고선전비',      hint: '' },
-  { key: 'travel',        label: '여비교통비',      hint: '' },
-  { key: 'other',         label: '기타',            hint: '' },
-] as const;
-
-type ExpenseMap = Record<string, string>;
-
-interface CustomExpenseDef {
-  id: string;
-  label: string;
-}
-
-interface RowDetail {
-  show: boolean;
-  expenses: ExpenseMap;
-  /** 상세분석에서 추가한 항목 (행마다 독립) */
-  customDefs: CustomExpenseDef[];
-}
-
-const initExpenses = (): ExpenseMap =>
-  Object.fromEntries(EXPENSE_ITEMS.map(i => [i.key, ''])) as ExpenseMap;
-
-const customExpenseKey = (id: string) => `c_${id}`;
+let _uid = 0;
+const uid = () => String(++_uid);
+const makeRow = (): BusinessRow => ({ id: uid(), industryCode: '', totalRevenue: '', totalExpenses: '' });
 
 let _customItemUid = 0;
 const nextCustomExpenseId = () => String(++_customItemUid);
 
-function mergeDetailExpenses(raw: RowDetail | undefined): ExpenseMap {
-  const base = initExpenses();
-  if (!raw) return base;
-  const merged = { ...base, ...raw.expenses };
-  for (const c of raw.customDefs ?? []) {
-    const k = customExpenseKey(c.id);
-    if (merged[k] === undefined) merged[k] = '';
-  }
-  return merged;
-}
-
-function sumExpenseInputs(detail: RowDetail): number {
-  let s = 0;
-  for (const i of EXPENSE_ITEMS) s += toNum(detail.expenses[i.key]);
-  for (const c of detail.customDefs ?? []) s += toNum(detail.expenses[customExpenseKey(c.id)]);
-  return s;
-}
-
-// ── 유틸 ──────────────────────────────────────────────────
-const fmt = (v: string) => {
-  const n = v.replace(/[^0-9]/g, '');
-  return n ? parseInt(n).toLocaleString('ko-KR') : '';
-};
-const toNum = (v: string | undefined) => v ? parseFloat(v.replace(/,/g, '')) || 0 : 0;
-
-let _uid = 0;
-const uid = () => String(++_uid);
-const makeRow = (): BusinessRow => ({ id: uid(), industryCode: '', totalRevenue: '', totalExpenses: '' });
+let _nyUid = 0;
+const makeNyRow = (): BusinessRow => ({ id: `ny${++_nyUid}`, industryCode: '', totalRevenue: '', totalExpenses: '' });
 
 function bumpUidFromRowIds(ids: string[]) {
   for (const id of ids) {
@@ -240,83 +200,11 @@ function bumpUidFromRowIds(ids: string[]) {
   }
 }
 
-function computeRow(row: BusinessRow, allRates: Record<string, IndustryRate>): ComputedRow {
-  const revNum  = toNum(row.totalRevenue);
-  const expNum  = toNum(row.totalExpenses);
-  const netIncome    = revNum - expNum;
-  const incomeRate   = revNum > 0 ? (netIncome / revNum) * 100 : 0;
-  const expenseRate  = revNum > 0 ? (expNum   / revNum) * 100 : 0;
-  const industryRate = findIndustryRate(row.industryCode, allRates);
-  const baseExpRate  = industryRate?.simpleRateGeneral ?? 0;
-  const baseIncome   = industryRate && revNum > 0 ? Math.trunc(revNum * (1 - baseExpRate / 100)) : 0;
-  const baseIncomeRate = industryRate ? 100 - baseExpRate : 0;
-  const incomeRateDiff = industryRate && revNum > 0 ? incomeRate - baseIncomeRate : 0;
-  const pastStdRatio   = baseIncome > 0 ? (netIncome / baseIncome) * 100 : 0;
-  return { ...row, revNum, expNum, netIncome, incomeRate, expenseRate, industryRate, baseIncome, baseIncomeRate, incomeRateDiff, pastStdRatio };
-}
-
-// ── 필요경비 항목별 비율 테이블 ────────────────────────────
-function ExpenseRatioTable({ expMap, revenue, printClass, extraDefs = [] }: {
-  expMap: ExpenseMap; revenue: number; printClass: string;
-  extraDefs?: { key: string; label: string }[];
-}) {
-  const baseDefs = EXPENSE_ITEMS.map(i => ({ key: i.key, label: i.label }));
-  const allDefs = [...baseDefs, ...extraDefs];
-  const items = allDefs.map(i => ({ ...i, amount: toNum(expMap[i.key]) })).filter(i => i.amount > 0);
-  if (items.length === 0) return null;
-  const total    = items.reduce((s, i) => s + i.amount, 0);
-  const maxRatio = Math.max(...items.map(i => revenue > 0 ? (i.amount / revenue) * 100 : 0));
-  return (
-    <div className={`${printClass} overflow-x-auto`}>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-amber-50 text-gray-500 border-b border-amber-100">
-            <th className="text-left px-3 py-1.5 font-semibold">항목</th>
-            <th className="text-right px-3 py-1.5 font-semibold">금액</th>
-            <th className="text-right px-3 py-1.5 font-semibold w-16">매출대비</th>
-            <th className="px-3 py-1.5 w-24 no-print">비율</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {items.map(e => {
-            const ratio = revenue > 0 ? (e.amount / revenue) * 100 : 0;
-            const barW  = maxRatio > 0 ? (ratio / maxRatio) * 100 : 0;
-            return (
-              <tr key={e.key} className="hover:bg-gray-50/50">
-                <td className="px-3 py-1.5 font-medium text-gray-700">{e.label}</td>
-                <td className="px-3 py-1.5 text-right font-mono text-gray-800">{e.amount.toLocaleString('ko-KR')}</td>
-                <td className="px-3 py-1.5 text-right">
-                  <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-[10px] ${
-                    ratio >= 20 ? 'bg-red-100 text-red-700'
-                    : ratio >= 10 ? 'bg-orange-100 text-orange-700'
-                    : ratio >= 5  ? 'bg-amber-100 text-amber-700'
-                    : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {ratio.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="px-3 py-1.5 no-print">
-                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${barW}%` }} />
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          <tr className="bg-amber-50 font-bold border-t border-amber-200">
-            <td className="px-3 py-1.5 text-amber-800">합 계</td>
-            <td className="px-3 py-1.5 text-right font-mono text-amber-800">{total.toLocaleString('ko-KR')}</td>
-            <td className="px-3 py-1.5 text-right">
-              <span className="inline-block bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-bold text-[10px]">
-                {revenue > 0 ? ((total / revenue) * 100).toFixed(1) : '0'}%
-              </span>
-            </td>
-            <td className="no-print" />
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
+function bumpNyUidFromNyRowIds(ids: string[]) {
+  for (const id of ids) {
+    const m = /^ny(\d+)$/.exec(id);
+    if (m) _nyUid = Math.max(_nyUid, parseInt(m[1], 10));
+  }
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
@@ -327,17 +215,48 @@ export default function Home() {
   const [rows, setRows]             = useState<BusinessRow[]>([makeRow()]);
   const [allRates, setAllRates]     = useState<Record<string, IndustryRate>>({});
   const [analyzed, setAnalyzed]     = useState(false);
+  /** 입력이 바뀐 뒤에는 이전 분석 결과가 최신이 아님을 안내 */
+  const [analysisStale, setAnalysisStale] = useState(false);
+  const [ratesReloadKey, setRatesReloadKey] = useState(0);
+  const [industryRatesStatus, setIndustryRatesStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [ratesLoadError, setRatesLoadError] = useState<string | null>(null);
+  const [analyzeBlockReason, setAnalyzeBlockReason] = useState<string | null>(null);
   const [rowDetails, setRowDetails] = useState<Record<string, RowDetail>>({});
   const [printExpDetail, setPrintExpDetail] = useState(false);
   const [printInputExpenseDetail, setPrintInputExpenseDetail] = useState(false);
+  const [printSimulationNewPage, setPrintSimulationNewPage] = useState(false);
+  const [nyRows, setNyRows] = useState<BusinessRow[]>(() => [makeNyRow()]);
+  const [nyRowDetails, setNyRowDetails] = useState<Record<string, RowDetail>>({});
+  const [nyAnalyzed, setNyAnalyzed] = useState(false);
+  const [nyPrintExpDetail, setNyPrintExpDetail] = useState(false);
+  const [nyDetailSectionOpen, setNyDetailSectionOpen] = useState(false);
+  const [nyRemarks, setNyRemarks] = useState('');
   const [saving, setSaving] = useState<'pdf' | 'jpg' | null>(null);
   const [persistReady, setPersistReady] = useState(false);
   const simSnapRef = useRef<SimPersist | null>(null);
+  const [simPersist, setSimPersist] = useState<SimPersist | null>(null);
   const fileImportRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadIndustryRates().then(setAllRates).catch(() => {});
-  }, []);
+    let cancelled = false;
+    setIndustryRatesStatus('loading');
+    setRatesLoadError(null);
+    loadIndustryRates()
+      .then(data => {
+        if (cancelled) return;
+        setAllRates(data);
+        setIndustryRatesStatus('ok');
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setAllRates({});
+        setIndustryRatesStatus('error');
+        setRatesLoadError(e instanceof Error ? e.message : '업종코드 데이터를 불러오지 못했습니다.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ratesReloadKey]);
 
   // 브라우저에 저장된 작업 불러오기 (최초 1회)
   useEffect(() => {
@@ -365,13 +284,42 @@ export default function Home() {
         }
       }
       setAnalyzed(!!m.analyzed);
+      setAnalysisStale(false);
       setPrintExpDetail(!!m.printExpDetail);
       setPrintInputExpenseDetail(!!m.printInputExpenseDetail);
+      setPrintSimulationNewPage(!!m.printSimulationNewPage);
+      if (Array.isArray(m.nyRows) && m.nyRows.length > 0) {
+        bumpNyUidFromNyRowIds(m.nyRows.map(r => r.id));
+        setNyRows(m.nyRows as BusinessRow[]);
+      }
+      if (m.nyRowDetails && typeof m.nyRowDetails === 'object') {
+        const nyd = m.nyRowDetails as Record<string, RowDetail>;
+        setNyRowDetails(nyd);
+        bumpNyCustomUidFromRowDetails(nyd);
+      }
+      setNyAnalyzed(!!m.nyAnalyzed);
+      setNyPrintExpDetail(!!m.nyPrintExpDetail);
+      if (typeof m.nyDetailSectionOpen === 'boolean') setNyDetailSectionOpen(m.nyDetailSectionOpen);
+      if (typeof m.nyRemarks === 'string') setNyRemarks(m.nyRemarks);
     } catch {
       /* ignore */
     }
     setPersistReady(true);
   }, []);
+
+  // 시뮬 스냅샷: 시뮬 섹션 마운트 전에도 LS_SIM으로 당기 명세 동기화 가능하게
+  useEffect(() => {
+    if (!persistReady || typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(LS_SIM);
+      if (!raw) return;
+      const p = JSON.parse(raw) as SimPersist;
+      setSimPersist(p);
+      simSnapRef.current = p;
+    } catch {
+      /* ignore */
+    }
+  }, [persistReady]);
 
   // 입력값 자동 저장 (같은 PC에서 창 닫았다 열어도 유지)
   useEffect(() => {
@@ -387,6 +335,13 @@ export default function Home() {
           analyzed,
           printExpDetail,
           printInputExpenseDetail,
+          printSimulationNewPage,
+          nyRows,
+          nyRowDetails,
+          nyAnalyzed,
+          nyPrintExpDetail,
+          nyDetailSectionOpen,
+          nyRemarks,
         };
         localStorage.setItem(LS_MAIN, JSON.stringify(main));
       } catch {
@@ -404,10 +359,18 @@ export default function Home() {
     analyzed,
     printExpDetail,
     printInputExpenseDetail,
+    printSimulationNewPage,
+    nyRows,
+    nyRowDetails,
+    nyAnalyzed,
+    nyPrintExpDetail,
+    nyDetailSectionOpen,
+    nyRemarks,
   ]);
 
   const onSimSnapshot = useCallback((s: SimPersist) => {
     simSnapRef.current = s;
+    setSimPersist(s);
   }, []);
 
   const exportWorkJson = async () => {
@@ -429,6 +392,13 @@ export default function Home() {
       analyzed,
       printExpDetail,
       printInputExpenseDetail,
+      printSimulationNewPage,
+      nyRows,
+      nyRowDetails,
+      nyAnalyzed,
+      nyPrintExpDetail,
+      nyDetailSectionOpen,
+      nyRemarks,
     };
     const simData: SimPersist = sim ?? { rows: [], card: '', tax: '', loan: '', other: '' };
     const payload: FullSessionFile = {
@@ -476,7 +446,8 @@ export default function Home() {
 
   // 행 상태
   const updateRow = (id: string, field: keyof BusinessRow, value: string) => {
-    setAnalyzed(false);
+    if (analyzed) setAnalysisStale(true);
+    if (field === 'totalRevenue') setAnalyzeBlockReason(null);
     setRows(prev => prev.map(r => {
       if (r.id !== id) return r;
       if (field === 'industryCode') return { ...r, industryCode: value.replace(/[^0-9]/g, '').slice(0, 6) };
@@ -564,7 +535,16 @@ export default function Home() {
     });
   };
 
-  const handleAnalyze = () => setAnalyzed(true);
+  const handleAnalyze = () => {
+    const hasRevenue = rows.some(r => toNum(r.totalRevenue) > 0);
+    if (!hasRevenue) {
+      setAnalyzeBlockReason('총수입금액 칸에 1원 이상 숫자를 입력한 뒤 다시 눌러 주세요. (경비만 넣으면 분석할 수 없습니다.)');
+      return;
+    }
+    setAnalyzeBlockReason(null);
+    setAnalysisStale(false);
+    setAnalyzed(true);
+  };
   const handleReset = () => {
     try {
       localStorage.removeItem(LS_MAIN);
@@ -573,14 +553,28 @@ export default function Home() {
       /* */
     }
     simSnapRef.current = null;
+    _uid = 0;
+    _customItemUid = 0;
+    _nyUid = 0;
+    resetNyCustomItemUid();
     setRows([makeRow()]);
     setAnalyzed(false);
+    setAnalysisStale(false);
     setTaxpayer('');
     setPrevYear('');
     setCurrYear('');
     setRowDetails({});
     setPrintExpDetail(false);
     setPrintInputExpenseDetail(false);
+    setPrintSimulationNewPage(false);
+    setNyRows([makeNyRow()]);
+    setNyRowDetails({});
+    setNyAnalyzed(false);
+    setNyPrintExpDetail(false);
+    setNyDetailSectionOpen(false);
+    setNyRemarks('');
+    setAnalyzeBlockReason(null);
+    setRatesReloadKey(k => k + 1);
   };
 
   const handleSave = async (format: 'pdf' | 'jpg') => {
@@ -595,17 +589,42 @@ export default function Home() {
     }
   };
 
-  const computed   = rows.map(r => computeRow(r, allRates));
+  const computed   = rows.map(r => computeRow(r, allRates, toNum));
   const activeRows = computed.filter(c => c.revNum > 0);
+  const canAnalyze = rows.some(r => toNum(r.totalRevenue) > 0);
   const totalRev   = computed.reduce((s, r) => s + r.revNum, 0);
   const totalExp   = computed.reduce((s, r) => s + r.expNum, 0);
   const totalNet   = totalRev - totalExp;
   const totalRate  = totalRev > 0 ? (totalNet / totalRev) * 100 : 0;
+  const totalBaseIncome =
+    computed.reduce((s, r) => s + r.baseIncome, 0);
+  const totalBaseIncomeRate =
+    totalRev > 0 ? (totalBaseIncome / totalRev) * 100 : 0;
+  const totalPastStdRatio =
+    totalBaseIncome > 0 ? (totalNet / totalBaseIncome) * 100 : 0;
+  const totalIncomeRateDiff = totalRate - totalBaseIncomeRate;
 
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // 상세분석이 입력된 행이 있는지 확인
-  const hasAnyExpDetail = rows.some(r => sumExpenseInputs(getDetail(r.id)) > 0);
+  const hasAnyExpDetail = rows.some(r => sumExpenseInputs(getDetail(r.id), toNum) > 0);
+
+  const getNyDetail = (id: string): RowDetail => {
+    const raw = nyRowDetails[id];
+    if (!raw) return { show: false, expenses: initExpenses(), customDefs: [] };
+    return {
+      show: raw.show,
+      customDefs: raw.customDefs ?? [],
+      expenses: mergeDetailExpenses(raw),
+    };
+  };
+  const nyComputed = nyRows.map(r => computeRow(r, allRates, toNum));
+  const nyActiveRows = nyComputed.filter(c => c.revNum > 0);
+  const nyHasAnyExpDetail = nyRows.some(r => sumExpenseInputs(getNyDetail(r.id), toNum) > 0);
+  const showPrevExpDetailPrint = analyzed && printExpDetail && hasAnyExpDetail;
+  const showNyExpDetailPrint =
+    nyDetailSectionOpen && nyAnalyzed && nyPrintExpDetail && nyHasAnyExpDetail;
+  const prevYearPrintPrefix = prevYear.trim() ? `${prevYear.trim()}년 ` : '';
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -622,6 +641,14 @@ export default function Home() {
           <img src="/logo.png" alt="세무법인청년들" className="print-header-logo object-contain shrink-0 self-center" />
         </div>
       </div>
+
+      {/* 인쇄·PDF·JPG: 기재한 경우에만 특이사항 블록 출력 */}
+      {nyRemarks.trim() && (
+        <div className="print-only hidden px-2 mb-2 no-break rounded-lg border border-gray-300 bg-gray-50 py-2">
+          <p className="text-[10px] font-bold text-gray-600 mb-1">특이사항</p>
+          <p className="text-[10px] text-gray-800 whitespace-pre-wrap leading-snug">{nyRemarks}</p>
+        </div>
+      )}
 
       {/* ── 화면 헤더 ── */}
       <header className="bg-white border-b border-gray-100 shadow-sm no-print">
@@ -721,11 +748,40 @@ export default function Home() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 
+        {industryRatesStatus === 'loading' && (
+          <div className="no-print rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-2.5 text-xs text-blue-800 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              업종코드·단순경비율 데이터를 불러오는 중입니다… (수십 초 걸리면 브라우저 캐시 문제일 수 있습니다. 아래를 누르거나 <strong className="font-bold">F5</strong>로 새로고침해 보세요.)
+            </span>
+            <button
+              type="button"
+              onClick={() => setRatesReloadKey(k => k + 1)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-bold hover:bg-blue-800">
+              다시 시도
+            </button>
+          </div>
+        )}
+        {industryRatesStatus === 'error' && ratesLoadError && (
+          <div className="no-print rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 flex flex-wrap items-center justify-between gap-3">
+            <span>
+              <strong className="font-bold">업종 데이터 오류.</strong> {ratesLoadError} 분석 시 업종 매칭이 되지 않습니다. 네트워크 확인 후 아래를 눌러 주세요.
+            </span>
+            <button
+              type="button"
+              onClick={() => setRatesReloadKey(k => k + 1)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-red-700 text-white text-xs font-bold hover:bg-red-800">
+              다시 불러오기
+            </button>
+          </div>
+        )}
+
         {/* ── 입력 테이블 (인쇄 제외) ── */}
         <div className="no-print bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-gray-800">총수입금액 및 필요경비 명세</h2>
+              <h2 className="text-sm font-bold text-gray-800">
+                {prevYear.trim() ? `${prevYear.trim()}년 ` : ''}총수입금액 및 필요경비 명세
+              </h2>
               <p className="text-xs text-gray-400 mt-0.5">업종코드별 수입·경비 입력 — 행별 <span className="text-amber-600 font-semibold">상세분석</span> 버튼으로 필요경비 항목 입력 가능</p>
             </div>
             <button onClick={addRow}
@@ -759,9 +815,10 @@ export default function Home() {
                   const c      = computed[idx];
                   const detail = getDetail(row.id);
                   const matched = c.industryRate;
-                  const hasDetail = sumExpenseInputs(detail) > 0;
-                  const expTotal = sumExpenseInputs(detail);
+                  const hasDetail = sumExpenseInputs(detail, toNum) > 0;
+                  const expTotal = sumExpenseInputs(detail, toNum);
                   const expDiff  = c.expNum - expTotal;
+                  const expDenom = c.expNum > 0 ? c.expNum : expTotal > 0 ? expTotal : 0;
 
                   return (
                     <Fragment key={row.id}>
@@ -911,7 +968,8 @@ export default function Home() {
                               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                 {EXPENSE_ITEMS.map(item => {
                                   const num   = toNum(detail.expenses[item.key]);
-                                  const ratio = c.revNum > 0 && num > 0 ? (num / c.revNum) * 100 : null;
+                                  const revRatio = c.revNum > 0 && num > 0 ? (num / c.revNum) * 100 : null;
+                                  const expRatio = expDenom > 0 && num > 0 ? (num / expDenom) * 100 : null;
                                   return (
                                     <div key={item.key} className="flex items-center gap-1.5">
                                       <div className="shrink-0 w-20 text-[10px] font-semibold text-gray-600 leading-tight">{item.label}</div>
@@ -922,9 +980,18 @@ export default function Home() {
                                         placeholder="0"
                                         className="flex-1 min-w-0 border border-amber-200 rounded-lg px-2 py-1.5 text-[11px] text-right font-mono focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
                                       />
-                                      {ratio !== null
-                                        ? <span className="shrink-0 w-10 text-center text-[10px] font-bold text-amber-700">{ratio.toFixed(1)}%</span>
-                                        : <span className="shrink-0 w-10 text-gray-300 text-center text-[10px]">-</span>}
+                                      {num <= 0 ? (
+                                        <span className="shrink-0 w-10 text-gray-300 text-center text-[10px]">-</span>
+                                      ) : (
+                                        <div className="shrink-0 flex flex-col items-end gap-0.5 min-w-[3.35rem]">
+                                          {revRatio !== null && (
+                                            <span className="text-[10px] font-bold text-amber-700 leading-tight">매출 {revRatio.toFixed(1)}%</span>
+                                          )}
+                                          {expRatio !== null && (
+                                            <span className="text-[10px] font-bold text-indigo-700 leading-tight">경비 {expRatio.toFixed(1)}%</span>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -942,7 +1009,8 @@ export default function Home() {
                                 {(detail.customDefs ?? []).map(cd => {
                                   const k = customExpenseKey(cd.id);
                                   const num = toNum(detail.expenses[k]);
-                                  const ratio = c.revNum > 0 && num > 0 ? (num / c.revNum) * 100 : null;
+                                  const revRatio = c.revNum > 0 && num > 0 ? (num / c.revNum) * 100 : null;
+                                  const expRatio = expDenom > 0 && num > 0 ? (num / expDenom) * 100 : null;
                                   return (
                                     <div key={cd.id} className="flex items-center gap-1.5 sm:col-span-2">
                                       <input
@@ -960,9 +1028,18 @@ export default function Home() {
                                         placeholder="0"
                                         className="flex-1 min-w-0 border border-amber-200 rounded-lg px-2 py-1.5 text-[11px] text-right font-mono focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
                                       />
-                                      {ratio !== null
-                                        ? <span className="shrink-0 w-10 text-center text-[10px] font-bold text-amber-700">{ratio.toFixed(1)}%</span>
-                                        : <span className="shrink-0 w-10 text-gray-300 text-center text-[10px]">-</span>}
+                                      {num <= 0 ? (
+                                        <span className="shrink-0 w-10 text-gray-300 text-center text-[10px]">-</span>
+                                      ) : (
+                                        <div className="shrink-0 flex flex-col items-end gap-0.5 min-w-[3.35rem]">
+                                          {revRatio !== null && (
+                                            <span className="text-[10px] font-bold text-amber-700 leading-tight">매출 {revRatio.toFixed(1)}%</span>
+                                          )}
+                                          {expRatio !== null && (
+                                            <span className="text-[10px] font-bold text-indigo-700 leading-tight">경비 {expRatio.toFixed(1)}%</span>
+                                          )}
+                                        </div>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => removeCustomExpenseItem(row.id, cd.id)}
@@ -1005,11 +1082,24 @@ export default function Home() {
           {/* 분석 버튼 */}
           <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/40">
             <button
+              type="button"
               onClick={handleAnalyze}
-              disabled={!rows.some(r => toNum(r.totalRevenue) > 0)}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+              className={`relative z-10 w-full cursor-pointer py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 active:scale-[0.99] transition-all shadow text-sm ${
+                canAnalyze ? '' : 'opacity-90'
+              }`}
+            >
               분석하기
             </button>
+            {analyzeBlockReason && (
+              <p className="mt-2.5 text-xs text-red-600 font-semibold text-center leading-snug" role="alert">
+                {analyzeBlockReason}
+              </p>
+            )}
+            {!canAnalyze && !analyzeBlockReason && (
+              <p className="mt-2 text-[11px] text-gray-500 text-center leading-snug">
+                위 표에서 <span className="text-blue-700 font-semibold">총수입금액</span>에 숫자를 넣으면 분석할 수 있습니다.
+              </p>
+            )}
           </div>
         </div>
 
@@ -1019,11 +1109,12 @@ export default function Home() {
             {/* ── 분석 섹션 래퍼 (시뮬레이션과 동일 스타일) ── */}
             <div className="space-y-4 bg-orange-50/30 rounded-3xl border border-orange-100 p-5 shadow-sm">
 
-            {/* 제목 */}
+            <div className="analysis-section-print-top space-y-4">
+            {/* 제목 — 인쇄에도 화면과 동일(체크박스만 제외) */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-8 bg-gradient-to-b from-orange-400 to-amber-500 rounded-full no-print" />
-                <h2 className="text-2xl font-black tracking-tight">
+                <div className="w-1.5 h-8 bg-gradient-to-b from-orange-400 to-amber-500 rounded-full shrink-0" />
+                <h2 className="text-2xl font-black tracking-tight analysis-screen-title">
                   <mark className="bg-orange-100 px-2 py-0.5 rounded inline-block">
                     {prevYear && <span className="text-orange-400">{prevYear}년 </span>}
                     <span className="text-gray-900">업종코드별 단순경비율 대비 분석</span>
@@ -1038,16 +1129,72 @@ export default function Home() {
                     onChange={e => setPrintExpDetail(e.target.checked)}
                     className="w-4 h-4 accent-amber-500 rounded"
                   />
-                  <span className="text-xs font-bold text-amber-700">항목별 비율분석 인쇄에 포함</span>
+                  <span className="text-xs font-bold text-amber-700">{prevYearPrintPrefix}항목별 비율분석 인쇄에 포함</span>
                 </label>
               )}
             </div>
 
+            {/* 전체 합계 — 업종별 카드보다 위 */}
+            {activeRows.length >= 2 && (
+              <div className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-5 no-break print-summary-total">
+                <h3 className="text-sm font-bold text-gray-700 mb-4 print-summary-total-heading">
+                  전체 합계 분석{prevYear.trim() ? ` (${prevYear.trim()}년)` : ''}
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="bg-blue-50 rounded-xl p-4 print-summary-total-cell">
+                    <p className="text-xs text-blue-500 mb-1.5">총수입금액 합계</p>
+                    <p className="text-base font-bold text-blue-700 font-mono">{formatKRW(totalRev)}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded-xl p-4 print-summary-total-cell">
+                    <p className="text-xs text-orange-500 mb-1.5">필요경비 합계</p>
+                    <p className="text-base font-bold text-orange-600 font-mono">{formatKRW(totalExp)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatPct(totalRev > 0 ? (totalExp / totalRev) * 100 : 0)}</p>
+                  </div>
+                  <div className="bg-green-50 rounded-xl p-4 print-summary-total-cell">
+                    <p className="text-xs text-green-600 mb-1.5">소득금액 합계</p>
+                    <p className="text-base font-bold text-green-700 font-mono">{formatKRW(totalNet)}</p>
+                    <p className="text-xs text-green-600 font-bold mt-0.5">{formatPct(totalRate)}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 print-summary-total-cell">
+                    <p className="text-xs text-gray-500 mb-1.5">단순경비율 기준 소득금액 합계</p>
+                    <p className="text-base font-bold text-gray-800 font-mono">{formatKRW(totalBaseIncome)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatPct(totalBaseIncomeRate)}</p>
+                  </div>
+                </div>
+                {totalBaseIncome > 0 && (
+                  <div className="mt-3 pt-3 border-t border-blue-100">
+                    <IncomeRateStandardCompareBlock
+                      incomeRate={totalRate}
+                      baseIncomeRate={totalBaseIncomeRate}
+                      incomeRateDiff={totalIncomeRateDiff}
+                      pastStdRatio={totalPastStdRatio}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            </div>{/* analysis-section-print-top */}
+
+            {analysisStale && (
+              <div className="no-print rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+                <strong className="font-bold">입력이 변경되었습니다.</strong> 아래 숫자는 이전 분석 기준입니다. 반영하려면 위에서 <strong>분석하기</strong>를 다시 눌러 주세요.
+              </div>
+            )}
+
             {/* 업종별 분석 카드 */}
             <div className="grid gap-3">
-              {activeRows.map((c, idx) => {
+              {activeRows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-orange-200 bg-white/80 px-6 py-10 text-center text-sm text-gray-600">
+                  <p className="font-bold text-gray-800 mb-1">표시할 분석 행이 없습니다</p>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    이 영역에는 <strong className="text-orange-700">총수입금액</strong>을 1원 이상 입력한 행만 나옵니다.
+                    수입만 비워 두고 경비만 넣으면 여기는 비어 보일 수 있습니다. 수입 금액을 입력한 뒤 다시 <strong>분석하기</strong>를 눌러 주세요.
+                  </p>
+                </div>
+              ) : (
+              activeRows.map((c, idx) => {
                 const detail  = getDetail(c.id);
-                const hasExp  = sumExpenseInputs(detail) > 0;
+                const hasExp  = sumExpenseInputs(detail, toNum) > 0;
                 const expPrintClass = 'no-print';
                 const extraExpenseDefs = (detail.customDefs ?? []).map(x => ({
                   key: customExpenseKey(x.id),
@@ -1109,67 +1256,31 @@ export default function Home() {
                     </div>
 
                     {c.industryRate && c.revNum > 0 && (
-                      <div className="space-y-1.5 mb-3">
-                        <div className="flex justify-between text-[10px] text-gray-500">
-                          <span>실제 소득율 <strong className="text-green-600">{formatPct(c.incomeRate)}</strong></span>
-                          <span>기준 소득율 <strong className="text-indigo-600">{formatPct(c.baseIncomeRate)}</strong></span>
-                        </div>
-                        {/* 진행률 바 - 화면 전용 */}
-                        <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden no-print">
-                          <div className="absolute left-0 top-0 h-full bg-indigo-300 rounded-full"
-                            style={{ width: `${Math.min(c.baseIncomeRate, 100)}%` }} />
-                          <div className={`absolute left-0 top-0 h-full rounded-full opacity-80 ${c.incomeRate >= c.baseIncomeRate ? 'bg-green-400' : 'bg-sky-400'}`}
-                            style={{ width: `${Math.min(Math.max(c.incomeRate, 0), 100)}%` }} />
-                        </div>
-                        <div className="flex gap-2 flex-wrap items-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${c.incomeRateDiff >= 0 ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}`}>
-                            소득율 차이: {c.incomeRateDiff >= 0 ? '+' : ''}{formatPct(c.incomeRateDiff)} ({c.incomeRateDiff >= 0 ? '기준 초과' : '기준 미달'})
-                          </span>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
-                            표준 대비: {formatPct(c.pastStdRatio)}
-                          </span>
-                        </div>
-                      </div>
+                      <IncomeRateStandardCompareBlock
+                        incomeRate={c.incomeRate}
+                        baseIncomeRate={c.baseIncomeRate}
+                        incomeRateDiff={c.incomeRateDiff}
+                        pastStdRatio={c.pastStdRatio}
+                      />
                     )}
 
                     {/* 항목별 비율분석 (입력된 경우) */}
                     {hasExp && (
                       <div className={`border-t border-amber-100 pt-2 mt-1 ${expPrintClass}`}>
-                        <p className="text-[10px] font-bold text-amber-700 mb-1.5">필요경비 항목별 매출 대비 비율</p>
-                        <ExpenseRatioTable expMap={detail.expenses} revenue={c.revNum} printClass="" extraDefs={extraExpenseDefs} />
+                        <p className="text-[10px] font-bold text-amber-700 mb-1.5">필요경비 항목별 매출·필요경비 내 비율</p>
+                        <ExpenseRatioTable
+                          expMap={detail.expenses}
+                          revenue={c.revNum}
+                          necessaryExpense={c.expNum}
+                          printClass=""
+                          extraDefs={extraExpenseDefs}
+                        />
                       </div>
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
-
-            {/* 전체 합계 (2개 이상) */}
-            {activeRows.length >= 2 && (
-              <div className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-4 no-break">
-                <h3 className="text-xs font-bold text-gray-700 mb-3">전체 합계 분석</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div className="bg-blue-50 rounded-xl p-2.5">
-                    <p className="text-[10px] text-blue-500 mb-1">총수입금액 합계</p>
-                    <p className="text-sm font-bold text-blue-700 font-mono">{formatKRW(totalRev)}</p>
-                  </div>
-                  <div className="bg-orange-50 rounded-xl p-2.5">
-                    <p className="text-[10px] text-orange-500 mb-1">필요경비 합계</p>
-                    <p className="text-sm font-bold text-orange-600 font-mono">{formatKRW(totalExp)}</p>
-                    <p className="text-[10px] text-gray-400">{formatPct(totalRev > 0 ? (totalExp / totalRev) * 100 : 0)}</p>
-                  </div>
-                  <div className="bg-green-50 rounded-xl p-2.5">
-                    <p className="text-[10px] text-green-600 mb-1">소득금액 합계</p>
-                    <p className="text-sm font-bold text-green-700 font-mono">{formatKRW(totalNet)}</p>
-                    <p className="text-[10px] text-green-500 font-bold">{formatPct(totalRate)}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-2.5">
-                    <p className="text-[10px] text-gray-500 mb-1">전체 소득율</p>
-                    <p className="text-xl font-black text-gray-700">{formatPct(totalRate)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             </div>{/* ── 분석 섹션 래퍼 닫기 ── */}
 
@@ -1184,14 +1295,38 @@ export default function Home() {
               currYear={currYear}
               printInputExpenseDetail={printInputExpenseDetail}
               onPrintInputExpenseDetailChange={setPrintInputExpenseDetail}
+              printSimulationNewPage={printSimulationNewPage}
+              onPrintSimulationNewPageChange={setPrintSimulationNewPage}
               onSimSnapshot={onSimSnapshot}
+              detailAnalysisNeeded={nyDetailSectionOpen}
+              onDetailAnalysisNeededChange={setNyDetailSectionOpen}
+              nyRemarks={nyRemarks}
+              onNyRemarksChange={setNyRemarks}
             />
+
+            {nyDetailSectionOpen && (
+            <NextYearPlanSection
+              allRates={allRates}
+              currYear={currYear}
+              taxpayer={taxpayer}
+              makeNyRow={makeNyRow}
+              rows={nyRows}
+              setRows={setNyRows}
+              rowDetails={nyRowDetails}
+              setRowDetails={setNyRowDetails}
+              analyzed={nyAnalyzed}
+              setAnalyzed={setNyAnalyzed}
+              printExpDetail={nyPrintExpDetail}
+              setPrintExpDetail={setNyPrintExpDetail}
+              simulationSnapshot={simPersist}
+            />
+            )}
           </>
         )}
       </div>
 
-      {/* ── 인쇄 2페이지: 항목별 비율분석 ── */}
-      {analyzed && printExpDetail && hasAnyExpDetail && (
+      {/* ── 인쇄 부속: 전기 항목별 비율분석 → 이어서 당기 ── */}
+      {showPrevExpDetailPrint && (
         <div className="print-only hidden exp-detail-page px-2 pt-2">
           <div className="mb-3 pb-2 border-b-2 border-amber-600">
             <h2 className="text-lg font-black text-gray-900">
@@ -1203,7 +1338,7 @@ export default function Home() {
           <div className="space-y-4">
             {activeRows.map((c, idx) => {
               const detail = getDetail(c.id);
-              const hasExp = sumExpenseInputs(detail) > 0;
+              const hasExp = sumExpenseInputs(detail, toNum) > 0;
               if (!hasExp) return null;
               const extraExpenseDefs = (detail.customDefs ?? []).map(x => ({
                 key: customExpenseKey(x.id),
@@ -1220,7 +1355,53 @@ export default function Home() {
                       총수입: {formatKRW(c.revNum)}
                     </span>
                   </div>
-                  <ExpenseRatioTable expMap={detail.expenses} revenue={c.revNum} printClass="" extraDefs={extraExpenseDefs} />
+                  <ExpenseRatioTable
+                    expMap={detail.expenses}
+                    revenue={c.revNum}
+                    necessaryExpense={c.expNum}
+                    printClass=""
+                    extraDefs={extraExpenseDefs}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showNyExpDetailPrint && (
+        <div
+          className={`print-only hidden px-2 pt-2 ${showPrevExpDetailPrint ? 'exp-detail-follow-ny' : 'exp-detail-page'}`}>
+          <div className="mb-3 pb-2 border-b-2 border-red-600">
+            <h2 className="text-lg font-black text-gray-900">
+              {taxpayer && <span className="text-blue-900">{taxpayer} </span>}
+              {currYear.trim() && <span className="text-red-600">{currYear.trim()}년 </span>}
+              필요경비 항목별 매출 대비 비율분석
+            </h2>
+          </div>
+          <div className="space-y-4">
+            {nyActiveRows.map((c, idx) => {
+              const detail = getNyDetail(c.id);
+              const hasExp = sumExpenseInputs(detail, toNum) > 0;
+              if (!hasExp) return null;
+              const extraExpenseDefs = (detail.customDefs ?? []).map(x => ({
+                key: customExpenseKey(x.id),
+                label: x.label || '추가항목',
+              }));
+              return (
+                <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-3 no-break">
+                  <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-gray-100">
+                    <span className="text-xs font-black text-gray-800 font-mono">#{idx + 1} {c.industryCode}</span>
+                    {c.industryRate && <span className="text-xs text-gray-500">{c.industryRate.name}</span>}
+                    <span className="ml-auto text-xs text-gray-400 font-mono">총수입: {formatKRW(c.revNum)}</span>
+                  </div>
+                  <ExpenseRatioTable
+                    expMap={detail.expenses}
+                    revenue={c.revNum}
+                    necessaryExpense={c.expNum}
+                    printClass=""
+                    extraDefs={extraExpenseDefs}
+                  />
                 </div>
               );
             })}

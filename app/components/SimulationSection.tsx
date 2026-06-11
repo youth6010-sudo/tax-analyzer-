@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type ChangeEvent, type CompositionEvent } from 'react';
 import type { IndustryRate } from '../types';
+import { fmt, toNum } from '../lib/taxAmountFmt';
 import { findIndustryRate, formatKRW, formatPct } from '../utils/calculator';
 import { LS_SIM, type SimPersist, type SimCustomExpensePersist } from '../utils/taxSessionStorage';
 
@@ -28,13 +29,19 @@ interface Props {
   currYear?: string;
   printInputExpenseDetail: boolean;
   onPrintInputExpenseDetailChange: (v: boolean) => void;
+  /** 인쇄·PDF·JPG: 시뮬레이션 블록을 새 페이지에서 시작 */
+  printSimulationNewPage: boolean;
+  onPrintSimulationNewPageChange: (v: boolean) => void;
   onSimSnapshot?: (s: SimPersist) => void;
+  /** 과세연도 기준 총수입·경비 명세 블록 표시 (시뮬레이션 헤더 체크) */
+  detailAnalysisNeeded?: boolean;
+  onDetailAnalysisNeededChange?: (v: boolean) => void;
+  /** 인쇄·PDF·JPG — 내용이 있을 때만 출력에 포함 */
+  nyRemarks: string;
+  onNyRemarksChange: (v: string) => void;
 }
 
 const TARGET_PCTS = [80, 90, 100, 110, 120] as const;
-
-const fmt   = (v: string) => { const n = v.replace(/[^0-9]/g, ''); return n ? parseInt(n).toLocaleString('ko-KR') : ''; };
-const toNum = (v: string) => parseFloat(v.replace(/,/g, '')) || 0;
 
 let _uid = 0;
 const uid        = () => String(++_uid);
@@ -62,7 +69,13 @@ export default function SimulationSection({
   currYear,
   printInputExpenseDetail,
   onPrintInputExpenseDetailChange,
+  printSimulationNewPage,
+  onPrintSimulationNewPageChange,
   onSimSnapshot,
+  detailAnalysisNeeded = false,
+  onDetailAnalysisNeededChange,
+  nyRemarks,
+  onNyRemarksChange,
 }: Props) {
   const [rows, setRows] = useState<SimRow[]>([makeSimRow()]);
   const [card,  setCard]  = useState('');
@@ -116,7 +129,14 @@ export default function SimulationSection({
       if (r.id !== id) return r;
       if (field === 'code')      return { ...r, code: String(value).replace(/[^0-9]/g, '').slice(0, 6) };
       if (field === 'revenue')   return { ...r, revenue: fmt(String(value)) };
-      if (field === 'targetPct') return { ...r, targetPct: Number(value) };
+      if (field === 'targetPct') {
+        const raw = typeof value === 'number' ? String(value) : String(value).trim().replace(',', '.');
+        const normalized = raw.startsWith('.') ? `0${raw}` : raw;
+        const n = typeof value === 'number' ? value : parseFloat(normalized);
+        if (!Number.isFinite(n)) return r;
+        const clamped = Math.min(200, Math.max(0, n));
+        return { ...r, targetPct: clamped };
+      }
       return r;
     }));
   };
@@ -140,8 +160,9 @@ export default function SimulationSection({
     const rate          = r.code.length === 6 ? findIndustryRate(r.code, allRates) : null;
     const simpleRate    = rate?.simpleRateGeneral ?? 0;
     const baseIncome    = rate && revNum > 0 ? Math.trunc(revNum * (1 - simpleRate / 100)) : 0;
-    const targetIncome  = Math.trunc(baseIncome * (r.targetPct / 100));
-    const requiredExpense = revNum > 0 ? Math.trunc(revNum - targetIncome) : 0;
+    // 조정률 소수 반영: 절사만 쓰면 소액·저조정에서 목표소득·가이드가 0으로 떨어져 '-'로 보이는 문제 방지
+    const targetIncome  = baseIncome > 0 ? Math.round(baseIncome * (Number(r.targetPct) / 100)) : 0;
+    const requiredExpense = revNum > 0 ? Math.round(revNum - targetIncome) : 0;
     return { ...r, revNum, rate, baseIncome, targetIncome, requiredExpense };
   }), [rows, allRates]);
 
@@ -164,28 +185,67 @@ export default function SimulationSection({
   const allSamePct   = rows.every(r => r.targetPct === rows[0].targetPct);
 
   return (
-    <div className="space-y-4 simulation-section bg-blue-50/40 rounded-3xl border border-blue-100 p-5 shadow-sm">
+    <div
+      className={`space-y-4 simulation-section bg-blue-50/40 rounded-3xl border border-blue-100 p-5 shadow-sm${
+        printSimulationNewPage ? ' simulation-print-new-page' : ''
+      }`}
+    >
 
-      {/* ── 제목 ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-9 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-full no-print" />
-          <h2 className="text-2xl font-black tracking-tight">
+      {/* ── 제목 | 특이사항 | 상세 분석 필요·인쇄 옵션 (한 줄) ── */}
+      <div className="flex flex-nowrap items-center gap-2 sm:gap-3 w-full min-w-0 overflow-x-auto">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-1.5 h-9 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-full" />
+          <h2 className="text-2xl font-black tracking-tight whitespace-nowrap analysis-screen-title">
             <mark className="bg-yellow-200 px-2 py-0.5 rounded inline-block">
               {currYear && <span className="text-blue-600">{currYear}년 </span>}
               <span className="text-gray-900">소득금액 시뮬레이션</span>
             </mark>
           </h2>
         </div>
-        <label className="no-print flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-blue-200 bg-white hover:bg-blue-50/80 transition-colors shrink-0">
-          <input
-            type="checkbox"
-            checked={printInputExpenseDetail}
-            onChange={e => onPrintInputExpenseDetailChange(e.target.checked)}
-            className="w-4 h-4 accent-blue-600 rounded"
+        <div className="no-print flex items-center gap-1.5 min-w-0 flex-1 basis-0">
+          <label htmlFor="ny-remarks-sim" className="text-[11px] font-bold text-blue-900 shrink-0 whitespace-nowrap">
+            특이사항
+          </label>
+          <textarea
+            id="ny-remarks-sim"
+            rows={1}
+            value={nyRemarks}
+            onChange={e => onNyRemarksChange(e.target.value)}
+            placeholder="기재 시 인쇄·PDF·JPG에만 함께 출력"
+            className="min-w-[6rem] w-full min-h-9 max-h-9 py-1.5 text-xs border border-blue-200 rounded-lg px-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white leading-snug"
           />
-          <span className="text-xs font-bold text-blue-800">입력지출상세 인쇄에 포함</span>
-        </label>
+        </div>
+        <div className="flex flex-nowrap items-center gap-2 shrink-0 ml-auto">
+          {onDetailAnalysisNeededChange && (
+            <label className="no-print flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50/80 transition-colors whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={detailAnalysisNeeded}
+                onChange={e => onDetailAnalysisNeededChange(e.target.checked)}
+                className="w-4 h-4 accent-indigo-600 rounded shrink-0"
+              />
+              <span className="text-xs font-bold text-indigo-800">상세 분석 필요</span>
+            </label>
+          )}
+          <label className="no-print flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-blue-200 bg-white hover:bg-blue-50/80 transition-colors whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={printInputExpenseDetail}
+              onChange={e => onPrintInputExpenseDetailChange(e.target.checked)}
+              className="w-4 h-4 accent-blue-600 rounded shrink-0"
+            />
+            <span className="text-xs font-bold text-blue-800">입력지출상세 인쇄에 포함</span>
+          </label>
+          <label className="no-print flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/80 transition-colors whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={printSimulationNewPage}
+              onChange={e => onPrintSimulationNewPageChange(e.target.checked)}
+              className="w-4 h-4 accent-slate-600 rounded shrink-0"
+            />
+            <span className="text-xs font-bold text-slate-800">시뮬레이션 새 장에서 시작</span>
+          </label>
+        </div>
       </div>
 
       {/* ── 입력 테이블 ── */}
@@ -293,13 +353,19 @@ export default function SimulationSection({
                     </div>
                     <div className="flex items-center gap-1 justify-center">
                       <input
-                        type="number" min={0} max={200}
+                        type="number"
+                        step="any"
+                        min={0}
+                        max={200}
                         value={c.targetPct}
                         onChange={e => {
-                          const v = parseInt(e.target.value);
-                          if (!isNaN(v) && v >= 0 && v <= 200) updateRow(c.id, 'targetPct', v);
+                          const raw = String(e.target.value).trim().replace(',', '.');
+                          if (raw === '' || raw === '-') return;
+                          const normalized = raw.startsWith('.') ? `0${raw}` : raw;
+                          const v = parseFloat(normalized);
+                          if (Number.isFinite(v)) updateRow(c.id, 'targetPct', v);
                         }}
-                        className="w-14 border border-indigo-300 rounded-lg px-1.5 py-1 text-sm text-center font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        className="w-16 border border-indigo-300 rounded-lg px-1.5 py-1 text-sm text-center font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <span className="text-xs text-gray-500 font-bold">%</span>
                     </div>
@@ -314,23 +380,36 @@ export default function SimulationSection({
 
                   {/* 목표 소득금액 */}
                   <td className="px-3 py-2 text-right">
-                    {c.targetIncome > 0
+                    {c.revNum > 0 && c.rate
                       ? <div>
                           <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold text-sm">
                             {c.targetIncome.toLocaleString('ko-KR')}
                           </span>
-                          <p className="text-xs text-blue-600 font-bold text-right mt-0.5">({c.targetPct}%)</p>
+                          <p className="text-xs text-blue-600 font-bold text-right mt-0.5">
+                            ({Number.isInteger(c.targetPct) ? c.targetPct : c.targetPct.toFixed(2)}%)
+                          </p>
                         </div>
-                      : <span className="text-gray-300">-</span>}
+                      : c.revNum > 0 && c.code.length === 6 && !c.rate ? (
+                        <span className="text-xs text-red-500">코드 없음</span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
                   </td>
 
                   {/* 필요경비 가이드 */}
                   <td className="px-3 py-2 text-right">
-                    {c.requiredExpense > 0
-                      ? <span className="inline-block bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold text-sm">
-                          {c.requiredExpense.toLocaleString('ko-KR')}
-                        </span>
-                      : <span className="text-gray-300">-</span>}
+                    {c.revNum > 0 && c.rate ? (
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded font-bold text-sm ${
+                          c.requiredExpense >= 0
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}>
+                        {c.requiredExpense.toLocaleString('ko-KR')}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
                   </td>
 
                   {/* 삭제 */}
@@ -367,12 +446,12 @@ export default function SimulationSection({
 
         {/* 안내 문구 (화면 전용) */}
         <div className="no-print px-5 py-2 border-t border-gray-100 bg-gray-50">
-          <p className="text-xs text-gray-500">조정률 버튼 클릭 또는 숫자 직접 입력 (0~200%)</p>
+          <p className="text-xs text-gray-500">조정률 버튼 클릭 또는 숫자 직접 입력 (0~200%, 소수 가능)</p>
         </div>
       </div>
 
-      {/* ── 요약 카드 ── */}
-      {totalBaseIncome > 0 && (
+      {/* ── 요약 카드 ── (수입이 있으면 표시 — 업종 미입력 시에도 안내) */}
+      {totalRev > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {/* 단순기준 */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center shadow-sm">
@@ -381,17 +460,23 @@ export default function SimulationSection({
               <span className="text-xs text-gray-400 font-normal ml-1">(조정률 100%)</span>
             </p>
             <p className="text-base font-bold text-gray-800 font-mono break-all">
-              {formatKRW(totalBaseIncome)}
+              {totalBaseIncome > 0 ? formatKRW(totalBaseIncome) : <span className="text-gray-400 text-sm font-normal">6자리 업종코드 입력</span>}
             </p>
           </div>
           {/* 목표 소득금액 ★ */}
           <div className="bg-white rounded-2xl border-2 border-blue-400 p-4 text-center shadow-md">
             <p className="text-sm font-bold text-blue-700 mb-2">★ 목표 소득금액</p>
             <p className="text-base font-black text-blue-800 font-mono break-all">
-              {formatKRW(totalTargetIncome)}
-              <span className="text-sm font-bold text-blue-600 ml-1">
-                ({totalRev > 0 ? ((totalTargetIncome / totalRev) * 100).toFixed(1) : '0'}%)
-              </span>
+              {totalBaseIncome > 0 ? (
+                <>
+                  {formatKRW(totalTargetIncome)}
+                  <span className="text-sm font-bold text-blue-600 ml-1">
+                    ({totalRev > 0 ? ((totalTargetIncome / totalRev) * 100).toFixed(1) : '0'}%)
+                  </span>
+                </>
+              ) : (
+                <span className="text-gray-400 text-sm font-normal">단순기준 산출 후 표시</span>
+              )}
             </p>
           </div>
           {/* 필요경비 가이드 ★ */}
@@ -401,7 +486,7 @@ export default function SimulationSection({
               <span className="text-xs text-amber-500 font-normal ml-1">(수입−목표소득)</span>
             </p>
             <p className="text-base font-black text-amber-700 font-mono break-all">
-              {formatKRW(totalRequiredExpPct)}
+              {totalBaseIncome > 0 ? formatKRW(totalRequiredExpPct) : <span className="text-gray-400 text-sm font-normal">단순기준 산출 후 표시</span>}
             </p>
           </div>
         </div>
@@ -419,12 +504,12 @@ export default function SimulationSection({
           </button>
         </div>
         <div className="divide-y divide-gray-100">
-          <ExpenseRow label="카드이용총액" value={card}  onChange={v => setCard(fmt(v))}  revenue={totalRev} />
-          <ExpenseRow label="세금과공과금" value={tax}   onChange={v => setTax(fmt(v))}   revenue={totalRev} />
-          <ExpenseRow label="대출이자"     value={loan}  onChange={v => setLoan(fmt(v))}  revenue={totalRev} />
-          <ExpenseRow label="기타비용"     value={other} onChange={v => setOther(fmt(v))} revenue={totalRev} />
+          <ExpenseRow label="카드이용총액" value={card}  onChange={setCard}  revenue={totalRev} />
+          <ExpenseRow label="세금과공과금" value={tax}   onChange={setTax}   revenue={totalRev} />
+          <ExpenseRow label="대출이자"     value={loan}  onChange={setLoan}  revenue={totalRev} />
+          <ExpenseRow label="기타비용"     value={other} onChange={setOther} revenue={totalRev} />
           {customExpenses.map(c => (
-            <div key={c.id} className="px-5 py-3 flex items-center gap-3">
+            <div key={c.id} className="px-5 py-3 flex items-center gap-3 min-w-0">
               <input
                 type="text"
                 value={c.label}
@@ -436,10 +521,19 @@ export default function SimulationSection({
               <span className="print-only hidden w-28 shrink-0 text-sm font-semibold text-gray-700">{c.label || '추가항목'}</span>
               <input
                 type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={c.amount}
-                onChange={e => updateCustomExpense(c.id, { amount: fmt(e.target.value) })}
+                onChange={e => {
+                  const ne = e.nativeEvent as InputEvent;
+                  if (ne.isComposing) return;
+                  updateCustomExpense(c.id, { amount: fmt(e.target.value) });
+                }}
+                onCompositionEnd={e => {
+                  updateCustomExpense(c.id, { amount: fmt(e.currentTarget.value) });
+                }}
                 placeholder="0"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-base text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 min-w-0 min-h-[2.5rem] border border-gray-200 rounded-xl px-3 py-2 text-base text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
               <div className="w-16 text-right shrink-0 flex items-center justify-end gap-1">
                 {totalRev > 0 && toNum(c.amount) > 0
@@ -532,13 +626,28 @@ export default function SimulationSection({
 function ExpenseRow({ label, value, onChange, revenue }: {
   label: string; value: string; onChange: (v: string) => void; revenue: number;
 }) {
-  const num      = parseFloat(value.replace(/,/g, '')) || 0;
+  const num      = toNum(value);
   const curRatio = revenue > 0 && num > 0 ? ((num / revenue) * 100).toFixed(1) + '%' : null;
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    if (ne.isComposing) return;
+    onChange(fmt(e.target.value));
+  };
+  const handleCompositionEnd = (e: CompositionEvent<HTMLInputElement>) => {
+    onChange(fmt(e.currentTarget.value));
+  };
   return (
-    <div className="px-5 py-3 flex items-center gap-3">
+    <div className="px-5 py-3 flex items-center gap-3 min-w-0">
       <div className="w-28 shrink-0 text-sm font-semibold text-gray-700">{label}</div>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
-        className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-base text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        value={value}
+        onChange={handleChange}
+        onCompositionEnd={handleCompositionEnd}
+        placeholder="0"
+        className="flex-1 min-w-0 min-h-[2.5rem] border border-gray-200 rounded-xl px-3 py-2 text-base text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
       />
       <div className="w-16 text-right shrink-0">
         {curRatio
