@@ -1,0 +1,174 @@
+'use client';
+
+import { useState } from 'react';
+import type { LunchSpot } from '@/app/types/lunch';
+import type { LunchSpotJournal } from '@/app/types/lunchJournal';
+import {
+  formatVisitDate,
+  getAverageRating,
+  getLastVisit,
+  ateOnDate,
+  todayDateStr,
+} from '@/app/utils/lunchJournal';
+import { LunchVisitForm, LunchVisitHistory, getTodayVisitDefaults } from './LunchVisitPanel';
+
+function MapLink({ href, label }: { href: string; label: string }) {
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+    >
+      {label}
+    </a>
+  );
+}
+
+interface LunchSpotCardProps {
+  spot: LunchSpot;
+  journal?: LunchSpotJournal | null;
+  onRecordVisit?: (spotId: string, rating: number, review: string) => void;
+  onEditVisit?: (spotId: string, visitId: string, rating: number, review: string) => void;
+  onDeleteVisit?: (spotId: string, visitId: string) => void;
+  onCancelToday?: (spotId: string) => void;
+  showVisitForm?: boolean;
+  highlight?: boolean;
+}
+
+export default function LunchSpotCard({
+  spot,
+  journal,
+  onRecordVisit,
+  onEditVisit,
+  onDeleteVisit,
+  onCancelToday,
+  showVisitForm = false,
+  highlight = false,
+}: LunchSpotCardProps) {
+  const [formOpen, setFormOpen] = useState(showVisitForm);
+  const visits = journal?.visits ?? [];
+  const avg = journal ? getAverageRating(journal) : null;
+  const last = journal ? getLastVisit(journal) : null;
+  const ateToday = journal ? ateOnDate(journal, todayDateStr()) : false;
+  const todayDefaults = getTodayVisitDefaults(journal);
+
+  return (
+    <article
+      className={`rounded-2xl border bg-white p-4 shadow-sm transition-shadow ${
+        highlight
+          ? 'border-orange-300 ring-2 ring-orange-200 shadow-md'
+          : 'border-gray-200 hover:shadow-md'
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-gray-900">{spot.name}</h3>
+            {ateToday && (
+              <span className="inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-green-100 text-green-700 border border-green-200">
+                오늘 먹음
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {spot.category} · 도보 {spot.walkMinutes > 0 ? `${spot.walkMinutes}분` : '—'} ·{' '}
+            {spot.priceRange !== '미입력' ? spot.priceRange : '가격 미입력'}
+          </p>
+          {avg !== null && (
+            <p className="mt-1 text-sm text-amber-600 font-medium">
+              ★ {avg}{' '}
+              <span className="text-gray-400 font-normal text-xs">({visits.length}회 방문)</span>
+            </p>
+          )}
+          {last && !ateToday && (
+            <p className="mt-0.5 text-xs text-gray-400">
+              마지막 방문 {formatVisitDate(last.date)}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <MapLink href={spot.naverMapUrl} label="네이버" />
+          <MapLink href={spot.kakaoMapUrl} label="카카오" />
+        </div>
+      </div>
+
+      {spot.menuHints.length > 0 && (
+        <p className="mt-3 text-sm text-gray-700">
+          <span className="font-semibold text-gray-800">메뉴</span> {spot.menuHints.join(', ')}
+        </p>
+      )}
+
+      {spot.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {spot.tags.map(tag => (
+            <span
+              key={tag}
+              className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-800 border border-amber-100"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {journal && journal.visits.length > 0 && (
+        <LunchVisitHistory
+          journal={journal}
+          onEditVisit={
+            onEditVisit
+              ? (visitId, rating, review) => onEditVisit(spot.id, visitId, rating, review)
+              : undefined
+          }
+          onDeleteVisit={
+            onDeleteVisit ? visitId => onDeleteVisit(spot.id, visitId) : undefined
+          }
+        />
+      )}
+
+      {ateToday && onCancelToday && (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('오늘 먹음 기록을 취소할까요? (별점·리뷰 삭제)')) {
+              onCancelToday(spot.id);
+              setFormOpen(false);
+            }
+          }}
+          className="mt-3 w-full py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+        >
+          오늘 먹음 취소
+        </button>
+      )}
+
+      {onRecordVisit && !showVisitForm && (
+        <button
+          type="button"
+          onClick={() => setFormOpen(v => !v)}
+          className="mt-3 w-full py-2 text-sm font-semibold rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 transition-colors"
+        >
+          {formOpen ? '닫기' : ateToday ? '오늘 기록 수정' : '오늘 먹었어요 — 기록하기'}
+        </button>
+      )}
+
+      {(showVisitForm || formOpen) && onRecordVisit && (
+        <LunchVisitForm
+          spotName={spot.name}
+          initialRating={todayDefaults.initialRating}
+          initialReview={todayDefaults.initialReview}
+          submitLabel={todayDefaults.hasToday ? '오늘 기록 수정' : '먹은 날 기록하기'}
+          onSaved={(rating, review) => {
+            onRecordVisit(spot.id, rating, review);
+            if (!showVisitForm) setFormOpen(false);
+          }}
+          onCancel={showVisitForm ? undefined : () => setFormOpen(false)}
+        />
+      )}
+
+      {spot.notes && !showVisitForm && !formOpen && (
+        <p className="mt-3 text-xs text-gray-500 border-t border-gray-100 pt-3">{spot.notes}</p>
+      )}
+    </article>
+  );
+}

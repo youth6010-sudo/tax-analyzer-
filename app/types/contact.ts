@@ -36,6 +36,7 @@ export interface ContactRecord {
   corporateNo: string;
   residentNo: string;
   phone: string;
+  mobilePhone: string;
   fax: string;
 }
 
@@ -77,6 +78,7 @@ export const EDITABLE_FIELDS: {
   { key: 'businessNo', label: CONTACT_FIELD_LABELS.businessNo, mono: true },
   { key: 'corporateNo', label: CONTACT_FIELD_LABELS.corporateNo, mono: true },
   { key: 'residentNo', label: CONTACT_FIELD_LABELS.residentNo, mono: true },
-  { key: 'phone', label: CONTACT_FIELD_LABELS.phone, mono: true },
+  { key: 'phone', label: '전화번호', mono: true },
+  { key: 'mobilePhone', label: '휴대번호', mono: true },
   { key: 'fax', label: '팩스', mono: true },
 ];

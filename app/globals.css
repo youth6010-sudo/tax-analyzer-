@@ -467,3 +467,1493 @@ body[data-capture] .print-header-logo {
     line-height: 1.2 !important;
   }
 }
+
+/* ─── 점심 승부차기 — 월드컵 SVG (정밀 좌표 + 3D 카메라) ─── */
+@keyframes lunch-reveal-card {
+  0% { transform: translateY(16px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.lunch-reveal-slide {
+  animation: lunch-reveal-card 0.45s ease-out forwards;
+}
+
+/* ── 포토리얼 승부차기 — 단일 장면 연속 카메라 ── */
+.wc-penalty-scene {
+  will-change: transform;
+}
+
+.wc-penalty-photo {
+  object-position: 50% 52%;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, object-position;
+}
+
+.wc-penalty-ready .wc-penalty-photo {
+  animation: wc-penalty-idle-breathe 0.65s ease-in-out infinite alternate;
+}
+
+@keyframes wc-penalty-idle-breathe {
+  from { transform: scale(1); filter: brightness(0.94); }
+  to { transform: scale(1.015); filter: brightness(1.04); }
+}
+
+/* kick — 끊김 없이 줌 + 골대 쪽 팬 (960ms) */
+.wc-penalty-kick-flow .wc-penalty-photo {
+  animation: wc-kick-flow-center 0.96s cubic-bezier(0.33, 0, 0.15, 1) forwards;
+}
+
+.wc-penalty-pan-left.wc-penalty-kick-flow .wc-penalty-photo {
+  animation-name: wc-kick-flow-left;
+}
+
+.wc-penalty-pan-right.wc-penalty-kick-flow .wc-penalty-photo {
+  animation-name: wc-kick-flow-right;
+}
+
+.wc-penalty-pan-center.wc-penalty-kick-flow .wc-penalty-photo {
+  animation-name: wc-kick-flow-center;
+}
+
+@keyframes wc-kick-flow-center {
+  0% { transform: scale(1); object-position: 50% 52%; filter: brightness(1); }
+  25% { transform: scale(1.04); object-position: 50% 48%; filter: brightness(1.04); }
+  55% { transform: scale(1.09); object-position: 50% 38%; filter: brightness(1.07); }
+  100% { transform: scale(1.13); object-position: 50% 28%; filter: brightness(1.1); }
+}
+
+@keyframes wc-kick-flow-left {
+  0% { transform: scale(1); object-position: 50% 52%; filter: brightness(1); }
+  25% { transform: scale(1.04); object-position: 49% 48%; }
+  55% { transform: scale(1.09); object-position: 47% 36%; }
+  100% { transform: scale(1.13); object-position: 45% 28%; filter: brightness(1.1); }
+}
+
+@keyframes wc-kick-flow-right {
+  0% { transform: scale(1); object-position: 50% 52%; filter: brightness(1); }
+  25% { transform: scale(1.04); object-position: 51% 48%; }
+  55% { transform: scale(1.09); object-position: 53% 36%; }
+  100% { transform: scale(1.13); object-position: 55% 28%; filter: brightness(1.1); }
+}
+
+/* goal — kick 종료 상태 유지 */
+.wc-penalty-goal-hold .wc-penalty-photo {
+  transform: scale(1.13);
+  object-position: 50% 28%;
+  filter: brightness(1.1);
+}
+
+.wc-penalty-goal-hold.wc-penalty-pan-left .wc-penalty-photo {
+  object-position: 45% 28%;
+}
+
+.wc-penalty-goal-hold.wc-penalty-pan-right .wc-penalty-photo {
+  object-position: 55% 28%;
+}
+
+.wc-penalty-speed-lines {
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 18px,
+    rgba(255, 255, 255, 0.06) 18px,
+    rgba(255, 255, 255, 0.06) 20px
+  );
+  animation: wc-speed-lines 0.96s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes wc-speed-lines {
+  0%, 15% { opacity: 0; transform: scale(1); }
+  25%, 70% { opacity: 0.7; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+
+.wc-goal-net-flash {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28%;
+  height: 18%;
+  border-radius: 4px;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.55) 0%, transparent 70%);
+  animation: wc-net-flash 0.5s ease-out forwards;
+}
+
+@keyframes wc-net-flash {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+  30% { opacity: 1; }
+  100% { opacity: 0.2; transform: translateX(-50%) scale(1.05); }
+}
+
+.wc-penalty-ui {
+  z-index: 5;
+}
+
+.wc-penalty-scoreboard {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #fbbf24;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+.wc-penalty-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 42%, transparent 35%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+.wc-penalty-tension-ring {
+  position: absolute;
+  left: 50%;
+  top: 82%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(251, 191, 36, 0.75);
+  border-radius: 50%;
+  animation: wc-tension-ring-pulse 0.65s ease-in-out infinite;
+  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.08);
+}
+
+@keyframes wc-tension-ring-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.85; }
+  50% { transform: translate(-50%, -50%) scale(1.18); opacity: 0.45; }
+}
+
+.wc-goal-banner-html {
+  padding: 8px 28px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 2px solid rgba(251, 191, 36, 0.55);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  animation: wc-goal-banner-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  box-shadow: 0 0 32px rgba(251, 191, 36, 0.35);
+}
+
+.wc-goal-text-html {
+  font-size: clamp(1.4rem, 6vw, 1.85rem);
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+  letter-spacing: 0.05em;
+}
+
+@keyframes wc-goal-banner-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── 3D 카메라 ── */
+.wc-scene-3d {
+  perspective: 880px;
+  perspective-origin: 50% 42%;
+  overflow: hidden;
+}
+
+.wc-scene-inner {
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.22, 0.85, 0.28, 1);
+  will-change: transform;
+}
+
+.wc-cam-ready {
+  transform: rotateX(5deg) scale(1.04);
+}
+
+.wc-cam-kick {
+  transform: rotateX(7deg) scale(1.1) translateZ(18px);
+}
+
+.wc-cam-goal {
+  transform: rotateX(4deg) scale(1.12) translateZ(8px);
+}
+
+.wc-cam-celebrate {
+  transform: rotateX(8deg) scale(1.08) translateZ(24px);
+}
+
+/* ── 공 HTML 오버레이 (SVG CSS transform 버그 회피) ── */
+.wc-ball-overlay {
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  transform: translate(-50%, -50%);
+  will-change: left, top, transform;
+}
+
+.wc-ball-ov-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%);
+  width: 72%;
+  height: 7px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  filter: blur(3px);
+  z-index: -1;
+}
+
+.wc-ball-graphic {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* CSS 3D 느낌 축구공 — 투명 배경, 원형 */
+.wc-ball-sphere {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #ffffff 0%, #f1f5f9 35%, #cbd5e1 100%);
+  box-shadow:
+    inset -3px -4px 8px rgba(0, 0, 0, 0.25),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.9),
+    0 4px 12px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.wc-ball-panel {
+  position: absolute;
+  background: #1e293b;
+  border-radius: 50%;
+}
+
+.wc-ball-p1 { width: 38%; height: 38%; top: 8%; left: 31%; }
+.wc-ball-p2 { width: 26%; height: 26%; top: 28%; left: 8%; }
+.wc-ball-p3 { width: 26%; height: 26%; top: 28%; right: 8%; }
+.wc-ball-p4 { width: 22%; height: 22%; bottom: 14%; left: 16%; }
+.wc-ball-p5 { width: 22%; height: 22%; bottom: 14%; right: 16%; }
+
+.wc-ball-highlight {
+  position: absolute;
+  top: 12%;
+  left: 18%;
+  width: 28%;
+  height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.85) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.wc-ball-spin {
+  animation: wc-ball-spin 0.96s linear forwards;
+}
+
+@keyframes wc-ball-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(720deg); }
+}
+
+.wc-ball-ghost-ov {
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  transform: translate(-50%, -50%);
+  opacity: 0.5;
+}
+
+@keyframes wc-ball-ov-ready {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, calc(-50% - 6px)) scale(1.08); }
+}
+
+@keyframes wc-ball-ov-shadow-ready {
+  0%, 100% { opacity: 1; transform: translateX(-50%) scaleX(1); }
+  50% { opacity: 0.5; transform: translateX(-50%) scaleX(0.75); }
+}
+
+.wc-ball-ov-ready { animation: wc-ball-ov-ready 0.55s ease-in-out infinite; }
+.wc-ball-ov-ready .wc-ball-ov-shadow { animation: wc-ball-ov-shadow-ready 0.55s ease-in-out infinite; }
+
+@keyframes wc-ball-ov-kick-left {
+  0% { left: 50%; top: 84%; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  20% { left: 49%; top: 70%; transform: translate(-50%, -50%) scale(0.9) rotate(120deg); }
+  50% { left: 47%; top: 48%; transform: translate(-50%, -50%) scale(0.48) rotate(300deg); }
+  100% { left: 44%; top: 31%; transform: translate(-50%, -50%) scale(0.2) rotate(540deg); }
+}
+
+@keyframes wc-ball-ov-kick-center {
+  0% { left: 50%; top: 84%; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  20% { left: 50%; top: 68%; transform: translate(-50%, -50%) scale(0.88) rotate(120deg); }
+  50% { left: 50%; top: 46%; transform: translate(-50%, -50%) scale(0.45) rotate(300deg); }
+  100% { left: 50%; top: 29%; transform: translate(-50%, -50%) scale(0.2) rotate(540deg); }
+}
+
+@keyframes wc-ball-ov-kick-right {
+  0% { left: 50%; top: 84%; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  20% { left: 51%; top: 70%; transform: translate(-50%, -50%) scale(0.9) rotate(120deg); }
+  50% { left: 53%; top: 48%; transform: translate(-50%, -50%) scale(0.48) rotate(300deg); }
+  100% { left: 56%; top: 31%; transform: translate(-50%, -50%) scale(0.2) rotate(540deg); }
+}
+
+.wc-ball-ov-kick-left { animation: wc-ball-ov-kick-left 0.96s cubic-bezier(0.22, 0.85, 0.28, 1) forwards; }
+.wc-ball-ov-kick-center { animation: wc-ball-ov-kick-center 0.96s cubic-bezier(0.22, 0.85, 0.28, 1) forwards; }
+.wc-ball-ov-kick-right { animation: wc-ball-ov-kick-right 0.96s cubic-bezier(0.22, 0.85, 0.28, 1) forwards; }
+
+.wc-ball-ov-kick .wc-ball-ov-shadow {
+  animation: wc-ball-ov-shadow-kick 0.96s ease-out forwards;
+}
+
+@keyframes wc-ball-ov-shadow-kick {
+  0% { opacity: 1; transform: translateX(-50%) scaleX(1); }
+  100% { opacity: 0.05; transform: translateX(-50%) scaleX(0.12); }
+}
+
+.wc-ball-ov-goal-left { left: 44%; top: 31%; transform: translate(-50%, -50%) scale(0.2); }
+.wc-ball-ov-goal-center { left: 50%; top: 29%; transform: translate(-50%, -50%) scale(0.2); }
+.wc-ball-ov-goal-right { left: 56%; top: 31%; transform: translate(-50%, -50%) scale(0.2); }
+
+@keyframes wc-ball-ov-goal-pulse {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.8)); }
+  50% { filter: drop-shadow(0 0 14px rgba(251, 191, 36, 1)); }
+}
+
+.wc-ball-ov-goal .wc-ball-sphere {
+  animation: wc-ball-ov-goal-pulse 0.4s ease-in-out 2;
+}
+
+@keyframes wc-ghost-ov-left {
+  0% { opacity: 0.45; left: 50%; top: 84%; }
+  100% { opacity: 0; left: 47%; top: 55%; }
+}
+
+@keyframes wc-ghost-ov-center {
+  0% { opacity: 0.45; left: 50%; top: 84%; }
+  100% { opacity: 0; left: 50%; top: 52%; }
+}
+
+@keyframes wc-ghost-ov-right {
+  0% { opacity: 0.45; left: 50%; top: 84%; }
+  100% { opacity: 0; left: 53%; top: 55%; }
+}
+
+.wc-ball-ghost-ov-left.wc-ghost-ov-0 { animation: wc-ghost-ov-left 0.5s ease-out forwards; }
+.wc-ball-ghost-ov-left.wc-ghost-ov-1 { animation: wc-ghost-ov-left 0.5s ease-out 0.07s forwards; }
+.wc-ball-ghost-ov-left.wc-ghost-ov-2 { animation: wc-ghost-ov-left 0.5s ease-out 0.14s forwards; }
+.wc-ball-ghost-ov-center.wc-ghost-ov-0 { animation: wc-ghost-ov-center 0.5s ease-out forwards; }
+.wc-ball-ghost-ov-center.wc-ghost-ov-1 { animation: wc-ghost-ov-center 0.5s ease-out 0.07s forwards; }
+.wc-ball-ghost-ov-center.wc-ghost-ov-2 { animation: wc-ghost-ov-center 0.5s ease-out 0.14s forwards; }
+.wc-ball-ghost-ov-right.wc-ghost-ov-0 { animation: wc-ghost-ov-right 0.5s ease-out forwards; }
+.wc-ball-ghost-ov-right.wc-ghost-ov-1 { animation: wc-ghost-ov-right 0.5s ease-out 0.07s forwards; }
+.wc-ball-ghost-ov-right.wc-ghost-ov-2 { animation: wc-ghost-ov-right 0.5s ease-out 0.14s forwards; }
+
+/* ── 포토리얼 세레모니 (AI 생성 이미지 + 유니폼 오버레이) ── */
+.cele-arena {
+  animation: wc-cele-stage-in 0.5s ease-out forwards;
+  background: linear-gradient(180deg, #060d18 0%, #0f2744 35%, #1a3a5c 55%, #0c1929 100%);
+}
+
+.cele-arena-photo {
+  background: #060d18;
+}
+
+.cele-from-goal {
+  animation: cele-from-goal 0.55s ease-out forwards;
+}
+
+@keyframes cele-from-goal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cele-photo-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  animation: cele-photo-breathe 2.4s ease-in-out 0.7s infinite alternate;
+  transform-origin: center 55%;
+}
+
+.cele-photo-zoom {
+  animation: cele-photo-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cele-photo-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.12);
+    filter: brightness(0.6) blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1) blur(0);
+  }
+}
+
+@keyframes cele-photo-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.045); }
+}
+
+.cele-photo-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.07) 48%,
+    transparent 62%
+  );
+  animation: cele-shine-sweep 2.8s ease-in-out 0.5s infinite;
+  pointer-events: none;
+}
+
+@keyframes cele-shine-sweep {
+  0%, 100% { opacity: 0; transform: translateX(-30%); }
+  40%, 60% { opacity: 1; transform: translateX(30%); }
+}
+
+.cele-photo-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+}
+
+/* 가운데 빨간 유니폼 등 — 맛집명 */
+.cele-jersey-overlay {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  transform: translate(-50%, -50%) perspective(500px) rotateX(10deg);
+  animation: cele-jersey-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both;
+  pointer-events: none;
+}
+
+@keyframes cele-jersey-pop {
+  from { opacity: 0; transform: translate(-50%, -50%) perspective(500px) rotateX(10deg) scale(0.5); }
+  to { opacity: 1; transform: translate(-50%, -50%) perspective(500px) rotateX(10deg) scale(1); }
+}
+
+.cele-jersey-number {
+  font-size: 11px;
+  font-weight: 900;
+  color: #fef08a;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 1),
+    0 0 20px rgba(251, 191, 36, 0.5);
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.cele-jersey-name {
+  font-weight: 900;
+  color: #fff;
+  text-align: center;
+  max-width: 72px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.95),
+    0 1px 3px rgba(0, 0, 0, 1),
+    0 0 14px rgba(255, 255, 255, 0.25);
+  animation: cele-name-shimmer 1.8s ease-in-out 0.9s infinite;
+}
+
+@keyframes cele-name-shimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+
+.cele-firework-on-photo {
+  z-index: 15;
+  mix-blend-mode: screen;
+}
+
+.cele-banner-glass {
+  background: rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(251, 191, 36, 0.35) !important;
+}
+
+.cele-nameplate-glow {
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.35), 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+.cele-arena-sky {
+  position: absolute;
+  inset: 0 0 45%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(100, 160, 255, 0.12) 0%, transparent 55%);
+}
+
+.cele-arena-lights {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cele-light {
+  position: absolute;
+  top: 0;
+  width: 45%;
+  height: 55%;
+  opacity: 0.35;
+}
+
+.cele-light-l {
+  left: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 55%);
+}
+
+.cele-light-r {
+  right: 0;
+  background: linear-gradient(-135deg, rgba(255, 255, 255, 0.15) 0%, transparent 55%);
+}
+
+/* 관중석 래퍼 — 원근 */
+.cele-crowd-wrap {
+  position: absolute;
+  top: 28%;
+  left: 0;
+  right: 0;
+  height: 38%;
+  perspective: 420px;
+  perspective-origin: 50% 100%;
+  z-index: 5;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+}
+
+.crowd-stand {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 0 2%;
+  transform: rotateX(22deg);
+  transform-origin: 50% 100%;
+}
+
+.crowd-stand-rail {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(#64748b, #334155);
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.crowd-row {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  transform: translateZ(calc(var(--row-z, 0) * 1px));
+  opacity: var(--row-opacity, 1);
+}
+
+.crowd-person {
+  transform: scale(var(--cp-scale, 0.5));
+  transform-origin: bottom center;
+  flex-shrink: 0;
+}
+
+.crowd-person-inner {
+  position: relative;
+  width: 18px;
+  transform-style: preserve-3d;
+  transform: rotateX(-8deg);
+}
+
+.crowd-head {
+  width: 10px;
+  height: 10px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--cp-skin, #fcd9b6);
+  box-shadow: inset -2px -2px 3px rgba(0, 0, 0, 0.15), 0 2px 3px rgba(0, 0, 0, 0.25);
+  transform: translateZ(4px);
+}
+
+.crowd-torso {
+  width: 14px;
+  height: 16px;
+  margin: -1px auto 0;
+  background: linear-gradient(180deg, var(--cp-shirt, #c8102e), color-mix(in srgb, var(--cp-shirt) 70%, #000));
+  border-radius: 3px 3px 2px 2px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transform: translateZ(2px);
+}
+
+.crowd-arm {
+  position: absolute;
+  top: 10px;
+  width: 8px;
+  height: 4px;
+  background: var(--cp-skin, #fcd9b6);
+  border-radius: 999px;
+  transform-origin: bottom center;
+}
+
+.crowd-arm-l {
+  left: -2px;
+  transform: rotate(-55deg) translateZ(6px);
+}
+
+.crowd-arm-r {
+  right: -2px;
+  transform: rotate(55deg) translateZ(6px);
+}
+
+.crowd-person-cheer {
+  animation: crowd-jump 0.55s ease-in-out infinite alternate;
+  animation-delay: var(--cp-delay, 0s);
+}
+
+@keyframes crowd-jump {
+  0% { transform: scale(var(--cp-scale, 0.5)) translateY(0); }
+  100% { transform: scale(var(--cp-scale, 0.5)) translateY(-4px); }
+}
+
+.cele-pitch-edge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 42%;
+  background: linear-gradient(180deg, #1e7a42 0%, #14532d 60%, #0f3d22 100%);
+  clip-path: polygon(0 28%, 100% 28%, 100% 100%, 0 100%);
+  z-index: 1;
+}
+
+.cele-pitch-edge::before {
+  content: '';
+  position: absolute;
+  top: 28%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.cele-stage-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8%;
+  z-index: 15;
+}
+
+.cele-spotlight-cone {
+  position: absolute;
+  bottom: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 160px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.28) 0%, transparent 65%);
+  pointer-events: none;
+  animation: wc-spotlight-pulse 1.1s ease-in-out infinite;
+}
+
+.cele-hero-wrap {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: wc-cele-3d-enter 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+             wc-cele-3d-jump 0.9s ease-in-out 0.55s infinite;
+}
+
+.cele-hero-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fcd34d;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.cele-mate {
+  position: absolute;
+  bottom: 18%;
+  z-index: 8;
+}
+
+.cele-mate-l {
+  left: 4%;
+  transform: rotateY(28deg);
+  animation: cele-mate-cheer-l 0.75s ease-in-out infinite alternate;
+}
+
+.cele-mate-r {
+  right: 4%;
+  transform: rotateY(-28deg);
+  animation: cele-mate-cheer-r 0.75s ease-in-out 0.15s infinite alternate;
+}
+
+@keyframes cele-mate-cheer-l {
+  0% { transform: rotateY(28deg) translateY(0); }
+  100% { transform: rotateY(28deg) translateY(-10px); }
+}
+
+@keyframes cele-mate-cheer-r {
+  0% { transform: rotateY(-28deg) translateY(0); }
+  100% { transform: rotateY(-28deg) translateY(-10px); }
+}
+
+/* ── 3D 인물 (PlayerFigure3D) ── */
+.p3d-figure {
+  --p3d-scale: 1;
+  --p3d-shirt: #c8102e;
+  --p3d-shirt-dark: #8b0a20;
+  transform: scale(var(--p3d-scale));
+  transform-origin: bottom center;
+}
+
+.p3d-root {
+  position: relative;
+  width: 80px;
+  height: 130px;
+  transform-style: preserve-3d;
+  transform: rotateX(-12deg);
+}
+
+.p3d-hero .p3d-root {
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.45));
+}
+
+.p3d-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateZ(18px);
+  transform-style: preserve-3d;
+  z-index: 10;
+}
+
+.p3d-head-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffe4c4, #fcd9b6);
+  box-shadow: inset -3px -3px 6px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.25);
+  transform: translateZ(0);
+}
+
+.p3d-hair {
+  position: absolute;
+  top: -4px;
+  left: -2px;
+  right: -2px;
+  height: 20px;
+  background: #3d2b1f;
+  border-radius: 50% 50% 0 0;
+  transform: translateZ(2px);
+}
+
+.p3d-neck {
+  width: 12px;
+  height: 8px;
+  margin: -2px auto 0;
+  background: #fcd9b6;
+  transform: translateZ(-2px);
+}
+
+.p3d-torso {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  width: 52px;
+  height: 56px;
+  transform: translateX(-50%) translateZ(8px);
+  transform-style: preserve-3d;
+}
+
+.p3d-torso-back {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: linear-gradient(165deg, var(--p3d-shirt), var(--p3d-shirt-dark));
+  border-radius: 10px 10px 6px 6px;
+  transform: translateZ(10px);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15), inset 0 -4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.p3d-torso-front {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--p3d-shirt) 85%, #000);
+  border-radius: 10px;
+  transform: translateZ(-8px) rotateY(180deg);
+}
+
+.p3d-torso-side {
+  position: absolute;
+  top: 4px;
+  width: 14px;
+  height: 48px;
+  background: var(--p3d-shirt-dark);
+}
+
+.p3d-torso-side-l {
+  left: -7px;
+  transform: rotateY(-90deg) translateZ(26px);
+  transform-origin: right center;
+  border-radius: 4px 0 0 4px;
+}
+
+.p3d-torso-side-r {
+  right: -7px;
+  transform: rotateY(90deg) translateZ(26px);
+  transform-origin: left center;
+  border-radius: 0 4px 4px 0;
+}
+
+.p3d-torso-top {
+  position: absolute;
+  top: -3px;
+  left: 4px;
+  right: 4px;
+  height: 10px;
+  background: var(--p3d-shirt);
+  transform: rotateX(90deg) translateZ(0);
+  transform-origin: bottom center;
+  border-radius: 4px 4px 0 0;
+}
+
+.p3d-number {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+  animation: wc-jersey-pop 0.5s cubic-bezier(0.34, 1.5, 0.64, 1) 0.3s both;
+}
+
+.p3d-name {
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  line-height: 1.15;
+  max-width: 48px;
+  word-break: keep-all;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  animation: wc-jersey-name-in 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) 0.48s both;
+}
+
+.p3d-shorts {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  width: 44px;
+  height: 18px;
+  transform: translateX(-50%) translateZ(6px);
+  background: linear-gradient(#fff, #e5e7eb);
+  border-radius: 0 0 5px 5px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+.p3d-legs {
+  position: absolute;
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(4px);
+  display: flex;
+  gap: 8px;
+}
+
+.p3d-leg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.p3d-sock {
+  width: 14px;
+  height: 14px;
+  background: #fff;
+}
+
+.p3d-boot {
+  width: 16px;
+  height: 10px;
+  background: #111827;
+  border-radius: 0 0 3px 3px;
+}
+
+.p3d-limb {
+  position: absolute;
+  transform-style: preserve-3d;
+  z-index: 15;
+}
+
+.p3d-upper-arm {
+  width: 12px;
+  height: 22px;
+  background: var(--p3d-shirt);
+  border-radius: 6px;
+  transform-origin: top center;
+  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.15);
+}
+
+.p3d-forearm {
+  width: 10px;
+  height: 20px;
+  margin-top: -2px;
+  background: linear-gradient(#ffe4c4, #fcd9b6);
+  border-radius: 5px;
+  transform-origin: top center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.p3d-hand {
+  width: 10px;
+  height: 10px;
+  margin: -1px auto 0;
+  border-radius: 50%;
+  background: #fcd9b6;
+}
+
+.p3d-arm-l {
+  top: 42px;
+  left: 2px;
+  transform: rotateZ(-28deg) translateZ(14px);
+}
+
+.p3d-arm-l .p3d-upper-arm { transform: rotateX(-35deg) rotateZ(15deg); }
+.p3d-arm-l .p3d-forearm { transform: rotateX(-55deg); }
+
+.p3d-arm-r {
+  top: 42px;
+  right: 2px;
+  transform: rotateZ(28deg) translateZ(14px);
+}
+
+.p3d-arm-r .p3d-upper-arm { transform: rotateX(-35deg) rotateZ(-15deg); }
+.p3d-arm-r .p3d-forearm { transform: rotateX(-55deg); }
+
+.p3d-shadow {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotateX(80deg);
+  width: 70px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  filter: blur(4px);
+}
+
+.p3d-hero .p3d-shadow {
+  animation: wc-cele-shadow 0.9s ease-in-out 0.4s infinite;
+}
+
+.wc-cele-fullstage,
+.cele-arena {
+  animation: wc-cele-stage-in 0.5s ease-out forwards;
+}
+
+@keyframes wc-cele-stage-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.wc-cele-scene-3d {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  height: 200px;
+  perspective: 900px;
+  perspective-origin: 50% 70%;
+  transform-style: preserve-3d;
+}
+
+@keyframes wc-cele-3d-enter {
+  0% { opacity: 0; transform: translateY(50px) scale(0.65); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes wc-cele-3d-jump {
+  0%, 100% { transform: translateY(0); }
+  42% { transform: translateY(-16px); }
+}
+
+.wc-cele-podium {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) rotateX(72deg);
+  transform-style: preserve-3d;
+  width: 200px;
+  height: 80px;
+  z-index: 0;
+}
+
+.wc-cele-podium-top {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse, #fbbf24 0%, #b45309 50%, #78350f 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.4), inset 0 4px 12px rgba(255, 255, 255, 0.3);
+  animation: wc-podium-glow 1.2s ease-in-out infinite alternate;
+}
+
+.wc-cele-podium-front {
+  position: absolute;
+  bottom: -20px;
+  left: 10%;
+  width: 80%;
+  height: 24px;
+  background: linear-gradient(#92400e, #451a03);
+  border-radius: 0 0 8px 8px;
+  transform: rotateX(-90deg) translateZ(10px);
+  transform-origin: top center;
+}
+
+@keyframes wc-podium-glow {
+  0% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); }
+  100% { box-shadow: 0 0 55px rgba(251, 191, 36, 0.55); }
+}
+
+/* 트로피 3D */
+.wc-cele-trophy-wrap {
+  position: absolute;
+  right: 6%;
+  bottom: 48px;
+  z-index: 20;
+  animation: wc-trophy-enter 0.7s cubic-bezier(0.34, 1.4, 0.64, 1) 0.35s both;
+}
+
+@keyframes wc-trophy-enter {
+  0% { opacity: 0; transform: translateY(30px) scale(0.5) rotateY(-30deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotateY(-15deg); }
+}
+
+.wc-cele-trophy-3d {
+  transform-style: preserve-3d;
+  transform: rotateX(-12deg) rotateY(-20deg);
+  animation: wc-trophy-float 1.1s ease-in-out 0.8s infinite alternate;
+}
+
+@keyframes wc-trophy-float {
+  0% { transform: rotateX(-12deg) rotateY(-20deg) translateY(0); }
+  100% { transform: rotateX(-12deg) rotateY(-20deg) translateY(-8px); }
+}
+
+.wc-cele-trophy-cup {
+  position: relative;
+  width: 36px;
+  height: 32px;
+  margin: 0 auto;
+}
+
+.wc-cele-trophy-rim {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  right: 2px;
+  height: 6px;
+  background: linear-gradient(#fde68a, #fbbf24);
+  border-radius: 4px 4px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.wc-cele-trophy-body {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  right: 6px;
+  height: 24px;
+  background: linear-gradient(135deg, #fde68a 0%, #f59e0b 40%, #d97706 100%);
+  border-radius: 0 0 8px 8px;
+  box-shadow: inset -4px 0 8px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.wc-cele-trophy-handles {
+  position: absolute;
+  top: 10px;
+  left: -4px;
+  right: -4px;
+  height: 14px;
+  border: 3px solid #fbbf24;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+.wc-cele-trophy-base {
+  width: 28px;
+  height: 10px;
+  margin: 2px auto 0;
+  background: linear-gradient(#92400e, #451a03);
+  border-radius: 2px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.wc-cele-trophy-shine {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  width: 8px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  filter: blur(2px);
+  animation: wc-trophy-shine 1.5s ease-in-out infinite;
+}
+
+@keyframes wc-trophy-shine {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+
+/* CHAMPION 배너 */
+.wc-cele-banner-wrap {
+  animation: wc-caption-in 0.5s ease-out 0.15s both;
+  z-index: 10;
+}
+
+.wc-cele-champion-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, rgba(200, 16, 46, 0.92), rgba(139, 10, 32, 0.95));
+  border: 2px solid #fbbf24;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: perspective(400px) rotateX(-8deg);
+}
+
+/* 맛집 플래카드 */
+.wc-cele-nameplate-wrap {
+  z-index: 50;
+  animation: wc-nameplate-in 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) 0.6s both;
+}
+
+@keyframes wc-nameplate-in {
+  0% { opacity: 0; transform: translateY(20px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.wc-cele-nameplate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 24px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* 폭죽 */
+.wc-cele-firework {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  pointer-events: none;
+  animation: wc-firework-burst 1.4s ease-out infinite;
+}
+
+.wc-cele-firework::before,
+.wc-cele-firework::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--fw-color, #fbbf24) 0%, transparent 65%);
+  opacity: 0;
+  animation: wc-firework-ring 1.4s ease-out infinite;
+}
+
+.wc-cele-firework::after {
+  animation-delay: 0.15s;
+  transform: scale(0.6);
+}
+
+@keyframes wc-firework-burst {
+  0%, 100% { opacity: 0; transform: scale(0.3); }
+  15% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+@keyframes wc-firework-ring {
+  0% { opacity: 0; transform: scale(0.2); }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
+@keyframes wc-spotlight-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes wc-jersey-pop {
+  0% { opacity: 0; transform: scale(0.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wc-jersey-name-in {
+  0% { opacity: 0; letter-spacing: 0.3em; transform: scale(0.8); }
+  100% { opacity: 1; letter-spacing: 0.02em; transform: scale(1); }
+}
+
+@keyframes wc-caption-in {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wc-cele-shadow {
+  0%, 100% { opacity: 0.4; transform: translateX(-50%) scaleX(1); }
+  42% { opacity: 0.18; transform: translateX(-50%) scaleX(0.55); }
+}
+
+/* ── GK (공 반대, 살짝 늦게) ── */
+.wc-gk-inner {
+  transform-box: fill-box;
+  transform-origin: 0 40px;
+}
+
+@keyframes wc-gk-dive-left {
+  0% { transform: rotate(0deg); }
+  100% { transform: translate(-52px, 12px) rotate(-68deg); }
+}
+
+@keyframes wc-gk-dive-right {
+  0% { transform: rotate(0deg); }
+  100% { transform: translate(52px, 12px) rotate(68deg); }
+}
+
+@keyframes wc-gk-dive-center {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-22px) scale(1.08); }
+  100% { transform: translateY(6px) scale(0.94); }
+}
+
+.wc-gk-left { animation: wc-gk-dive-left 0.55s cubic-bezier(0.25, 0, 0.15, 1) 0.07s forwards; }
+.wc-gk-right { animation: wc-gk-dive-right 0.55s cubic-bezier(0.25, 0, 0.15, 1) 0.07s forwards; }
+.wc-gk-center { animation: wc-gk-dive-center 0.5s ease-out 0.05s forwards; }
+
+/* ── 키커 ── */
+.wc-kicker-inner {
+  transform-box: fill-box;
+  transform-origin: 4px 20px;
+}
+
+@keyframes wc-kicker-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes wc-kicker-windup {
+  0% { transform: translateY(0); }
+  25% { transform: translate(-3px, 1px); }
+  100% { transform: translate(2px, 0); }
+}
+
+.wc-kicker-idle { animation: wc-kicker-idle 0.9s ease-in-out infinite; }
+
+.wc-kicker-strike {
+  animation: wc-kicker-windup 0.72s ease-out forwards;
+}
+
+.wc-kicker-strike .wc-kicker-leg {
+  transform-box: fill-box;
+  transform-origin: 8px 12px;
+  animation: wc-kicker-leg 0.35s cubic-bezier(0.4, 0, 0.2, 1) 0.08s forwards;
+}
+
+@keyframes wc-kicker-leg {
+  0% { transform: rotate(0deg); }
+  45% { transform: rotate(-68deg); }
+  100% { transform: rotate(-18deg); }
+}
+
+/* ── 긴장·스릴 ── */
+@keyframes wc-tension-ring-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+.wc-tension-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wc-tension-ring-pulse 0.65s ease-in-out infinite;
+}
+
+@keyframes wc-tension-vignette {
+  0%, 100% { box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: inset 0 0 70px rgba(120, 40, 0, 0.45); }
+}
+
+.wc-tension-vignette {
+  animation: wc-tension-vignette 0.65s ease-in-out infinite;
+}
+
+@keyframes wc-tension-text-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.wc-tension-text {
+  animation: wc-tension-text-pulse 0.65s ease-in-out infinite;
+}
+
+@keyframes wc-kick-flash {
+  0% { background: rgba(255, 255, 255, 0); }
+  8% { background: rgba(255, 255, 255, 0.18); }
+  100% { background: rgba(255, 255, 255, 0); }
+}
+
+.wc-kick-flash {
+  animation: wc-kick-flash 0.35s ease-out forwards;
+}
+
+@keyframes wc-speed-lines {
+  0% { opacity: 0; transform: scale(0.8); }
+  20% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+.wc-speed-lines {
+  transform-box: fill-box;
+  transform-origin: 200px 210px;
+  animation: wc-speed-lines 0.4s ease-out forwards;
+}
+
+@keyframes wc-crowd-tense {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.5px); }
+}
+
+.wc-crowd-tense {
+  animation: wc-crowd-tense 0.5s ease-in-out infinite;
+}
+
+/* ── 골·세레모니 ── */
+@keyframes wc-goal-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  60% { transform: translateX(5px); }
+}
+
+.wc-goal-shake-inner {
+  animation: wc-goal-shake 0.32s ease-in-out 3;
+}
+
+@keyframes wc-net-bulge {
+  0% { opacity: 0; }
+  35% { opacity: 0.55; }
+  100% { opacity: 0.1; }
+}
+
+.wc-net-bulge {
+  animation: wc-net-bulge 0.5s ease-out forwards;
+}
+
+@keyframes wc-goal-text-pop {
+  0% { opacity: 0; transform: scale(0.35); }
+  55% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.wc-goal-text-svg,
+.wc-goal-banner {
+  animation: wc-goal-text-pop 0.48s cubic-bezier(0.34, 1.5, 0.64, 1) forwards;
+}
+
+@keyframes wc-scene-shake {
+  0%, 100% { transform: rotateX(4deg) scale(1.12) translateZ(8px) translateX(0); }
+  20% { transform: rotateX(4deg) scale(1.12) translateZ(8px) translateX(-5px); }
+  40% { transform: rotateX(4deg) scale(1.12) translateZ(8px) translateX(5px); }
+  60% { transform: rotateX(4deg) scale(1.12) translateZ(8px) translateX(-3px); }
+  80% { transform: rotateX(4deg) scale(1.12) translateZ(8px) translateX(3px); }
+}
+
+.wc-scene-shake.wc-cam-goal {
+  animation: wc-scene-shake 0.45s ease-out;
+}
+
+@keyframes wc-goal-flash-anim {
+  0% { background: rgba(251, 191, 36, 0); }
+  25% { background: rgba(251, 191, 36, 0.35); }
+  100% { background: rgba(251, 191, 36, 0); }
+}
+
+.wc-goal-flash {
+  animation: wc-goal-flash-anim 0.55s ease-out forwards;
+}
+
+.wc-scene-celebrate {
+  background: radial-gradient(ellipse at 50% 65%, rgba(251, 191, 36, 0.1) 0%, transparent 55%);
+}
+
+/* ── 세레모니 (SVG 레거시 — HTML 3D로 대체됨) ── */
+
+/* ── 관중·컨페티 ── */
+@keyframes wc-crowd-cheer {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-3px); }
+}
+
+.wc-crowd-cheer {
+  animation: wc-crowd-cheer 0.18s ease-in-out infinite alternate;
+}
+
+@keyframes wc-confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110px) rotate(540deg); opacity: 0; }
+}
+
+.wc-confetti {
+  border-radius: 1px;
+  animation: wc-confetti-fall 1.1s ease-out forwards;
+}
+
+.wc-confetti-long { animation-duration: 1.6s; }
+
+@keyframes wc-score-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+.wc-score-pop {
+  display: inline-block;
+  animation: wc-score-pop 0.4s ease-out;
+}
+
+@keyframes wc-name-reveal {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.wc-name-reveal {
+  animation: wc-name-reveal 0.4s ease-out forwards;
+}
+

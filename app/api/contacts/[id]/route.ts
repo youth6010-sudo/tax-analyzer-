@@ -39,6 +39,7 @@ function parsePayload(body: unknown): ContactUpdatePayload {
     corporateNo: typeof b.corporateNo === 'string' ? b.corporateNo : '',
     residentNo: typeof b.residentNo === 'string' ? b.residentNo : '',
     phone: typeof b.phone === 'string' ? b.phone : '',
+    mobilePhone: typeof b.mobilePhone === 'string' ? b.mobilePhone : '',
     fax: typeof b.fax === 'string' ? b.fax : '',
     taxTypes,
     businessEntityType,

@@ -9,6 +9,32 @@ export type TaxTypeId = (typeof TAX_TYPES)[number]['id'];
 
 export const TAX_MENU = [
   {
+    id: 'home',
+    label: '홈',
+    items: [
+      { label: '대시보드', href: '/' },
+      { label: '점심 가챠머신', href: '/lunch' },
+    ],
+  },
+  {
+    id: 'clients',
+    label: '수임처',
+    items: [
+      { label: '수임처 관리', href: '/clients' },
+      { label: '유입', href: '/clients/intake' },
+      { label: '유출 관리', href: '/clients/churn' },
+    ],
+  },
+  {
+    id: 'admin',
+    label: '관리',
+    adminOnly: true,
+    items: [
+      { label: '중복 수임처', href: '/admin/clients/duplicates' },
+      { label: '데이터 백업', href: '/admin/backup' },
+    ],
+  },
+  {
     id: 'comprehensive',
     label: '종소세',
     items: [{ label: '종합소득세 분석', href: '/tax/comprehensive' }],

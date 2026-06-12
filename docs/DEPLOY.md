@@ -1,59 +1,86 @@
 # 배포 가이드 (웹 공개)
 
-이 프로젝트는 **Next.js 16 App Router** 기준이며, 별도 서버 API 없이 정적·클라이언트 위주로 동작합니다. (`public/industry_rates.json` 등)
+이 프로젝트는 **Next.js 16 App Router** + **Neon Postgres** 기반 **부산지점 수임처 포털**입니다.
 
 ## 1) Vercel (권장)
 
 1. [Vercel](https://vercel.com)에 가입 후 **GitHub 저장소**를 연결합니다.
-2. **이 폴더(`tax-analyzer`)가 저장소 루트**인 경우: Root Directory를 비워 둡니다.
-3. **상위 폴더가 저장소 루트**인 경우: 프로젝트 설정 → **Root Directory**에 `tax-analyzer`를 입력합니다.
-4. Framework Preset은 **Next.js**로 자동 인식됩니다. (`vercel.json`에 `framework`, `regions` 등이 있습니다.)
-5. **Build Command**: `npm run build` (기본값과 동일)  
-   **Install Command**: `npm ci` (`vercel.json`에 명시)
-6. **Node 버전**: `package.json`의 `engines.node` (20 이상)에 맞춥니다. Vercel 프로젝트 Settings → Node.js Version에서 **20.x** 선택을 권장합니다.
-7. 환경 변수는 **필수 없음**. (로컬 스토리지·JSON만 사용)
+2. **Root Directory**: 저장소 구조에 맞게 `tax-analyzer` 또는 비워 둡니다.
+3. Framework Preset: **Next.js**
+4. **Node 버전**: 20.x 이상
 
-배포 후 주소 예: `https://<프로젝트명>.vercel.app`
+### 필수 환경 변수
 
-### 커스텀 도메인
+| 변수 | 설명 |
+|------|------|
+| `DATABASE_URL` | Neon Postgres 연결 문자열 (Vercel Marketplace → Neon) |
+| `SESSION_SECRET` | 32자 이상 랜덤 문자열 (iron-session 쿠키 서명) |
 
-Vercel 프로젝트 → **Domains**에서 구매한 도메인을 연결하면 됩니다.
+Vercel 프로젝트 → **Settings → Environment Variables**에 Production/Preview 모두 설정합니다.
+
+### DB 초기 설정 (최초 1회)
+
+로컬에서 `.env.local`에 `DATABASE_URL`을 넣은 뒤:
+
+```bash
+npm run db:push          # 스키마 반영
+npm run db:seed          # 직원 계정 (data/seed-users.json)
+npm run db:migrate-contacts   # contacts.json → DB (선택)
+```
+
+`data/seed-users.json` 예:
+
+```json
+[
+  { "loginId": "admin", "name": "관리자", "pin": "1234", "role": "admin" },
+  { "loginId": "hong", "name": "홍길동", "pin": "0000" }
+]
+```
+
+배포 후 `/login`에서 ID + 4자리 PIN으로 로그인합니다.
 
 ---
 
-## 2) Docker (자체 서버·NAS·클라우드 VM)
-
-`next.config.ts`에 `output: "standalone"`이 설정되어 있습니다.
+## 2) TP Excel import (담당찾기)
 
 ```bash
-docker build -t tax-analyzer .
-docker run -p 3000:3000 tax-analyzer
+# 수임처 roster (정본) — 청년들 ID.xlsx
+npm run import:youth-id -- "경로/청년들 ID.xlsx"
+# 또는
+npm run import:contacts -- "경로/청년들 ID.xlsx"
+
+# TP 연락처·세목 보강
+npm run import:contacts -- "경로/담당찾기.xls"
 ```
 
-또는:
+정본·병합 정책: [`docs/DATA-SOURCES.md`](./DATA-SOURCES.md) · 필드 매핑: [`docs/EXCEL-PORTAL-MAP.md`](./EXCEL-PORTAL-MAP.md)
+
+---
+
+## 3) Docker (자체 서버)
+
+`next.config.ts`에 `output: "standalone"`이 설정되어 있습니다.
 
 ```bash
 docker compose up --build
 ```
 
-브라우저에서 `http://서버IP:3000` 으로 접속합니다.
+Postgres를 함께 쓰려면 `DATABASE_URL`, `SESSION_SECRET`을 compose 환경 변수로 전달합니다.
 
 ---
 
-## 3) Node만 설치된 서버
+## 4) Node만 설치된 서버
 
 ```bash
 npm ci
 npm run build
-npm run start
+DATABASE_URL=... SESSION_SECRET=... npm run start
 ```
-
-기본 포트는 **3000**입니다. (`PORT` 환경 변수로 변경 가능)
 
 ---
 
 ## 참고
 
-- **로고**: `public/logo.png`가 없으면 헤더·인쇄용 이미지는 404일 수 있습니다. 운영 배포 전에 파일을 넣으세요.
-- **데이터**: 업종코드는 `public/industry_rates.json`에 포함되어 배포됩니다.
-- **민감 정보**: 사용자 입력은 브라우저 **localStorage**에만 저장되며 서버로 전송되지 않습니다.
+- **로고**: `public/logo.png`가 없으면 헤더·인쇄용 이미지는 404일 수 있습니다.
+- **유입 wizard**: `public/data/intake-manual.json` 수정만으로 단계 변경 가능 (재배포 불필요).
+- **민감 정보**: PIN은 bcrypt 해시로 DB 저장. 세션은 httpOnly 쿠키.

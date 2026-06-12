@@ -6,6 +6,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import XLSX from 'xlsx';
+import postgres from 'postgres';
+import { randomUUID } from 'crypto';
+import { detectYouthIdWorkbook, parseSuimcheoRows } from './lib/youth-id-parse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -102,7 +105,142 @@ function mergeKey(companyName, manager) {
   return `${companyName}||${manager}`;
 }
 
+async function upsertClientsToDb(contacts) {
+  if (!process.env.DATABASE_URL) {
+    console.log('DATABASE_URL 없음 — JSON만 저장했습니다.');
+    return;
+  }
+
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+  const userRows = await sql`SELECT id, name FROM users`;
+  const userByName = new Map(userRows.map(u => [u.name.trim(), u.id]));
+  const existingRows = await sql`SELECT id, company_name, manager, status FROM clients`;
+
+  let upserted = 0;
+  let skipped = 0;
+
+  for (const c of contacts) {
+    const manager = (c.manager ?? '').trim();
+    const companyName = (c.companyName ?? '').trim();
+    if (!companyName) continue;
+
+    const key = `${companyName}||${manager}`;
+    const existing = existingRows.find(r => `${r.company_name}||${r.manager}` === key);
+    const assignedUserId = userByName.get(manager) ?? null;
+
+    if (existing && (existing.status === 'intake' || existing.status === 'churned')) {
+      skipped++;
+      continue;
+    }
+
+    const taxTypes = JSON.stringify(c.taxTypes ?? []);
+    const serviceTypes = JSON.stringify(c.serviceTypes ?? []);
+
+    if (existing) {
+      await sql`
+        UPDATE clients SET
+          phone = ${c.phone ?? existing.phone},
+          fax = ${c.fax ?? existing.fax},
+          tax_types = ${taxTypes}::jsonb,
+          assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+          updated_at = NOW()
+        WHERE id = ${existing.id}
+      `;
+    } else {
+      await sql`
+        INSERT INTO clients (
+          id, company_name, manager, representative, business_no, corporate_no,
+          resident_no, phone, fax, tax_types, business_entity_type, service_types,
+          status, source, assigned_user_id
+        ) VALUES (
+          ${c.id}, ${companyName}, ${manager}, ${c.representative ?? ''},
+          ${c.businessNo ?? ''}, ${c.corporateNo ?? ''}, ${c.residentNo ?? ''},
+          ${c.phone ?? ''}, ${c.fax ?? ''}, ${taxTypes}::jsonb,
+          ${c.businessEntityType ?? ''}, ${serviceTypes}::jsonb,
+          'active', 'tp_import', ${assignedUserId}
+        )
+      `;
+    }
+    upserted++;
+  }
+
+  await sql.end();
+  console.log(`✓ DB upsert ${upserted}건 (skipped intake/churned: ${skipped})`);
+}
+
+function loadEnv() {
+  for (const name of ['.env.local', '.env']) {
+    const p = path.join(root, name);
+    if (!fs.existsSync(p)) continue;
+    for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+      const m = line.match(/^([^#=]+)=(.*)$/);
+      if (m && !process.env[m[1].trim()]) {
+        process.env[m[1].trim()] = m[2].trim().replace(/^["']|["']$/g, '');
+      }
+    }
+  }
+}
+
+loadEnv();
+
 const wb = XLSX.readFile(xlsPath);
+
+if (detectYouthIdWorkbook(wb.SheetNames)) {
+  console.log('청년들 ID.xlsx 감지 → 수임처관리 import (정본)');
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['수임처관리'], { header: 1, defval: '' });
+  const youthClients = parseSuimcheoRows(rows);
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL required');
+    process.exit(1);
+  }
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+  const userRows = await sql`SELECT id, name FROM users`;
+  const userByName = new Map(userRows.map(u => [u.name.trim(), u.id]));
+  const existingRows = await sql`SELECT id, company_name, manager, status FROM clients`;
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  for (const c of youthClients) {
+    const key = `${c.companyName}||${c.manager}`;
+    const existing = existingRows.find(r => `${r.company_name}||${r.manager}` === key);
+    const assignedUserId = userByName.get(c.manager) ?? null;
+    if (existing && (existing.status === 'intake' || existing.status === 'churned')) {
+      skipped++;
+      continue;
+    }
+    if (existing) {
+      await sql`
+        UPDATE clients SET
+          business_entity_type = ${c.businessEntityType},
+          fee_summary = ${c.feeSummary},
+          program = ${c.program},
+          converted = ${c.converted},
+          colbert = ${c.colbert},
+          assigned_user_id = ${assignedUserId},
+          source = 'youth_excel',
+          updated_at = NOW()
+        WHERE id = ${existing.id}
+      `;
+      updated++;
+    } else {
+      await sql`
+        INSERT INTO clients (
+          id, company_name, manager, business_entity_type, fee_summary, program,
+          converted, colbert, status, source, assigned_user_id
+        ) VALUES (
+          ${randomUUID()}, ${c.companyName}, ${c.manager}, ${c.businessEntityType}, ${c.feeSummary},
+          ${c.program}, ${c.converted}, ${c.colbert}, 'active', 'youth_excel', ${assignedUserId}
+        )
+      `;
+      inserted++;
+    }
+  }
+  await sql.end();
+  console.log(`✓ youth_excel DB: inserted=${inserted}, updated=${updated}, skipped=${skipped}`);
+  console.log('  TP 보강: npm run import:contacts -- "담당찾기.xls"');
+  process.exit(0);
+}
+
 const imported = [];
 
 const sheetTaxTypes = {
@@ -195,3 +333,5 @@ if (excelPhoneCount === 0) {
   console.log('  Excel에 전화번호를 입력한 뒤 다시 import 하거나,');
   console.log('  웹에서 거래처 상세 → 수정으로 직접 입력해 주세요.');
 }
+
+await upsertClientsToDb(merged);

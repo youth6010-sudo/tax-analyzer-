@@ -1,0 +1,10 @@
+[
+  { "loginId": "admin", "name": "관리자", "realName": "관리자", "pin": "1234", "role": "admin" },
+  { "loginId": "blue", "name": "블루", "realName": "구진혜", "pin": "0000" },
+  { "loginId": "daya", "name": "다야", "realName": "홍다예", "pin": "0000" },
+  { "loginId": "ria", "name": "리아", "realName": "박혜림", "pin": "0000" },
+  { "loginId": "winter", "name": "윈터", "realName": "안혜빈", "pin": "0000" },
+  { "loginId": "peri", "name": "페리", "realName": "김평진", "pin": "0000" },
+  { "loginId": "indie", "name": "인디", "realName": "신상협", "pin": "0000" },
+  { "loginId": "charlie", "name": "찰리", "realName": "이희만", "pin": "0000" }
+]

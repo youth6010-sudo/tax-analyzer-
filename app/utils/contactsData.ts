@@ -46,6 +46,7 @@ function normalizeContact(raw: Partial<ContactRecord> & { id: string; shortcutNo
     corporateNo: raw.corporateNo ?? '',
     residentNo: raw.residentNo ?? '',
     phone: raw.phone ?? '',
+    mobilePhone: raw.mobilePhone ?? '',
     fax: raw.fax ?? '',
   };
 }
@@ -80,6 +81,7 @@ export function updateContact(id: string, payload: ContactUpdatePayload): Contac
     corporateNo: payload.corporateNo.trim(),
     residentNo: payload.residentNo.trim(),
     phone: payload.phone.trim(),
+    mobilePhone: payload.mobilePhone.trim(),
     fax: payload.fax.trim(),
     taxTypes: payload.taxTypes.filter(t => VALID_TAX_IDS.has(t)),
     businessEntityType,

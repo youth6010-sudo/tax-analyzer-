@@ -1,0 +1,28 @@
+# 카카오 장소 URL (한 줄에 하나)
+# 기존 12곳
+https://place.map.kakao.com/27233884
+https://place.map.kakao.com/448665978
+https://place.map.kakao.com/24991629
+https://place.map.kakao.com/1666258503
+https://place.map.kakao.com/77230769
+https://place.map.kakao.com/1560348526
+https://place.map.kakao.com/1524069044
+https://place.map.kakao.com/18148611
+https://place.map.kakao.com/449597630
+https://place.map.kakao.com/554176889
+https://place.map.kakao.com/1453032994
+https://place.map.kakao.com/272899926
+# 추가 13곳
+https://place.map.kakao.com/25812093
+https://place.map.kakao.com/803280692
+https://place.map.kakao.com/319995996
+https://place.map.kakao.com/22831348
+https://place.map.kakao.com/2102393054
+https://place.map.kakao.com/842858438
+https://place.map.kakao.com/491316960
+https://place.map.kakao.com/1935790861
+https://place.map.kakao.com/26952311
+https://place.map.kakao.com/2061849042
+https://place.map.kakao.com/1239559567
+https://place.map.kakao.com/2140210498
+https://place.map.kakao.com/1900017839

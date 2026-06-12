@@ -8,7 +8,15 @@ import { TAX_MENU } from '../config/taxTypes';
 export default function TaxMenuButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => setIsAdmin(data?.user?.role === 'admin'))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -53,7 +61,7 @@ export default function TaxMenuButton() {
           role="menu"
           className="absolute left-0 top-full mt-2 w-56 z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden py-1"
         >
-          {TAX_MENU.map(group => (
+          {TAX_MENU.filter(group => !('adminOnly' in group && group.adminOnly) || isAdmin).map(group => (
             <div key={group.id} role="none" className="px-2 py-1.5">
               <p
                 role="none"

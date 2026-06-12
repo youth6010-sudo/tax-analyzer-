@@ -1,0 +1,36 @@
+import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth';
+import { updateProcessChecklist, updateProcessField } from '@/lib/consultationDb';
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    await requireUser();
+    const { id } = await params;
+    const body = (await request.json()) as {
+      checklist?: Record<string, boolean>;
+      monthlyFee?: number | null;
+      feeStartDate?: string;
+      channel?: string;
+    };
+
+    if (body.checklist) {
+      const row = await updateProcessChecklist(id, body.checklist);
+      return NextResponse.json({ process: row });
+    }
+
+    const row = await updateProcessField(id, {
+      monthlyFee: body.monthlyFee,
+      feeStartDate: body.feeStartDate,
+      channel: body.channel,
+    });
+    return NextResponse.json({ process: row });
+  } catch (e) {
+    if (e instanceof Error && e.message === 'NOT_FOUND') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "steps": [
+    {
+      "id": "inquiry",
+      "title": "유입 문의",
+      "description": "유입관리 시트 기준 — 문의·상담 정보를 입력합니다.",
+      "fields": [
+        { "key": "inquiryDate", "label": "문의일자", "type": "date" },
+        { "key": "companyName", "label": "업체명", "required": true },
+        { "key": "phone", "label": "전화번호", "required": true },
+        { "key": "channel", "label": "유입채널" },
+        { "key": "consultant", "label": "초회상담자" },
+        { "key": "inquiryNote", "label": "문의내용", "type": "textarea" },
+        { "key": "proposedFee", "label": "제안금액", "type": "number" },
+        { "key": "industry", "label": "업종" },
+        { "key": "businessNo", "label": "사업자번호" },
+        { "key": "representative", "label": "대표자" },
+        { "key": "address", "label": "주소" },
+        { "key": "contractStatus", "label": "계약유무", "type": "select", "options": ["", "계약완료", "보류", "실패"] }
+      ]
+    },
+    {
+      "id": "basic",
+      "title": "수임처 기본",
+      "description": "확정 상호·연락처·구분을 입력합니다.",
+      "fields": [
+        { "key": "companyName", "label": "업체명(상호)", "required": true },
+        { "key": "representative", "label": "대표자", "required": true },
+        { "key": "phone", "label": "전화번호", "required": true },
+        { "key": "businessEntityType", "label": "구분", "type": "entity", "required": true },
+        { "key": "businessNo", "label": "사업자번호" }
+      ]
+    },
+    {
+      "id": "checklist",
+      "title": "유입 프로세스",
+      "description": "유입프로세스 시트 10단계 — 완료 항목에 체크합니다.",
+      "fields": [
+        { "key": "contractSent", "label": "계약서 작성 및 전달", "type": "checklist" },
+        { "key": "consent", "label": "수임동의", "type": "checklist" },
+        { "key": "cms", "label": "CMS 등록", "type": "checklist" },
+        { "key": "assignee", "label": "담당자 배정", "type": "checklist" },
+        { "key": "programClient", "label": "프로그램 거래처 생성", "type": "checklist" },
+        { "key": "bluehole", "label": "블루홀 거래처 등록", "type": "checklist" },
+        { "key": "tpClient", "label": "TP 거래처 등록", "type": "checklist" },
+        { "key": "semoReport", "label": "위멤버스 및 세모리포트 등록", "type": "checklist" },
+        { "key": "bizAccount", "label": "사업용계좌 등록", "type": "checklist" },
+        { "key": "kakaoRoom", "label": "거래처 카톡방 생성", "type": "checklist" }
+      ]
+    },
+    {
+      "id": "confirm",
+      "title": "확인",
+      "description": "입력·체크리스트를 확인하고 active 수임처로 등록합니다.",
+      "fields": []
+    }
+  ]
+}

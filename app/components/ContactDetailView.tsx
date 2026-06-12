@@ -36,6 +36,7 @@ function toFormState(contact: ContactRecord): ContactUpdatePayload {
     corporateNo: contact.corporateNo,
     residentNo: contact.residentNo,
     phone: contact.phone,
+    mobilePhone: contact.mobilePhone,
     fax: contact.fax,
     taxTypes: [...contact.taxTypes],
     businessEntityType: contact.businessEntityType,
@@ -63,6 +64,7 @@ export default function ContactDetailView({ contact: initial }: ContactDetailVie
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ContactUpdatePayload>(() => toFormState(initial));
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const startEdit = useCallback(() => {
@@ -114,14 +116,14 @@ export default function ContactDetailView({ contact: initial }: ContactDetailVie
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/contacts/${contact.id}`, {
+      const res = await fetch(`/api/clients/${contact.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '저장 실패');
-      setContact(data as ContactRecord);
+      setContact((data.contact ?? data.client) as ContactRecord);
       setEditing(false);
       router.refresh();
     } catch (e) {
@@ -130,6 +132,29 @@ export default function ContactDetailView({ contact: initial }: ContactDetailVie
       setSaving(false);
     }
   }, [contact.id, form, router]);
+
+  const handleDelete = useCallback(async () => {
+    if (
+      !confirm(
+        `"${contact.companyName}" 수임처를 삭제할까요?\n연결된 시트·이력 데이터는 연결만 해제됩니다. 이 작업은 되돌릴 수 없습니다.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${contact.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? '삭제 실패');
+      router.push('/clients');
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '삭제하지 못했습니다.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [contact.companyName, contact.id, router]);
 
   const viewFields = EDITABLE_FIELDS.filter(
     f => f.key !== 'companyName',
@@ -141,13 +166,24 @@ export default function ContactDetailView({ contact: initial }: ContactDetailVie
         <div className="flex items-center justify-between gap-3">
           <BackButton />
           {!editing ? (
-            <button
-              type="button"
-              onClick={startEdit}
-              className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              수정
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-bold text-red-700 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                {deleting ? '삭제 중…' : '삭제'}
+              </button>
+              <button
+                type="button"
+                onClick={startEdit}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+              >
+                수정
+              </button>
+            </div>
           ) : (
             <div className="flex gap-2">
               <button
