@@ -7,6 +7,8 @@ import {
   CHURN_EDITABLE_COLUMNS,
   churnDateInputValue,
 } from '@/app/config/churnSheet';
+import ChurnExamplesPanel, { appendChurnFieldValue } from '@/app/components/churn/ChurnExamplesPanel';
+import type { ChurnExampleField } from '@/app/config/churnExamples';
 import type { ChurnRecordView } from '@/app/types/client';
 import { CHURN_REASONS } from '@/app/types/client';
 
@@ -267,6 +269,17 @@ export default function ChurnRecordPanel({
                 className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
               />
             </label>
+            <div className="sm:col-span-2">
+              <ChurnExamplesPanel
+                disabled={saving}
+                onApply={(field: ChurnExampleField, text: string) => {
+                  setForm(f => ({
+                    ...f,
+                    [field]: appendChurnFieldValue(f[field], text),
+                  }));
+                }}
+              />
+            </div>
             <div className="sm:col-span-2 rounded-lg px-3 py-2 bg-gray-50">
               <span className="text-[10px] font-bold text-gray-400 block">담당</span>
               <span className="text-sm text-gray-700">{record.manager || '—'}</span>

@@ -1,7 +1,9 @@
 'use client';
 
 import ChurnClientSearch from '@/app/components/churn/ChurnClientSearch';
+import ChurnExamplesPanel, { appendChurnFieldValue } from '@/app/components/churn/ChurnExamplesPanel';
 import { CHURN_COLUMNS } from '@/app/config/churnSheet';
+import type { ChurnExampleField } from '@/app/config/churnExamples';
 import type { ClientRecord } from '@/app/types/client';
 import { CHURN_REASONS } from '@/app/types/client';
 
@@ -194,6 +196,15 @@ export default function ChurnRegisterForm({
             className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
           />
         </label>
+
+        <div className="mt-3">
+          <ChurnExamplesPanel
+            disabled={!selectedClient || saving}
+            onApply={(field: ChurnExampleField, text: string) => {
+              onChange({ [field]: appendChurnFieldValue(values[field], text) });
+            }}
+          />
+        </div>
 
         <button
           type="submit"

@@ -3,6 +3,7 @@ import AppHeader from './components/AppHeader';
 import ClientCard from './components/ClientCard';
 import HomeLunchPreview from './components/lunch/HomeLunchPreview';
 import HomeTasksPanel from './components/dashboard/HomeTasksPanel';
+import TaxFilingPanel from './components/dashboard/TaxFilingPanel';
 import { requireUser } from '@/lib/auth';
 import { listClients } from '@/lib/clientsDb';
 import type { BusinessEntityType } from './types/contact';
@@ -98,6 +99,8 @@ export default async function HomePage() {
           </div>
 
           <HomeTasksPanel />
+
+          <TaxFilingPanel />
 
           {ENTITY_GROUPS.map(group => {
             const items = activeClients.filter(c => c.businessEntityType === group.id);

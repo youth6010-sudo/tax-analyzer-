@@ -7,6 +7,7 @@ import {
   uuid,
   integer,
   boolean,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const userRoleEnum = pgEnum('user_role', ['staff', 'admin']);
@@ -158,6 +159,43 @@ export const workChecklists = pgTable('work_checklists', {
   excelKey: text('excel_key').notNull().unique(),
 });
 
+/** 수임처 연락처 (업체당 다중) */
+export const clientContacts = pgTable('client_contacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  name: text('name').notNull().default(''),
+  role: text('role').notNull().default(''),
+  phone: text('phone').notNull().default(''),
+  mobilePhone: text('mobile_phone').notNull().default(''),
+  contactKind: text('contact_kind').notNull().default(''),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  source: text('source').notNull().default('manual'),
+  excelKey: text('excel_key').unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 세무 신고 수동 체크 (기간·세목별) */
+export const taxFilingChecks = pgTable(
+  'tax_filing_checks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+    taxType: text('tax_type').notNull(),
+    periodKey: text('period_key').notNull(),
+    status: text('status').notNull().default('pending'),
+    blueholeCaseId: text('bluehole_case_id').notNull().default(''),
+    acceptanceCount: integer('acceptance_count'),
+    notes: text('notes').notNull().default(''),
+    checkedBy: text('checked_by').notNull().default(''),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [uniqueIndex('tax_filing_checks_client_period_idx').on(t.clientId, t.taxType, t.periodKey)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type ChurnRecord = typeof churnRecords.$inferSelect;
+export type ClientContact = typeof clientContacts.$inferSelect;
+export type TaxFilingCheck = typeof taxFilingChecks.$inferSelect;

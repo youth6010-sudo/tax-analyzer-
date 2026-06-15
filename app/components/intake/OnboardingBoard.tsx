@@ -7,6 +7,7 @@ import type { ChecklistKey } from '@/app/types/intake';
 import type { ProcessChecklist } from '@/app/types/externalRefs';
 import { buildBlueholeCaseUrl } from '@/app/config/bluehole';
 import { registrationPackageFromInquiry } from '@/app/utils/registrationPackage';
+import { buildBlueholeCasePasteTemplate } from '@/app/utils/blueholeCasePaste';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import {
   CHECKLIST_LABEL,
@@ -51,10 +52,18 @@ export default function OnboardingBoard({
   const checklist = (process?.checklist ?? {}) as ProcessChecklist;
   const done = CHECKLIST_KEYS.filter(k => checklist[k]).length;
   const packageText = registrationPackageFromInquiry(inquiry);
+  const casePasteText = buildBlueholeCasePasteTemplate(inquiry, process);
+  const hasBluehole = Boolean(inquiryBlueholeCase(inquiry.extra).trim());
 
   const copyPackage = async () => {
     await navigator.clipboard.writeText(packageText);
     setCopyMsg('등록 패키지가 복사되었습니다.');
+    setTimeout(() => setCopyMsg(null), 2500);
+  };
+
+  const copyCasePaste = async () => {
+    await navigator.clipboard.writeText(casePasteText);
+    setCopyMsg('블루홀 케이스용 내용이 복사되었습니다.');
     setTimeout(() => setCopyMsg(null), 2500);
   };
 
@@ -83,6 +92,35 @@ export default function OnboardingBoard({
         </div>
         <span className="text-[10px] font-bold text-indigo-800 tabular-nums">{done}/{CHECKLIST_KEYS.length}</span>
       </div>
+
+      {!hasBluehole && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-2.5 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-blue-900">블루홀 케이스 등록</span>
+            <button
+              type="button"
+              onClick={() => void copyCasePaste()}
+              className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            >
+              케이스용 복사
+            </button>
+            <a
+              href="https://bluehole.world"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-semibold text-blue-700 hover:underline"
+            >
+              블루홀에서 케이스 만들기 →
+            </a>
+          </div>
+          <p className="text-[9px] text-blue-800/80">
+            복사한 내용을 블루홀 케이스에 붙여넣은 뒤, 케이스 번호(#213241 또는 /case/info/213241)를 아래에 저장하세요.
+          </p>
+          <pre className="text-[9px] text-gray-700 whitespace-pre-wrap font-sans leading-relaxed max-h-24 overflow-y-auto bg-white/60 rounded p-2 border border-blue-100">
+            {casePasteText}
+          </pre>
+        </div>
+      )}
 
       <div className="rounded-lg border border-indigo-100 bg-white p-2.5">
         <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -135,7 +173,7 @@ export default function OnboardingBoard({
                   <input
                     value={blueholeInput}
                     onChange={e => setBlueholeInput(e.target.value)}
-                    placeholder="#11364"
+                    placeholder="#213241"
                     className="flex-1 min-w-0 text-[10px] border border-gray-200 rounded px-2 py-1"
                   />
                   <button

@@ -18,6 +18,7 @@
     "import:youth-id": "node scripts/import-youth-id.mjs",
     "import:youth-workbook": "node scripts/import-youth-workbook.mjs",
     "import:suimcheo": "node scripts/import-suimcheo.mjs --replace",
+    "import:douzone-contacts": "node scripts/import-douzone-contacts.mjs",
     "db:push": "drizzle-kit push",
     "db:seed": "node scripts/seed-users.mjs",
     "db:migrate-contacts": "node scripts/migrate-contacts-to-db.mjs",

@@ -6,7 +6,7 @@ export const EXTERNAL_SYSTEMS = {
     label: '블루홀',
     checklistKey: 'bluehole',
     href: 'https://bluehole.world',
-    copyHint: '업체 번호(#11364)를 등록한 뒤 포털에 입력하세요.',
+    copyHint: '케이스용 복사 → 블루홀에 붙여넣기 → 케이스 번호(#213241) 저장.',
   },
   tp: {
     id: 'tp',

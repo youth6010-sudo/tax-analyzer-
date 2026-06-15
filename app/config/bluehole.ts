@@ -33,3 +33,14 @@ export function buildBlueholeCaseUrl(raw: string): string | null {
   }
   return `${BLUEHOLE_CLIENT_URL_BASE}/${parsed.id}?tab_name=info`;
 }
+
+/** 신고 체크용 — 항상 케이스 URL (/case/info/{id}) */
+export function buildBlueholeFilingCaseUrl(raw: string): string | null {
+  const parsed = parseBlueholeRef(raw);
+  if (!parsed) {
+    const id = raw.trim().replace(/^#\s*/, '').match(/\d+/)?.[0];
+    if (!id) return null;
+    return `${BLUEHOLE_CASE_URL_BASE}/${id}`;
+  }
+  return `${BLUEHOLE_CASE_URL_BASE}/${parsed.id}`;
+}

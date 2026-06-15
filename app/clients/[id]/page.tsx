@@ -4,6 +4,7 @@ import ContactDetailView from '../../components/ContactDetailView';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
 import ClientDouzoneSection from '../../components/ClientDouzoneSection';
 import ClientDetailExtras from '../../components/clients/ClientDetailExtras';
+import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
 import { requireUser } from '@/lib/auth';
 import { getClientById } from '@/lib/clientsDb';
 import { clientRecordToContact } from '@/lib/clientMapper';
@@ -25,6 +26,7 @@ export default async function ClientDetailPage({
       <AppHeader />
       <ContactDetailView contact={clientRecordToContact(client)} />
       <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pb-8 space-y-4 -mt-2">
+        <ClientContactsPanel clientId={client.id} />
         <ClientDetailExtras client={client} />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection

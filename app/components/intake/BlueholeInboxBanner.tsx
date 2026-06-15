@@ -19,7 +19,7 @@ export default function BlueholeInboxBanner({
         <p className="text-xs font-bold text-blue-900">블루홀 업체 인박스</p>
         <p className="text-[10px] text-blue-800/70 mt-0.5">
           {unlinkedCount > 0
-            ? `블루홀 미연결 유입 ${unlinkedCount}건 — 업체 번호(#11364)를 입력해 주세요.`
+            ? `블루홀 미연결 유입 ${unlinkedCount}건 — 케이스용 복사 후 번호(#213241)를 저장해 주세요.`
             : '블루홀 미연결 필터 적용 중'}
         </p>
       </div>
