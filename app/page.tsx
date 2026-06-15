@@ -2,6 +2,7 @@ import Link from 'next/link';
 import AppHeader from './components/AppHeader';
 import ClientCard from './components/ClientCard';
 import HomeLunchPreview from './components/lunch/HomeLunchPreview';
+import HomeTasksPanel from './components/dashboard/HomeTasksPanel';
 import { requireUser } from '@/lib/auth';
 import { listClients } from '@/lib/clientsDb';
 import type { BusinessEntityType } from './types/contact';
@@ -95,6 +96,8 @@ export default async function HomePage() {
               </Link>
             </div>
           </div>
+
+          <HomeTasksPanel />
 
           {ENTITY_GROUPS.map(group => {
             const items = activeClients.filter(c => c.businessEntityType === group.id);

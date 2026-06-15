@@ -3,7 +3,16 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { clients, intakeInquiries, intakeProcesses } from '@/db/schema';
 import { CHECKLIST_KEYS } from '@/app/types/intake';
+import type { ChecklistKey } from '@/app/types/intake';
+import type { ProcessChecklist } from '@/app/types/externalRefs';
+import { applyChecklistMeta } from '@/lib/checklistMeta';
 import { clientToRecord } from '@/lib/clientMapper';
+import {
+  externalRefsFromInquiryExtra,
+  intakeDataWithExternalRefs,
+  mergeExternalRefs,
+  parseExternalRefs,
+} from '@/lib/externalRefs';
 
 function str(v: unknown): string {
   return v == null ? '' : String(v).trim();
@@ -312,14 +321,25 @@ export async function createIntakeProcess(data: {
   return row;
 }
 
-export async function updateProcessChecklist(id: string, checklist: Record<string, boolean>) {
+export async function updateProcessChecklist(
+  id: string,
+  checklist: Record<string, boolean>,
+  options?: { toggledKey?: ChecklistKey; actorName?: string },
+) {
   const db = getDb();
+  const [existing] = await db.select().from(intakeProcesses).where(eq(intakeProcesses.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+
+  let nextChecklist: ProcessChecklist = { ...(existing.checklist as ProcessChecklist), ...checklist };
+  if (options?.toggledKey && options.actorName) {
+    nextChecklist = applyChecklistMeta(nextChecklist, options.toggledKey, options.actorName);
+  }
+
   const [row] = await db.update(intakeProcesses)
-    .set({ checklist, updatedAt: new Date() })
+    .set({ checklist: nextChecklist as Record<string, boolean>, updatedAt: new Date() })
     .where(eq(intakeProcesses.id, id))
     .returning();
-  if (!row) throw new Error('NOT_FOUND');
-  return row;
+  return row!;
 }
 
 export async function updateProcessField(
@@ -364,9 +384,20 @@ export async function updateInquiry(id: string, patch: InquiryPatch) {
   if (!existing) throw new Error('NOT_FOUND');
 
   const { extra: extraPatch, ...scalarPatch } = patch;
-  const extra = extraPatch != null
-    ? { ...(existing.extra ?? {}), ...extraPatch }
-    : undefined;
+  let extra: Record<string, unknown> | undefined;
+  if (extraPatch != null) {
+    const merged = { ...(existing.extra ?? {}), ...extraPatch };
+    const prevExt = (existing.extra?.externalRefs && typeof existing.extra.externalRefs === 'object'
+      ? existing.extra.externalRefs
+      : {}) as Record<string, unknown>;
+    const patchExt = (extraPatch.externalRefs && typeof extraPatch.externalRefs === 'object'
+      ? extraPatch.externalRefs
+      : null) as Record<string, unknown> | null;
+    if (patchExt) {
+      merged.externalRefs = { ...prevExt, ...patchExt };
+    }
+    extra = merged;
+  }
 
   const [row] = await db.update(intakeInquiries)
     .set({
@@ -396,6 +427,14 @@ export async function registerClientFromIntake(
   const companyName = (process?.companyName || inquiry.companyName).trim();
   if (!companyName || companyName === '(미입력)') throw new Error('COMPANY_NAME_REQUIRED');
 
+  const extRefs = externalRefsFromInquiryExtra(inquiry.extra ?? {}, managerName);
+  const baseIntake = {
+    inquiryId,
+    processId,
+    ...(inquiry.address ? { address: inquiry.address } : {}),
+  };
+  const intakePayload = intakeDataWithExternalRefs(baseIntake, extRefs);
+
   if (inquiry.clientId) {
     const [existing] = await db.select().from(clients).where(eq(clients.id, inquiry.clientId)).limit(1);
     if (existing?.status === 'active') return clientToRecord(existing);
@@ -411,12 +450,10 @@ export async function registerClientFromIntake(
           assignedUserId,
           manager: managerName,
           status: 'active',
-          intakeData: {
+          intakeData: intakeDataWithExternalRefs({
             ...(existing.intakeData ?? {}),
-            inquiryId,
-            processId,
-            ...(inquiry.address ? { address: inquiry.address } : {}),
-          },
+            ...baseIntake,
+          }, mergeExternalRefs(parseExternalRefs(existing.intakeData), extRefs)),
           updatedAt: new Date(),
         })
         .where(eq(clients.id, existing.id))
@@ -440,11 +477,7 @@ export async function registerClientFromIntake(
       status: 'active',
       source: 'manual_intake',
       feeSummary: process?.monthlyFee ?? inquiry.proposedFee ?? null,
-      intakeData: {
-        inquiryId,
-        processId,
-        ...(inquiry.address ? { address: inquiry.address } : {}),
-      },
+      intakeData: intakePayload,
     })
     .returning();
 

@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { PROCESS_CHECKLIST_TITLES } from '@/app/config/intakeSheets';
 import { CHECKLIST_KEYS } from '@/app/types/intake';
+import type { ChecklistKey } from '@/app/types/intake';
+import OnboardingBoard from './OnboardingBoard';
 import {
-  CHECKLIST_LABEL,
   processRowFromApi,
   type InquiryRow,
   type ProcessRow,
@@ -53,6 +53,27 @@ async function createMinimalProcess(inquiry: InquiryRow): Promise<ProcessRow> {
   return processRowFromApi(data.process as Record<string, unknown>);
 }
 
+function normalizeInquiry(raw: Record<string, unknown>): InquiryRow {
+  return {
+    id: String(raw.id ?? ''),
+    clientId: raw.clientId != null ? String(raw.clientId) : null,
+    companyName: String(raw.companyName ?? ''),
+    phone: String(raw.phone ?? ''),
+    channel: String(raw.channel ?? ''),
+    consultant: String(raw.consultant ?? ''),
+    inquiryDate: String(raw.inquiryDate ?? ''),
+    inquiryContent: String(raw.inquiryContent ?? ''),
+    contractStatus: String(raw.contractStatus ?? ''),
+    proposedFee: typeof raw.proposedFee === 'number' ? raw.proposedFee : null,
+    industry: String(raw.industry ?? ''),
+    businessNo: String(raw.businessNo ?? ''),
+    representative: String(raw.representative ?? ''),
+    address: String(raw.address ?? ''),
+    extra: (raw.extra && typeof raw.extra === 'object' ? raw.extra : {}) as Record<string, unknown>,
+    createdAt: raw.createdAt != null ? String(raw.createdAt) : '',
+  };
+}
+
 export default function IntakeProcessPanel({
   inquiry,
   process,
@@ -60,14 +81,16 @@ export default function IntakeProcessPanel({
   onProcessUpdated,
   onProcessCreated,
   onRegisterClient,
+  onInquiryUpdated,
   savingId,
 }: {
   inquiry: InquiryRow;
   process: ProcessRow | null;
-  onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
+  onToggleCheck: (process: ProcessRow, key: ChecklistKey) => void | Promise<void>;
   onProcessUpdated: (row: ProcessRow) => void;
   onProcessCreated: (row: ProcessRow) => void;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
+  onInquiryUpdated?: (row: InquiryRow) => void;
   savingId: string | null;
 }) {
   const [form, setForm] = useState(() => formFrom(inquiry, process));
@@ -122,15 +145,18 @@ export default function IntakeProcessPanel({
     }
   };
 
-  const handleChecklistClick = async (key: string) => {
+  const ensureProcess = async (): Promise<ProcessRow> => {
+    if (process) return process;
+    const proc = await createMinimalProcess(inquiry);
+    onProcessCreated(proc);
+    return proc;
+  };
+
+  const handleChecklistClick = async (key: ChecklistKey) => {
     setChecking(true);
     setError('');
     try {
-      let proc = process;
-      if (!proc) {
-        proc = await createMinimalProcess(inquiry);
-        onProcessCreated(proc);
-      }
+      const proc = await ensureProcess();
       await onToggleCheck(proc, key);
     } catch (e) {
       setError(e instanceof Error ? e.message : '체크 저장 실패');
@@ -139,15 +165,43 @@ export default function IntakeProcessPanel({
     }
   };
 
+  const saveBlueholeCase = async (caseId: string) => {
+    const res = await fetch('/api/integrations/bluehole/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inquiryId: inquiry.id, caseId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? '저장 실패');
+    onInquiryUpdated?.(normalizeInquiry(data.inquiry as Record<string, unknown>));
+  };
+
+  const saveExternalRef = async (system: 'tp' | 'semorang' | 'wemembers', id: string) => {
+    const existingExt = (inquiry.extra?.externalRefs && typeof inquiry.extra.externalRefs === 'object'
+      ? inquiry.extra.externalRefs
+      : {}) as Record<string, unknown>;
+    const res = await fetch(`/api/intake/inquiries/${inquiry.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        extra: {
+          externalRefs: {
+            ...existingExt,
+            [system]: { id, registeredAt: new Date().toISOString() },
+          },
+        },
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? '저장 실패');
+    onInquiryUpdated?.(normalizeInquiry(data.inquiry as Record<string, unknown>));
+  };
+
   const handleRegister = async () => {
     setRegistering(true);
     setError('');
     try {
-      let proc = process;
-      if (!proc) {
-        proc = await createMinimalProcess(inquiry);
-        onProcessCreated(proc);
-      }
+      const proc = await ensureProcess();
       const clientId = await onRegisterClient(inquiry.id, proc.id);
       if (clientId) setRegisteredClientId(clientId);
     } catch (e) {
@@ -158,10 +212,9 @@ export default function IntakeProcessPanel({
   };
 
   const done = process ? CHECKLIST_KEYS.filter(k => process.checklist?.[k]).length : 0;
-  const checklistBusy = checking || savingId === process?.id;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4">
         <label className="block text-[11px] col-span-2 sm:col-span-2">
           <span className="font-semibold text-indigo-900">업체명</span>
@@ -214,27 +267,15 @@ export default function IntakeProcessPanel({
 
       {error && <p className="text-[11px] text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-1">
-        {CHECKLIST_KEYS.map(key => {
-          const on = Boolean(process?.checklist?.[key]);
-          return (
-            <button
-              key={key}
-              type="button"
-              disabled={checklistBusy}
-              title={PROCESS_CHECKLIST_TITLES[key]}
-              onClick={() => void handleChecklistClick(key)}
-              className={`text-[10px] leading-none px-1.5 py-1 rounded border transition-colors ${
-                on
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
-                  : 'bg-white border-indigo-100 text-gray-500 hover:border-indigo-300'
-              } disabled:opacity-50`}
-            >
-              <span className="font-black">{on ? 'O' : '·'}</span> {CHECKLIST_LABEL[key]}
-            </button>
-          );
-        })}
-      </div>
+      <OnboardingBoard
+        inquiry={inquiry}
+        process={process}
+        onToggleCheck={(_, key) => handleChecklistClick(key)}
+        onSaveBlueholeCase={saveBlueholeCase}
+        onSaveExternalRef={saveExternalRef}
+        savingId={savingId}
+        checking={checking}
+      />
 
       <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200/50">
         {registeredClientId ? (
@@ -251,9 +292,15 @@ export default function IntakeProcessPanel({
             onClick={() => void handleRegister()}
             className="text-[11px] px-2.5 py-1 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
           >
-            {registering ? '…' : '수임처 등록'}
+            {registering ? '…' : '포털 수임처 등록'}
           </button>
         )}
+        <Link
+          href={`/clients/intake/new?inquiryId=${inquiry.id}`}
+          className="text-[11px] px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-800 font-semibold hover:bg-indigo-50"
+        >
+          수임 wizard →
+        </Link>
       </div>
     </div>
   );

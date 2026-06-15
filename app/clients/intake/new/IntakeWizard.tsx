@@ -134,6 +134,7 @@ export default function IntakeWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeId = searchParams.get('id');
+  const inquiryId = searchParams.get('inquiryId');
 
   const [manual, setManual] = useState<IntakeManual | null>(null);
   const [clientId, setClientId] = useState<string | null>(resumeId);
@@ -151,16 +152,48 @@ export default function IntakeWizard() {
 
   useEffect(() => {
     if (!resumeId) {
-      fetch('/api/clients/intake', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-          if (data.client) {
-            setClientId(data.client.id);
-            setStep(data.client.intakeStep ?? 0);
-            setForm(clientToForm(data.client));
+      const start = async () => {
+        if (inquiryId) {
+          const inqRes = await fetch(`/api/intake/inquiries/${inquiryId}`);
+          if (inqRes.ok) {
+            const inqData = await inqRes.json();
+            const inq = inqData.inquiry as Record<string, unknown>;
+            const createRes = await fetch('/api/clients/intake', { method: 'POST' });
+            const createData = await createRes.json();
+            if (createData.client) {
+              setClientId(createData.client.id);
+              setStep(0);
+              setForm({
+                ...emptyForm(),
+                companyName: String(inq.companyName ?? ''),
+                phone: String(inq.phone ?? ''),
+                representative: String(inq.representative ?? ''),
+                businessNo: String(inq.businessNo ?? ''),
+                inquiryDate: String(inq.inquiryDate ?? ''),
+                channel: String(inq.channel ?? ''),
+                consultant: String(inq.consultant ?? ''),
+                inquiryNote: String(inq.inquiryContent ?? ''),
+                proposedFee: inq.proposedFee ?? '',
+                industry: String(inq.industry ?? ''),
+                address: String(inq.address ?? ''),
+                contractStatus: String(inq.contractStatus ?? ''),
+              });
+              return;
+            }
           }
-        })
-        .catch(() => setError('유입을 시작하지 못했습니다.'));
+        }
+        fetch('/api/clients/intake', { method: 'POST' })
+          .then(r => r.json())
+          .then(data => {
+            if (data.client) {
+              setClientId(data.client.id);
+              setStep(data.client.intakeStep ?? 0);
+              setForm(clientToForm(data.client));
+            }
+          })
+          .catch(() => setError('유입을 시작하지 못했습니다.'));
+      };
+      void start();
       return;
     }
 
@@ -173,7 +206,7 @@ export default function IntakeWizard() {
           setForm(clientToForm(data.client));
         }
       });
-  }, [resumeId]);
+  }, [resumeId, inquiryId]);
 
   const steps = manual?.steps ?? [];
   const current = steps[step];

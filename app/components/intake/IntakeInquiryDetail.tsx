@@ -289,7 +289,7 @@ export default function IntakeInquiryDetail({
           />
         </label>
         <label className="block text-xs">
-          <span className="font-semibold text-gray-600">블루홀 케이스</span>
+          <span className="font-semibold text-gray-600">블루홀 업체</span>
           <input
             value={form.blueholeCase}
             onChange={e => setForm(prev => ({ ...prev, blueholeCase: e.target.value }))}
@@ -324,7 +324,7 @@ export default function IntakeInquiryDetail({
       <TextBlock label="특이사항" value={note} compact={compact} />
       {bluehole.trim() ? (
         <div>
-          <p className="text-[10px] font-bold text-gray-500 uppercase mb-0.5">블루홀 케이스</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase mb-0.5">블루홀 업체</p>
           <BlueholeCaseLink value={bluehole} className="text-xs" />
         </div>
       ) : null}

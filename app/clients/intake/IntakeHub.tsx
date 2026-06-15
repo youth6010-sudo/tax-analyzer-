@@ -6,13 +6,16 @@ import AppHeader from '../../components/AppHeader';
 import IntakeTabs, { resolveIntakeTab } from '../../components/intake/IntakeTabs';
 import ConsultationFormPanel from '../../components/intake/ConsultationFormPanel';
 import IntakeSplitView from '../../components/intake/IntakeSplitView';
+import BlueholeInboxBanner from '../../components/intake/BlueholeInboxBanner';
 import {
+  inquiryBlueholeCase,
   sortInquiries,
   sortProcesses,
   type InquiryRow,
   type IntakeSort,
   type ProcessRow,
 } from '../../components/intake/intakeUtils';
+import type { ChecklistKey } from '@/app/types/intake';
 
 function pick(raw: Record<string, unknown>, camel: string, snake?: string): unknown {
   if (raw[camel] !== undefined && raw[camel] !== null) return raw[camel];
@@ -81,7 +84,7 @@ function IntakeToolbar({
         type="search"
         value={search}
         onChange={e => onSearchChange(e.target.value)}
-        placeholder="상호 검색…"
+        placeholder="상호·블루홀 업체번호 검색…"
         className="w-full max-w-md border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"
       />
       <select
@@ -102,7 +105,9 @@ export default function IntakeHub() {
   const router = useRouter();
   const tab = resolveIntakeTab(searchParams.get('tab'));
   const draftId = searchParams.get('draft');
+  const urlInquiry = searchParams.get('inquiry');
   const urlQ = searchParams.get('q')?.trim() ?? '';
+  const blueholeOnly = searchParams.get('bluehole') === 'unlinked';
 
   const urlSort = searchParams.get('sort');
   const sort: IntakeSort = urlSort === 'name' ? 'name' : 'created';
@@ -112,9 +117,12 @@ export default function IntakeHub() {
   const [processes, setProcesses] = useState<ProcessRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
 
   useEffect(() => { setSearch(urlQ); }, [urlQ]);
+  useEffect(() => {
+    if (urlInquiry) setSelectedId(urlInquiry);
+  }, [urlInquiry]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,16 +138,35 @@ export default function IntakeHub() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const unlinkedCount = useMemo(
+    () => inquiries.filter(i => !inquiryBlueholeCase(i.extra).trim()).length,
+    [inquiries],
+  );
+
   const filterText = search.trim().toLowerCase();
-  const filterFn = <T extends { companyName: string }>(list: T[]) =>
-    filterText ? list.filter(x => x.companyName.toLowerCase().includes(filterText)) : list;
+  const filterFn = (list: InquiryRow[]) => {
+    let out = list;
+    if (blueholeOnly) {
+      out = out.filter(i => !inquiryBlueholeCase(i.extra).trim());
+    }
+    if (!filterText) return out;
+    return out.filter(i => {
+      const bh = inquiryBlueholeCase(i.extra).toLowerCase();
+      return i.companyName.toLowerCase().includes(filterText) || bh.includes(filterText);
+    });
+  };
 
   const filteredInquiries = useMemo(
     () => sortInquiries(filterFn(inquiries), sort),
-    [inquiries, filterText, sort],
+    [inquiries, filterText, sort, blueholeOnly],
   );
   const filteredProcesses = useMemo(
-    () => sortProcesses(filterFn(processes), sort),
+    () => sortProcesses(
+      filterText
+        ? processes.filter(x => x.companyName.toLowerCase().includes(filterText))
+        : processes,
+      sort,
+    ),
     [processes, filterText, sort],
   );
 
@@ -162,7 +189,7 @@ export default function IntakeHub() {
       const res = await fetch(`/api/processes/${process.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checklist: next }),
+        body: JSON.stringify({ checklist: next, toggledKey: key as ChecklistKey }),
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
@@ -201,6 +228,20 @@ export default function IntakeHub() {
     router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
   };
 
+  const toggleBlueholeFilter = () => {
+    const p = new URLSearchParams(searchParams.toString());
+    if (blueholeOnly) p.delete('bluehole');
+    else p.set('bluehole', 'unlinked');
+    router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
+  };
+
+  const onSelectInquiry = (id: string | null) => {
+    setSelectedId(id);
+    const p = new URLSearchParams(searchParams.toString());
+    if (id) p.set('inquiry', id); else p.delete('inquiry');
+    router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
+  };
+
   const selectedInquiry = filteredInquiries.find(i => i.id === selectedId);
 
   return (
@@ -210,12 +251,19 @@ export default function IntakeHub() {
         <IntakeTabs active={tab} />
 
         {tab !== 'consultation' && (
-          <IntakeToolbar
-            search={search}
-            sort={sort}
-            onSearchChange={onSearchChange}
-            onSortChange={onSortChange}
-          />
+          <>
+            <BlueholeInboxBanner
+              unlinkedCount={unlinkedCount}
+              showOnlyUnlinked={blueholeOnly}
+              onToggleFilter={toggleBlueholeFilter}
+            />
+            <IntakeToolbar
+              search={search}
+              sort={sort}
+              onSearchChange={onSearchChange}
+              onSortChange={onSortChange}
+            />
+          </>
         )}
 
         {loading ? (
@@ -224,14 +272,17 @@ export default function IntakeHub() {
           <ConsultationFormPanel
             key={draftId ?? 'new'}
             initialDraftId={draftId}
-            onSuccess={() => { void load(); router.push('/clients/intake?tab=intake'); }}
+            onSuccess={({ inquiryId }) => {
+              void load();
+              router.push(`/clients/intake?tab=intake&inquiry=${inquiryId}`);
+            }}
           />
         ) : (
           <IntakeSplitView
             inquiries={filteredInquiries}
             processes={processes}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={onSelectInquiry}
             onInquiryUpdated={onInquiryUpdated}
             onProcessUpdated={onProcessUpdated}
             onProcessCreated={onProcessCreated}

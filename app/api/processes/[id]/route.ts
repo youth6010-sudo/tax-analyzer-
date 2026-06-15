@@ -1,23 +1,28 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { updateProcessChecklist, updateProcessField } from '@/lib/consultationDb';
+import type { ChecklistKey } from '@/app/types/intake';
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
     const body = (await request.json()) as {
       checklist?: Record<string, boolean>;
+      toggledKey?: ChecklistKey;
       monthlyFee?: number | null;
       feeStartDate?: string;
       channel?: string;
     };
 
     if (body.checklist) {
-      const row = await updateProcessChecklist(id, body.checklist);
+      const row = await updateProcessChecklist(id, body.checklist, {
+        toggledKey: body.toggledKey,
+        actorName: user.name,
+      });
       return NextResponse.json({ process: row });
     }
 

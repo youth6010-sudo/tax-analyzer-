@@ -141,6 +141,7 @@ export default function IntakeInquirySheet({
                     onProcessCreated(row);
                   }}
                   onRegisterClient={onRegisterClient}
+                  onInquiryUpdated={onInquiryUpdated}
                   savingId={savingId}
                 />
               </section>
