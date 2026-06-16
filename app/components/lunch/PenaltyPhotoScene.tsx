@@ -7,17 +7,14 @@ import { gkDiveSide } from './penaltyScene';
 interface PenaltyPhotoSceneProps {
   phase: 'idle' | 'ready' | 'kick' | 'goal' | 'celebrate';
   kickSide: KickSide;
+  gkSide?: KickSide;
 }
 
-/**
- * 슛 연출 — 단일 장면 + 연속 카메라 (끊김 없음)
- * 4컷 크로스페이드 제거, 줌·팬만으로 공 따라가기
- */
-export default function PenaltyPhotoScene({ phase, kickSide }: PenaltyPhotoSceneProps) {
+export default function PenaltyPhotoScene({ phase, kickSide, gkSide }: PenaltyPhotoSceneProps) {
   const isReady = phase === 'ready';
   const isKick = phase === 'kick';
   const isGoal = phase === 'goal';
-  const gkDive = gkDiveSide(kickSide);
+  const gkDive = gkSide ?? gkDiveSide(kickSide);
 
   const sceneClass = [
     'wc-penalty-scene',

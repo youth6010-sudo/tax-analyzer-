@@ -1,13 +1,6 @@
-/** 외부 시스템 등록 화면 URL (딥링크·온보딩 보드용) */
+/** 외부 시스템 등록 화면 URL (온보딩 보드용) */
 
 export const EXTERNAL_SYSTEMS = {
-  bluehole: {
-    id: 'bluehole',
-    label: '블루홀',
-    checklistKey: 'bluehole',
-    href: 'https://bluehole.world',
-    copyHint: '케이스용 복사 → 블루홀에 붙여넣기 → 케이스 번호(#213241) 저장.',
-  },
   tp: {
     id: 'tp',
     label: 'TP',

@@ -1,17 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { CHECKLIST_KEYS } from '@/app/types/intake';
-import type { ChecklistKey } from '@/app/types/intake';
-import OnboardingBoard from './OnboardingBoard';
+import { useEffect, useRef, useState } from 'react';
+import ProcessChecklistPanel from './ProcessChecklistPanel';
 import {
+  inquiryBlueholeCase,
   processRowFromApi,
   type InquiryRow,
   type ProcessRow,
 } from './intakeUtils';
 
-const inputCls = 'mt-0.5 w-full min-w-0 border border-indigo-200 rounded px-2 py-1.5 text-xs text-gray-900 bg-white focus:ring-1 focus:ring-indigo-400 focus:outline-none';
+const inputCls = 'mt-0.5 w-full min-w-0 border border-indigo-200 rounded px-1.5 py-1 text-[10px] text-gray-900 bg-white focus:ring-1 focus:ring-indigo-400 focus:outline-none';
 
 function defaultCompanyName(inquiry: InquiryRow): string {
   const name = inquiry.companyName.trim();
@@ -53,49 +52,25 @@ async function createMinimalProcess(inquiry: InquiryRow): Promise<ProcessRow> {
   return processRowFromApi(data.process as Record<string, unknown>);
 }
 
-function normalizeInquiry(raw: Record<string, unknown>): InquiryRow {
-  return {
-    id: String(raw.id ?? ''),
-    clientId: raw.clientId != null ? String(raw.clientId) : null,
-    companyName: String(raw.companyName ?? ''),
-    phone: String(raw.phone ?? ''),
-    channel: String(raw.channel ?? ''),
-    consultant: String(raw.consultant ?? ''),
-    inquiryDate: String(raw.inquiryDate ?? ''),
-    inquiryContent: String(raw.inquiryContent ?? ''),
-    contractStatus: String(raw.contractStatus ?? ''),
-    proposedFee: typeof raw.proposedFee === 'number' ? raw.proposedFee : null,
-    industry: String(raw.industry ?? ''),
-    businessNo: String(raw.businessNo ?? ''),
-    representative: String(raw.representative ?? ''),
-    address: String(raw.address ?? ''),
-    extra: (raw.extra && typeof raw.extra === 'object' ? raw.extra : {}) as Record<string, unknown>,
-    createdAt: raw.createdAt != null ? String(raw.createdAt) : '',
-  };
-}
-
 export default function IntakeProcessPanel({
   inquiry,
   process,
-  onToggleCheck,
   onProcessUpdated,
   onProcessCreated,
   onRegisterClient,
-  onInquiryUpdated,
-  savingId,
+  onToggleCheck,
+  onSyncBlueholeCheck,
 }: {
   inquiry: InquiryRow;
   process: ProcessRow | null;
-  onToggleCheck: (process: ProcessRow, key: ChecklistKey) => void | Promise<void>;
   onProcessUpdated: (row: ProcessRow) => void;
   onProcessCreated: (row: ProcessRow) => void;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
-  onInquiryUpdated?: (row: InquiryRow) => void;
-  savingId: string | null;
+  onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
+  onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
 }) {
   const [form, setForm] = useState(() => formFrom(inquiry, process));
   const [saving, setSaving] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
   const [registeredClientId, setRegisteredClientId] = useState<string | null>(inquiry.clientId);
@@ -152,51 +127,6 @@ export default function IntakeProcessPanel({
     return proc;
   };
 
-  const handleChecklistClick = async (key: ChecklistKey) => {
-    setChecking(true);
-    setError('');
-    try {
-      const proc = await ensureProcess();
-      await onToggleCheck(proc, key);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '체크 저장 실패');
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const saveBlueholeCase = async (caseId: string) => {
-    const res = await fetch('/api/integrations/bluehole/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inquiryId: inquiry.id, caseId }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? '저장 실패');
-    onInquiryUpdated?.(normalizeInquiry(data.inquiry as Record<string, unknown>));
-  };
-
-  const saveExternalRef = async (system: 'tp' | 'semorang' | 'wemembers', id: string) => {
-    const existingExt = (inquiry.extra?.externalRefs && typeof inquiry.extra.externalRefs === 'object'
-      ? inquiry.extra.externalRefs
-      : {}) as Record<string, unknown>;
-    const res = await fetch(`/api/intake/inquiries/${inquiry.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        extra: {
-          externalRefs: {
-            ...existingExt,
-            [system]: { id, registeredAt: new Date().toISOString() },
-          },
-        },
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? '저장 실패');
-    onInquiryUpdated?.(normalizeInquiry(data.inquiry as Record<string, unknown>));
-  };
-
   const handleRegister = async () => {
     setRegistering(true);
     setError('');
@@ -211,12 +141,25 @@ export default function IntakeProcessPanel({
     }
   };
 
-  const done = process ? CHECKLIST_KEYS.filter(k => process.checklist?.[k]).length : 0;
+  const inquiryBluehole = inquiryBlueholeCase(inquiry.extra);
+  const syncedBlueholeRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    syncedBlueholeRef.current = null;
+  }, [inquiry.id]);
+
+  useEffect(() => {
+    if (!process || !inquiryBluehole.trim() || process.checklist?.blueholeClient) return;
+    const token = `${process.id}:${inquiryBluehole}`;
+    if (syncedBlueholeRef.current === token) return;
+    syncedBlueholeRef.current = token;
+    void onSyncBlueholeCheck?.(process);
+  }, [process?.id, process?.checklist?.blueholeClient, inquiryBluehole, onSyncBlueholeCheck]);
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4">
-        <label className="block text-[11px] col-span-2 sm:col-span-2">
+    <div className="space-y-2">
+      <div className="grid gap-1 grid-cols-2 sm:grid-cols-4">
+        <label className="block text-[10px] col-span-2">
           <span className="font-semibold text-indigo-900">업체명</span>
           <input
             value={form.companyName}
@@ -224,8 +167,8 @@ export default function IntakeProcessPanel({
             className={inputCls}
           />
         </label>
-        <label className="block text-[11px]">
-          <span className="font-semibold text-indigo-900">수수료일</span>
+        <label className="block text-[10px]">
+          <span className="font-semibold text-indigo-900">수수료 발생일</span>
           <input
             type="date"
             value={form.feeStartDate}
@@ -233,7 +176,7 @@ export default function IntakeProcessPanel({
             className={inputCls}
           />
         </label>
-        <label className="block text-[11px]">
+        <label className="block text-[10px]">
           <span className="font-semibold text-indigo-900">기장료</span>
           <input
             value={form.monthlyFee}
@@ -242,7 +185,7 @@ export default function IntakeProcessPanel({
             placeholder="숫자"
           />
         </label>
-        <label className="block text-[11px] col-span-2 sm:col-span-3">
+        <label className="block text-[10px] col-span-2 sm:col-span-3">
           <span className="font-semibold text-indigo-900">유입 경로</span>
           <input
             value={form.channel}
@@ -250,31 +193,26 @@ export default function IntakeProcessPanel({
             className={inputCls}
           />
         </label>
-        <div className="col-span-2 sm:col-span-1 flex items-end gap-1.5">
+        <div className="col-span-2 sm:col-span-1 flex items-end">
           <button
             type="button"
             disabled={saving}
             onClick={() => void saveMeta()}
-            className="flex-1 text-[11px] px-2 py-1.5 rounded-md bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full text-[10px] px-2 py-1.5 rounded-md bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50"
           >
             {saving ? '…' : '저장'}
           </button>
-          {process && (
-            <span className="text-[10px] font-semibold text-indigo-800 tabular-nums shrink-0">{done}/{CHECKLIST_KEYS.length}</span>
-          )}
         </div>
       </div>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && <p className="text-[10px] text-red-600">{error}</p>}
 
-      <OnboardingBoard
-        inquiry={inquiry}
+      <ProcessChecklistPanel
         process={process}
-        onToggleCheck={(_, key) => handleChecklistClick(key)}
-        onSaveBlueholeCase={saveBlueholeCase}
-        onSaveExternalRef={saveExternalRef}
-        savingId={savingId}
-        checking={checking}
+        inquiryBluehole={inquiryBluehole}
+        onToggleCheck={onToggleCheck}
+        onSyncBlueholeCheck={onSyncBlueholeCheck}
+        onEnsureProcess={ensureProcess}
       />
 
       <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200/50">
@@ -295,12 +233,6 @@ export default function IntakeProcessPanel({
             {registering ? '…' : '포털 수임처 등록'}
           </button>
         )}
-        <Link
-          href={`/clients/intake/new?inquiryId=${inquiry.id}`}
-          className="text-[11px] px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-800 font-semibold hover:bg-indigo-50"
-        >
-          수임 wizard →
-        </Link>
       </div>
     </div>
   );

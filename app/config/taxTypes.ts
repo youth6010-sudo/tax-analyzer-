@@ -30,7 +30,6 @@ export const TAX_MENU = [
     label: '관리',
     adminOnly: true,
     items: [
-      { label: '중복 수임처', href: '/admin/clients/duplicates' },
       { label: '데이터 백업', href: '/admin/backup' },
     ],
   },
@@ -39,9 +38,6 @@ export const TAX_MENU = [
     label: '종소세',
     items: [{ label: '종합소득세 분석', href: '/tax/comprehensive' }],
   },
-  { id: 'withholding', label: '원천세', items: [] },
-  { id: 'vat', label: '부가세', items: [] },
-  { id: 'corporate', label: '법인세', items: [] },
 ] as const;
 
 export type TaxMenuGroup = (typeof TAX_MENU)[number];

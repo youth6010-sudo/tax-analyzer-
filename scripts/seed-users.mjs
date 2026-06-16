@@ -32,10 +32,13 @@ if (!dbUrl) {
 }
 
 const inputPath = process.argv[2] || path.join(root, 'data', 'seed-users.json');
-let seedList = [{ loginId: 'admin', name: '관리자', pin: '1234', role: 'admin' }];
+let seedList = [];
 
 if (fs.existsSync(inputPath)) {
   seedList = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+} else {
+  console.error('Seed file not found:', inputPath);
+  process.exit(1);
 }
 
 const sql = postgres(dbUrl, { max: 1 });
@@ -43,7 +46,7 @@ const sql = postgres(dbUrl, { max: 1 });
 for (const u of seedList) {
   const loginId = u.loginId.trim().toLowerCase();
   const pinHash = await bcrypt.hash(String(u.pin), 10);
-  const role = u.role === 'admin' ? 'admin' : 'staff';
+  const role = 'staff';
   const realName = u.realName?.trim() ?? u.name;
 
   const existing = await sql`SELECT id FROM users WHERE login_id = ${loginId} LIMIT 1`;

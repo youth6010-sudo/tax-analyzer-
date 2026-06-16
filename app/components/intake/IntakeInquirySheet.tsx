@@ -14,15 +14,16 @@ import {
 
 function CellValue({ row, colKey }: { row: InquiryRow; colKey: string }) {
   const raw = inquiryFieldValue(row, colKey);
-  if (colKey === 'blueholeCase') {
-    return raw.trim()
-      ? <BlueholeCaseLink value={raw} className="text-sm" />
-      : <span className="text-gray-300">-</span>;
-  }
   if (!raw.trim()) return <span className="text-gray-300">-</span>;
   if (colKey === 'proposedFee') return <span className="font-medium tabular-nums">{Number(raw).toLocaleString()}</span>;
   if (colKey === 'companyName') {
     return <span className="font-bold text-gray-900">{raw}</span>;
+  }
+  if (colKey === 'inquiryDate') {
+    return <span className="text-gray-800 whitespace-nowrap tabular-nums">{raw}</span>;
+  }
+  if (colKey === 'blueholeCase') {
+    return <BlueholeCaseLink value={raw} className="text-xs" />;
   }
   return <span className="text-gray-800">{raw}</span>;
 }
@@ -36,8 +37,10 @@ export default function IntakeInquirySheet({
   onProcessUpdated,
   onProcessCreated,
   onToggleCheck,
+  onSyncBlueholeCheck,
   onRegisterClient,
-  savingId,
+  onDeleteInquiry,
+  deletingId,
 }: {
   rows: InquiryRow[];
   processes: ProcessRow[];
@@ -47,8 +50,10 @@ export default function IntakeInquirySheet({
   onProcessUpdated: (row: ProcessRow) => void;
   onProcessCreated: (row: ProcessRow) => void;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
+  onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
-  savingId: string | null;
+  onDeleteInquiry: (inquiry: InquiryRow, process: ProcessRow | null) => void | Promise<void>;
+  deletingId: string | null;
 }) {
   const [linkedProcessId, setLinkedProcessId] = useState<string | null>(null);
 
@@ -83,7 +88,10 @@ export default function IntakeInquirySheet({
               {INQUIRY_LIST_COLUMNS.map(col => (
                 <th
                   key={col.key}
-                  className="px-2.5 py-2 text-left text-xs font-bold text-slate-700 border-b border-slate-200"
+                  style={col.width ? { width: col.width, minWidth: col.width } : undefined}
+                  className={`px-2.5 py-2 text-left text-xs font-bold text-slate-700 border-b border-slate-200 ${
+                    col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''
+                  }`}
                 >
                   {col.label}
                 </th>
@@ -102,7 +110,11 @@ export default function IntakeInquirySheet({
                   }`}
                 >
                   {INQUIRY_LIST_COLUMNS.map(col => (
-                    <td key={col.key} className="px-2.5 py-2 align-top">
+                    <td
+                      key={col.key}
+                      style={col.width ? { width: col.width, minWidth: col.width } : undefined}
+                      className={`px-2.5 py-2 align-top ${col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''}`}
+                    >
                       <CellValue row={row} colKey={col.key} />
                     </td>
                   ))}
@@ -120,29 +132,38 @@ export default function IntakeInquirySheet({
               <p className="text-sm font-black text-gray-900 truncate">
                 {selectedInquiry.companyName || '(미입력)'}
               </p>
-              <button
-                type="button"
-                onClick={() => onSelect(null)}
-                className="shrink-0 text-xs font-semibold text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md hover:bg-white"
-              >
-                닫기
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  disabled={deletingId === selectedInquiry.id}
+                  onClick={() => void onDeleteInquiry(selectedInquiry, selectedProcess)}
+                  className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deletingId === selectedInquiry.id ? '…' : '삭제'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelect(null)}
+                  className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md hover:bg-white"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
             <div className="flex flex-col gap-2.5 p-2.5">
-              <section className="rounded-lg border border-indigo-200/60 bg-indigo-50/80 p-2.5">
-                <h3 className="text-[11px] font-black text-indigo-900 mb-1.5">유입프로세스</h3>
+              <section className="rounded-lg border border-indigo-200/60 bg-indigo-50/80 p-2">
+                <h3 className="text-[10px] font-black text-indigo-900 mb-1">유입프로세스</h3>
                 <IntakeProcessPanel
                   inquiry={selectedInquiry}
                   process={selectedProcess}
-                  onToggleCheck={onToggleCheck}
                   onProcessUpdated={onProcessUpdated}
                   onProcessCreated={row => {
                     setLinkedProcessId(row.id);
                     onProcessCreated(row);
                   }}
                   onRegisterClient={onRegisterClient}
-                  onInquiryUpdated={onInquiryUpdated}
-                  savingId={savingId}
+                  onToggleCheck={onToggleCheck}
+                  onSyncBlueholeCheck={onSyncBlueholeCheck}
                 />
               </section>
               <section className="rounded-lg border border-slate-200 bg-white p-2.5">

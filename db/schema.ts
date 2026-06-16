@@ -175,12 +175,13 @@ export const clientContacts = pgTable('client_contacts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** 세무 신고 수동 체크 (기간·세목별) */
+/** 세무 신고 통합 케이스 보드 (지점·세목·기간당 1건) */
 export const taxFilingChecks = pgTable(
   'tax_filing_checks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull().default('branch'),
     taxType: text('tax_type').notNull(),
     periodKey: text('period_key').notNull(),
     status: text('status').notNull().default('pending'),
@@ -191,11 +192,23 @@ export const taxFilingChecks = pgTable(
     checkedAt: timestamp('checked_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  t => [uniqueIndex('tax_filing_checks_client_period_idx').on(t.clientId, t.taxType, t.periodKey)],
+  t => [uniqueIndex('tax_filing_checks_scope_period_idx').on(t.scope, t.taxType, t.periodKey)],
 );
+
+/** 점심 맛집 추가 요청 큐 */
+export const lunchSpotRequests = pgTable('lunch_spot_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  note: text('note').notNull().default(''),
+  requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+  requestedByName: text('requested_by_name').notNull().default(''),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type User = typeof users.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type ChurnRecord = typeof churnRecords.$inferSelect;
 export type ClientContact = typeof clientContacts.$inferSelect;
 export type TaxFilingCheck = typeof taxFilingChecks.$inferSelect;
+export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth';
+import { requireUser, isPortalAdmin } from '@/lib/auth';
 import { listClients } from '@/lib/clientsDb';
 
 export async function GET(request: NextRequest) {
@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
 
     const clients = await listClients({
       status: status ?? undefined,
-      mineOnly: mineOnly && user.role !== 'admin',
+      mineOnly: mineOnly && !isPortalAdmin(user),
       userId: user.id,
       userName: user.name,
       businessEntityType,
       assignedUserId:
-        user.role === 'admin' && searchParams.get('assignedUserId')
+        isPortalAdmin(user) && searchParams.get('assignedUserId')
           ? searchParams.get('assignedUserId')!
           : undefined,
     });

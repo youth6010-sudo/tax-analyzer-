@@ -24,7 +24,10 @@ export default async function ClientDetailPage({
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
-      <ContactDetailView contact={clientRecordToContact(client)} />
+      <ContactDetailView
+        contact={clientRecordToContact(client)}
+        primaryContactName={client.primaryContactName}
+      />
       <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pb-8 space-y-4 -mt-2">
         <ClientContactsPanel clientId={client.id} />
         <ClientDetailExtras client={client} />

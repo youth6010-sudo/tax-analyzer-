@@ -5,24 +5,37 @@ import AppHeader from '../components/AppHeader';
 import ClientExpandableCard from '../components/ClientExpandableCard';
 import type { ClientRecord } from '../types/client';
 import { BUSINESS_ENTITY_TYPES } from '../types/contact';
+import {
+  getPortalClients,
+  hydratePortal,
+  prefetchPortal,
+  subscribePortal,
+} from '@/app/utils/portalStore';
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<ClientRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [entity, setEntity] = useState('');
   const [mineOnly, setMineOnly] = useState(true);
+  const [clients, setClients] = useState<ClientRecord[]>(() => getPortalClients());
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'name' | 'fee'>('name');
 
+  useEffect(() => {
+    if (!clients.length) hydratePortal();
+    return subscribePortal(() => setClients(getPortalClients()));
+  }, [clients.length]);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    if (mineOnly && !entity) {
+      await prefetchPortal(true);
+      setClients(getPortalClients());
+      return;
+    }
     const params = new URLSearchParams({ status: 'active' });
     if (mineOnly) params.set('mine', '1');
     if (entity) params.set('entity', entity);
     const res = await fetch(`/api/clients?${params}`);
     const data = await res.json();
     setClients(data.clients ?? []);
-    setLoading(false);
   }, [entity, mineOnly]);
 
   useEffect(() => {
@@ -108,9 +121,7 @@ export default function ClientsPage() {
           </select>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-gray-400">불러오는 중…</p>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="text-sm text-gray-500">표시할 수임처가 없습니다.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -120,11 +131,9 @@ export default function ClientsPage() {
           </div>
         )}
 
-        {!loading && (
-          <p className="mt-4 text-xs text-gray-400 text-center">
-            {filtered.length}건 표시 · 더보기로 상세 정보 확인
-          </p>
-        )}
+        <p className="mt-4 text-xs text-gray-400 text-center">
+          {filtered.length}건 표시 · 더보기로 상세 정보 확인
+        </p>
       </main>
     </div>
   );

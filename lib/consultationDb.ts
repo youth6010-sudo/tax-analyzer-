@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { clients, intakeInquiries, intakeProcesses } from '@/db/schema';
-import { CHECKLIST_KEYS } from '@/app/types/intake';
+import { CHECKLIST_KEYS, BLUEHOLE_CODE_KEY } from '@/app/types/intake';
 import type { ChecklistKey } from '@/app/types/intake';
 import type { ProcessChecklist } from '@/app/types/externalRefs';
 import { applyChecklistMeta } from '@/lib/checklistMeta';
@@ -323,14 +323,18 @@ export async function createIntakeProcess(data: {
 
 export async function updateProcessChecklist(
   id: string,
-  checklist: Record<string, boolean>,
-  options?: { toggledKey?: ChecklistKey; actorName?: string },
+  checklist: Record<string, boolean | string>,
+  options?: { toggledKey?: ChecklistKey; actorName?: string; blueholeCode?: string },
 ) {
   const db = getDb();
   const [existing] = await db.select().from(intakeProcesses).where(eq(intakeProcesses.id, id)).limit(1);
   if (!existing) throw new Error('NOT_FOUND');
 
   let nextChecklist: ProcessChecklist = { ...(existing.checklist as ProcessChecklist), ...checklist };
+  if (options?.blueholeCode !== undefined) {
+    nextChecklist[BLUEHOLE_CODE_KEY] = options.blueholeCode;
+  }
+
   if (options?.toggledKey && options.actorName) {
     nextChecklist = applyChecklistMeta(nextChecklist, options.toggledKey, options.actorName);
   }
@@ -407,6 +411,48 @@ export async function updateInquiry(id: string, patch: InquiryPatch) {
     .where(eq(intakeInquiries.id, id))
     .returning();
   return row!;
+}
+
+/** 유입관리 행 삭제 (연결된 유입프로세스 함께 삭제, 수임처 clients는 유지) */
+export async function deleteIntakeInquiry(id: string, linkedProcessId?: string | null) {
+  const db = getDb();
+  const [inquiry] = await db.select().from(intakeInquiries).where(eq(intakeInquiries.id, id)).limit(1);
+  if (!inquiry) throw new Error('NOT_FOUND');
+
+  const processIds = new Set<string>();
+  if (linkedProcessId) processIds.add(linkedProcessId);
+
+  const consultId = inquiry.extra?.consultationId;
+  if (typeof consultId === 'string' && consultId.trim()) {
+    const [proc] = await db
+      .select({ id: intakeProcesses.id })
+      .from(intakeProcesses)
+      .where(eq(intakeProcesses.excelKey, `portal||consult||${consultId.trim()}||process`))
+      .limit(1);
+    if (proc) processIds.add(proc.id);
+  }
+
+  if (inquiry.clientId) {
+    const linked = await db
+      .select({ id: intakeProcesses.id })
+      .from(intakeProcesses)
+      .where(eq(intakeProcesses.clientId, inquiry.clientId));
+    for (const p of linked) processIds.add(p.id);
+  }
+
+  const companyName = inquiry.companyName.trim();
+  if (companyName && companyName !== '(미입력)') {
+    const byName = await db
+      .select({ id: intakeProcesses.id })
+      .from(intakeProcesses)
+      .where(eq(intakeProcesses.companyName, companyName));
+    for (const p of byName) processIds.add(p.id);
+  }
+
+  for (const pid of processIds) {
+    await db.delete(intakeProcesses).where(eq(intakeProcesses.id, pid));
+  }
+  await db.delete(intakeInquiries).where(eq(intakeInquiries.id, id));
 }
 
 export async function registerClientFromIntake(

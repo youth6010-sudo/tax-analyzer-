@@ -15,7 +15,7 @@ const MANAGER_BLOCKS = [
 
 const CHECKLIST_KEYS = [
   'contractSent', 'consent', 'cms', 'assignee', 'programClient',
-  'bluehole', 'tpClient', 'semoReport', 'bizAccount', 'kakaoRoom',
+  'blueholeClient', 'tpClient', 'semoReport', 'bizAccount', 'kakaoRoom',
 ];
 
 function excelDateSerial(v) {
@@ -44,7 +44,7 @@ export function parseIntakeInquiries(rows) {
     channel: headerIndex(h, '유입'),
     consultant: headerIndex(h, '초회'),
     inquiryContent: headerIndex(h, '문의내'),
-    blueholeCase: headerIndex(h, '블루홀'),
+    blueholeCase: headerIndex(h, '블루홀케이스', '블루홀'),
     note: headerIndex(h, '특이'),
     proposedFee: headerIndex(h, '제안'),
     industry: headerIndex(h, '업종'),
@@ -100,7 +100,7 @@ export function parseIntakeProcesses(rows) {
     const row = rows[r];
     const companyName = cellText(row[0]);
     if (!companyName) continue;
-    const checklist = {};
+    const checklist = Object.fromEntries(CHECKLIST_KEYS.map(k => [k, false]));
     CHECKLIST_KEYS.forEach((k, i) => {
       checklist[k] = parseBool(row[4 + i]);
     });
@@ -328,16 +328,58 @@ export function parseWorkChecklists(rows) {
   return out;
 }
 
+function mergeChecklists(prev, next) {
+  const out = { ...prev };
+  for (const [k, v] of Object.entries(next)) {
+    if (v === true) out[k] = true;
+    else if (out[k] === undefined) out[k] = v;
+  }
+  return out;
+}
+
+function companyKey(name) {
+  return String(name ?? '').trim().normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+}
+
+/** 유입관리 블루홀케이스 → 유입프로세스 블루홀 거래처 등록 (엑셀 운영 방식) */
+function enrichProcessesWithInquiries(processes, inquiries) {
+  const inqByName = new Map();
+  for (const i of inquiries) {
+    const code = String(i.extra?.blueholeCase ?? '').trim();
+    if (!code) continue;
+    const key = companyKey(i.companyName);
+    if (key) inqByName.set(key, code);
+  }
+
+  return processes.map(p => {
+    const code = inqByName.get(companyKey(p.companyName));
+    if (!code) return p;
+    return {
+      ...p,
+      checklist: {
+        ...p.checklist,
+        blueholeClient: Boolean(p.checklist?.blueholeClient) || true,
+      },
+    };
+  });
+}
+
 export function parseWorkbook(wb, XLSX) {
   const get = name => {
     if (!wb.Sheets[name]) return [];
     return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
   };
 
+  const inquiries = parseIntakeInquiries(get('유입관리'));
+  const processes = enrichProcessesWithInquiries(
+    parseIntakeProcesses(get('유입프로세스')),
+    inquiries,
+  );
+
   return {
     clients: parseSuimcheoRows(get('수임처관리')),
-    inquiries: parseIntakeInquiries(get('유입관리')),
-    processes: parseIntakeProcesses(get('유입프로세스')),
+    inquiries,
+    processes,
     churns: parseChurnRows(get('유출')),
   };
 }

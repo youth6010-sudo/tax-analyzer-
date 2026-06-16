@@ -18,6 +18,7 @@ import {
 import { TAX_TYPES } from '../config/taxTypes';
 import type { TaxTypeId } from '../config/taxTypes';
 import BackButton from './BackButton';
+import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
@@ -25,6 +26,7 @@ const TAX_LABEL: Record<string, string> = Object.fromEntries(
 
 interface ContactDetailViewProps {
   contact: ContactRecord;
+  primaryContactName?: string;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -58,7 +60,7 @@ function CategorySection({ title, children }: { title: string; children: React.R
   );
 }
 
-export default function ContactDetailView({ contact: initial }: ContactDetailViewProps) {
+export default function ContactDetailView({ contact: initial, primaryContactName }: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -360,7 +362,9 @@ export default function ContactDetailView({ contact: initial }: ContactDetailVie
                   />
                 ) : (
                   <p className={`text-base font-semibold text-gray-900 break-all ${mono ? 'font-mono' : ''}`}>
-                    {displayValue(contact[key] as string)}
+                    {key === 'phone'
+                      ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
+                      : displayValue(contact[key] as string)}
                   </p>
                 )}
               </div>

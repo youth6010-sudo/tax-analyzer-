@@ -1,9 +1,10 @@
 import { and, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { churnRecords, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
+import { churnRecords, clientContacts, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
 import type { ChurnSummary, ClientStatus } from '@/app/types/client';
 import { clientToRecord } from '@/lib/clientMapper';
+import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -55,7 +56,11 @@ export async function listClients(filters: ClientListFilters = {}) {
 export async function getClientById(id: string) {
   const db = getDb();
   const [row] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
-  return row ? clientToRecord(row) : null;
+  if (!row) return null;
+  const record = clientToRecord(row);
+  const primaryNames = await getPrimaryContactNamesByClientIds([id]);
+  const primaryContactName = primaryNames.get(id);
+  return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
 export async function searchClients(
@@ -68,6 +73,7 @@ export async function searchClients(
   const db = getDb();
   const pattern = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
   const digits = q.replace(/\D/g, '');
+  const qLower = q.toLowerCase();
 
   let statusCond;
   if (options?.activeOnly) {
@@ -84,43 +90,81 @@ export async function searchClients(
     statusCond = eq(clients.status, 'active');
   }
 
-  const textMatch = or(
+  const matchedContactByClient = new Map<string, string>();
+  const contactClientIdSet = new Set<string>();
+
+  const contactTextConds = [
+    ilike(clientContacts.name, pattern),
+    ilike(clientContacts.role, pattern),
+    ilike(clientContacts.phone, pattern),
+    ilike(clientContacts.mobilePhone, pattern),
+    ilike(clientContacts.contactKind, pattern),
+  ];
+
+  if (digits.length >= 2) {
+    contactTextConds.push(
+      sql`replace(replace(${clientContacts.phone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+      sql`replace(replace(${clientContacts.mobilePhone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+    );
+  }
+
+  const contactHits = await db
+    .select({ clientId: clientContacts.clientId, name: clientContacts.name })
+    .from(clientContacts)
+    .innerJoin(clients, eq(clients.id, clientContacts.clientId))
+    .where(and(statusCond, or(...contactTextConds)))
+    .limit(60);
+
+  for (const hit of contactHits) {
+    contactClientIdSet.add(hit.clientId);
+    const name = hit.name.trim();
+    if (!name) continue;
+    const prev = matchedContactByClient.get(hit.clientId);
+    const nameMatches = name.toLowerCase().includes(qLower);
+    if (!prev || (nameMatches && !prev.toLowerCase().includes(qLower))) {
+      matchedContactByClient.set(hit.clientId, name);
+    }
+  }
+
+  const clientConds = [
     ilike(clients.companyName, pattern),
     ilike(clients.representative, pattern),
     ilike(clients.manager, pattern),
     ilike(clients.phone, pattern),
-  );
+    sql`${clients.intakeData}->>'mobilePhone' ilike ${pattern}`,
+    sql`${clients.intakeData}->>'clientContact' ilike ${pattern}`,
+    sql`${clients.intakeData}->>'callNote' ilike ${pattern}`,
+  ];
 
-  let rows = await db
-    .select()
-    .from(clients)
-    .where(and(statusCond, textMatch))
-    .limit(30);
-
-  if (digits.length >= 2) {
-    const digitRows = await db
-      .select()
-      .from(clients)
-      .where(
-        and(
-          statusCond,
-          or(
-            sql`replace(replace(${clients.businessNo}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-            sql`replace(replace(${clients.corporateNo}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-            sql`replace(replace(${clients.phone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-            sql`replace(replace(${clients.intakeData}->>'mobilePhone', '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-          ),
-        ),
-      )
-      .limit(30);
-
-    const seen = new Set(rows.map(r => r.id));
-    for (const r of digitRows) {
-      if (!seen.has(r.id)) rows.push(r);
-    }
+  if (contactClientIdSet.size > 0) {
+    clientConds.push(inArray(clients.id, [...contactClientIdSet]));
   }
 
-  const sliced = rows.slice(0, 20);
+  if (digits.length >= 2) {
+    clientConds.push(
+      sql`replace(replace(${clients.businessNo}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+      sql`replace(replace(${clients.corporateNo}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+      sql`replace(replace(${clients.phone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+      sql`replace(replace(${clients.intakeData}->>'mobilePhone', '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+    );
+  }
+
+  const rows = await db
+    .select()
+    .from(clients)
+    .where(and(statusCond, or(...clientConds)))
+    .limit(40);
+
+  const sorted = [...rows].sort((a, b) => {
+    const aContact = contactClientIdSet.has(a.id) ? 0 : 1;
+    const bContact = contactClientIdSet.has(b.id) ? 0 : 1;
+    if (aContact !== bContact) return aContact - bContact;
+    return a.companyName.localeCompare(b.companyName, 'ko');
+  });
+
+  const sliced = sorted.slice(0, 20);
+  const clientIds = sliced.map(r => r.id);
+  const primaryNames = await getPrimaryContactNamesByClientIds(clientIds);
   const churnedIds = sliced.filter(r => r.status === 'churned').map(r => r.id);
   const churnByClient = new Map<string, ChurnSummary>();
 
@@ -150,6 +194,8 @@ export async function searchClients(
   return sliced.map(r => ({
     ...clientToRecord(r),
     churn: churnByClient.get(r.id) ?? null,
+    primaryContactName: primaryNames.get(r.id),
+    matchedContactName: matchedContactByClient.get(r.id),
   }));
 }
 
@@ -301,6 +347,7 @@ export async function churnClient(
     dataCleanup?: string;
     churnType?: string;
     earlySign?: string;
+    manager?: string;
   },
   recordedByUserId: string,
 ) {
@@ -320,7 +367,7 @@ export async function churnClient(
   await db.insert(churnRecords).values({
     clientId: id,
     companyName: existing.companyName,
-    manager: existing.manager,
+    manager: data.manager?.trim() || existing.manager,
     reason: data.reason.trim(),
     detail: data.detail?.trim() ?? '',
     churnType: data.churnType?.trim() ?? '',
@@ -450,6 +497,7 @@ export async function updateChurnRecord(
     dataCleanup?: string;
     churnType?: string;
     earlySign?: string;
+    manager?: string;
   },
 ) {
   const db = getDb();
@@ -459,6 +507,7 @@ export async function updateChurnRecord(
   if (data.churnType !== undefined) patch.churnType = data.churnType.trim();
   if (data.dataCleanup !== undefined) patch.dataCleanup = data.dataCleanup.trim();
   if (data.earlySign !== undefined) patch.earlySign = data.earlySign.trim();
+  if (data.manager !== undefined) patch.manager = data.manager.trim();
   if (data.feeAmount !== undefined) patch.feeAmount = data.feeAmount;
   if (data.churnedAt !== undefined && data.churnedAt.trim()) {
     patch.churnedAt = new Date(data.churnedAt.trim());
@@ -508,6 +557,29 @@ export async function updateChurnRecord(
     churnedAt: r.churnedAt.toISOString(),
     recordedByName: r.recordedByName,
   };
+}
+
+export async function deleteChurnRecord(id: string) {
+  const db = getDb();
+  const [existing] = await db.select().from(churnRecords).where(eq(churnRecords.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+
+  const clientId = existing.clientId;
+  await db.delete(churnRecords).where(eq(churnRecords.id, id));
+
+  if (clientId) {
+    const remaining = await db
+      .select({ id: churnRecords.id })
+      .from(churnRecords)
+      .where(eq(churnRecords.clientId, clientId))
+      .limit(1);
+    if (remaining.length === 0) {
+      await db
+        .update(clients)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(and(eq(clients.id, clientId), eq(clients.status, 'churned')));
+    }
+  }
 }
 
 async function detachClientLinks(clientId: string) {

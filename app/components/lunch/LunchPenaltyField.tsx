@@ -2,9 +2,7 @@
 
 import type { KickSide } from './penaltyScene';
 import { gkDiveSide } from './penaltyScene';
-import PenaltyBallOverlay from './PenaltyBallOverlay';
-import PenaltyPhotoScene from './PenaltyPhotoScene';
-import CelebrationCeremony from './CelebrationCeremony';
+import Penalty2DScene from './Penalty2DScene';
 
 export type PenaltyPhase = 'idle' | 'ready' | 'kick' | 'goal' | 'celebrate';
 
@@ -12,8 +10,8 @@ export { gkDiveSide };
 export type { KickSide };
 
 export const PENALTY_TIMINGS = {
-  readyMs: 650,
-  kickMs: 960,
+  readyMs: 700,
+  kickMs: 1000,
   goalFlashMs: 550,
   celebrateMs: 2200,
   cardMs: 400,
@@ -24,17 +22,16 @@ interface LunchPenaltyFieldProps {
   targetName: string;
   hintName?: string;
   kickSide?: KickSide;
+  gkSide?: KickSide;
+  saved?: boolean;
 }
 
-const CONFETTI = Array.from({ length: 26 }, (_, i) => ({
-  id: i,
-  left: `${3 + ((i * 11) % 94)}%`,
-  delay: `${(i % 8) * 0.05}s`,
-  color: ['#fbbf24', '#c8102e', '#003478', '#fff', '#16a34a'][i % 5],
-  size: 4 + (i % 4) * 2,
-}));
-
-function phaseLabel(phase: PenaltyPhase, hintName: string | undefined, targetName: string): string {
+function phaseLabel(
+  phase: PenaltyPhase,
+  hintName: string | undefined,
+  targetName: string,
+  saved?: boolean,
+): string {
   switch (phase) {
     case 'idle':
       return '슛 버튼을 눌러 오늘의 맛집을 골인!';
@@ -43,20 +40,12 @@ function phaseLabel(phase: PenaltyPhase, hintName: string | undefined, targetNam
     case 'kick':
       return hintName || '…';
     case 'goal':
-      return 'GOAL!';
+      return saved ? `🧤 GK 세이브! → ${targetName}` : 'GOAL!';
     case 'celebrate':
-      return `🏆 오늘의 점심 — ${targetName}`;
+      return saved ? `🧤 막혔지만… ${targetName}!` : `🏆 오늘의 점심 — ${targetName}`;
     default:
       return '';
   }
-}
-
-function cameraClass(phase: PenaltyPhase): string {
-  if (phase === 'ready') return 'wc-cam-ready';
-  if (phase === 'kick') return 'wc-cam-kick';
-  if (phase === 'goal') return 'wc-cam-goal';
-  if (phase === 'celebrate') return 'wc-cam-celebrate';
-  return '';
 }
 
 export default function LunchPenaltyField({
@@ -64,19 +53,15 @@ export default function LunchPenaltyField({
   targetName,
   hintName,
   kickSide = 'center',
+  gkSide,
+  saved,
 }: LunchPenaltyFieldProps) {
-  const isReady = phase === 'ready';
-  const isKick = phase === 'kick';
   const isGoal = phase === 'goal';
   const isCelebrate = phase === 'celebrate';
   const isPostGoal = isGoal || isCelebrate;
-  const isActive = isReady || isKick || isPostGoal;
-  const showPlay = !isCelebrate;
 
-  const ballPhase =
-    phase === 'ready' || phase === 'kick' || phase === 'goal' || phase === 'idle'
-      ? phase
-      : 'idle';
+  const scenePhase =
+    phase === 'idle' ? 'ready' : phase;
 
   return (
     <div className="mt-6 mx-auto max-w-lg">
@@ -95,49 +80,13 @@ export default function LunchPenaltyField({
           <span className="text-sky-300 text-xs sm:text-sm">LIVE 🇰🇷</span>
         </div>
 
-        <div className="wc-scene-3d bg-[#0c1929]">
-          <div
-            className={`relative wc-scene-inner ${cameraClass(phase)} ${
-              isGoal ? 'wc-scene-shake' : ''
-            } ${isCelebrate ? 'wc-scene-celebrate' : ''}`}
-          >
-            <PenaltyPhotoScene phase={phase} kickSide={kickSide} />
-
-            <PenaltyBallOverlay visible={showPlay} phase={ballPhase} kickSide={kickSide} />
-
-            {isGoal && (
-              <div className="absolute inset-0 z-[35] flex items-start justify-center pt-[24%] pointer-events-none">
-                <div className="wc-goal-banner-html">
-                  <span className="wc-goal-text-html">⚽ GOAL!</span>
-                </div>
-              </div>
-            )}
-
-            {isCelebrate && targetName && <CelebrationCeremony name={targetName} />}
-
-            {isReady && <div className="absolute inset-0 wc-tension-vignette pointer-events-none z-20" />}
-            {isKick && <div className="absolute inset-0 wc-kick-flash pointer-events-none z-20" />}
-            {isPostGoal && (
-              <div className={`absolute inset-0 pointer-events-none overflow-hidden ${isCelebrate ? 'z-50' : 'z-[25]'}`}>
-                {isGoal && <div className="absolute inset-0 wc-goal-flash" />}
-                {CONFETTI.map(c => (
-                  <span
-                    key={c.id}
-                    className={`absolute wc-confetti ${isCelebrate ? 'wc-confetti-long' : ''}`}
-                    style={{
-                      left: c.left,
-                      top: isCelebrate ? '6%' : '22%',
-                      width: c.size,
-                      height: c.size,
-                      backgroundColor: c.color,
-                      animationDelay: c.delay,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <Penalty2DScene
+          phase={scenePhase}
+          kickSide={kickSide}
+          gkSide={gkSide}
+          celebrateName={isCelebrate ? targetName : undefined}
+          saved={saved}
+        />
 
         <div className="px-4 py-3 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200 min-h-[3.25rem] flex items-center justify-center text-center">
           <p
@@ -146,14 +95,12 @@ export default function LunchPenaltyField({
                 ? 'text-lg sm:text-xl text-[#c8102e] wc-name-reveal'
                 : isGoal
                   ? 'text-base sm:text-lg text-amber-600 font-black'
-                  : isReady
+                  : phase === 'ready'
                     ? 'text-sm text-amber-700 font-bold wc-tension-text'
-                    : isActive
-                      ? 'text-sm text-slate-600'
-                      : 'text-sm text-slate-400'
+                    : 'text-sm text-slate-600'
             }`}
           >
-            {phaseLabel(phase, hintName, targetName)}
+            {phaseLabel(phase, hintName, targetName, saved)}
           </p>
         </div>
       </div>

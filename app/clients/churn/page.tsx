@@ -25,6 +25,7 @@ function ChurnPageInner() {
   const [formValues, setFormValues] = useState<ChurnFormValues>(defaultChurnFormValues);
   const [backfillNote, setBackfillNote] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
@@ -147,6 +148,7 @@ function ChurnPageInner() {
           dataCleanup: formValues.dataCleanup,
           churnType: formValues.churnType,
           earlySign: formValues.earlySign,
+          manager: formValues.manager || selectedClient.manager,
         }),
       });
       const data = await res.json();
@@ -174,6 +176,24 @@ function ChurnPageInner() {
 
   const handleRecordSaved = (record: ChurnRecordView) => {
     setHistory(prev => prev.map(r => (r.id === record.id ? record : r)));
+  };
+
+  const handleRecordDeleted = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/churn/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('삭제 실패');
+      setHistory(prev => prev.filter(r => r.id !== id));
+      if (selectedRecordId === id) {
+        const next = history.filter(r => r.id !== id);
+        setSelectedRecordId(next[0]?.id ?? null);
+      }
+      await loadHistory();
+    } catch {
+      alert('삭제하지 못했습니다.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -244,6 +264,8 @@ function ChurnPageInner() {
                   <ChurnRecordPanel
                     record={selectedRecord}
                     onSaved={handleRecordSaved}
+                    onDeleted={id => void handleRecordDeleted(id)}
+                    deleting={deletingId === selectedRecordId}
                   />
                 </div>
               </div>

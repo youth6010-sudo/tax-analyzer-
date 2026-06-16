@@ -1,14 +1,21 @@
 /**
  * 청년들 ID.xlsx 전체 import (비품 주문 제외)
- * node scripts/import-youth-workbook.mjs [xlsx경로]
+ * node scripts/import-youth-workbook.mjs [--link-only] [xlsx경로]
+ *
+ * --link-only  수임처관리 시트로 client INSERT 금지 (TP export 정본 기준 UPDATE/link만)
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
 import XLSX from 'xlsx';
 import postgres from 'postgres';
 import { detectYouthIdWorkbook, parseWorkbook } from './lib/youth-workbook-parse.mjs';
+import {
+  isManagerNameOnlyRow,
+  normBizNo,
+  normalizeCompanyKey,
+  reportSkippedRows,
+} from './lib/client-import-guards.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -28,9 +35,12 @@ function loadEnv() {
 
 loadEnv();
 
+const args = process.argv.slice(2);
+const linkOnly = args.includes('--link-only');
+const desktop = path.join(process.env.USERPROFILE || '', 'Desktop');
 const xlsxPath =
-  process.argv[2] ||
-  path.join(process.env.USERPROFILE || '', 'Downloads', '청년들 ID.xlsx');
+  args.find(a => !a.startsWith('--')) ||
+  path.join(desktop, '청년들 ID.xlsx');
 
 if (!fs.existsSync(xlsxPath)) {
   console.error('파일을 찾을 수 없습니다:', xlsxPath);
@@ -50,6 +60,7 @@ console.log('파싱:', {
   processes: data.processes.length,
   churns: data.churns.length,
 });
+if (linkOnly) console.log('모드: --link-only (수임처 INSERT 금지)');
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
@@ -59,31 +70,38 @@ if (!dbUrl) {
 
 const sql = postgres(dbUrl, { max: 1 });
 
-function normalizeName(name) {
-  return String(name ?? '').trim().replace(/\s+/g, '');
-}
-
 function buildClientLookup(rows) {
-  const map = new Map();
+  const byBiz = new Map();
+  const byFull = new Map();
+  const byName = new Map();
+
   for (const r of rows) {
-    const key = normalizeName(r.company_name);
-    if (key && !map.has(key)) map.set(key, r.id);
-    const full = `${r.company_name}||${r.manager}`;
-    if (!map.has(full)) map.set(full, r.id);
+    const biz = normBizNo(r.business_no);
+    if (biz.length >= 10 && !byBiz.has(biz)) byBiz.set(biz, r.id);
+
+    const full = `${String(r.company_name).trim()}||${String(r.manager).trim()}`;
+    if (!byFull.has(full)) byFull.set(full, r.id);
+
+    const nameKey = normalizeCompanyKey(r.company_name);
+    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, r.id);
   }
-  return map;
+
+  return { byBiz, byFull, byName };
 }
 
-function resolveClientId(lookup, companyName, manager) {
-  const n = normalizeName(companyName);
+function resolveClientId(lookup, companyName, manager, businessNo) {
+  const biz = normBizNo(businessNo);
+  if (biz.length >= 10 && lookup.byBiz.has(biz)) return lookup.byBiz.get(biz);
+
+  const trimmed = String(companyName ?? '').trim();
   if (manager) {
-    const full = `${companyName.trim()}||${manager.trim()}`;
-    if (lookup.has(full)) return lookup.get(full);
+    const full = `${trimmed}||${String(manager).trim()}`;
+    if (lookup.byFull.has(full)) return lookup.byFull.get(full);
   }
-  if (lookup.has(n)) return lookup.get(n);
-  for (const [k, id] of lookup) {
-    if (k.includes(n) || n.includes(k)) return id;
-  }
+
+  const nameKey = normalizeCompanyKey(trimmed);
+  if (nameKey && lookup.byName.has(nameKey)) return lookup.byName.get(nameKey);
+
   return null;
 }
 
@@ -110,72 +128,114 @@ async function upsertInquiry(row, clientId, sql) {
   return 'inserted';
 }
 
-// --- clients (수임처관리) ---
+// --- clients (수임처관리) — 보강만 ---
 const userRows = await sql`SELECT id, name FROM users`;
 const userByName = new Map(userRows.map(u => [u.name.trim(), u.id]));
-let clientRows = await sql`SELECT id, company_name, manager, status FROM clients`;
-let clientInserted = 0;
+let clientRows = await sql`SELECT id, company_name, manager, business_no, status FROM clients`;
 let clientUpdated = 0;
+let clientSkippedLink = 0;
+const skippedNameOnly = [];
 
 for (const c of data.clients) {
+  if (isManagerNameOnlyRow(c)) {
+    skippedNameOnly.push({
+      companyName: c.companyName,
+      representative: '',
+      manager: c.manager,
+      status: '',
+    });
+    continue;
+  }
+
   const key = `${c.companyName}||${c.manager}`;
   const existing = clientRows.find(r => `${r.company_name}||${r.manager}` === key);
+  const nameMatch = clientRows.find(
+    r => normalizeCompanyKey(r.company_name) === normalizeCompanyKey(c.companyName),
+  );
+  const target = existing ?? nameMatch;
   const assignedUserId = userByName.get(c.manager) ?? null;
 
-  if (existing && (existing.status === 'intake' || existing.status === 'churned')) continue;
-
-  if (existing) {
-    await sql`
-      UPDATE clients SET
-        business_entity_type = ${c.businessEntityType},
-        fee_summary = ${c.feeSummary},
-        program = ${c.program},
-        converted = ${c.converted},
-        colbert = ${c.colbert},
-        assigned_user_id = ${assignedUserId},
-        source = 'youth_excel',
-        updated_at = NOW()
-      WHERE id = ${existing.id}
-    `;
-    clientUpdated++;
-  } else {
-    await sql`
-      INSERT INTO clients (
-        id, company_name, manager, business_entity_type, fee_summary, program,
-        converted, colbert, status, source, assigned_user_id
-      ) VALUES (
-        ${randomUUID()}, ${c.companyName}, ${c.manager}, ${c.businessEntityType}, ${c.feeSummary},
-        ${c.program}, ${c.converted}, ${c.colbert}, 'active', 'youth_excel', ${assignedUserId}
-      )
-    `;
-    clientInserted++;
+  if (!target) {
+    clientSkippedLink++;
+    continue;
   }
+
+  if (target.status === 'intake') continue;
+
+  await sql`
+    UPDATE clients SET
+      business_entity_type = ${c.businessEntityType},
+      fee_summary = ${c.feeSummary},
+      program = ${c.program},
+      converted = ${c.converted},
+      colbert = ${c.colbert},
+      assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+      updated_at = NOW()
+    WHERE id = ${target.id}
+  `;
+  clientUpdated++;
 }
 
-clientRows = await sql`SELECT id, company_name, manager FROM clients`;
+reportSkippedRows(skippedNameOnly, { maxLog: 20 });
+
+clientRows = await sql`SELECT id, company_name, manager, business_no FROM clients`;
 const clientLookup = buildClientLookup(clientRows);
 
-const stats = { inserted: 0, updated: 0 };
+const stats = { inserted: 0, updated: 0, skippedOps: 0 };
+const skippedOps = [];
 
 async function track(result) {
   if (result === 'inserted') stats.inserted++;
-  else stats.updated++;
+  else if (result === 'updated') stats.updated++;
+  else stats.skippedOps++;
+}
+
+function shouldSkipOperationalRow(row) {
+  return isManagerNameOnlyRow({
+    companyName: row.companyName,
+    representative: row.representative ?? '',
+    businessNo: row.businessNo ?? '',
+    manager: row.manager ?? '',
+  });
 }
 
 // --- intake_inquiries ---
 for (const row of data.inquiries) {
-  const clientId = resolveClientId(clientLookup, row.companyName);
+  if (shouldSkipOperationalRow(row)) {
+    skippedOps.push({ type: 'inquiry', companyName: row.companyName, manager: row.consultant });
+    await track('skipped');
+    continue;
+  }
+  const clientId = resolveClientId(clientLookup, row.companyName, null, row.businessNo);
   await track(await upsertInquiry(row, clientId, sql));
 }
 
 // --- intake_processes ---
 for (const row of data.processes) {
+  if (shouldSkipOperationalRow(row)) {
+    skippedOps.push({ type: 'process', companyName: row.companyName });
+    await track('skipped');
+    continue;
+  }
   const clientId = resolveClientId(clientLookup, row.companyName);
-  const existing = await sql`SELECT id FROM intake_processes WHERE excel_key = ${row.excelKey} LIMIT 1`;
+  let existing = await sql`SELECT id, checklist, excel_key FROM intake_processes WHERE excel_key = ${row.excelKey} LIMIT 1`;
+  if (!existing.length) {
+    existing = await sql`
+      SELECT id, checklist, excel_key FROM intake_processes
+      WHERE company_name = ${row.companyName}
+      ORDER BY updated_at DESC LIMIT 1
+    `;
+  }
+  const mergedChecklist = existing.length
+    ? mergeChecklists(existing[0].checklist ?? {}, row.checklist)
+    : row.checklist;
+
   if (existing.length) {
     await sql`
-      UPDATE intake_processes SET client_id=${clientId}, fee_start_date=${row.feeStartDate}, monthly_fee=${row.monthlyFee},
-        channel=${row.channel}, checklist=${sql.json(row.checklist)}, updated_at=NOW() WHERE id=${existing[0].id}
+      UPDATE intake_processes SET client_id=${clientId}, company_name=${row.companyName},
+        fee_start_date=${row.feeStartDate}, monthly_fee=${row.monthlyFee},
+        channel=${row.channel}, checklist=${sql.json(mergedChecklist)},
+        excel_key=${row.excelKey}, updated_at=NOW() WHERE id=${existing[0].id}
     `;
     await track('updated');
   } else {
@@ -190,7 +250,11 @@ for (const row of data.processes) {
 // --- churn_records ---
 let churnCount = 0;
 for (const row of data.churns) {
-  const clientId = resolveClientId(clientLookup, row.companyName, row.manager);
+  if (shouldSkipOperationalRow(row)) {
+    skippedOps.push({ type: 'churn', companyName: row.companyName, manager: row.manager });
+    continue;
+  }
+  const clientId = resolveClientId(clientLookup, row.companyName, row.manager, row.businessNo);
   const existing = await sql`SELECT id FROM churn_records WHERE excel_key = ${row.excelKey} LIMIT 1`;
   const churnedAt = row.churnedAt ? new Date(row.churnedAt) : new Date();
 
@@ -218,7 +282,14 @@ for (const row of data.churns) {
 
 await sql.end();
 
-console.log(`✓ 수임처: inserted=${clientInserted}, updated=${clientUpdated}`);
-console.log(`✓ 운영 데이터: inserted=${stats.inserted}, updated=${stats.updated}`);
+console.log(`✓ 수임처 보강: updated=${clientUpdated}, link-only skip=${clientSkippedLink}`);
+console.log(`✓ 운영 데이터: inserted=${stats.inserted}, updated=${stats.updated}, skip=${stats.skippedOps}`);
 console.log(`✓ 유출: ${churnCount}건`);
-console.log('  (수임처·유입·유출 시트만 — 비품·미팅·체크리스트·가결산 제외)');
+if (skippedOps.length > 0) {
+  console.log(`⚠ 운영 데이터 제외 ${skippedOps.length}건 (담당·이름만):`);
+  for (const s of skippedOps.slice(0, 15)) {
+    console.log(`  · [${s.type}] ${s.companyName}${s.manager ? ` / ${s.manager}` : ''}`);
+  }
+  if (skippedOps.length > 15) console.log(`  … 외 ${skippedOps.length - 15}건`);
+}
+console.log('  (수임처·유입·유출 시트 — 비품·미팅·체크리스트·가결산 제외)');

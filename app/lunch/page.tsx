@@ -5,6 +5,7 @@ import { loadLunchDatabase } from '@/app/utils/lunchData';
 import type { LunchDatabase } from '@/app/types/lunch';
 import LunchPickGame from '@/app/components/lunch/LunchPickGame';
 import LunchSpotList from '@/app/components/lunch/LunchSpotList';
+import LunchSpotRequestForm from '@/app/components/lunch/LunchSpotRequestForm';
 import { useLunchJournal } from '@/app/components/lunch/useLunchJournal';
 
 export default function LunchPage() {
@@ -53,6 +54,7 @@ export default function LunchPage() {
             <LunchPickGame
               spots={db.spots}
               journal={store}
+              authorName={authorName}
               onRecordVisit={recordVisit}
               onEditVisit={editVisit}
               onDeleteVisit={removeVisit}
@@ -61,13 +63,15 @@ export default function LunchPage() {
             <LunchSpotList
               spots={db.spots}
               journal={store}
+              authorName={authorName}
               onRecordVisit={recordVisit}
               onEditVisit={editVisit}
               onDeleteVisit={removeVisit}
               onCancelToday={cancelToday}
             />
+            <LunchSpotRequestForm />
             <p className="mt-8 text-xs text-gray-400 text-center">
-              방문 기록·별점·리뷰는 브라우저에 저장 (PC마다 따로) · 맛집 목록: {db.updatedAt}
+              방문·리뷰는 브라우저에 저장 (같은 PC에서 로그인한 사람마다 각자 리뷰 가능) · 맛집 목록: {db.updatedAt}
             </p>
           </>
         )}

@@ -15,6 +15,8 @@ export interface ClientRecord extends ContactRecord {
   colbert: boolean;
   createdAt: string;
   updatedAt: string;
+  /** 주 연락처(is_primary) 이름 */
+  primaryContactName?: string;
 }
 
 export interface ChurnRecordView {
@@ -46,6 +48,12 @@ export interface ChurnSummary {
 
 export interface ClientSearchResult extends ClientRecord {
   churn?: ChurnSummary | null;
+  /** 검색어가 연락처 이름/번호와 매칭된 경우 */
+  matchedContactName?: string;
+  /** bootstrap 검색 인덱스 전용 */
+  contactSearchText?: string;
+  contactNames?: string[];
+  intakeSearchText?: string;
 }
 
 export interface ChurnRegisterPayload {
@@ -57,6 +65,7 @@ export interface ChurnRegisterPayload {
   dataCleanup?: string;
   churnType?: string;
   earlySign?: string;
+  manager?: string;
 }
 
 export interface ChurnRecordUpdatePayload {
@@ -67,6 +76,7 @@ export interface ChurnRecordUpdatePayload {
   dataCleanup?: string;
   churnType?: string;
   earlySign?: string;
+  manager?: string;
 }
 
 export const CHURN_REASONS = [

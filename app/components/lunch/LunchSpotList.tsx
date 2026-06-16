@@ -1,16 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { LunchCategory, LunchSpot } from '@/app/types/lunch';
-import { LUNCH_CATEGORIES } from '@/app/types/lunch';
+import type { LunchSpot } from '@/app/types/lunch';
 import type { LunchJournalStore } from '@/app/types/lunchJournal';
 import { getSpotJournal } from '@/app/utils/lunchJournal';
-import { filterLunchSpots } from '@/app/utils/lunchPick';
+import { buildWalkDistanceBands, filterSpotsByDistanceBand } from '@/app/utils/lunchDistance';
 import LunchSpotCard from './LunchSpotCard';
 
 interface LunchSpotListProps {
   spots: LunchSpot[];
   journal: LunchJournalStore;
+  authorName?: string;
   onRecordVisit: (spotId: string, rating: number, review: string) => void;
   onEditVisit: (spotId: string, visitId: string, rating: number, review: string) => void;
   onDeleteVisit: (spotId: string, visitId: string) => void;
@@ -20,25 +20,42 @@ interface LunchSpotListProps {
 export default function LunchSpotList({
   spots,
   journal,
+  authorName = '',
   onRecordVisit,
   onEditVisit,
   onDeleteVisit,
   onCancelToday,
 }: LunchSpotListProps) {
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<LunchCategory | 'all'>('all');
+  const [distanceBand, setDistanceBand] = useState<string | 'all'>('all');
 
-  const filtered = useMemo(
-    () => filterLunchSpots(spots, query, category),
-    [spots, query, category],
-  );
+  const bands = useMemo(() => buildWalkDistanceBands(spots, 4), [spots]);
+
+  const filtered = useMemo(() => {
+    let list = filterSpotsByDistanceBand(spots, distanceBand, bands);
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(spot => {
+      const haystack = [
+        spot.name,
+        spot.category,
+        ...spot.tags,
+        ...spot.menuHints,
+        spot.notes ?? '',
+        `도보 ${spot.walkMinutes}분`,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [spots, query, distanceBand, bands]);
 
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-lg font-black text-gray-900">맛집 도감</h2>
-          <p className="mt-1 text-sm text-gray-500">{filtered.length}곳 · 별점·리뷰는 이 브라우저에 저장</p>
+          <p className="mt-1 text-sm text-gray-500">{filtered.length}곳 · 팀원 리뷰는 이 브라우저에 저장</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <input
@@ -49,14 +66,14 @@ export default function LunchSpotList({
             className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-orange-200"
           />
           <select
-            value={category}
-            onChange={e => setCategory(e.target.value as LunchCategory | 'all')}
+            value={distanceBand}
+            onChange={e => setDistanceBand(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-orange-200"
           >
-            <option value="all">전체 카테고리</option>
-            {LUNCH_CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>
-                {cat}
+            <option value="all">전체 거리</option>
+            {bands.map(band => (
+              <option key={band.id} value={band.id}>
+                {band.emoji} {band.label}
               </option>
             ))}
           </select>
@@ -69,6 +86,7 @@ export default function LunchSpotList({
             key={spot.id}
             spot={spot}
             journal={getSpotJournal(journal, spot.id)}
+            currentAuthor={authorName}
             onRecordVisit={onRecordVisit}
             onEditVisit={onEditVisit}
             onDeleteVisit={onDeleteVisit}

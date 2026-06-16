@@ -27,6 +27,17 @@ export function pickLunchSpot(spots: LunchSpot[], options: PickLunchOptions = {}
   return pool[idx] ?? null;
 }
 
+/** 승부차기용 — 서로 다른 두 후보 (풀이 1개면 동일 반환) */
+export function pickTwoLunchSpots(spots: LunchSpot[], excludeIds: string[] = []): [LunchSpot, LunchSpot] | null {
+  if (spots.length === 0) return null;
+  const first = pickLunchSpot(spots, { excludeIds });
+  if (!first) return null;
+  if (spots.length === 1) return [first, first];
+  const second = pickLunchSpot(spots, { excludeIds: [...excludeIds, first.id] });
+  if (!second) return [first, first];
+  return [first, second];
+}
+
 export function loadRecentIds(): string[] {
   if (typeof window === 'undefined') return [];
   try {

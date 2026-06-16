@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { LunchSpotJournal, LunchVisit } from '@/app/types/lunchJournal';
-import { formatVisitDate, getAverageRating, getVisitOnDate, todayDateStr } from '@/app/utils/lunchJournal';
+import { formatVisitDate, getAverageRating, getVisitOnDateByAuthor, todayDateStr, authorKey } from '@/app/utils/lunchJournal';
 import StarRating from './StarRating';
 
 interface LunchVisitFormProps {
@@ -121,29 +121,43 @@ function VisitEditRow({
 
 interface LunchVisitHistoryProps {
   journal: LunchSpotJournal;
+  currentAuthor?: string;
   onEditVisit?: (visitId: string, rating: number, review: string) => void;
   onDeleteVisit?: (visitId: string) => void;
 }
 
-export function LunchVisitHistory({ journal, onEditVisit, onDeleteVisit }: LunchVisitHistoryProps) {
+function canManageVisit(visit: LunchVisit, currentAuthor?: string): boolean {
+  if (!currentAuthor) return true;
+  return authorKey(visit.author) === authorKey(currentAuthor);
+}
+
+export function LunchVisitHistory({
+  journal,
+  currentAuthor,
+  onEditVisit,
+  onDeleteVisit,
+}: LunchVisitHistoryProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   if (journal.visits.length === 0) return null;
 
   const avg = getAverageRating(journal);
-  const recent = [...journal.visits].reverse().slice(0, 5);
+  const recent = [...journal.visits].reverse();
 
   return (
     <div className="mt-4 border-t border-gray-100 pt-4">
       {avg !== null && (
         <p className="text-sm font-semibold text-amber-600">
           ★ {avg}{' '}
-          <span className="text-gray-400 font-normal text-xs">({journal.visits.length}회)</span>
+          <span className="text-gray-400 font-normal text-xs">
+            ({journal.visits.length}개 리뷰)
+          </span>
         </p>
       )}
       <ul className="mt-2 space-y-2">
-        {recent.map(v =>
-          editingId === v.id ? (
+        {recent.map(v => {
+          const manageable = canManageVisit(v, currentAuthor);
+          return editingId === v.id ? (
             <VisitEditRow
               key={v.id}
               visit={v}
@@ -159,48 +173,55 @@ export function LunchVisitHistory({ journal, onEditVisit, onDeleteVisit }: Lunch
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-gray-700">{formatVisitDate(v.date)}</span>
                   <StarRating value={v.rating} size="sm" />
-                  <span className="text-gray-400">· {v.author}</span>
+                  <span className="font-medium text-gray-500">{v.author}</span>
                 </div>
-                <div className="flex gap-1">
-                  {onEditVisit && (
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(v.id)}
-                      className="px-2 py-0.5 text-[10px] font-semibold rounded border border-gray-200 hover:bg-white"
-                    >
-                      수정
-                    </button>
-                  )}
-                  {onDeleteVisit && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm('이 기록을 삭제할까요?')) onDeleteVisit(v.id);
-                      }}
-                      className="px-2 py-0.5 text-[10px] font-semibold rounded border border-red-200 text-red-600 hover:bg-red-50"
-                    >
-                      삭제
-                    </button>
-                  )}
-                </div>
+                {manageable && (
+                  <div className="flex gap-1">
+                    {onEditVisit && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(v.id)}
+                        className="px-2 py-0.5 text-[10px] font-semibold rounded border border-gray-200 hover:bg-white"
+                      >
+                        수정
+                      </button>
+                    )}
+                    {onDeleteVisit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('이 기록을 삭제할까요?')) onDeleteVisit(v.id);
+                        }}
+                        className="px-2 py-0.5 text-[10px] font-semibold rounded border border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               {v.review && <p className="mt-1 text-gray-600">{v.review}</p>}
               {v.updatedAt && (
                 <p className="mt-0.5 text-[10px] text-gray-400">수정됨</p>
               )}
             </li>
-          ),
-        )}
+          );
+        })}
       </ul>
     </div>
   );
 }
 
-export function getTodayVisitDefaults(journal: LunchSpotJournal | null | undefined) {
+export function getTodayVisitDefaults(
+  journal: LunchSpotJournal | null | undefined,
+  author?: string,
+) {
   if (!journal) {
     return { initialRating: 4, initialReview: '', hasToday: false };
   }
-  const today = getVisitOnDate(journal, todayDateStr());
+  const today = author
+    ? getVisitOnDateByAuthor(journal, todayDateStr(), author)
+    : null;
   return {
     initialRating: today?.rating ?? 4,
     initialReview: today?.review ?? '',

@@ -6,9 +6,10 @@ import AppHeader from '../../components/AppHeader';
 import IntakeTabs, { resolveIntakeTab } from '../../components/intake/IntakeTabs';
 import ConsultationFormPanel from '../../components/intake/ConsultationFormPanel';
 import IntakeSplitView from '../../components/intake/IntakeSplitView';
-import BlueholeInboxBanner from '../../components/intake/BlueholeInboxBanner';
 import {
-  inquiryBlueholeCase,
+  companyMatchKeys,
+  findProcessForInquiry,
+  normalizeCompanyKey,
   sortInquiries,
   sortProcesses,
   type InquiryRow,
@@ -16,6 +17,14 @@ import {
   type ProcessRow,
 } from '../../components/intake/intakeUtils';
 import type { ChecklistKey } from '@/app/types/intake';
+import { formatIntakeDate } from '@/app/utils/intakeDates';
+import {
+  getPortalInquiries,
+  getPortalProcesses,
+  hydratePortal,
+  prefetchPortal,
+  subscribePortal,
+} from '@/app/utils/portalStore';
 
 function pick(raw: Record<string, unknown>, camel: string, snake?: string): unknown {
   if (raw[camel] !== undefined && raw[camel] !== null) return raw[camel];
@@ -32,7 +41,7 @@ function normalizeInquiry(raw: Record<string, unknown>): InquiryRow {
     phone: String(pick(raw, 'phone') ?? ''),
     channel: String(pick(raw, 'channel') ?? ''),
     consultant: String(pick(raw, 'consultant') ?? ''),
-    inquiryDate: String(pick(raw, 'inquiryDate', 'inquiry_date') ?? ''),
+    inquiryDate: formatIntakeDate(String(pick(raw, 'inquiryDate', 'inquiry_date') ?? '')),
     inquiryContent: String(pick(raw, 'inquiryContent', 'inquiry_content') ?? ''),
     contractStatus: String(pick(raw, 'contractStatus', 'contract_status') ?? ''),
     proposedFee: typeof pick(raw, 'proposedFee', 'proposed_fee') === 'number'
@@ -51,6 +60,14 @@ function normalizeInquiry(raw: Record<string, unknown>): InquiryRow {
 
 function normalizeProcess(raw: Record<string, unknown>): ProcessRow {
   const updated = pick(raw, 'updatedAt', 'updated_at');
+  const rawChecklist = (pick(raw, 'checklist') && typeof pick(raw, 'checklist') === 'object'
+    ? pick(raw, 'checklist')
+    : {}) as ProcessRow['checklist'];
+  const checklist = { ...rawChecklist };
+  if (checklist.bluehole && !checklist.blueholeClient) {
+    checklist.blueholeClient = checklist.bluehole as boolean;
+    delete checklist.bluehole;
+  }
   return {
     id: String(pick(raw, 'id') ?? ''),
     clientId: pick(raw, 'clientId', 'client_id') != null ? String(pick(raw, 'clientId', 'client_id')) : null,
@@ -60,9 +77,8 @@ function normalizeProcess(raw: Record<string, unknown>): ProcessRow {
       ? (pick(raw, 'monthlyFee', 'monthly_fee') as number)
       : null,
     channel: String(pick(raw, 'channel') ?? ''),
-    checklist: (pick(raw, 'checklist') && typeof pick(raw, 'checklist') === 'object'
-      ? pick(raw, 'checklist')
-      : {}) as Record<string, boolean>,
+    checklist,
+    excelKey: pick(raw, 'excelKey', 'excel_key') != null ? String(pick(raw, 'excelKey', 'excel_key')) : undefined,
     updatedAt: updated instanceof Date ? updated.toISOString() : String(updated ?? ''),
   };
 }
@@ -84,7 +100,7 @@ function IntakeToolbar({
         type="search"
         value={search}
         onChange={e => onSearchChange(e.target.value)}
-        placeholder="상호·블루홀 업체번호 검색…"
+        placeholder="상호 검색…"
         className="w-full max-w-md border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"
       />
       <select
@@ -93,7 +109,7 @@ function IntakeToolbar({
         className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"
         aria-label="정렬"
       >
-        <option value="created">최신순</option>
+        <option value="inquiryDate">문의일순</option>
         <option value="name">이름순</option>
       </select>
     </div>
@@ -106,59 +122,87 @@ export default function IntakeHub() {
   const tab = resolveIntakeTab(searchParams.get('tab'));
   const draftId = searchParams.get('draft');
   const urlInquiry = searchParams.get('inquiry');
+  const urlProcessId = searchParams.get('processId');
   const urlQ = searchParams.get('q')?.trim() ?? '';
-  const blueholeOnly = searchParams.get('bluehole') === 'unlinked';
 
   const urlSort = searchParams.get('sort');
-  const sort: IntakeSort = urlSort === 'name' ? 'name' : 'created';
+  const sort: IntakeSort = urlSort === 'name'
+    ? 'name'
+    : urlSort === 'created'
+      ? 'created'
+      : 'inquiryDate';
 
   const [search, setSearch] = useState(urlQ);
-  const [inquiries, setInquiries] = useState<InquiryRow[]>([]);
-  const [processes, setProcesses] = useState<ProcessRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [inquiries, setInquiries] = useState<InquiryRow[]>(() =>
+    getPortalInquiries().map(r => normalizeInquiry(r)),
+  );
+  const [processes, setProcesses] = useState<ProcessRow[]>(() =>
+    getPortalProcesses().map(r => normalizeProcess(r)),
+  );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
 
   useEffect(() => { setSearch(urlQ); }, [urlQ]);
   useEffect(() => {
-    if (urlInquiry) setSelectedId(urlInquiry);
-  }, [urlInquiry]);
+    if (urlInquiry) {
+      setSelectedId(urlInquiry);
+      return;
+    }
+    if (!inquiries.length) return;
+
+    if (urlProcessId) {
+      const process = processes.find(p => p.id === urlProcessId);
+      if (process) {
+        let match = inquiries.find(inq => findProcessForInquiry(inq, [process])?.id === process.id);
+        if (!match) {
+          const pKey = normalizeCompanyKey(process.companyName);
+          match = inquiries.find(inq => companyMatchKeys(inq.companyName).includes(pKey));
+        }
+        if (match) {
+          setSelectedId(match.id);
+          const p = new URLSearchParams(searchParams.toString());
+          p.delete('processId');
+          p.set('inquiry', match.id);
+          p.set('tab', 'intake');
+          router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
+        }
+      }
+      return;
+    }
+
+    if (urlQ) {
+      const qKey = normalizeCompanyKey(urlQ);
+      const match = inquiries.find(inq => {
+        const keys = companyMatchKeys(inq.companyName);
+        return keys.includes(qKey) || normalizeCompanyKey(inq.companyName) === qKey;
+      });
+      if (match) setSelectedId(match.id);
+    }
+  }, [urlInquiry, urlProcessId, urlQ, inquiries, processes, router, searchParams]);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    const [inqRes, procRes] = await Promise.all([
-      fetch('/api/intake/inquiries'),
-      fetch('/api/intake/processes'),
-    ]);
-    const [inqData, procData] = await Promise.all([inqRes.json(), procRes.json()]);
-    setInquiries((inqData.items ?? []).map((r: Record<string, unknown>) => normalizeInquiry(r)));
-    setProcesses((procData.items ?? []).map((r: Record<string, unknown>) => normalizeProcess(r)));
-    setLoading(false);
+    await prefetchPortal(true);
+    setInquiries(getPortalInquiries().map(r => normalizeInquiry(r)));
+    setProcesses(getPortalProcesses().map(r => normalizeProcess(r)));
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
-
-  const unlinkedCount = useMemo(
-    () => inquiries.filter(i => !inquiryBlueholeCase(i.extra).trim()).length,
-    [inquiries],
-  );
+  useEffect(() => {
+    if (!inquiries.length && !processes.length) hydratePortal();
+    return subscribePortal(() => {
+      setInquiries(getPortalInquiries().map(r => normalizeInquiry(r)));
+      setProcesses(getPortalProcesses().map(r => normalizeProcess(r)));
+    });
+  }, [inquiries.length, processes.length]);
 
   const filterText = search.trim().toLowerCase();
   const filterFn = (list: InquiryRow[]) => {
-    let out = list;
-    if (blueholeOnly) {
-      out = out.filter(i => !inquiryBlueholeCase(i.extra).trim());
-    }
-    if (!filterText) return out;
-    return out.filter(i => {
-      const bh = inquiryBlueholeCase(i.extra).toLowerCase();
-      return i.companyName.toLowerCase().includes(filterText) || bh.includes(filterText);
-    });
+    if (!filterText) return list;
+    return list.filter(i => i.companyName.toLowerCase().includes(filterText));
   };
 
   const filteredInquiries = useMemo(
     () => sortInquiries(filterFn(inquiries), sort),
-    [inquiries, filterText, sort, blueholeOnly],
+    [inquiries, filterText, sort],
   );
   const filteredProcesses = useMemo(
     () => sortProcesses(
@@ -182,9 +226,11 @@ export default function IntakeHub() {
     setProcesses(prev => [row, ...prev]);
   }, []);
 
-  const toggleCheck = async (process: ProcessRow, key: string) => {
+  const toggleCheck = useCallback(async (process: ProcessRow, key: string) => {
+    const prevChecklist = { ...process.checklist };
     const next = { ...process.checklist, [key]: !process.checklist?.[key] };
-    setSavingId(process.id);
+    onProcessUpdated({ ...process, checklist: next });
+
     try {
       const res = await fetch(`/api/processes/${process.id}`, {
         method: 'PATCH',
@@ -193,11 +239,31 @@ export default function IntakeHub() {
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
-      onProcessUpdated(normalizeProcess(data.process));
-    } finally {
-      setSavingId(null);
+      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+    } catch {
+      onProcessUpdated({ ...process, checklist: prevChecklist });
     }
-  };
+  }, [onProcessUpdated]);
+
+  const syncBlueholeCheck = useCallback(async (process: ProcessRow) => {
+    if (process.checklist?.blueholeClient) return;
+    const prevChecklist = { ...process.checklist };
+    const next = { ...process.checklist, blueholeClient: true };
+    onProcessUpdated({ ...process, checklist: next });
+
+    try {
+      const res = await fetch(`/api/processes/${process.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checklist: next, toggledKey: 'blueholeClient' as ChecklistKey }),
+      });
+      if (!res.ok) throw new Error('저장 실패');
+      const data = await res.json();
+      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+    } catch {
+      onProcessUpdated({ ...process, checklist: prevChecklist });
+    }
+  }, [onProcessUpdated]);
 
   const registerClient = useCallback(async (inquiryId: string, processId: string | null): Promise<string | null> => {
     const res = await fetch('/api/intake/register-client', {
@@ -228,18 +294,40 @@ export default function IntakeHub() {
     router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
   };
 
-  const toggleBlueholeFilter = () => {
-    const p = new URLSearchParams(searchParams.toString());
-    if (blueholeOnly) p.delete('bluehole');
-    else p.set('bluehole', 'unlinked');
-    router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
-  };
-
   const onSelectInquiry = (id: string | null) => {
     setSelectedId(id);
     const p = new URLSearchParams(searchParams.toString());
     if (id) p.set('inquiry', id); else p.delete('inquiry');
     router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
+  };
+
+  const deleteInquiry = async (inquiry: InquiryRow, process: ProcessRow | null) => {
+    const label = inquiry.companyName.trim() || '(미입력)';
+    const linked = process ?? findProcessForInquiry(inquiry, processes);
+    const clientNote = inquiry.clientId
+      ? '\n\n등록된 수임처는 유지되며, 유입 목록에서만 삭제됩니다.'
+      : '';
+    if (!confirm(`"${label}" 유입 건을 삭제할까요?${linked ? '\n연결된 유입프로세스도 함께 삭제됩니다.' : ''}${clientNote}`)) {
+      return;
+    }
+    setDeletingId(inquiry.id);
+    try {
+      const res = await fetch(`/api/intake/inquiries/${inquiry.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ processId: linked?.id ?? null }),
+      });
+      if (!res.ok) throw new Error('삭제 실패');
+      setInquiries(prev => prev.filter(q => q.id !== inquiry.id));
+      if (linked) {
+        setProcesses(prev => prev.filter(p => p.id !== linked.id));
+      }
+      if (selectedId === inquiry.id) onSelectInquiry(null);
+    } catch {
+      alert('삭제하지 못했습니다.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const selectedInquiry = filteredInquiries.find(i => i.id === selectedId);
@@ -251,24 +339,15 @@ export default function IntakeHub() {
         <IntakeTabs active={tab} />
 
         {tab !== 'consultation' && (
-          <>
-            <BlueholeInboxBanner
-              unlinkedCount={unlinkedCount}
-              showOnlyUnlinked={blueholeOnly}
-              onToggleFilter={toggleBlueholeFilter}
-            />
-            <IntakeToolbar
-              search={search}
-              sort={sort}
-              onSearchChange={onSearchChange}
-              onSortChange={onSortChange}
-            />
-          </>
+          <IntakeToolbar
+            search={search}
+            sort={sort}
+            onSearchChange={onSearchChange}
+            onSortChange={onSortChange}
+          />
         )}
 
-        {loading ? (
-          <p className="text-sm text-gray-400 py-12 text-center">불러오는 중…</p>
-        ) : tab === 'consultation' ? (
+        {tab === 'consultation' ? (
           <ConsultationFormPanel
             key={draftId ?? 'new'}
             initialDraftId={draftId}
@@ -287,12 +366,14 @@ export default function IntakeHub() {
             onProcessUpdated={onProcessUpdated}
             onProcessCreated={onProcessCreated}
             onToggleCheck={toggleCheck}
+            onSyncBlueholeCheck={syncBlueholeCheck}
             onRegisterClient={registerClient}
-            savingId={savingId}
+            onDeleteInquiry={deleteInquiry}
+            deletingId={deletingId}
           />
         )}
 
-        {!loading && tab !== 'consultation' && (
+        {tab !== 'consultation' && (
           <p className="mt-4 text-xs text-gray-400 text-center">
             유입관리 {filteredInquiries.length}건 · 유입프로세스 {filteredProcesses.length}건
             {selectedInquiry && <span> · 선택: {selectedInquiry.companyName || '(미입력)'}</span>}

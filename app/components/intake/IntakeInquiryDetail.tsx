@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ConsultationFormConfig } from '../../types/consultation';
+import { formatIntakeDate } from '../../utils/intakeDates';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import {
-  inquiryBlueholeCase,
   inquiryFormFields,
   inquiryNote,
+  inquiryBlueholeCase,
   inquiryRepPhone,
   inquiryAdmin,
   inquiryAdminPhone,
@@ -41,7 +42,7 @@ function toEditState(q: InquiryRow): EditState {
     phone: q.phone,
     channel: q.channel,
     consultant: q.consultant,
-    inquiryDate: q.inquiryDate,
+    inquiryDate: formatIntakeDate(q.inquiryDate),
     inquiryContent: q.inquiryContent,
     contractStatus: q.contractStatus,
     proposedFee: q.proposedFee != null ? String(q.proposedFee) : '',
@@ -66,7 +67,7 @@ function rowFromApi(inquiry: Record<string, unknown>): InquiryRow {
     phone: String(inquiry.phone ?? ''),
     channel: String(inquiry.channel ?? ''),
     consultant: String(inquiry.consultant ?? ''),
-    inquiryDate: String(inquiry.inquiryDate ?? ''),
+    inquiryDate: formatIntakeDate(String(inquiry.inquiryDate ?? '')),
     inquiryContent: String(inquiry.inquiryContent ?? ''),
     contractStatus: String(inquiry.contractStatus ?? ''),
     proposedFee: typeof inquiry.proposedFee === 'number' ? inquiry.proposedFee : null,
@@ -197,7 +198,7 @@ export default function IntakeInquiryDetail({
           phone: form.phone.trim(),
           channel: form.channel.trim(),
           consultant: form.consultant.trim(),
-          inquiryDate: form.inquiryDate.trim(),
+          inquiryDate: formatIntakeDate(form.inquiryDate.trim()),
           inquiryContent: form.inquiryContent.trim(),
           contractStatus: form.contractStatus.trim(),
           proposedFee: proposedFee != null && !Number.isNaN(proposedFee) ? proposedFee : null,
@@ -280,19 +281,19 @@ export default function IntakeInquiryDetail({
           ))}
         </div>
         <label className="block text-xs">
+          <span className="font-semibold text-gray-600">블루홀케이스</span>
+          <input
+            value={form.blueholeCase}
+            onChange={e => setForm(prev => ({ ...prev, blueholeCase: e.target.value }))}
+            className={inputCls}
+          />
+        </label>
+        <label className="block text-xs">
           <span className="font-semibold text-gray-600">특이사항</span>
           <textarea
             value={form.note}
             onChange={e => setForm(prev => ({ ...prev, note: e.target.value }))}
             rows={3}
-            className={inputCls}
-          />
-        </label>
-        <label className="block text-xs">
-          <span className="font-semibold text-gray-600">블루홀 업체</span>
-          <input
-            value={form.blueholeCase}
-            onChange={e => setForm(prev => ({ ...prev, blueholeCase: e.target.value }))}
             className={inputCls}
           />
         </label>
@@ -324,7 +325,7 @@ export default function IntakeInquiryDetail({
       <TextBlock label="특이사항" value={note} compact={compact} />
       {bluehole.trim() ? (
         <div>
-          <p className="text-[10px] font-bold text-gray-500 uppercase mb-0.5">블루홀 업체</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase mb-0.5">블루홀케이스</p>
           <BlueholeCaseLink value={bluehole} className="text-xs" />
         </div>
       ) : null}

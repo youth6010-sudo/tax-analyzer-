@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'busan-login-id';
 
@@ -18,6 +18,8 @@ function LoginForm() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/auth/login-users')
@@ -28,18 +30,27 @@ function LoginForm() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved && list.some(u => u.loginId === saved)) {
           setLoginId(saved);
-        } else if (list.length === 1) {
-          setLoginId(list[0].loginId);
         }
       })
       .catch(() => setUsers([]))
       .finally(() => setUsersLoading(false));
   }, []);
 
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setListOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
   const selectUser = useCallback((id: string) => {
     setLoginId(id);
     setPin('');
     setError(null);
+    setListOpen(false);
   }, []);
 
   const appendPin = useCallback((digit: string) => {
@@ -95,35 +106,76 @@ function LoginForm() {
         <h1 className="mt-2 text-2xl font-black text-white text-center">부산지점 포털</h1>
         <p className="mt-2 text-sm text-violet-200/70 text-center">이름 선택 후 PIN 4자리</p>
 
-        <div className="mt-8">
+        <div className="mt-8" ref={pickerRef}>
           <span className="text-xs font-semibold text-violet-200">누구세요?</span>
           {usersLoading ? (
             <p className="mt-3 text-sm text-violet-200/60 text-center">불러오는 중…</p>
           ) : users.length === 0 ? (
             <p className="mt-3 text-sm text-red-300 text-center">등록된 사용자가 없습니다.</p>
           ) : (
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {users.map(user => {
-                const active = loginId === user.loginId;
-                return (
-                  <button
-                    key={user.loginId}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => selectUser(user.loginId)}
-                    className={`rounded-xl px-2 py-3 text-sm font-bold transition active:scale-95 disabled:opacity-50 ${
-                      active
-                        ? 'bg-violet-500 text-white ring-2 ring-violet-300 shadow-lg shadow-violet-900/40'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    {user.name}
-                    {user.role === 'admin' && (
-                      <span className="block text-[9px] font-semibold opacity-70 mt-0.5">admin</span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="mt-3 relative">
+              <button
+                type="button"
+                disabled={loading}
+                aria-expanded={listOpen}
+                aria-haspopup="listbox"
+                onClick={() => setListOpen(open => !open)}
+                className="w-full flex items-center justify-between gap-2 rounded-xl px-4 py-3.5 text-left text-sm font-bold text-white bg-white/10 hover:bg-white/15 ring-1 ring-white/10 transition disabled:opacity-50"
+              >
+                <span className={selected ? 'text-white' : 'text-violet-200/60'}>
+                  {selected ? selected.name : '이름을 선택하세요'}
+                </span>
+                <svg
+                  className={`w-5 h-5 shrink-0 text-violet-300 transition-transform ${listOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {listOpen && (
+                <ul
+                  role="listbox"
+                  aria-label="로그인 사용자"
+                  className="absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur-md shadow-xl py-1"
+                >
+                  {users.map(user => {
+                    const checked = loginId === user.loginId;
+                    return (
+                      <li key={user.loginId} role="option" aria-selected={checked}>
+                        <button
+                          type="button"
+                          disabled={loading}
+                          onClick={() => selectUser(user.loginId)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left transition ${
+                            checked
+                              ? 'bg-violet-600/40 text-white'
+                              : 'text-violet-100 hover:bg-white/10'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${
+                              checked ? 'border-violet-300 bg-violet-500' : 'border-white/30 bg-transparent'
+                            }`}
+                            aria-hidden
+                          >
+                            {checked && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          {user.name}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
         </div>

@@ -11,8 +11,9 @@ export async function PATCH(
     const user = await requireUser();
     const { id } = await params;
     const body = (await request.json()) as {
-      checklist?: Record<string, boolean>;
+      checklist?: Record<string, boolean | string>;
       toggledKey?: ChecklistKey;
+      blueholeCode?: string;
       monthlyFee?: number | null;
       feeStartDate?: string;
       channel?: string;
@@ -22,6 +23,7 @@ export async function PATCH(
       const row = await updateProcessChecklist(id, body.checklist, {
         toggledKey: body.toggledKey,
         actorName: user.name,
+        blueholeCode: body.blueholeCode,
       });
       return NextResponse.json({ process: row });
     }

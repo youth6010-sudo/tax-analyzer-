@@ -57,9 +57,10 @@ export function useLunchJournal() {
   }, []);
 
   const cancelToday = useCallback((spotId: string) => {
-    const next = persistCancelToday(spotId);
+    const author = authorName.trim() || '익명';
+    const next = persistCancelToday(spotId, author);
     setStore(next);
-  }, []);
+  }, [authorName]);
 
   return useMemo(
     () => ({

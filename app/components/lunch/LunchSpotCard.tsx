@@ -7,8 +7,10 @@ import {
   formatVisitDate,
   getAverageRating,
   getLastVisit,
-  ateOnDate,
+  ateOnDateByAuthor,
+  getVisitsOnDate,
   todayDateStr,
+  authorKey,
 } from '@/app/utils/lunchJournal';
 import { LunchVisitForm, LunchVisitHistory, getTodayVisitDefaults } from './LunchVisitPanel';
 
@@ -29,6 +31,7 @@ function MapLink({ href, label }: { href: string; label: string }) {
 interface LunchSpotCardProps {
   spot: LunchSpot;
   journal?: LunchSpotJournal | null;
+  currentAuthor?: string;
   onRecordVisit?: (spotId: string, rating: number, review: string) => void;
   onEditVisit?: (spotId: string, visitId: string, rating: number, review: string) => void;
   onDeleteVisit?: (spotId: string, visitId: string) => void;
@@ -40,6 +43,7 @@ interface LunchSpotCardProps {
 export default function LunchSpotCard({
   spot,
   journal,
+  currentAuthor,
   onRecordVisit,
   onEditVisit,
   onDeleteVisit,
@@ -51,8 +55,12 @@ export default function LunchSpotCard({
   const visits = journal?.visits ?? [];
   const avg = journal ? getAverageRating(journal) : null;
   const last = journal ? getLastVisit(journal) : null;
-  const ateToday = journal ? ateOnDate(journal, todayDateStr()) : false;
-  const todayDefaults = getTodayVisitDefaults(journal);
+  const author = currentAuthor?.trim() || '익명';
+  const ateToday = journal ? ateOnDateByAuthor(journal, todayDateStr(), author) : false;
+  const todayOthers = journal
+    ? getVisitsOnDate(journal, todayDateStr()).filter(v => authorKey(v.author) !== authorKey(author))
+    : [];
+  const todayDefaults = getTodayVisitDefaults(journal, author);
 
   return (
     <article
@@ -68,7 +76,12 @@ export default function LunchSpotCard({
             <h3 className="text-base font-bold text-gray-900">{spot.name}</h3>
             {ateToday && (
               <span className="inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-green-100 text-green-700 border border-green-200">
-                오늘 먹음
+                내가 오늘 먹음
+              </span>
+            )}
+            {!ateToday && todayOthers.length > 0 && (
+              <span className="inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                오늘 {todayOthers.length}명 리뷰
               </span>
             )}
           </div>
@@ -79,7 +92,7 @@ export default function LunchSpotCard({
           {avg !== null && (
             <p className="mt-1 text-sm text-amber-600 font-medium">
               ★ {avg}{' '}
-              <span className="text-gray-400 font-normal text-xs">({visits.length}회 방문)</span>
+              <span className="text-gray-400 font-normal text-xs">({visits.length}개 리뷰)</span>
             </p>
           )}
           {last && !ateToday && (
@@ -116,6 +129,7 @@ export default function LunchSpotCard({
       {journal && journal.visits.length > 0 && (
         <LunchVisitHistory
           journal={journal}
+          currentAuthor={author}
           onEditVisit={
             onEditVisit
               ? (visitId, rating, review) => onEditVisit(spot.id, visitId, rating, review)
@@ -138,7 +152,7 @@ export default function LunchSpotCard({
           }}
           className="mt-3 w-full py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
         >
-          오늘 먹음 취소
+          내 오늘 기록 취소
         </button>
       )}
 
@@ -148,7 +162,7 @@ export default function LunchSpotCard({
           onClick={() => setFormOpen(v => !v)}
           className="mt-3 w-full py-2 text-sm font-semibold rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 transition-colors"
         >
-          {formOpen ? '닫기' : ateToday ? '오늘 기록 수정' : '오늘 먹었어요 — 기록하기'}
+          {formOpen ? '닫기' : ateToday ? '내 오늘 기록 수정' : '오늘 먹었어요 — 리뷰 남기기'}
         </button>
       )}
 
@@ -157,7 +171,7 @@ export default function LunchSpotCard({
           spotName={spot.name}
           initialRating={todayDefaults.initialRating}
           initialReview={todayDefaults.initialReview}
-          submitLabel={todayDefaults.hasToday ? '오늘 기록 수정' : '먹은 날 기록하기'}
+          submitLabel={todayDefaults.hasToday ? '내 오늘 기록 수정' : '리뷰 저장하기'}
           onSaved={(rating, review) => {
             onRecordVisit(spot.id, rating, review);
             if (!showVisitForm) setFormOpen(false);

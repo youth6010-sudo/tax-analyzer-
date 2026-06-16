@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { ChurnSummary, ClientRecord } from '@/app/types/client';
+import type { ChurnSummary, ClientRecord, ClientSearchResult } from '@/app/types/client';
 import { BUSINESS_ENTITY_LABEL, SERVICE_TYPE_LABEL } from '@/app/types/contact';
 import { TAX_TYPES } from '@/app/config/taxTypes';
 import { douzoneExtraEntries } from '@/app/config/douzoneFields';
+import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
@@ -29,7 +30,7 @@ function Highlight({ text, query }: { text: string; query?: string }) {
 }
 
 type Props = {
-  client: ClientRecord;
+  client: ClientRecord | ClientSearchResult;
   churn?: ChurnSummary | null;
   query?: string;
   onSelect?: (id: string) => void;
@@ -40,6 +41,11 @@ export default function ClientExpandableCard({ client, churn, query = '', onSele
   const [expanded, setExpanded] = useState(false);
 
   const isChurned = client.status === 'churned' && churn;
+  const contactLabel =
+    'matchedContactName' in client && client.matchedContactName
+      ? client.matchedContactName
+      : client.primaryContactName;
+  const phoneDisplay = formatPhoneWithContactName(client.phone, contactLabel);
 
   const primary = isChurned
     ? [
@@ -59,7 +65,7 @@ export default function ClientExpandableCard({ client, churn, query = '', onSele
     : [
         { label: '대표자', value: client.representative },
         { label: '사업자번호', value: client.businessNo, mono: true },
-        { label: '전화번호', value: client.phone, mono: true },
+        { label: '전화번호', value: phoneDisplay, mono: true },
         { label: '휴대번호', value: client.mobilePhone, mono: true },
         { label: '담당자', value: client.manager },
       ];

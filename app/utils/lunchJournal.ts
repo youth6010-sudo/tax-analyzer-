@@ -31,6 +31,10 @@ export function newVisitId(): string {
   return `v-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function authorKey(author: string | undefined): string {
+  return (author ?? '').trim() || '익명';
+}
+
 function normalizeVisit(raw: Partial<LunchVisit> & { date: string; rating: number }): LunchVisit {
   return {
     id: raw.id ?? newVisitId(),
@@ -89,6 +93,19 @@ export function getVisitOnDate(journal: LunchSpotJournal, date: string): LunchVi
   return journal.visits.find(v => v.date === date) ?? null;
 }
 
+export function getVisitsOnDate(journal: LunchSpotJournal, date: string): LunchVisit[] {
+  return journal.visits.filter(v => v.date === date);
+}
+
+export function getVisitOnDateByAuthor(
+  journal: LunchSpotJournal,
+  date: string,
+  author: string,
+): LunchVisit | null {
+  const key = authorKey(author);
+  return journal.visits.find(v => v.date === date && authorKey(v.author) === key) ?? null;
+}
+
 export function getAverageRating(journal: LunchSpotJournal): number | null {
   if (journal.visits.length === 0) return null;
   const sum = journal.visits.reduce((acc, v) => acc + v.rating, 0);
@@ -99,6 +116,14 @@ export function ateOnDate(journal: LunchSpotJournal, date: string): boolean {
   return journal.visits.some(v => v.date === date);
 }
 
+export function ateOnDateByAuthor(
+  journal: LunchSpotJournal,
+  date: string,
+  author: string,
+): boolean {
+  return getVisitOnDateByAuthor(journal, date, author) != null;
+}
+
 export function upsertVisit(
   spotId: string,
   payload: { rating: number; review: string; date?: string; author?: string },
@@ -106,8 +131,10 @@ export function upsertVisit(
   const store = loadJournal();
   const journal = getSpotJournal(store, spotId);
   const date = payload.date ?? todayDateStr();
-  const author = (payload.author ?? '').trim() || '익명';
-  const existing = journal.visits.find(v => v.date === date);
+  const author = authorKey(payload.author);
+  const existing = journal.visits.find(
+    v => v.date === date && authorKey(v.author) === author,
+  );
 
   let visits: LunchVisit[];
   if (existing) {
@@ -189,11 +216,14 @@ export function deleteVisit(spotId: string, visitId: string): LunchJournalStore 
   return next;
 }
 
-export function cancelTodayVisit(spotId: string): LunchJournalStore {
+export function cancelTodayVisit(spotId: string, author?: string): LunchJournalStore {
   const store = loadJournal();
   const journal = getSpotJournal(store, spotId);
   const today = todayDateStr();
-  const visits = journal.visits.filter(v => v.date !== today);
+  const key = authorKey(author);
+  const visits = journal.visits.filter(
+    v => !(v.date === today && authorKey(v.author) === key),
+  );
 
   const next = { ...store };
   if (visits.length === 0) {
@@ -212,8 +242,16 @@ export function getEatenSpotIds(store: LunchJournalStore, dates: string[]): stri
     .map(j => j.spotId);
 }
 
-export function getRecentEatenSpotIds(store: LunchJournalStore): string[] {
-  return getEatenSpotIds(store, [todayDateStr(), yesterdayDateStr()]);
+export function getRecentEatenSpotIds(store: LunchJournalStore, author?: string): string[] {
+  const dates = [todayDateStr(), yesterdayDateStr()];
+  const key = author != null ? authorKey(author) : null;
+  return Object.values(store)
+    .filter(j =>
+      j.visits.some(
+        v => dates.includes(v.date) && (key == null || authorKey(v.author) === key),
+      ),
+    )
+    .map(j => j.spotId);
 }
 
 /** @deprecated use getRecentEatenSpotIds */

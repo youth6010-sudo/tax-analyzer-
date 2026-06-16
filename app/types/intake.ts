@@ -24,11 +24,14 @@ export const CHECKLIST_KEYS = [
   'cms',
   'assignee',
   'programClient',
-  'bluehole',
+  'blueholeClient',
   'tpClient',
   'semoReport',
   'bizAccount',
   'kakaoRoom',
 ] as const;
+
+/** checklist JSON 내부 — 블루홀 업체/케이스 번호 */
+export const BLUEHOLE_CODE_KEY = '_blueholeCode';
 
 export type ChecklistKey = (typeof CHECKLIST_KEYS)[number];

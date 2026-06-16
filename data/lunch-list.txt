@@ -26,3 +26,4 @@ https://place.map.kakao.com/2061849042
 https://place.map.kakao.com/1239559567
 https://place.map.kakao.com/2140210498
 https://place.map.kakao.com/1900017839
+https://place.map.kakao.com/1384681956

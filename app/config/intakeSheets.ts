@@ -8,7 +8,6 @@ export type InquiryColumnKey =
   | 'channel'
   | 'consultant'
   | 'inquiryContent'
-  | 'blueholeCase'
   | 'note'
   | 'proposedFee'
   | 'industry'
@@ -39,12 +38,12 @@ export type SheetColumn = {
 };
 
 export const INQUIRY_LIST_COLUMNS: SheetColumn[] = [
-  { key: 'inquiryDate', label: '문의일자' },
+  { key: 'inquiryDate', label: '문의일자', width: '5.5rem' },
   { key: 'companyName', label: '업체명' },
+  { key: 'phone', label: '전화번호', width: '7rem' },
   { key: 'channel', label: '유입채널' },
   { key: 'consultant', label: '초회상담자' },
-  { key: 'blueholeCase', label: '블루홀' },
-  { key: 'phone', label: '전화번호' },
+  { key: 'blueholeCase', label: '블루홀케이스', width: '5.5rem' },
   { key: 'contractStatus', label: '계약유무' },
   { key: 'proposedFee', label: '제안금액', type: 'number' },
 ];
@@ -56,7 +55,7 @@ export const INQUIRY_COLUMNS: SheetColumn[] = [
   { key: 'channel', label: '유입채널', width: '6.5rem', editable: true },
   { key: 'consultant', label: '초회상담자', width: '5.5rem', editable: true },
   { key: 'inquiryContent', label: '문의내용', width: '14rem', editable: true, multiline: true },
-  { key: 'blueholeCase', label: '블루홀 업체', width: '6rem', editable: true },
+  { key: 'blueholeCase', label: '블루홀케이스', width: '6rem', editable: true },
   { key: 'note', label: '특이사항', width: '10rem', editable: true, multiline: true },
   { key: 'proposedFee', label: '제안금액', width: '5.5rem', editable: true, type: 'number' },
   { key: 'industry', label: '업종', width: '7rem', editable: true },
@@ -80,7 +79,7 @@ export const PROCESS_META_COLUMNS: SheetColumn[] = [
 export const PROCESS_CHECKLIST_COLUMNS: SheetColumn[] = CHECKLIST_KEYS.map(key => ({
   key,
   label: CHECKLIST_LABEL[key] ?? key,
-  width: '2.25rem',
+  width: '6.5rem',
   type: 'check' as const,
 }));
 

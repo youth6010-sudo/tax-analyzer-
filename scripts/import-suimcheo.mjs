@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import XLSX from 'xlsx';
 import postgres from 'postgres';
 import { detectSuimcheoExport, parseSuimcheoExportRows } from './lib/suimcheo-export-parse.mjs';
+import { filterImportableClients, reportSkippedRows } from './lib/client-import-guards.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -53,11 +54,17 @@ if (!sheetName) {
 }
 
 const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
-const clients = parseSuimcheoExportRows(rows);
+const parsed = parseSuimcheoExportRows(rows);
+const { importable: clients, skipped: skippedRows } = filterImportableClients(parsed, {
+  label: 'TP 수임처 export',
+});
 
 const active = clients.filter(c => c.status === 'active').length;
 const churned = clients.filter(c => c.status === 'churned').length;
-console.log(`파싱: ${clients.length}건 (수임 ${active}, 해임 ${churned}) ← ${path.basename(xlsxPath)}`);
+console.log(
+  `파싱: ${parsed.length}건 → 반영 ${clients.length}건 (수임 ${active}, 해임 ${churned}), 제외 ${skippedRows.length}건 ← ${path.basename(xlsxPath)}`,
+);
+reportSkippedRows(skippedRows);
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {

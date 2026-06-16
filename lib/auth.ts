@@ -3,6 +3,12 @@ import { cookies } from 'next/headers';
 import type { SessionData } from './session';
 import { getSessionOptions } from './session';
 
+export const PORTAL_ADMIN_LOGIN_ID = 'charlie';
+
+export function isPortalAdmin(user: { loginId: string }) {
+  return user.loginId === PORTAL_ADMIN_LOGIN_ID;
+}
+
 export async function getServerSession() {
   const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());
   return session;
@@ -18,7 +24,7 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const user = await requireUser();
-  if (user.role !== 'admin') {
+  if (!isPortalAdmin(user)) {
     throw new Error('FORBIDDEN');
   }
   return user;

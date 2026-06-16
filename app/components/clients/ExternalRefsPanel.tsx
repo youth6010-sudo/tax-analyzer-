@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { parseExternalRefs } from '@/lib/externalRefs';
 import type { ExternalRefs } from '@/app/types/externalRefs';
-import BlueholeCaseLink from '../intake/BlueholeCaseLink';
-import BlueholeCasePreview from './BlueholeCasePreview';
 
 export default function ExternalRefsPanel({
   clientId,
@@ -16,7 +14,6 @@ export default function ExternalRefsPanel({
   onUpdated?: (intakeData: Record<string, unknown>) => void;
 }) {
   const refs = parseExternalRefs(intakeData);
-  const [blueholeId, setBlueholeId] = useState(refs.bluehole?.id ?? '');
   const [tpId, setTpId] = useState(refs.tp?.id ?? '');
   const [semoId, setSemoId] = useState(refs.semorang?.id ?? '');
   const [wmId, setWmId] = useState(refs.wemembers?.id ?? '');
@@ -25,7 +22,6 @@ export default function ExternalRefsPanel({
 
   useEffect(() => {
     const r = parseExternalRefs(intakeData);
-    setBlueholeId(r.bluehole?.id ?? '');
     setTpId(r.tp?.id ?? '');
     setSemoId(r.semorang?.id ?? '');
     setWmId(r.wemembers?.id ?? '');
@@ -61,35 +57,9 @@ export default function ExternalRefsPanel({
   return (
     <article className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
       <h2 className="text-sm font-black text-blue-900">외부 시스템 연동</h2>
-      <p className="text-[10px] text-blue-800/70 mt-0.5">블루홀 · TP · 세무사랑 · 위멤버스 등록 ID</p>
+      <p className="text-[10px] text-blue-800/70 mt-0.5">TP · 세무사랑 · 위멤버스 등록 ID</p>
 
       <div className="mt-3 space-y-3">
-        <div>
-          <label className="text-[10px] font-bold text-gray-600">블루홀 업체 번호</label>
-          <div className="mt-1 flex gap-2">
-            <input
-              value={blueholeId}
-              onChange={e => setBlueholeId(e.target.value)}
-              placeholder="#11364"
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
-            />
-            <button
-              type="button"
-              disabled={saving || !blueholeId.trim()}
-              onClick={() => void save({ bluehole: { id: blueholeId.trim() } })}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white disabled:opacity-50"
-            >
-              저장
-            </button>
-          </div>
-          {blueholeId.trim() && (
-            <div className="mt-1.5 flex items-center gap-2">
-              <BlueholeCaseLink value={blueholeId} className="text-xs" />
-              <BlueholeCasePreview caseId={blueholeId} />
-            </div>
-          )}
-        </div>
-
         {([
           ['TP', 'tp', tpId, setTpId] as const,
           ['세무사랑', 'semorang', semoId, setSemoId] as const,

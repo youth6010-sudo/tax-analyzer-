@@ -1,11 +1,18 @@
 'use client';
 
 import ChurnClientSearch from '@/app/components/churn/ChurnClientSearch';
-import ChurnExamplesPanel, { appendChurnFieldValue } from '@/app/components/churn/ChurnExamplesPanel';
-import { CHURN_COLUMNS } from '@/app/config/churnSheet';
-import type { ChurnExampleField } from '@/app/config/churnExamples';
+import {
+  ChurnCheckboxGroup,
+  ChurnManagerSelect,
+  ChurnNumberedField,
+} from '@/app/components/churn/ChurnFieldGroups';
+import {
+  CHURN_TYPE_OPTIONS,
+  DATA_CLEANUP_OPTIONS,
+  EARLY_SIGN_ITEMS,
+  REASON_ITEMS,
+} from '@/app/config/churnOptions';
 import type { ClientRecord } from '@/app/types/client';
-import { CHURN_REASONS } from '@/app/types/client';
 
 export type ChurnFormValues = {
   churnedAt: string;
@@ -15,6 +22,7 @@ export type ChurnFormValues = {
   earlySign: string;
   reason: string;
   detail: string;
+  manager: string;
 };
 
 type Props = {
@@ -40,6 +48,7 @@ export function defaultChurnFormValues(): ChurnFormValues {
     earlySign: '',
     reason: '',
     detail: '',
+    manager: '',
   };
 }
 
@@ -52,8 +61,6 @@ export default function ChurnRegisterForm({
   onSubmit,
   backfillNote,
 }: Props) {
-  const manager = selectedClient?.manager ?? '';
-
   return (
     <form
       onSubmit={e => {
@@ -67,6 +74,9 @@ export default function ChurnRegisterForm({
         <div className="mt-2">
           <ChurnClientSearch value={selectedClient} onChange={onClientChange} disabled={saving} />
         </div>
+        {selectedClient && (
+          <p className="mt-2 text-sm font-bold text-gray-900">{selectedClient.companyName}</p>
+        )}
         {backfillNote && selectedClient?.status === 'churned' && (
           <p className="mt-2 text-xs text-amber-700 font-medium">
             유출 상태이나 이력이 없는 수임처입니다. 아래 내용을 입력해 이력을 등록합니다.
@@ -74,142 +84,86 @@ export default function ChurnRegisterForm({
         )}
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[52rem] text-sm border-collapse">
-          <thead>
-            <tr className="bg-red-50 border-b border-red-100">
-              {CHURN_COLUMNS.map(col => (
-                <th
-                  key={col.key}
-                  className={`px-2 py-2 text-left text-[10px] font-bold text-red-800 whitespace-nowrap ${
-                    col.sticky ? 'sticky left-0 z-10 bg-red-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]' : ''
-                  }`}
-                  style={{ minWidth: col.width }}
-                >
-                  {col.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-gray-100">
-              {CHURN_COLUMNS.map(col => {
-                const cellCls = `px-2 py-2 align-top ${
-                  col.sticky ? 'sticky left-0 z-10 bg-white shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]' : ''
-                }`;
+      <div className="px-4 space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <label className="block">
+            <span className="text-[10px] font-bold text-gray-500">계약 종료일</span>
+            <input
+              type="date"
+              value={values.churnedAt}
+              onChange={e => onChange({ churnedAt: e.target.value })}
+              disabled={!selectedClient || saving}
+              className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs disabled:opacity-50"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] font-bold text-gray-500">기장료</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={values.feeAmount}
+              onChange={e => onChange({ feeAmount: e.target.value })}
+              disabled={!selectedClient || saving}
+              placeholder="0"
+              className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono disabled:opacity-50"
+            />
+          </label>
+        </div>
 
-                if (col.key === 'companyName') {
-                  return (
-                    <td key={col.key} className={cellCls}>
-                      <span className="font-bold text-gray-900 block truncate max-w-[8rem]">
-                        {selectedClient?.companyName ?? '—'}
-                      </span>
-                    </td>
-                  );
-                }
+        <ChurnManagerSelect
+          value={values.manager}
+          onChange={v => onChange({ manager: v })}
+          defaultManager={selectedClient?.manager}
+          disabled={!selectedClient || saving}
+        />
 
-                if (col.key === 'manager') {
-                  return (
-                    <td key={col.key} className={cellCls}>
-                      <span className="text-gray-700">{manager || '—'}</span>
-                    </td>
-                  );
-                }
+        <ChurnCheckboxGroup
+          label="자료 정리"
+          options={DATA_CLEANUP_OPTIONS}
+          value={values.dataCleanup}
+          onChange={v => onChange({ dataCleanup: v })}
+          disabled={!selectedClient || saving}
+        />
 
-                if (col.key === 'churnedAt') {
-                  return (
-                    <td key={col.key} className={cellCls}>
-                      <input
-                        type="date"
-                        value={values.churnedAt}
-                        onChange={e => onChange({ churnedAt: e.target.value })}
-                        disabled={!selectedClient || saving}
-                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs disabled:opacity-50"
-                      />
-                    </td>
-                  );
-                }
+        <ChurnCheckboxGroup
+          label="유형"
+          options={CHURN_TYPE_OPTIONS}
+          value={values.churnType}
+          onChange={v => onChange({ churnType: v })}
+          disabled={!selectedClient || saving}
+        />
 
-                if (col.key === 'feeAmount') {
-                  return (
-                    <td key={col.key} className={cellCls}>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={values.feeAmount}
-                        onChange={e => onChange({ feeAmount: e.target.value })}
-                        disabled={!selectedClient || saving}
-                        placeholder="0"
-                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono disabled:opacity-50"
-                      />
-                    </td>
-                  );
-                }
+        <ChurnNumberedField
+          label="전조증상"
+          items={EARLY_SIGN_ITEMS}
+          value={values.earlySign}
+          onChange={v => onChange({ earlySign: v })}
+          disabled={!selectedClient || saving}
+        />
 
-                if (col.key === 'reason') {
-                  return (
-                    <td key={col.key} className={cellCls}>
-                      <input
-                        type="text"
-                        list="churn-reason-suggestions"
-                        value={values.reason}
-                        onChange={e => onChange({ reason: e.target.value })}
-                        disabled={!selectedClient || saving}
-                        placeholder="유출 사유"
-                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs disabled:opacity-50"
-                      />
-                      <datalist id="churn-reason-suggestions">
-                        {CHURN_REASONS.map(r => (
-                          <option key={r} value={r} />
-                        ))}
-                      </datalist>
-                    </td>
-                  );
-                }
+        <ChurnNumberedField
+          label="유출 사유"
+          items={REASON_ITEMS}
+          value={values.reason}
+          onChange={v => onChange({ reason: v })}
+          disabled={!selectedClient || saving}
+        />
 
-                const fieldKey = col.key as 'dataCleanup' | 'churnType' | 'earlySign';
-                return (
-                  <td key={col.key} className={cellCls}>
-                    <input
-                      type="text"
-                      value={values[fieldKey]}
-                      onChange={e => onChange({ [fieldKey]: e.target.value })}
-                      disabled={!selectedClient || saving}
-                      className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs disabled:opacity-50"
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="px-4 pb-4">
         <label className="block">
-          <span className="text-xs font-bold text-gray-500">상세 메모 (엑셀 외 보조)</span>
+          <span className="text-[10px] font-bold text-gray-500">상세 메모 (엑셀 외 보조)</span>
           <textarea
             value={values.detail}
             onChange={e => onChange({ detail: e.target.value })}
             disabled={!selectedClient || saving}
             rows={3}
-            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+            className="mt-0.5 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
           />
         </label>
-
-        <div className="mt-3">
-          <ChurnExamplesPanel
-            disabled={!selectedClient || saving}
-            onApply={(field: ChurnExampleField, text: string) => {
-              onChange({ [field]: appendChurnFieldValue(values[field], text) });
-            }}
-          />
-        </div>
 
         <button
           type="submit"
           disabled={saving || !selectedClient}
-          className="mt-4 w-full py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50"
+          className="w-full py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50"
         >
           {saving ? '등록 중…' : '유출 등록'}
         </button>

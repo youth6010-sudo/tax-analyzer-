@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth';
+import { requireUser, isPortalAdmin } from '@/lib/auth';
 import { churnClient, listClients } from '@/lib/clientsDb';
 
 export async function GET() {
@@ -7,7 +7,7 @@ export async function GET() {
     const user = await requireUser();
     const clients = await listClients({
       status: 'active',
-      mineOnly: user.role !== 'admin',
+      mineOnly: !isPortalAdmin(user),
       userId: user.id,
       userName: user.name,
     });
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       dataCleanup?: string;
       churnType?: string;
       earlySign?: string;
+      manager?: string;
     };
     if (!body.clientId || !body.reason?.trim()) {
       return NextResponse.json({ error: '수임처와 유출 사유를 입력해 주세요.' }, { status: 400 });
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
         dataCleanup: body.dataCleanup,
         churnType: body.churnType,
         earlySign: body.earlySign,
+        manager: body.manager,
       },
       user.id,
     );

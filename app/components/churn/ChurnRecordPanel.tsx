@@ -2,26 +2,34 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { CHURN_COLUMNS, churnDateInputValue } from '@/app/config/churnSheet';
 import {
-  CHURN_COLUMNS,
-  CHURN_EDITABLE_COLUMNS,
-  churnDateInputValue,
-} from '@/app/config/churnSheet';
-import ChurnExamplesPanel, { appendChurnFieldValue } from '@/app/components/churn/ChurnExamplesPanel';
-import type { ChurnExampleField } from '@/app/config/churnExamples';
+  ChurnCheckboxGroup,
+  ChurnManagerSelect,
+  ChurnNumberedField,
+} from '@/app/components/churn/ChurnFieldGroups';
+import {
+  CHURN_TYPE_OPTIONS,
+  DATA_CLEANUP_OPTIONS,
+  EARLY_SIGN_ITEMS,
+  REASON_ITEMS,
+} from '@/app/config/churnOptions';
 import type { ChurnRecordView } from '@/app/types/client';
-import { CHURN_REASONS } from '@/app/types/client';
 
 type Props = {
   record: ChurnRecordView | null;
   emptyMessage?: string;
   onSaved?: (record: ChurnRecordView) => void;
+  onDeleted?: (id: string) => void;
+  deleting?: boolean;
 };
 
 export default function ChurnRecordPanel({
   record,
   emptyMessage = '항목을 선택하면 유출 상세가 표시됩니다.',
   onSaved,
+  onDeleted,
+  deleting = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -33,6 +41,7 @@ export default function ChurnRecordPanel({
     earlySign: '',
     reason: '',
     detail: '',
+    manager: '',
   });
 
   useEffect(() => {
@@ -45,6 +54,7 @@ export default function ChurnRecordPanel({
       earlySign: record.earlySign,
       reason: record.reason,
       detail: record.detail,
+      manager: record.manager,
     });
     setEditing(false);
   }, [record]);
@@ -76,6 +86,7 @@ export default function ChurnRecordPanel({
           dataCleanup: form.dataCleanup,
           churnType: form.churnType,
           earlySign: form.earlySign,
+          manager: form.manager,
         }),
       });
       const data = await res.json();
@@ -89,6 +100,15 @@ export default function ChurnRecordPanel({
     }
   };
 
+  const handleDelete = () => {
+    if (!record) return;
+    const restoreNote = record.clientId
+      ? '\n\n연결된 수임처에 다른 유출 이력이 없으면 active로 복구됩니다.'
+      : '';
+    if (!confirm(`"${record.companyName}" 유출 이력을 삭제할까요?${restoreNote}`)) return;
+    onDeleted?.(record.id);
+  };
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
       <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-start justify-between gap-2">
@@ -98,7 +118,7 @@ export default function ChurnRecordPanel({
             계약 종료 · {new Date(record.churnedAt).toLocaleDateString('ko-KR')}
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
           {record.clientId && (
             <Link
               href={`/clients/${record.clientId}`}
@@ -106,6 +126,16 @@ export default function ChurnRecordPanel({
             >
               수임처 상세
             </Link>
+          )}
+          {!editing && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={handleDelete}
+              className="text-[10px] font-bold px-2 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? '…' : '삭제'}
+            </button>
           )}
           {!editing ? (
             <button
@@ -117,19 +147,10 @@ export default function ChurnRecordPanel({
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 text-gray-600 bg-white"
-              >
+              <button type="button" onClick={() => setEditing(false)} className="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 text-gray-600 bg-white">
                 취소
               </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void handleSave()}
-                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-600 text-white disabled:opacity-50"
-              >
+              <button type="button" disabled={saving} onClick={() => void handleSave()} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-600 text-white disabled:opacity-50">
                 {saving ? '저장 중…' : '저장'}
               </button>
             </>
@@ -139,151 +160,49 @@ export default function ChurnRecordPanel({
 
       <div className="p-4">
         {!editing ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {CHURN_COLUMNS.map(col => (
-                    <th
-                      key={col.key}
-                      className="px-2 py-1.5 text-left text-[10px] font-bold text-gray-500 whitespace-nowrap"
-                      style={{ minWidth: col.width }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {CHURN_COLUMNS.map(col => {
-                    let value = '—';
-                    switch (col.key) {
-                      case 'companyName':
-                        value = record.companyName;
-                        break;
-                      case 'churnedAt':
-                        value = new Date(record.churnedAt).toLocaleDateString('ko-KR');
-                        break;
-                      case 'feeAmount':
-                        value = record.feeAmount != null ? `${record.feeAmount.toLocaleString()}원` : '—';
-                        break;
-                      case 'dataCleanup':
-                        value = record.dataCleanup || '—';
-                        break;
-                      case 'churnType':
-                        value = record.churnType || '—';
-                        break;
-                      case 'earlySign':
-                        value = record.earlySign || '—';
-                        break;
-                      case 'reason':
-                        value = record.reason || '—';
-                        break;
-                      case 'manager':
-                        value = record.manager || '—';
-                        break;
-                    }
-                    return (
-                      <td key={col.key} className="px-2 py-2 text-xs text-gray-800 border-b border-gray-50">
-                        {value}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2 rounded-lg px-3 py-2 bg-gray-50">
-              <span className="text-[10px] font-bold text-gray-400 block">업체명</span>
-              <span className="text-sm font-semibold text-gray-800">{record.companyName}</span>
-            </div>
-            {CHURN_EDITABLE_COLUMNS.map(col => {
-              const key = col.key as keyof typeof form;
-              if (col.type === 'date') {
-                return (
-                  <label key={col.key} className="block">
-                    <span className="text-[10px] font-bold text-gray-400">{col.label}</span>
-                    <input
-                      type="date"
-                      value={form.churnedAt}
-                      onChange={e => setForm(f => ({ ...f, churnedAt: e.target.value }))}
-                      className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                );
+          <div className="space-y-2 text-xs">
+            {CHURN_COLUMNS.map(col => {
+              let value = '—';
+              switch (col.key) {
+                case 'companyName': value = record.companyName; break;
+                case 'churnedAt': value = new Date(record.churnedAt).toLocaleDateString('ko-KR'); break;
+                case 'feeAmount': value = record.feeAmount != null ? `${record.feeAmount.toLocaleString()}원` : '—'; break;
+                case 'dataCleanup': value = record.dataCleanup || '—'; break;
+                case 'churnType': value = record.churnType || '—'; break;
+                case 'earlySign': value = record.earlySign || '—'; break;
+                case 'reason': value = record.reason || '—'; break;
+                case 'manager': value = record.manager || '—'; break;
               }
-              if (col.type === 'number') {
-                return (
-                  <label key={col.key} className="block">
-                    <span className="text-[10px] font-bold text-gray-400">{col.label}</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.feeAmount}
-                      onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
-                      className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono"
-                    />
-                  </label>
-                );
-              }
-              if (col.key === 'reason') {
-                return (
-                  <label key={col.key} className="block sm:col-span-2">
-                    <span className="text-[10px] font-bold text-gray-400">{col.label}</span>
-                    <input
-                      type="text"
-                      list="churn-edit-reason-suggestions"
-                      value={form.reason}
-                      onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
-                      className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-                    />
-                    <datalist id="churn-edit-reason-suggestions">
-                      {CHURN_REASONS.map(r => (
-                        <option key={r} value={r} />
-                      ))}
-                    </datalist>
-                  </label>
-                );
-              }
+              if (col.key === 'companyName') return null;
               return (
-                <label key={col.key} className="block">
+                <div key={col.key}>
                   <span className="text-[10px] font-bold text-gray-400">{col.label}</span>
-                  <input
-                    type="text"
-                    value={form[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-                  />
-                </label>
+                  <p className="text-gray-800 whitespace-pre-line mt-0.5">{value}</p>
+                </div>
               );
             })}
-            <label className="block sm:col-span-2">
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[10px] font-bold text-gray-400">계약 종료일</span>
+                <input type="date" value={form.churnedAt} onChange={e => setForm(f => ({ ...f, churnedAt: e.target.value }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold text-gray-400">기장료</span>
+                <input type="text" inputMode="numeric" value={form.feeAmount} onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono" />
+              </label>
+            </div>
+            <ChurnManagerSelect value={form.manager} onChange={v => setForm(f => ({ ...f, manager: v }))} disabled={saving} />
+            <ChurnCheckboxGroup label="자료 정리" options={DATA_CLEANUP_OPTIONS} value={form.dataCleanup} onChange={v => setForm(f => ({ ...f, dataCleanup: v }))} disabled={saving} />
+            <ChurnCheckboxGroup label="유형" options={CHURN_TYPE_OPTIONS} value={form.churnType} onChange={v => setForm(f => ({ ...f, churnType: v }))} disabled={saving} />
+            <ChurnNumberedField label="전조증상" items={EARLY_SIGN_ITEMS} value={form.earlySign} onChange={v => setForm(f => ({ ...f, earlySign: v }))} disabled={saving} />
+            <ChurnNumberedField label="유출 사유" items={REASON_ITEMS} value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} disabled={saving} />
+            <label className="block">
               <span className="text-[10px] font-bold text-gray-400">상세 메모</span>
-              <textarea
-                value={form.detail}
-                onChange={e => setForm(f => ({ ...f, detail: e.target.value }))}
-                rows={3}
-                className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-              />
+              <textarea value={form.detail} onChange={e => setForm(f => ({ ...f, detail: e.target.value }))} rows={3} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
             </label>
-            <div className="sm:col-span-2">
-              <ChurnExamplesPanel
-                disabled={saving}
-                onApply={(field: ChurnExampleField, text: string) => {
-                  setForm(f => ({
-                    ...f,
-                    [field]: appendChurnFieldValue(f[field], text),
-                  }));
-                }}
-              />
-            </div>
-            <div className="sm:col-span-2 rounded-lg px-3 py-2 bg-gray-50">
-              <span className="text-[10px] font-bold text-gray-400 block">담당</span>
-              <span className="text-sm text-gray-700">{record.manager || '—'}</span>
-            </div>
           </div>
         )}
 

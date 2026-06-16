@@ -5,15 +5,25 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ClientSearchResult } from '../types/client';
 import ClientExpandableCard from './ClientExpandableCard';
+import {
+  getPortalSearchIndex,
+  hydratePortal,
+  searchPortalClients,
+} from '@/app/utils/portalStore';
+import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 
 export default function ContactHeaderSearch() {
   const router = useRouter();
   const [results, setResults] = useState<ClientSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    hydratePortal();
+  }, []);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -29,23 +39,32 @@ export default function ContactHeaderSearch() {
     const q = query.trim();
     if (!q) {
       setResults([]);
-      setLoading(false);
+      setSearching(false);
       return;
     }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setLoading(true);
-    debounceRef.current = setTimeout(() => {
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&includeChurned=1`)
-        .then(r => (r.ok ? r.json() : { clients: [] }))
-        .then(data => setResults(data.clients ?? []))
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
-    }, 250);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    const local = getPortalSearchIndex().length > 0 ? searchPortalClients(q) : [];
+    setResults(local);
+    setSearching(true);
+
+    fetch(`/api/clients/search?q=${encodeURIComponent(q)}&includeChurned=1`, {
+      signal: ac.signal,
+    })
+      .then(r => (r.ok ? r.json() : { clients: [] }))
+      .then(data => {
+        const api = (data.clients ?? []) as ClientSearchResult[];
+        setResults(mergeClientSearchResults(local, api));
+      })
+      .catch(err => {
+        if (err?.name !== 'AbortError') setResults(local);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setSearching(false);
+      });
   }, [query]);
 
   const showPanel = open && query.trim().length > 0;
@@ -88,7 +107,7 @@ export default function ContactHeaderSearch() {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="업체·대표·사업자번호·전화·담당자 검색"
+          placeholder="업체·대표·연락처 이름·전화·담당자 검색"
           className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent focus:bg-white transition-all"
         />
         {query && (
@@ -116,11 +135,9 @@ export default function ContactHeaderSearch() {
 
       {showPanel && (
         <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,28rem)] sm:w-[32rem] z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-          {loading ? (
-            <p className="px-4 py-6 text-sm text-gray-400 text-center">검색 중…</p>
-          ) : results.length === 0 ? (
+          {results.length === 0 ? (
             <p className="px-4 py-6 text-sm text-gray-500 text-center">
-              &quot;{query}&quot; 검색 결과 없음
+              {searching ? `"${query}" 검색 중…` : `"${query}" 검색 결과 없음`}
             </p>
           ) : (
             <>

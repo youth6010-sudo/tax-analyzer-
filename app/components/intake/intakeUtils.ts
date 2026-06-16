@@ -1,38 +1,29 @@
-import { CHECKLIST_KEYS } from '@/app/types/intake';
+import { CHECKLIST_KEYS, BLUEHOLE_CODE_KEY } from '@/app/types/intake';
+import { compareIntakeDateDesc, formatIntakeDate } from '@/app/utils/intakeDates';
 
-export { CHECKLIST_KEYS };
+export { CHECKLIST_KEYS, BLUEHOLE_CODE_KEY };
 
+/** 유입프로세스 시트 컬럼명 (청년들 ID.xlsx) */
 export const CHECKLIST_LABEL: Record<string, string> = {
-  contractSent: '계약서',
-  consent: '수임동의',
-  cms: 'CMS',
-  assignee: '담당배정',
-  programClient: '프로그램',
-  bluehole: '블루홀',
-  tpClient: 'TP',
-  semoReport: '세모리포트',
-  bizAccount: '사업용계좌',
-  kakaoRoom: '카톡방',
-};
-
-export const CHECKLIST_LABEL_FULL: Record<string, string> = {
   contractSent: '계약서 작성 및 전달',
   consent: '수임동의',
   cms: 'CMS 등록',
   assignee: '담당자 배정',
   programClient: '프로그램 거래처 생성',
-  bluehole: '블루홀 거래처 등록',
+  blueholeClient: '블루홀 거래처 등록',
   tpClient: 'TP 거래처 등록',
-  semoReport: '위멤버스·세모리포트 등록',
+  semoReport: '위멤버스 및 세모리포트 등록',
   bizAccount: '사업용계좌 등록',
   kakaoRoom: '거래처 카톡방 생성',
 };
 
-export function checklistDone(checklist: Record<string, boolean> | undefined) {
-  return CHECKLIST_KEYS.filter(k => checklist?.[k]).length;
+export const CHECKLIST_LABEL_FULL: Record<string, string> = CHECKLIST_LABEL;
+
+export function checklistDone(checklist: Record<string, boolean | string | Record<string, unknown>> | undefined) {
+  return CHECKLIST_KEYS.filter(k => Boolean(checklist?.[k])).length;
 }
 
-export function progressPct(checklist: Record<string, boolean> | undefined) {
+export function progressPct(checklist: Record<string, boolean | string | Record<string, unknown>> | undefined) {
   return Math.round((checklistDone(checklist) / CHECKLIST_KEYS.length) * 100);
 }
 
@@ -62,12 +53,55 @@ export type ProcessRow = {
   feeStartDate: string;
   monthlyFee: number | null;
   channel: string;
-  checklist: Record<string, boolean>;
+  checklist: Record<string, boolean | string | Record<string, unknown>>;
+  excelKey?: string;
   updatedAt: string;
 };
 
+/** 유입관리 블루홀케이스가 있으면 엑셀과 동일하게 등록 완료로 간주 */
+export function isBlueholeClientDone(
+  checklist: ProcessRow['checklist'] | undefined,
+  inquiryBluehole = '',
+): boolean {
+  if (Boolean(checklist?.blueholeClient) || Boolean(checklist?.bluehole)) return true;
+  return Boolean(inquiryBluehole.trim());
+}
+
+export function isChecklistItemDone(
+  key: string,
+  checklist: ProcessRow['checklist'] | undefined,
+  inquiryBluehole = '',
+): boolean {
+  if (key === 'blueholeClient') return isBlueholeClientDone(checklist, inquiryBluehole);
+  return Boolean(checklist?.[key]);
+}
+
+function processMatchScore(p: ProcessRow): number {
+  let score = checklistDone(p.checklist) * 10;
+  if (p.excelKey?.startsWith('process||')) score += 200;
+  return score;
+}
+
+function pickBetterProcess(a: ProcessRow, b: ProcessRow): ProcessRow {
+  const sa = processMatchScore(a);
+  const sb = processMatchScore(b);
+  if (sa !== sb) return sa >= sb ? a : b;
+  return a.updatedAt >= b.updatedAt ? a : b;
+}
+
+export function processBlueholeCode(
+  checklist: Record<string, boolean | string | Record<string, unknown>> | undefined,
+): string {
+  const v = checklist?.[BLUEHOLE_CODE_KEY];
+  return typeof v === 'string' ? v : '';
+}
+
 export function inquiryNote(extra: Record<string, unknown> | undefined): string {
   return typeof extra?.note === 'string' ? extra.note : '';
+}
+
+export function inquiryBlueholeCase(extra: Record<string, unknown> | undefined): string {
+  return typeof extra?.blueholeCase === 'string' ? extra.blueholeCase : '';
 }
 
 export function inquiryRepPhone(extra: Record<string, unknown> | undefined): string {
@@ -88,7 +122,7 @@ export function inquiryEmail(extra: Record<string, unknown> | undefined): string
 
 export function inquiryFieldValue(row: InquiryRow, key: string): string {
   switch (key) {
-    case 'inquiryDate': return row.inquiryDate;
+    case 'inquiryDate': return formatIntakeDate(row.inquiryDate);
     case 'companyName': return row.companyName;
     case 'phone': return row.phone;
     case 'channel': return row.channel;
@@ -108,10 +142,6 @@ export function inquiryFieldValue(row: InquiryRow, key: string): string {
     case 'contractStatus': return row.contractStatus;
     default: return '';
   }
-}
-
-export function inquiryBlueholeCase(extra: Record<string, unknown> | undefined): string {
-  return typeof extra?.blueholeCase === 'string' ? extra.blueholeCase : '';
 }
 
 export function inquiryFormFields(extra: Record<string, unknown> | undefined): Record<string, unknown> | null {
@@ -144,7 +174,13 @@ export type IntakePair = {
   sortDate: string;
 };
 
-export type IntakeSort = 'name' | 'created';
+export type IntakeSort = 'name' | 'inquiryDate' | 'created';
+
+function compareInquiryDateDesc(a: InquiryRow, b: InquiryRow): number {
+  const cmp = compareIntakeDateDesc(a.inquiryDate, b.inquiryDate);
+  if (cmp !== 0) return cmp;
+  return b.createdAt.localeCompare(a.createdAt);
+}
 
 /** 상호 병합용 키 — 공백·대소문자 차이로 인한 중복 행 방지 */
 export function normalizeCompanyKey(name: string): string {
@@ -170,28 +206,38 @@ export function companyMatchKeys(name: string): string[] {
 }
 
 export function findProcessForInquiry(inquiry: InquiryRow, processes: ProcessRow[]): ProcessRow | null {
+  const candidates = new Map<string, ProcessRow>();
+
   if (inquiry.clientId) {
-    const byClient = processes.find(p => p.clientId === inquiry.clientId);
-    if (byClient) return byClient;
-  }
-
-  const inqKeys = companyMatchKeys(inquiry.companyName);
-  if (!inqKeys.length) return null;
-
-  for (const p of processes) {
-    const pKey = normalizeCompanyKey(p.companyName);
-    if (pKey && inqKeys.includes(pKey)) return p;
-  }
-
-  for (const p of processes) {
-    const pKey = normalizeCompanyKey(p.companyName);
-    if (!pKey) continue;
-    for (const ik of inqKeys) {
-      if (ik.length >= 2 && (ik.includes(pKey) || pKey.includes(ik))) return p;
+    for (const p of processes) {
+      if (p.clientId === inquiry.clientId) candidates.set(p.id, p);
     }
   }
 
-  return null;
+  const inqKeys = companyMatchKeys(inquiry.companyName);
+  if (inqKeys.length) {
+    for (const p of processes) {
+      const pKey = normalizeCompanyKey(p.companyName);
+      if (!pKey) continue;
+      if (inqKeys.includes(pKey)) {
+        candidates.set(p.id, p);
+        continue;
+      }
+      for (const ik of inqKeys) {
+        if (ik.length >= 2 && (ik.includes(pKey) || pKey.includes(ik))) {
+          candidates.set(p.id, p);
+          break;
+        }
+      }
+    }
+  }
+
+  const list = [...candidates.values()];
+  if (!list.length) return null;
+  return list.sort((a, b) => {
+    const diff = processMatchScore(b) - processMatchScore(a);
+    return diff !== 0 ? diff : b.updatedAt.localeCompare(a.updatedAt);
+  })[0];
 }
 
 function pickNewerInquiry(a: InquiryRow, b: InquiryRow): InquiryRow {
@@ -199,7 +245,7 @@ function pickNewerInquiry(a: InquiryRow, b: InquiryRow): InquiryRow {
 }
 
 function pickNewerProcess(a: ProcessRow, b: ProcessRow): ProcessRow {
-  return a.updatedAt >= b.updatedAt ? a : b;
+  return pickBetterProcess(a, b);
 }
 
 export function mergeIntakeRows(inquiries: InquiryRow[], processes: ProcessRow[]): IntakePair[] {
@@ -226,7 +272,9 @@ export function mergeIntakeRows(inquiries: InquiryRow[], processes: ProcessRow[]
     const inquiry = inqByKey.get(matchKey);
     const process = procByKey.get(matchKey);
     const companyName = inquiry?.companyName ?? process?.companyName ?? '';
-    const sortDate = [inquiry?.createdAt, process?.updatedAt].filter(Boolean).sort().reverse()[0] ?? '';
+    const sortDate = inquiry?.inquiryDate.trim()
+      || [inquiry?.createdAt, process?.updatedAt].filter(Boolean).sort().reverse()[0]
+      || '';
     pairs.push({
       id: inquiry?.id ?? process?.id ?? matchKey,
       matchKey,
@@ -245,8 +293,14 @@ export function sortIntakePairs(pairs: IntakePair[], sort: IntakeSort): IntakePa
   const copy = [...pairs];
   if (sort === 'name') {
     copy.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
-  } else {
+  } else if (sort === 'created') {
     copy.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+  } else {
+    copy.sort((a, b) => {
+      const da = a.inquiry?.inquiryDate.trim() || a.sortDate;
+      const db = b.inquiry?.inquiryDate.trim() || b.sortDate;
+      return compareIntakeDateDesc(da, db);
+    });
   }
   return copy;
 }
@@ -255,8 +309,10 @@ export function sortInquiries(rows: InquiryRow[], sort: IntakeSort): InquiryRow[
   const copy = [...rows];
   if (sort === 'name') {
     copy.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
-  } else {
+  } else if (sort === 'created') {
     copy.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } else {
+    copy.sort(compareInquiryDateDesc);
   }
   return copy;
 }
@@ -278,6 +334,14 @@ export function processRowFromApi(raw: Record<string, unknown>): ProcessRow {
     return undefined;
   };
   const updated = pick('updatedAt', 'updated_at');
+  const rawChecklist = (pick('checklist') && typeof pick('checklist') === 'object'
+    ? pick('checklist')
+    : {}) as ProcessRow['checklist'];
+  const checklist = { ...rawChecklist };
+  if (checklist.bluehole && !checklist.blueholeClient) {
+    checklist.blueholeClient = checklist.bluehole as boolean;
+    delete checklist.bluehole;
+  }
   return {
     id: String(pick('id') ?? ''),
     clientId: pick('clientId', 'client_id') != null ? String(pick('clientId', 'client_id')) : null,
@@ -287,9 +351,8 @@ export function processRowFromApi(raw: Record<string, unknown>): ProcessRow {
       ? (pick('monthlyFee', 'monthly_fee') as number)
       : null,
     channel: String(pick('channel') ?? ''),
-    checklist: (pick('checklist') && typeof pick('checklist') === 'object'
-      ? pick('checklist')
-      : {}) as Record<string, boolean>,
+    checklist,
+    excelKey: pick('excelKey', 'excel_key') != null ? String(pick('excelKey', 'excel_key')) : undefined,
     updatedAt: updated instanceof Date ? updated.toISOString() : String(updated ?? ''),
   };
 }

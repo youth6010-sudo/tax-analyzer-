@@ -45,7 +45,6 @@ TP 보강(`import:contacts`): `phone`, `fax`, `tax_types` only.
 | CMS 등록 | `cms` |
 | 담당자 배정 | `assignee` |
 | 프로그램 거래처 생성 | `programClient` |
-| 블루홀 거래처 등록 | `bluehole` |
 | TP 거래처 등록 | `tpClient` |
 | 위멤버스 및 세모리포트 등록 | `semoReport` |
 | 사업용계좌 등록 | `bizAccount` |

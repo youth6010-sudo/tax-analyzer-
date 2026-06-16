@@ -12,8 +12,10 @@ export default function IntakeSplitView({
   onProcessUpdated,
   onProcessCreated,
   onToggleCheck,
+  onSyncBlueholeCheck,
   onRegisterClient,
-  savingId,
+  onDeleteInquiry,
+  deletingId,
 }: {
   inquiries: InquiryRow[];
   processes: ProcessRow[];
@@ -23,8 +25,10 @@ export default function IntakeSplitView({
   onProcessUpdated: (row: ProcessRow) => void;
   onProcessCreated: (row: ProcessRow) => void;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
+  onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
-  savingId: string | null;
+  onDeleteInquiry: (inquiry: InquiryRow, process: ProcessRow | null) => void | Promise<void>;
+  deletingId: string | null;
 }) {
   return (
     <section className="rounded-2xl border border-slate-200/60 bg-slate-50/80 p-3 lg:p-4 shadow-sm w-full">
@@ -43,8 +47,10 @@ export default function IntakeSplitView({
         onProcessUpdated={onProcessUpdated}
         onProcessCreated={onProcessCreated}
         onToggleCheck={onToggleCheck}
+        onSyncBlueholeCheck={onSyncBlueholeCheck}
         onRegisterClient={onRegisterClient}
-        savingId={savingId}
+        onDeleteInquiry={onDeleteInquiry}
+        deletingId={deletingId}
       />
     </section>
   );

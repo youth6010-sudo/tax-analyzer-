@@ -2,14 +2,12 @@ import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { BUSINESS_ENTITY_LABEL, SERVICE_TYPE_LABEL } from '@/app/types/contact';
 import { TAX_TYPES } from '@/app/config/taxTypes';
-import { parseExternalRefs } from '@/lib/externalRefs';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
 );
 
 export default function ClientCard({ client }: { client: ClientRecord }) {
-  const bh = parseExternalRefs(client.intakeData).bluehole?.id;
   return (
     <Link
       href={`/clients/${client.id}`}
@@ -32,11 +30,6 @@ export default function ClientCard({ client }: { client: ClientRecord }) {
             {TAX_LABEL[t] ?? t}
           </span>
         ))}
-        {bh && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-800">
-            BH #{bh}
-          </span>
-        )}
       </div>
       {client.representative && (
         <p className="mt-2 text-xs text-gray-500">대표 {client.representative}</p>

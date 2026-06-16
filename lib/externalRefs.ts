@@ -1,4 +1,3 @@
-import { buildBlueholeCaseUrl } from '@/app/config/bluehole';
 import type { ExternalRefEntry, ExternalRefs } from '@/app/types/externalRefs';
 
 export function parseExternalRefs(intakeData: Record<string, unknown> | null | undefined): ExternalRefs {
@@ -12,7 +11,7 @@ export function mergeExternalRefs(
   patch: Partial<ExternalRefs>,
 ): ExternalRefs {
   const next: ExternalRefs = { ...existing };
-  for (const key of ['bluehole', 'tp', 'semorang', 'wemembers'] as const) {
+  for (const key of ['tp', 'semorang', 'wemembers'] as const) {
     if (patch[key] !== undefined) {
       next[key] = { ...existing[key], ...patch[key] };
     }
@@ -20,33 +19,16 @@ export function mergeExternalRefs(
   return next;
 }
 
-export function blueholeRefFromCase(raw: string, registeredBy?: string): ExternalRefEntry | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const url = buildBlueholeCaseUrl(trimmed);
-  const id = trimmed.replace(/^#\s*/, '').match(/\d+/)?.[0] ?? trimmed;
-  return {
-    id,
-    url: url ?? undefined,
-    registeredAt: new Date().toISOString(),
-    registeredBy,
-  };
-}
-
+/** 유입 extra에 명시된 externalRefs만 반영 */
 export function externalRefsFromInquiryExtra(
   extra: Record<string, unknown> | undefined,
-  registeredBy?: string,
+  _registeredBy?: string,
 ): ExternalRefs {
-  const refs: ExternalRefs = {};
-  const caseRaw = typeof extra?.blueholeCase === 'string' ? extra.blueholeCase : '';
-  const bh = blueholeRefFromCase(caseRaw, registeredBy);
-  if (bh) refs.bluehole = bh;
-
   const rawExt = extra?.externalRefs;
   if (rawExt && typeof rawExt === 'object' && !Array.isArray(rawExt)) {
-    return mergeExternalRefs(rawExt as ExternalRefs, refs);
+    return rawExt as ExternalRefs;
   }
-  return refs;
+  return {};
 }
 
 export function intakeDataWithExternalRefs(
@@ -57,8 +39,4 @@ export function intakeDataWithExternalRefs(
     ...intakeData,
     externalRefs: mergeExternalRefs(parseExternalRefs(intakeData), refs),
   };
-}
-
-export function hasBlueholeRef(intakeData: Record<string, unknown> | undefined): boolean {
-  return Boolean(parseExternalRefs(intakeData).bluehole?.id);
 }

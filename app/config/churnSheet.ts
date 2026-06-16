@@ -26,7 +26,7 @@ export const CHURN_COLUMNS: ChurnSheetColumn[] = [
   { key: 'churnType', label: '유형', width: '6rem' },
   { key: 'earlySign', label: '전조증상', width: '7rem' },
   { key: 'reason', label: '유출 사유', width: '8rem' },
-  { key: 'manager', label: '담당', width: '5rem', readOnly: true },
+  { key: 'manager', label: '담당', width: '5rem' },
 ];
 
 export const CHURN_EDITABLE_COLUMNS = CHURN_COLUMNS.filter(c => !c.readOnly && c.key !== 'companyName');

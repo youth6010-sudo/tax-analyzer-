@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { asc } from 'drizzle-orm';
+import { asc, and, ne } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { users } from '@/db/schema';
 
@@ -9,6 +9,7 @@ export async function GET() {
     const rows = await db
       .select({ loginId: users.loginId, name: users.name, role: users.role })
       .from(users)
+      .where(and(ne(users.role, 'admin'), ne(users.loginId, 'admin')))
       .orderBy(asc(users.name));
 
     return NextResponse.json({ users: rows });

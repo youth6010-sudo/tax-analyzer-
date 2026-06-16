@@ -2,10 +2,12 @@ import Link from 'next/link';
 import TaxMenuButton from './TaxMenuButton';
 import ContactHeaderSearch from './ContactHeaderSearch';
 import AppHeaderUser from './AppHeaderUser';
+import PortalPrefetch from './PortalPrefetch';
 
 export default function AppHeader() {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm no-print">
+      <PortalPrefetch />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
         <div className="flex items-center gap-3">
           <TaxMenuButton />

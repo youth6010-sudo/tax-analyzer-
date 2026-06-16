@@ -370,6 +370,24 @@
       "kakaoMapUrl": "https://place.map.kakao.com/1900017839",
       "menuHints": [],
       "notes": "주소: 부산 해운대구 센텀동로 99"
+    },
+    {
+      "id": "spot-026-바로바로횟집",
+      "name": "바로바로횟집",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "회",
+        "횟집"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%94%EB%A1%9C%EB%B0%94%EB%A1%9C%ED%9A%9F%EC%A7%91%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1384681956",
+      "menuHints": [
+        "점심특선"
+      ],
+      "notes": "주소: 부산 해운대구 센텀동로 90 센텀필2 1층 115호"
     }
   ]
 }

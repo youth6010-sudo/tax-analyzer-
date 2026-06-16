@@ -1,6 +1,6 @@
 'use client';
 
-import { buildBlueholeCaseUrl } from '../../config/bluehole';
+import { buildBlueholeFilingCaseUrl } from '../../config/bluehole';
 
 export default function BlueholeCaseLink({
   value,
@@ -12,7 +12,7 @@ export default function BlueholeCaseLink({
   const trimmed = value.trim();
   if (!trimmed) return <span className="text-gray-400">-</span>;
 
-  const href = buildBlueholeCaseUrl(trimmed);
+  const href = buildBlueholeFilingCaseUrl(trimmed);
   if (!href) {
     return <span className={`text-gray-600 ${className}`}>{trimmed}</span>;
   }

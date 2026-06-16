@@ -1,5 +1,4 @@
 [
-  { "loginId": "admin", "name": "관리자", "realName": "관리자", "pin": "1234", "role": "admin" },
   { "loginId": "blue", "name": "블루", "realName": "구진혜", "pin": "0000" },
   { "loginId": "daya", "name": "다야", "realName": "홍다예", "pin": "0000" },
   { "loginId": "ria", "name": "리아", "realName": "박혜림", "pin": "0000" },
