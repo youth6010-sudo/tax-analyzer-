@@ -2,6 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ClientRecord } from '@/app/types/client';
+import {
+  getPortalSearchIndex,
+  hydratePortal,
+  searchPortalClients,
+} from '@/app/utils/portalStore';
 
 type Props = {
   value: ClientRecord | null;
@@ -16,6 +21,11 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    hydratePortal();
+  }, []);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -44,14 +54,32 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    setLoading(true);
     debounceRef.current = setTimeout(() => {
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&activeOnly=1&includeIntake=0`)
+      const index = getPortalSearchIndex();
+      if (index.length > 0) {
+        const local = searchPortalClients(q, { activeOnly: true }) as ClientRecord[];
+        if (local.length > 0) {
+          setResults(local);
+          setLoading(false);
+          return;
+        }
+      }
+
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setLoading(true);
+
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&activeOnly=1&includeIntake=0`, {
+        signal: ac.signal,
+      })
         .then(r => (r.ok ? r.json() : { clients: [] }))
         .then(data => setResults(data.clients ?? []))
-        .catch(() => setResults([]))
+        .catch(err => {
+          if (err?.name !== 'AbortError') setResults([]);
+        })
         .finally(() => setLoading(false));
-    }, 250);
+    }, 150);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -91,7 +119,7 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder="업체명·사업자번호·대표자·담당자로 검색"
+        placeholder="업체명·사업자번호·대표자·담당자·연락처로 검색"
         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:opacity-50"
       />
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
@@ -471,20 +471,14 @@ export async function listChurnRecords() {
 
 export async function listChurnedClientsWithoutRecord() {
   const db = getDb();
-  const linkedIds = await db
-    .select({ clientId: churnRecords.clientId })
-    .from(churnRecords)
-    .where(sql`${churnRecords.clientId} is not null`);
-
-  const linkedSet = new Set(linkedIds.map(r => r.clientId).filter(Boolean) as string[]);
-
   const rows = await db
-    .select()
+    .select({ client: clients })
     .from(clients)
-    .where(eq(clients.status, 'churned'))
+    .leftJoin(churnRecords, eq(churnRecords.clientId, clients.id))
+    .where(and(eq(clients.status, 'churned'), isNull(churnRecords.id)))
     .orderBy(clients.companyName);
 
-  return rows.filter(r => !linkedSet.has(r.id)).map(clientToRecord);
+  return rows.map(r => clientToRecord(r.client));
 }
 
 export async function updateChurnRecord(

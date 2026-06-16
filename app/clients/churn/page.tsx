@@ -10,15 +10,27 @@ import ChurnRegisterForm, {
   type ChurnFormValues,
 } from '../../components/churn/ChurnRegisterForm';
 import type { ClientRecord, ChurnRecordView } from '../../types/client';
+import {
+  getPortalChurnMissingClients,
+  getPortalChurnRecords,
+  hydratePortal,
+  patchPortalChurn,
+  prefetchPortal,
+  subscribePortal,
+} from '@/app/utils/portalStore';
+
+function hasChurnCache(): boolean {
+  return getPortalChurnRecords().length > 0 || getPortalChurnMissingClients().length > 0;
+}
 
 function ChurnPageInner() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<'register' | 'history'>(
     searchParams.get('tab') === 'history' ? 'history' : 'register',
   );
-  const [history, setHistory] = useState<ChurnRecordView[]>([]);
-  const [missingClients, setMissingClients] = useState<ClientRecord[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  const [history, setHistory] = useState<ChurnRecordView[]>(() => getPortalChurnRecords());
+  const [missingClients, setMissingClients] = useState<ClientRecord[]>(() => getPortalChurnMissingClients());
+  const [historyLoading, setHistoryLoading] = useState(() => !hasChurnCache());
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
@@ -28,27 +40,46 @@ function ChurnPageInner() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
+  const syncFromPortal = useCallback(() => {
+    setHistory(getPortalChurnRecords());
+    setMissingClients(getPortalChurnMissingClients());
+  }, []);
+
+  const loadHistory = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent && !hasChurnCache()) setHistoryLoading(true);
     setHistoryError(null);
     try {
       const historyRes = await fetch('/api/churn');
       const historyData = await historyRes.json();
       if (!historyRes.ok) throw new Error(historyData.error ?? '이력을 불러오지 못했습니다.');
-      setHistory(historyData.records ?? []);
-      setMissingClients(historyData.missingClients ?? []);
+      const records = historyData.records ?? [];
+      const missing = historyData.missingClients ?? [];
+      setHistory(records);
+      setMissingClients(missing);
+      patchPortalChurn(records, missing);
     } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : '이력을 불러오지 못했습니다.');
-      setHistory([]);
-      setMissingClients([]);
+      if (!hasChurnCache()) {
+        setHistoryError(err instanceof Error ? err.message : '이력을 불러오지 못했습니다.');
+        setHistory([]);
+        setMissingClients([]);
+      }
     } finally {
       setHistoryLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    hydratePortal();
+    syncFromPortal();
+    return subscribePortal(syncFromPortal);
+  }, [syncFromPortal]);
+
+  useEffect(() => {
+    void prefetchPortal().then(() => {
+      syncFromPortal();
+      setHistoryLoading(false);
+    });
+  }, [syncFromPortal]);
 
   useEffect(() => {
     if (searchParams.get('clientId') || searchParams.get('tab') === 'history') {
@@ -157,7 +188,7 @@ function ChurnPageInner() {
       setFormValues(defaultChurnFormValues());
       setBackfillNote(false);
       setTab('history');
-      await loadHistory();
+      await loadHistory({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : '등록하지 못했습니다.');
     } finally {
@@ -188,7 +219,7 @@ function ChurnPageInner() {
         const next = history.filter(r => r.id !== id);
         setSelectedRecordId(next[0]?.id ?? null);
       }
-      await loadHistory();
+      await loadHistory({ silent: true });
     } catch {
       alert('삭제하지 못했습니다.');
     } finally {
@@ -217,7 +248,7 @@ function ChurnPageInner() {
             type="button"
             onClick={() => {
               setTab('history');
-              void loadHistory();
+              void loadHistory({ silent: true });
             }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${
               tab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'

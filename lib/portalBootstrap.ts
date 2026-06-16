@@ -1,5 +1,5 @@
 import { isPortalAdmin, requireUser } from '@/lib/auth';
-import { listClients } from '@/lib/clientsDb';
+import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '@/lib/clientsDb';
 import { listClientSearchIndex } from '@/lib/clientSearchIndex';
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 import { listInquiries, listIntakeProcesses } from '@/lib/workbookDb';
@@ -26,7 +26,7 @@ export async function getPortalBootstrap() {
   const user = await requireUser();
   const mineOnly = !isPortalAdmin(user);
 
-  const [tasks, activeClients, searchIndex, inquiries, processes] = await Promise.all([
+  const [tasks, activeClients, searchIndex, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
     listDashboardTasks(user.name),
     listClients({
       status: 'active',
@@ -37,6 +37,8 @@ export async function getPortalBootstrap() {
     listClientSearchIndex(),
     listInquiries(),
     listIntakeProcesses(),
+    listChurnRecords(),
+    listChurnedClientsWithoutRecord(),
   ]);
 
   return {
@@ -47,5 +49,7 @@ export async function getPortalBootstrap() {
     searchIndex,
     inquiries,
     processes,
+    churnRecords,
+    churnMissingClients,
   };
 }

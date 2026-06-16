@@ -7,8 +7,10 @@ import type { ClientRecord } from '../types/client';
 import { BUSINESS_ENTITY_TYPES } from '../types/contact';
 import {
   getPortalClients,
+  getPortalSearchIndex,
   hydratePortal,
   prefetchPortal,
+  searchPortalClients,
   subscribePortal,
 } from '@/app/utils/portalStore';
 
@@ -26,7 +28,7 @@ export default function ClientsPage() {
 
   const load = useCallback(async () => {
     if (mineOnly && !entity) {
-      await prefetchPortal(true);
+      await prefetchPortal(false);
       setClients(getPortalClients());
       return;
     }
@@ -43,35 +45,49 @@ export default function ClientsPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = q
-      ? clients.filter(c => {
-          const digits = q.replace(/\D/g, '');
-          const hay = [
-            c.companyName,
-            c.representative,
-            c.manager,
-            c.phone,
-            c.businessNo,
-          ].join(' ').toLowerCase();
-          if (hay.includes(q)) return true;
-          if (digits.length >= 2) {
-            const biz = c.businessNo.replace(/\D/g, '');
-            const phone = c.phone.replace(/\D/g, '');
-            return biz.includes(digits) || phone.includes(digits);
-          }
-          return false;
-        })
-      : clients;
+    const q = search.trim();
+    if (!q) {
+      const list = [...clients];
+      if (sort === 'name') {
+        list.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
+      } else {
+        list.sort((a, b) => (b.feeSummary ?? 0) - (a.feeSummary ?? 0));
+      }
+      return list;
+    }
 
-    list = [...list];
+    const indexHits = mineOnly && !entity && getPortalSearchIndex().length > 0
+      ? searchPortalClients(q, { activeOnly: true })
+      : [];
+    const base = indexHits.length > 0 ? indexHits : clients;
+    const qLower = q.toLowerCase();
+    const digits = q.replace(/\D/g, '');
+
+    let list = base.filter(c => {
+      const hay = [
+        c.companyName,
+        c.representative,
+        c.manager,
+        c.phone,
+        c.businessNo,
+        c.primaryContactName ?? '',
+      ].join(' ').toLowerCase();
+      if (hay.includes(qLower)) return true;
+      if (digits.length >= 2) {
+        const biz = c.businessNo.replace(/\D/g, '');
+        const phone = c.phone.replace(/\D/g, '');
+        return biz.includes(digits) || phone.includes(digits);
+      }
+      return false;
+    });
+
     if (sort === 'name') {
       list.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
     } else {
       list.sort((a, b) => (b.feeSummary ?? 0) - (a.feeSummary ?? 0));
     }
     return list;
-  }, [clients, search, sort]);
+  }, [clients, search, sort, mineOnly, entity]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
