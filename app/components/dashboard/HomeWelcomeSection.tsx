@@ -37,11 +37,11 @@ export default function HomeWelcomeSection({ userName }: { userName: string }) {
       <h1 className="text-2xl sm:text-3xl font-black text-gray-900">
         {userName}님, 안녕하세요
       </h1>
-      <p className="mt-2 text-sm text-gray-600">
+      <p className="mt-2 text-sm text-gray-700">
         부산지점 수임처 포털 · 담당 수임처 {stats != null ? `${stats.count}곳` : '…'}
       </p>
       {stats && stats.count > 0 && (
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-gray-600">
           {breakdown}
           {stats.unclassified > 0 && (
             <>

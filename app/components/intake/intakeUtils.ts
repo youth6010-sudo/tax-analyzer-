@@ -44,6 +44,7 @@ export type InquiryRow = {
   address: string;
   extra: Record<string, unknown>;
   createdAt: string;
+  excelKey?: string;
 };
 
 export type ProcessRow = {
@@ -187,48 +188,195 @@ export function normalizeCompanyKey(name: string): string {
   return name.trim().normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
 
-/** 문의 상호에서 프로세스 매칭용 후보 키 (쉼표·괄호 변형) */
-export function companyMatchKeys(name: string): string[] {
+/** (주)·㈜·주식회사 등 법인 접두어 제거 후 핵심 상호 */
+export function coreCompanyKey(name: string): string {
+  let s = name.trim().normalize('NFKC').replace(/\s+/g, '');
+  let prev = '';
+  while (prev !== s) {
+    prev = s;
+    s = s
+      .replace(/^\(주\)/i, '')
+      .replace(/^㈜/, '')
+      .replace(/^주식회사/i, '')
+      .replace(/^\(유\)/i, '')
+      .replace(/^유한회사/i, '')
+      .replace(/^\(사\)/i, '')
+      .replace(/^사\(/i, '');
+  }
+  return s.toLowerCase();
+}
+
+/** 엑셀 import excel_key 에서 상호 추출 */
+export function companyNameFromExcelKey(excelKey?: string): string | null {
+  if (!excelKey) return null;
+  const m = excelKey.match(/^(?:inquiry|process)\|\|(?:\d+\|\|)?(.+)$/);
+  return m?.[1]?.trim() || null;
+}
+
+/** 전덕삼(전포) → 전덕삼전포 등 괄호 병합 변형 */
+function parentheticalVariants(name: string): string[] {
+  const normalized = name.trim().normalize('NFKC').replace(/\s+/g, '');
+  const m = normalized.match(/^(.*?)\(([^)]+)\)(.*)$/);
+  if (!m) return [];
+  return [m[1] + m[2] + m[3], m[1] + m[3]];
+}
+
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function keysSimilar(a: string, b: string): boolean {
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen < 4) return false;
+  const dist = editDistance(a, b);
+  if (dist <= 1) return true;
+  if (dist <= 2 && Math.max(a.length, b.length) >= 10) return true;
+  const maxLen = Math.max(a.length, b.length);
+  return (1 - dist / maxLen) >= 0.9;
+}
+
+export function intakeMergeKey(name: string): string {
+  return coreCompanyKey(name) || normalizeCompanyKey(name);
+}
+
+function collectCompanyKeys(name: string): string[] {
   const trimmed = name.trim();
   if (!trimmed || trimmed === '(미입력)') return [];
 
   const keys = new Set<string>();
   const add = (s: string) => {
-    const k = normalizeCompanyKey(s);
-    if (k && k !== '(미입력)') keys.add(k);
+    const norm = normalizeCompanyKey(s);
+    if (norm && norm !== '(미입력)') keys.add(norm);
+    const core = coreCompanyKey(s);
+    if (core && core !== '(미입력)') keys.add(core);
   };
 
   add(trimmed);
   add(trimmed.split(',')[0] ?? '');
-  add(trimmed.replace(/\([^)]*\)/g, ''));
+  const noParen = trimmed.replace(/\([^)]*\)/g, '');
+  add(noParen);
+  for (const variant of parentheticalVariants(trimmed)) add(variant);
 
   return [...keys];
 }
 
-export function findProcessForInquiry(inquiry: InquiryRow, processes: ProcessRow[]): ProcessRow | null {
+export function allCompanyMatchKeys(companyName: string, excelKey?: string): string[] {
+  const keys = new Set<string>();
+  for (const name of [companyName, companyNameFromExcelKey(excelKey)].filter(Boolean) as string[]) {
+    for (const k of collectCompanyKeys(name)) keys.add(k);
+  }
+  return [...keys];
+}
+
+function keysOverlap(keysA: string[], keysB: string[]): boolean {
+  if (!keysA.length || !keysB.length) return false;
+  if (keysA.some(a => keysB.includes(a))) return true;
+  for (const a of keysA) {
+    for (const b of keysB) {
+      if (keysSimilar(a, b)) return true;
+      if (a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a))) return true;
+    }
+  }
+  return false;
+}
+
+export function companyNamesMatch(a: string, b: string): boolean {
+  return keysOverlap(collectCompanyKeys(a), collectCompanyKeys(b));
+}
+
+/** 문의 상호에서 프로세스 매칭용 후보 키 (쉼표·괄호·법인 접두어 변형) */
+export function companyMatchKeys(name: string): string[] {
+  return collectCompanyKeys(name);
+}
+
+export type ClientNameRef = { id: string; companyName: string };
+
+export function resolveClientIdByName(
+  companyName: string,
+  clients: ClientNameRef[],
+  excelKey?: string,
+): string | null {
+  const keys = allCompanyMatchKeys(companyName, excelKey);
+  if (!keys.length) return null;
+  for (const c of clients) {
+    if (keysOverlap(keys, allCompanyMatchKeys(c.companyName))) return c.id;
+  }
+  return null;
+}
+
+export function extraNamesFromClients(
+  companyName: string,
+  clients: ClientNameRef[],
+  excelKey?: string,
+): string[] {
+  const id = resolveClientIdByName(companyName, clients, excelKey);
+  if (!id) return [];
+  return clients.filter(c => c.id === id).map(c => c.companyName);
+}
+
+export function findProcessForInquiry(
+  inquiry: InquiryRow,
+  processes: ProcessRow[],
+  clients: ClientNameRef[] = [],
+): ProcessRow | null {
   const candidates = new Map<string, ProcessRow>();
 
-  if (inquiry.clientId) {
+  const consultId = typeof inquiry.extra?.consultationId === 'string'
+    ? inquiry.extra.consultationId.trim()
+    : '';
+  if (consultId) {
     for (const p of processes) {
-      if (p.clientId === inquiry.clientId) candidates.set(p.id, p);
+      if (p.excelKey === `portal||consult||${consultId}||process`) {
+        candidates.set(p.id, p);
+      }
+    }
+  }
+  const inquiryConsultFromKey = inquiry.excelKey?.match(/^portal\|\|consult\|\|([^|]+)\|\|inquiry$/);
+  if (inquiryConsultFromKey) {
+    const cid = inquiryConsultFromKey[1];
+    for (const p of processes) {
+      if (p.excelKey === `portal||consult||${cid}||process`) {
+        candidates.set(p.id, p);
+      }
     }
   }
 
-  const inqKeys = companyMatchKeys(inquiry.companyName);
+  const clientId = inquiry.clientId
+    ?? resolveClientIdByName(inquiry.companyName, clients, inquiry.excelKey);
+  if (clientId) {
+    for (const p of processes) {
+      if (p.clientId === clientId) candidates.set(p.id, p);
+      const pClientId: string | null = p.clientId
+        ?? resolveClientIdByName(p.companyName, clients, p.excelKey);
+      if (pClientId === clientId) candidates.set(p.id, p);
+    }
+  }
+
+  const clientNames = clientId
+    ? clients.filter(c => c.id === clientId).map(c => c.companyName)
+    : extraNamesFromClients(inquiry.companyName, clients, inquiry.excelKey);
+
+  const inqKeys = [
+    ...allCompanyMatchKeys(inquiry.companyName, inquiry.excelKey),
+    ...clientNames.flatMap(n => allCompanyMatchKeys(n)),
+  ];
   if (inqKeys.length) {
     for (const p of processes) {
-      const pKey = normalizeCompanyKey(p.companyName);
-      if (!pKey) continue;
-      if (inqKeys.includes(pKey)) {
-        candidates.set(p.id, p);
-        continue;
-      }
-      for (const ik of inqKeys) {
-        if (ik.length >= 2 && (ik.includes(pKey) || pKey.includes(ik))) {
-          candidates.set(p.id, p);
-          break;
-        }
-      }
+      const pKeys = allCompanyMatchKeys(p.companyName, p.excelKey);
+      if (keysOverlap(inqKeys, pKeys)) candidates.set(p.id, p);
     }
   }
 
@@ -238,6 +386,94 @@ export function findProcessForInquiry(inquiry: InquiryRow, processes: ProcessRow
     const diff = processMatchScore(b) - processMatchScore(a);
     return diff !== 0 ? diff : b.updatedAt.localeCompare(a.updatedAt);
   })[0];
+}
+
+export function findInquiryForProcess(
+  process: ProcessRow,
+  inquiries: InquiryRow[],
+  extraCompanyNames: string[] = [],
+  clients: ClientNameRef[] = [],
+): InquiryRow | null {
+  const candidates = new Map<string, InquiryRow>();
+
+  const consultFromKey = process.excelKey?.match(/^portal\|\|consult\|\|([^|]+)\|\|process$/);
+  if (consultFromKey) {
+    const consultId = consultFromKey[1];
+    for (const i of inquiries) {
+      if (i.excelKey === `portal||consult||${consultId}||inquiry`) {
+        candidates.set(i.id, i);
+      }
+      if (typeof i.extra?.consultationId === 'string' && i.extra.consultationId.trim() === consultId) {
+        candidates.set(i.id, i);
+      }
+    }
+  }
+
+  const clientId = process.clientId
+    ?? resolveClientIdByName(process.companyName, clients, process.excelKey);
+  if (clientId) {
+    for (const i of inquiries) {
+      if (i.clientId === clientId) candidates.set(i.id, i);
+    }
+  }
+
+  const clientNames = clientId
+    ? clients.filter(c => c.id === clientId).map(c => c.companyName)
+    : extraNamesFromClients(process.companyName, clients, process.excelKey);
+
+  const processNames = [
+    process.companyName,
+    companyNameFromExcelKey(process.excelKey),
+    ...extraCompanyNames,
+    ...clientNames,
+  ].filter(Boolean) as string[];
+
+  const procKeys = processNames.flatMap(n => allCompanyMatchKeys(n));
+  if (procKeys.length) {
+    for (const i of inquiries) {
+      const inqKeys = allCompanyMatchKeys(i.companyName, i.excelKey);
+      if (keysOverlap(inqKeys, procKeys)) candidates.set(i.id, i);
+    }
+  }
+
+  const list = [...candidates.values()];
+  if (!list.length) return null;
+  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
+export function buildIntakeDeepLink(opts: {
+  inquiryId?: string | null;
+  processId?: string | null;
+  companyName?: string;
+}): string {
+  const p = new URLSearchParams({ tab: 'intake' });
+  if (opts.inquiryId) p.set('inquiry', opts.inquiryId);
+  if (opts.processId) p.set('processId', opts.processId);
+  const company = opts.companyName?.trim();
+  if (!opts.inquiryId && company) p.set('q', company);
+  return `/clients/intake?${p.toString()}`;
+}
+
+/** 유입관리 없이 프로세스만 있을 때 패널용 최소 inquiry */
+export function stubInquiryFromProcess(process: ProcessRow): InquiryRow {
+  return {
+    id: '',
+    clientId: process.clientId,
+    companyName: process.companyName,
+    phone: '',
+    channel: process.channel,
+    consultant: '',
+    inquiryDate: process.feeStartDate,
+    inquiryContent: '',
+    contractStatus: '',
+    proposedFee: process.monthlyFee,
+    industry: '',
+    businessNo: '',
+    representative: '',
+    address: '',
+    extra: {},
+    createdAt: process.updatedAt,
+  };
 }
 
 function pickNewerInquiry(a: InquiryRow, b: InquiryRow): InquiryRow {
@@ -251,7 +487,7 @@ function pickNewerProcess(a: ProcessRow, b: ProcessRow): ProcessRow {
 export function mergeIntakeRows(inquiries: InquiryRow[], processes: ProcessRow[]): IntakePair[] {
   const inqByKey = new Map<string, InquiryRow>();
   for (const i of inquiries) {
-    const key = normalizeCompanyKey(i.companyName);
+    const key = intakeMergeKey(i.companyName);
     if (!key) continue;
     const prev = inqByKey.get(key);
     inqByKey.set(key, prev ? pickNewerInquiry(i, prev) : i);
@@ -259,7 +495,7 @@ export function mergeIntakeRows(inquiries: InquiryRow[], processes: ProcessRow[]
 
   const procByKey = new Map<string, ProcessRow>();
   for (const p of processes) {
-    const key = normalizeCompanyKey(p.companyName);
+    const key = intakeMergeKey(p.companyName);
     if (!key) continue;
     const prev = procByKey.get(key);
     procByKey.set(key, prev ? pickNewerProcess(p, prev) : p);

@@ -10,7 +10,7 @@ import {
   type ProcessRow,
 } from './intakeUtils';
 
-const inputCls = 'mt-0.5 w-full min-w-0 border border-indigo-200 rounded px-1.5 py-1 text-[10px] text-gray-900 bg-white focus:ring-1 focus:ring-indigo-400 focus:outline-none';
+const inputCls = 'mt-1 w-full min-w-0 border border-indigo-200 rounded-md px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none';
 
 function defaultCompanyName(inquiry: InquiryRow): string {
   const name = inquiry.companyName.trim();
@@ -60,6 +60,7 @@ export default function IntakeProcessPanel({
   onRegisterClient,
   onToggleCheck,
   onSyncBlueholeCheck,
+  allowRegister = true,
 }: {
   inquiry: InquiryRow;
   process: ProcessRow | null;
@@ -68,6 +69,7 @@ export default function IntakeProcessPanel({
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
   onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
+  allowRegister?: boolean;
 }) {
   const [form, setForm] = useState(() => formFrom(inquiry, process));
   const [saving, setSaving] = useState(false);
@@ -157,9 +159,9 @@ export default function IntakeProcessPanel({
   }, [process?.id, process?.checklist?.blueholeClient, inquiryBluehole, onSyncBlueholeCheck]);
 
   return (
-    <div className="space-y-2">
-      <div className="grid gap-1 grid-cols-2 sm:grid-cols-4">
-        <label className="block text-[10px] col-span-2">
+    <div className="space-y-3">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+        <label className="block text-xs col-span-2">
           <span className="font-semibold text-indigo-900">업체명</span>
           <input
             value={form.companyName}
@@ -167,7 +169,7 @@ export default function IntakeProcessPanel({
             className={inputCls}
           />
         </label>
-        <label className="block text-[10px]">
+        <label className="block text-xs">
           <span className="font-semibold text-indigo-900">수수료 발생일</span>
           <input
             type="date"
@@ -176,7 +178,7 @@ export default function IntakeProcessPanel({
             className={inputCls}
           />
         </label>
-        <label className="block text-[10px]">
+        <label className="block text-xs">
           <span className="font-semibold text-indigo-900">기장료</span>
           <input
             value={form.monthlyFee}
@@ -185,7 +187,7 @@ export default function IntakeProcessPanel({
             placeholder="숫자"
           />
         </label>
-        <label className="block text-[10px] col-span-2 sm:col-span-3">
+        <label className="block text-xs col-span-2 sm:col-span-3">
           <span className="font-semibold text-indigo-900">유입 경로</span>
           <input
             value={form.channel}
@@ -198,14 +200,14 @@ export default function IntakeProcessPanel({
             type="button"
             disabled={saving}
             onClick={() => void saveMeta()}
-            className="w-full text-[10px] px-2 py-1.5 rounded-md bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full text-xs px-3 py-2 rounded-md bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50"
           >
             {saving ? '…' : '저장'}
           </button>
         </div>
       </div>
 
-      {error && <p className="text-[10px] text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
 
       <ProcessChecklistPanel
         process={process}
@@ -215,24 +217,31 @@ export default function IntakeProcessPanel({
         onEnsureProcess={ensureProcess}
       />
 
-      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200/50">
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-200/60">
         {registeredClientId ? (
           <Link
             href={`/clients/${registeredClientId}`}
-            className="text-[11px] px-2.5 py-1 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
+            className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
           >
             수임처 →
           </Link>
-        ) : (
+        ) : allowRegister && inquiry.id ? (
           <button
             type="button"
             disabled={registering || !canRegister(inquiry, process)}
             onClick={() => void handleRegister()}
-            className="text-[11px] px-2.5 py-1 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
           >
             {registering ? '…' : '포털 수임처 등록'}
           </button>
-        )}
+        ) : process?.clientId ? (
+          <Link
+            href={`/clients/${process.clientId}`}
+            className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
+          >
+            수임처 →
+          </Link>
+        ) : null}
       </div>
     </div>
   );

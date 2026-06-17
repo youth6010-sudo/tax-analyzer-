@@ -33,7 +33,7 @@ export default function HomeTasksSidebar({ children }: { children: React.ReactNo
     <div className="flex min-h-0 flex-1">
       <aside
         className={`shrink-0 border-r border-gray-200 bg-white transition-[width] duration-200 ${
-          open ? 'w-72' : 'w-10'
+          open ? 'w-80' : 'w-11'
         }`}
       >
         <div className={`sticky top-0 flex flex-col ${open ? 'p-3' : 'py-3 px-1'}`}>

@@ -30,8 +30,8 @@ export default function IntakeTabs({ active }: { active: IntakeTab }) {
     <div className="sticky top-[4.25rem] z-30 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 bg-gray-50/98 backdrop-blur border-b border-gray-200 mb-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-black text-gray-900">유입</h1>
-          <p className="text-[11px] text-gray-500 mt-0.5">유입관리 · 신규상담</p>
+          <h1 className="text-xl font-bold text-gray-900">유입</h1>
+          <p className="text-xs text-gray-600 mt-0.5">유입관리 · 신규상담</p>
         </div>
         {active !== 'consultation' && (
           <Link

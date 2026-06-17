@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-06-11",
-  "officeLabel": "큐비E센텀 15층 · 센텀중앙로 90",
+  "updatedAt": "2026-06-17",
+  "officeLabel": "?먮퉬E?쇳? 15痢?쨌 ?쇳?以묒븰濡?90",
   "spots": [
     {
       "id": "spot-001-쿠킹마더스",
@@ -388,6 +388,36 @@
         "점심특선"
       ],
       "notes": "주소: 부산 해운대구 센텀동로 90 센텀필2 1층 115호"
+    },
+    {
+      "id": "spot-027-동경규동-센텀시티점",
+      "name": "동경규동 센텀시티점",
+      "category": "일식",
+      "tags": [
+        "돈까스,우동",
+        "동경규동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EA%B2%BD%EA%B7%9C%EB%8F%99%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/1823077040",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102"
+    },
+    {
+      "id": "spot-028-진소문난칼국수",
+      "name": "진소문난칼국수",
+      "category": "한식",
+      "tags": [
+        "국수",
+        "칼국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A7%84%EC%86%8C%EB%AC%B8%EB%82%9C%EC%B9%BC%EA%B5%AD%EC%88%98%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/784829673",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102"
     }
   ]
 }

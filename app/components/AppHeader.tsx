@@ -6,9 +6,9 @@ import PortalPrefetch from './PortalPrefetch';
 
 export default function AppHeader() {
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm no-print">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 shadow-sm no-print">
       <PortalPrefetch />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+      <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center gap-3">
           <TaxMenuButton />
           <Link

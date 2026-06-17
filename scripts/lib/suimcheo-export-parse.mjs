@@ -149,8 +149,10 @@ export function parseSuimcheoExportRows(rows) {
     const entityType = mapEntityType(row[col.entityType]);
     const idNo = cell(row, col.idNo);
     const statusRaw = cell(row, col.status);
+    const closedDate = formatDateValue(row[col.closedDate]);
     const convertedDate = cell(row, col.convertedDate);
     const contact = splitContactPhone(row[col.phone]);
+    const isClosed = Boolean(closedDate);
 
     parsed.push({
       code: cell(row, col.code),
@@ -168,7 +170,7 @@ export function parseSuimcheoExportRows(rows) {
       taxTypes: [],
       program: cell(row, col.program),
       converted: Boolean(convertedDate),
-      status: statusRaw === '수임' ? 'active' : 'churned',
+      status: isClosed || statusRaw !== '수임' ? 'churned' : 'active',
       intakeData: {
         mobilePhone: contact.mobilePhone,
         douzoneCode: cell(row, col.code),
@@ -181,7 +183,7 @@ export function parseSuimcheoExportRows(rows) {
         openAge: cell(row, col.openAge),
         gender: cell(row, col.gender),
         openDate: formatDateValue(row[col.openDate]),
-        closedDate: formatDateValue(row[col.closedDate]),
+        closedDate,
         taxKind: cell(row, col.taxKind),
         convertedDate: formatDateValue(convertedDate),
         taxInvoice: cell(row, col.taxInvoice),
@@ -197,7 +199,7 @@ export function parseSuimcheoExportRows(rows) {
         clientContact: cell(row, col.clientContact),
         payrollHistory: cell(row, col.payrollHistory),
         relatedCompanies: cell(row, col.relatedCompanies),
-        statusLabel: statusRaw,
+        statusLabel: isClosed ? '폐업' : statusRaw,
         taxFlags: {
           employed: yn(row[col.employed]),
           daily: yn(row[col.daily]),

@@ -1,12 +1,14 @@
 'use client';
 
 import IntakeInquirySheet from './IntakeInquirySheet';
-import type { InquiryRow, ProcessRow } from './intakeUtils';
+import type { ClientNameRef, InquiryRow, ProcessRow } from './intakeUtils';
 
 export default function IntakeSplitView({
   inquiries,
   processes,
   selectedId,
+  forcedProcessId,
+  clientRefs = [],
   onSelect,
   onInquiryUpdated,
   onProcessUpdated,
@@ -20,6 +22,8 @@ export default function IntakeSplitView({
   inquiries: InquiryRow[];
   processes: ProcessRow[];
   selectedId: string | null;
+  forcedProcessId?: string | null;
+  clientRefs?: ClientNameRef[];
   onSelect: (id: string | null) => void;
   onInquiryUpdated: (row: InquiryRow) => void;
   onProcessUpdated: (row: ProcessRow) => void;
@@ -31,10 +35,10 @@ export default function IntakeSplitView({
   deletingId: string | null;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200/60 bg-slate-50/80 p-3 lg:p-4 shadow-sm w-full">
-      <header className="mb-2">
-        <h2 className="text-sm font-black text-slate-900">유입관리</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
+    <section className="rounded-2xl border border-slate-200 bg-slate-50/90 p-4 lg:p-5 shadow-sm w-full">
+      <header className="mb-3">
+        <h2 className="text-base font-bold text-slate-900">유입관리</h2>
+        <p className="text-xs text-slate-600 mt-1">
           {inquiries.length}건 · 왼쪽 목록 스크롤 · 오른쪽은 화면에 붙어 따라옴
         </p>
       </header>
@@ -42,6 +46,8 @@ export default function IntakeSplitView({
         rows={inquiries}
         processes={processes}
         selectedId={selectedId}
+        forcedProcessId={forcedProcessId}
+        clientRefs={clientRefs}
         onSelect={onSelect}
         onInquiryUpdated={onInquiryUpdated}
         onProcessUpdated={onProcessUpdated}

@@ -38,15 +38,15 @@ export default function ProcessChecklistPanel({
   };
 
   return (
-    <div className="pt-1.5 border-t border-indigo-200/50">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-[10px] font-black text-indigo-900">유입프로세스</p>
-        <span className="text-[9px] font-bold text-indigo-700 tabular-nums">
+    <div className="pt-2 border-t border-indigo-200/60">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-xs font-bold text-indigo-900">체크리스트</p>
+        <span className="text-xs font-semibold text-indigo-700 tabular-nums">
           {done}/{CHECKLIST_KEYS.length}
         </span>
       </div>
 
-      <ul className="grid grid-cols-5 gap-1">
+      <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
         {CHECKLIST_KEYS.map(key => {
           const isBluehole = key === 'blueholeClient';
           const checked = isChecklistItemDone(key, process?.checklist, inquiryBluehole);
@@ -54,15 +54,17 @@ export default function ProcessChecklistPanel({
             <li key={key}>
               <label
                 title={CHECKLIST_LABEL[key]}
-                className={`flex items-start gap-1 rounded px-1 py-1 h-full text-[9px] leading-tight cursor-pointer transition-colors ${
-                  checked ? 'bg-emerald-50 text-emerald-900' : 'bg-white hover:bg-indigo-50/60 text-gray-800 border border-indigo-100/80'
+                className={`flex items-start gap-1.5 rounded-md px-2 py-1.5 h-full text-xs leading-snug cursor-pointer transition-colors ${
+                  checked
+                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200/80'
+                    : 'bg-white hover:bg-indigo-50/70 text-gray-800 border border-indigo-100'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => void (isBluehole ? handleBlueholeToggle() : handleToggle(key))}
-                  className="mt-0.5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400 scale-90"
+                  className="mt-0.5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400"
                 />
                 <span className={`min-w-0 ${checked ? 'font-semibold line-through decoration-emerald-400/60' : ''}`}>
                   {CHECKLIST_LABEL[key]}

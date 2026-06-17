@@ -7,11 +7,14 @@ import IntakeTabs, { resolveIntakeTab } from '../../components/intake/IntakeTabs
 import ConsultationFormPanel from '../../components/intake/ConsultationFormPanel';
 import IntakeSplitView from '../../components/intake/IntakeSplitView';
 import {
+  buildIntakeDeepLink,
   companyMatchKeys,
+  findInquiryForProcess,
   findProcessForInquiry,
   normalizeCompanyKey,
   sortInquiries,
   sortProcesses,
+  type ClientNameRef,
   type InquiryRow,
   type IntakeSort,
   type ProcessRow,
@@ -19,6 +22,7 @@ import {
 import type { ChecklistKey } from '@/app/types/intake';
 import { formatIntakeDate } from '@/app/utils/intakeDates';
 import {
+  getPortalClients,
   getPortalInquiries,
   getPortalProcesses,
   hydratePortal,
@@ -55,6 +59,7 @@ function normalizeInquiry(raw: Record<string, unknown>): InquiryRow {
       ? pick(raw, 'extra')
       : {}) as Record<string, unknown>,
     createdAt: created instanceof Date ? created.toISOString() : String(created ?? ''),
+    excelKey: pick(raw, 'excelKey', 'excel_key') != null ? String(pick(raw, 'excelKey', 'excel_key')) : undefined,
   };
 }
 
@@ -142,29 +147,25 @@ export default function IntakeHub() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
 
+  const clientRefs = useMemo<ClientNameRef[]>(
+    () => getPortalClients().map(c => ({ id: c.id, companyName: c.companyName })),
+    [inquiries, processes],
+  );
+
   useEffect(() => { setSearch(urlQ); }, [urlQ]);
   useEffect(() => {
     if (urlInquiry) {
       setSelectedId(urlInquiry);
       return;
     }
-    if (!inquiries.length) return;
+    if (!inquiries.length && !processes.length) return;
 
     if (urlProcessId) {
       const process = processes.find(p => p.id === urlProcessId);
       if (process) {
-        let match = inquiries.find(inq => findProcessForInquiry(inq, [process])?.id === process.id);
-        if (!match) {
-          const pKey = normalizeCompanyKey(process.companyName);
-          match = inquiries.find(inq => companyMatchKeys(inq.companyName).includes(pKey));
-        }
+        const match = findInquiryForProcess(process, inquiries, [], clientRefs);
         if (match) {
           setSelectedId(match.id);
-          const p = new URLSearchParams(searchParams.toString());
-          p.delete('processId');
-          p.set('inquiry', match.id);
-          p.set('tab', 'intake');
-          router.replace(`/clients/intake?${p.toString()}`, { scroll: false });
         }
       }
       return;
@@ -178,7 +179,7 @@ export default function IntakeHub() {
       });
       if (match) setSelectedId(match.id);
     }
-  }, [urlInquiry, urlProcessId, urlQ, inquiries, processes, router, searchParams]);
+  }, [urlInquiry, urlProcessId, urlQ, inquiries, processes, clientRefs]);
 
   const load = useCallback(async () => {
     await prefetchPortal(true);
@@ -303,7 +304,7 @@ export default function IntakeHub() {
 
   const deleteInquiry = async (inquiry: InquiryRow, process: ProcessRow | null) => {
     const label = inquiry.companyName.trim() || '(미입력)';
-    const linked = process ?? findProcessForInquiry(inquiry, processes);
+    const linked = process ?? findProcessForInquiry(inquiry, processes, clientRefs);
     const clientNote = inquiry.clientId
       ? '\n\n등록된 수임처는 유지되며, 유입 목록에서만 삭제됩니다.'
       : '';
@@ -351,9 +352,9 @@ export default function IntakeHub() {
           <ConsultationFormPanel
             key={draftId ?? 'new'}
             initialDraftId={draftId}
-            onSuccess={({ inquiryId }) => {
+            onSuccess={({ inquiryId, processId }) => {
               void load();
-              router.push(`/clients/intake?tab=intake&inquiry=${inquiryId}`);
+              router.push(buildIntakeDeepLink({ inquiryId, processId }));
             }}
           />
         ) : (
@@ -361,6 +362,8 @@ export default function IntakeHub() {
             inquiries={filteredInquiries}
             processes={processes}
             selectedId={selectedId}
+            forcedProcessId={urlProcessId}
+            clientRefs={clientRefs}
             onSelect={onSelectInquiry}
             onInquiryUpdated={onInquiryUpdated}
             onProcessUpdated={onProcessUpdated}

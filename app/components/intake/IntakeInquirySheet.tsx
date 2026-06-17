@@ -8,13 +8,15 @@ import IntakeProcessPanel from './IntakeProcessPanel';
 import {
   findProcessForInquiry,
   inquiryFieldValue,
+  stubInquiryFromProcess,
+  type ClientNameRef,
   type InquiryRow,
   type ProcessRow,
 } from './intakeUtils';
 
 function CellValue({ row, colKey }: { row: InquiryRow; colKey: string }) {
   const raw = inquiryFieldValue(row, colKey);
-  if (!raw.trim()) return <span className="text-gray-300">-</span>;
+  if (!raw.trim()) return <span className="text-gray-400">-</span>;
   if (colKey === 'proposedFee') return <span className="font-medium tabular-nums">{Number(raw).toLocaleString()}</span>;
   if (colKey === 'companyName') {
     return <span className="font-bold text-gray-900">{raw}</span>;
@@ -32,6 +34,8 @@ export default function IntakeInquirySheet({
   rows,
   processes,
   selectedId,
+  forcedProcessId,
+  clientRefs = [],
   onSelect,
   onInquiryUpdated,
   onProcessUpdated,
@@ -45,6 +49,8 @@ export default function IntakeInquirySheet({
   rows: InquiryRow[];
   processes: ProcessRow[];
   selectedId: string | null;
+  forcedProcessId?: string | null;
+  clientRefs?: ClientNameRef[];
   onSelect: (id: string | null) => void;
   onInquiryUpdated: (row: InquiryRow) => void;
   onProcessUpdated: (row: ProcessRow) => void;
@@ -55,11 +61,11 @@ export default function IntakeInquirySheet({
   onDeleteInquiry: (inquiry: InquiryRow, process: ProcessRow | null) => void | Promise<void>;
   deletingId: string | null;
 }) {
-  const [linkedProcessId, setLinkedProcessId] = useState<string | null>(null);
+  const [linkedProcessId, setLinkedProcessId] = useState<string | null>(forcedProcessId ?? null);
 
   useEffect(() => {
-    setLinkedProcessId(null);
-  }, [selectedId]);
+    setLinkedProcessId(forcedProcessId ?? null);
+  }, [selectedId, forcedProcessId]);
 
   const selectedInquiry = useMemo(
     () => rows.find(r => r.id === selectedId) ?? null,
@@ -67,29 +73,38 @@ export default function IntakeInquirySheet({
   );
 
   const selectedProcess = useMemo(() => {
-    if (!selectedInquiry) return null;
+    if (!selectedInquiry) {
+      if (forcedProcessId) {
+        return processes.find(p => p.id === forcedProcessId) ?? null;
+      }
+      return null;
+    }
     if (linkedProcessId) {
       const linked = processes.find(p => p.id === linkedProcessId);
       if (linked) return linked;
     }
-    return findProcessForInquiry(selectedInquiry, processes);
-  }, [selectedInquiry, processes, linkedProcessId]);
+    if (forcedProcessId) {
+      const forced = processes.find(p => p.id === forcedProcessId);
+      if (forced) return forced;
+    }
+    return findProcessForInquiry(selectedInquiry, processes, clientRefs);
+  }, [selectedInquiry, processes, linkedProcessId, forcedProcessId, clientRefs]);
 
   if (rows.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center">유입관리 데이터 없음</p>;
   }
 
   return (
-    <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] gap-3 items-start">
-      <div className="rounded-lg border border-slate-200/80 bg-white/90 min-w-0 lg:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto lg:overflow-x-auto">
-        <table className="w-full text-sm leading-snug min-w-[640px]">
-          <thead className="bg-slate-100 sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)]">
+    <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] gap-4 items-start">
+      <div className="rounded-xl border border-slate-200 bg-white min-w-0 lg:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto lg:overflow-x-auto">
+        <table className="w-full text-sm leading-relaxed min-w-[640px]">
+          <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
             <tr>
               {INQUIRY_LIST_COLUMNS.map(col => (
                 <th
                   key={col.key}
                   style={col.width ? { width: col.width, minWidth: col.width } : undefined}
-                  className={`px-2.5 py-2 text-left text-xs font-bold text-slate-700 border-b border-slate-200 ${
+                  className={`px-3 py-2.5 text-left portal-table-head ${
                     col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''
                   }`}
                 >
@@ -98,7 +113,7 @@ export default function IntakeInquirySheet({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100">
             {rows.map(row => {
               const active = selectedId === row.id;
               return (
@@ -113,7 +128,7 @@ export default function IntakeInquirySheet({
                     <td
                       key={col.key}
                       style={col.width ? { width: col.width, minWidth: col.width } : undefined}
-                      className={`px-2.5 py-2 align-top ${col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''}`}
+                      className={`px-3 py-2.5 align-top ${col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''}`}
                     >
                       <CellValue row={row} colKey={col.key} />
                     </td>
@@ -128,8 +143,8 @@ export default function IntakeInquirySheet({
       <div className="min-w-0 lg:sticky lg:top-[8.75rem] lg:z-20 lg:self-start lg:max-h-[calc(100dvh-9.25rem)] lg:overflow-y-auto">
         {selectedInquiry ? (
           <div className="rounded-xl border border-amber-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border-b border-amber-100">
-              <p className="text-sm font-black text-gray-900 truncate">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-50 border-b border-amber-100">
+              <p className="text-base font-bold text-gray-900 truncate">
                 {selectedInquiry.companyName || '(미입력)'}
               </p>
               <div className="flex items-center gap-1 shrink-0">
@@ -150,9 +165,9 @@ export default function IntakeInquirySheet({
                 </button>
               </div>
             </div>
-            <div className="flex flex-col gap-2.5 p-2.5">
-              <section className="rounded-lg border border-indigo-200/60 bg-indigo-50/80 p-2">
-                <h3 className="text-[10px] font-black text-indigo-900 mb-1">유입프로세스</h3>
+            <div className="flex flex-col gap-3 p-4">
+              <section className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-3">
+                <h3 className="text-xs font-bold text-indigo-900 mb-2">유입프로세스</h3>
                 <IntakeProcessPanel
                   inquiry={selectedInquiry}
                   process={selectedProcess}
@@ -166,12 +181,41 @@ export default function IntakeInquirySheet({
                   onSyncBlueholeCheck={onSyncBlueholeCheck}
                 />
               </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-2.5">
-                <h3 className="text-[11px] font-black text-slate-900 mb-1.5">상세내용</h3>
+              <section className="rounded-lg border border-slate-200 bg-white p-3">
+                <h3 className="text-xs font-bold text-slate-900 mb-2">상세내용</h3>
                 <IntakeInquiryDetail
                   inquiry={selectedInquiry}
                   onUpdated={onInquiryUpdated}
                   compact
+                />
+              </section>
+            </div>
+          </div>
+        ) : selectedProcess ? (
+          <div className="rounded-xl border border-indigo-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+              <div className="min-w-0">
+                <p className="text-base font-bold text-gray-900 truncate">
+                  {selectedProcess.companyName || '(미입력)'}
+                </p>
+                <p className="text-xs text-indigo-800 mt-0.5">연결된 유입관리 건이 없습니다</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 p-4">
+              <section className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-3">
+                <h3 className="text-xs font-bold text-indigo-900 mb-2">유입프로세스</h3>
+                <IntakeProcessPanel
+                  inquiry={stubInquiryFromProcess(selectedProcess)}
+                  process={selectedProcess}
+                  allowRegister={false}
+                  onProcessUpdated={onProcessUpdated}
+                  onProcessCreated={row => {
+                    setLinkedProcessId(row.id);
+                    onProcessCreated(row);
+                  }}
+                  onRegisterClient={onRegisterClient}
+                  onToggleCheck={onToggleCheck}
+                  onSyncBlueholeCheck={onSyncBlueholeCheck}
                 />
               </section>
             </div>

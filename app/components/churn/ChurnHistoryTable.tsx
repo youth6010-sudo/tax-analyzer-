@@ -27,7 +27,7 @@ export default function ChurnHistoryTable({ records, selectedId, onSelect }: Pro
               {CHURN_COLUMNS.map(col => (
                 <th
                   key={col.key}
-                  className={`px-2 py-2 text-left text-[10px] font-bold text-red-800 whitespace-nowrap ${
+                  className={`px-2.5 py-2.5 text-left text-xs font-bold text-red-900 whitespace-nowrap ${
                     col.sticky ? 'sticky left-0 z-30 bg-red-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]' : ''
                   }`}
                   style={{ minWidth: col.width }}
@@ -44,12 +44,16 @@ export default function ChurnHistoryTable({ records, selectedId, onSelect }: Pro
                 <tr
                   key={record.id}
                   onClick={() => onSelect(record.id)}
-                  className={`border-b border-gray-50 cursor-pointer transition-colors ${
+                  className={`border-b border-gray-200 cursor-pointer transition-colors ${
                     active ? 'bg-red-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   {CHURN_COLUMNS.map(col => {
-                    const cellCls = `px-2 py-2 text-xs whitespace-nowrap max-w-[10rem] truncate ${
+                    const cellCls = `px-2.5 py-2.5 text-sm whitespace-nowrap ${
+                      col.key === 'reason' || col.key === 'earlySign'
+                        ? 'max-w-[14rem] whitespace-normal line-clamp-2'
+                        : 'max-w-[12rem] truncate'
+                    } ${
                       col.sticky
                         ? `sticky left-0 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] ${active ? 'bg-red-50' : 'bg-white'}`
                         : ''

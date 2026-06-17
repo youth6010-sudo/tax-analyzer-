@@ -27,3 +27,6 @@ https://place.map.kakao.com/1239559567
 https://place.map.kakao.com/2140210498
 https://place.map.kakao.com/1900017839
 https://place.map.kakao.com/1384681956
+# 추가 2곳
+https://place.map.kakao.com/1823077040
+https://place.map.kakao.com/784829673

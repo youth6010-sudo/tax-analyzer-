@@ -40,25 +40,25 @@ export default async function HomePage() {
   const user = await requireUser();
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-[var(--background)]">
       <AppHeader />
       <main className="flex-1 flex flex-col">
         <HomeTasksSidebar>
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-10 w-full">
+          <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10 w-full">
             <HomeWelcomeSection userName={user.name} />
 
             <section>
               <h2 className="text-lg font-bold text-gray-900 mb-4">도구</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {TOOLS.map(tool => {
-                  const cardClass = `block rounded-2xl border bg-white p-5 shadow-sm transition-all ${
+                  const cardClass = `block rounded-xl border bg-white p-5 shadow-sm transition-all ${
                     ACCENT[tool.accent] ?? ACCENT.gray
                   } ${tool.disabled ? 'pointer-events-none' : 'hover:shadow-md'}`;
 
                   const inner = (
                     <>
                       <h3 className="text-lg font-bold text-gray-900">{tool.title}</h3>
-                      <p className="mt-2 text-sm text-gray-600">{tool.description}</p>
+                      <p className="mt-2 text-sm text-gray-700 leading-relaxed">{tool.description}</p>
                       {'preview' in tool && tool.preview ? <HomeLunchPreview /> : null}
                       {!tool.disabled && (
                         <span className="mt-4 inline-flex text-sm font-semibold text-gray-800">

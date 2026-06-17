@@ -8,11 +8,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const status = searchParams.get('status') as 'intake' | 'active' | 'churned' | null;
     const mineOnly = searchParams.get('mine') === '1';
+    const includeChurned = searchParams.get('includeChurned') === '1';
     const businessEntityType = searchParams.get('entity') ?? undefined;
 
     const clients = await listClients({
       status: status ?? undefined,
-      mineOnly: mineOnly && !isPortalAdmin(user),
+      includeChurned: includeChurned || undefined,
+      mineOnly,
       userId: user.id,
       userName: user.name,
       businessEntityType,

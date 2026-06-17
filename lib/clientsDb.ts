@@ -5,6 +5,7 @@ import type { ContactUpdatePayload } from '@/app/types/contact';
 import type { ChurnSummary, ClientStatus } from '@/app/types/client';
 import { clientToRecord } from '@/lib/clientMapper';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -14,6 +15,7 @@ export type ClientPatch = ContactUpdatePayload & {
 
 export interface ClientListFilters {
   status?: ClientStatus;
+  includeChurned?: boolean;
   assignedUserId?: string;
   businessEntityType?: string;
   managerName?: string;
@@ -28,6 +30,8 @@ export async function listClients(filters: ClientListFilters = {}) {
 
   if (filters.status) {
     conditions.push(eq(clients.status, filters.status));
+  } else if (filters.includeChurned) {
+    conditions.push(or(eq(clients.status, 'active'), eq(clients.status, 'churned')));
   } else {
     conditions.push(ne(clients.status, 'churned'));
   }
@@ -39,8 +43,13 @@ export async function listClients(filters: ClientListFilters = {}) {
   if (filters.assignedUserId) {
     conditions.push(eq(clients.assignedUserId, filters.assignedUserId));
   } else if (filters.mineOnly && filters.userId) {
+    const matchNames = getManagerMatchNames(filters.userName ?? '');
+    const managerConds = matchNames.map(name => eq(clients.manager, name));
     conditions.push(
-      or(eq(clients.assignedUserId, filters.userId), eq(clients.manager, filters.userName ?? '')),
+      or(
+        eq(clients.assignedUserId, filters.userId),
+        ...(managerConds.length > 0 ? managerConds : []),
+      )!,
     );
   }
 
