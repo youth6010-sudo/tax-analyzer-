@@ -33,6 +33,39 @@ export function mapEntityType(label) {
   return '';
 }
 
+/** UI 대분류 허용 값 */
+export const CANONICAL_CATEGORIES = ['개인', '법인', '신고대리', '미사용', '비사업자'];
+
+/** 구 대분류·프로그램명 → canonical (빈 문자열이면 구분 fallback) */
+export const CATEGORY_ALIASES = {
+  세무사랑: '',
+  더존: '',
+  신고대리: '신고대리',
+};
+
+function categoryFromEntityType(entityType) {
+  if (entityType === 'corporate') return '법인';
+  if (entityType === 'individual') return '개인';
+  if (entityType === 'nonBusiness') return '비사업자';
+  return '';
+}
+
+/**
+ * 더존 `대분류` → canonical category
+ * @param {string} raw
+ * @param {string} [entityType] corporate | individual | nonBusiness
+ */
+export function normalizeCategory(raw, entityType = '') {
+  const s = cellText(raw);
+  if (!s) return categoryFromEntityType(entityType);
+  if (CANONICAL_CATEGORIES.includes(s)) return s;
+  if (Object.prototype.hasOwnProperty.call(CATEGORY_ALIASES, s)) {
+    const mapped = CATEGORY_ALIASES[s];
+    return mapped || categoryFromEntityType(entityType);
+  }
+  return s;
+}
+
 export function yn(value) {
   return cellText(value).toUpperCase() === 'Y';
 }
@@ -174,7 +207,7 @@ export function parseSuimcheoExportRows(rows) {
       intakeData: {
         mobilePhone: contact.mobilePhone,
         douzoneCode: cell(row, col.code),
-        category: cell(row, col.category),
+        category: normalizeCategory(row[col.category], entityType),
         team: cell(row, col.team),
         mainOffice: cell(row, col.mainOffice),
         address: cell(row, col.address),

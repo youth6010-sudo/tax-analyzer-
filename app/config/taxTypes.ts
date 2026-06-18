@@ -13,7 +13,8 @@ export const TAX_MENU = [
     label: '홈',
     items: [
       { label: '대시보드', href: '/' },
-      { label: '점심 가챠머신', href: '/lunch' },
+      { label: '가챠머신', href: '/gacha' },
+      { label: '담당자 뽑기', href: '/gacha?tab=manager' },
     ],
   },
   {

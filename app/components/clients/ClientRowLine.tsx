@@ -98,11 +98,11 @@ export default function ClientRowLine({
         isChurned ? 'bg-red-50/40 hover:bg-red-50/70 hover:border-l-red-300' : '',
       ].join(' ')}
     >
-      <div className={`${grid} items-center px-4 py-3.5 min-h-[3.75rem]`}>
+      <div className={`${grid} items-center px-4 py-3 min-h-[3.5rem]`}>
         <div className="min-w-0">
           <p
             className={[
-              'text-sm font-semibold leading-snug text-gray-900 truncate group-hover:text-blue-900',
+              'text-base font-semibold leading-snug text-gray-900 truncate group-hover:text-blue-900',
               isChurned ? 'line-through decoration-red-300/80 text-gray-600' : '',
             ].join(' ')}
             title={client.companyName}
@@ -110,12 +110,12 @@ export default function ClientRowLine({
             <Highlight text={client.companyName} query={query} />
           </p>
           {showRep && (
-            <p className="text-xs text-gray-600 truncate mt-0.5" title={rep}>
+            <p className="text-sm text-gray-600 truncate mt-0.5" title={rep}>
               대표 <Highlight text={rep} query={query} />
             </p>
           )}
           {isChurned && (
-            <span className="inline-block mt-1 rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">
+            <span className="inline-block mt-1 rounded-md bg-red-100 px-2 py-0.5 text-sm font-bold text-red-800">
               {statusLabel || '해임'}
             </span>
           )}
@@ -123,22 +123,22 @@ export default function ClientRowLine({
 
         {showCode && (
           <span
-            className="text-xs font-mono tabular-nums text-gray-600 text-right truncate"
+            className="text-sm font-mono tabular-nums text-gray-600 text-right truncate"
             title={code || undefined}
           >
             <Highlight text={dash(code)} query={query} />
           </span>
         )}
 
-        <span className="text-xs font-mono tabular-nums text-gray-700 truncate" title={dash(biz)}>
+        <span className="text-sm font-mono tabular-nums text-gray-800 truncate" title={dash(biz)}>
           <Highlight text={dash(biz)} query={query} />
         </span>
 
-        <span className="text-xs font-mono tabular-nums text-gray-700 truncate" title={dash(idNo)}>
+        <span className="text-sm font-mono tabular-nums text-gray-800 truncate" title={dash(idNo)}>
           <Highlight text={dash(idNo)} query={query} />
         </span>
 
-        <span className="text-xs text-gray-700 truncate" title={dash(phone)}>
+        <span className="text-sm text-gray-800 truncate" title={dash(phone)}>
           <Highlight text={dash(phone)} query={query} />
         </span>
       </div>

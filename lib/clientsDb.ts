@@ -346,6 +346,30 @@ export async function updateClientDetail(
   return clientToRecord(row);
 }
 
+export async function updateClientColbert(id: string, colbert: boolean) {
+  const db = getDb();
+  const [row] = await db
+    .update(clients)
+    .set({ colbert, updatedAt: new Date() })
+    .where(eq(clients.id, id))
+    .returning();
+
+  if (!row) throw new Error('NOT_FOUND');
+  return clientToRecord(row);
+}
+
+export async function updateClientFeeSummary(id: string, feeSummary: number | null) {
+  const db = getDb();
+  const [row] = await db
+    .update(clients)
+    .set({ feeSummary, updatedAt: new Date() })
+    .where(eq(clients.id, id))
+    .returning();
+
+  if (!row) throw new Error('NOT_FOUND');
+  return clientToRecord(row);
+}
+
 export async function churnClient(
   id: string,
   data: {

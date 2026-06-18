@@ -25,10 +25,30 @@ body {
 }
 
 .portal-table-head {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
-  color: #64748b;
+  color: #475569;
+}
+
+/* 수임처 roster 스크롤 */
+.roster-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.roster-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.roster-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.roster-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.roster-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 * {

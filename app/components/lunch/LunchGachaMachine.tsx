@@ -10,6 +10,8 @@ import {
   type GachaBall,
 } from './gachaBalls';
 import './gacha-machine.css';
+import type { GachaMachineTheme } from '../gacha/gachaThemes';
+import { LUNCH_GACHA_THEME } from '../gacha/gachaThemes';
 
 interface LunchGachaMachineProps {
   phase: GachaPhase;
@@ -21,6 +23,7 @@ interface LunchGachaMachineProps {
   onLeverDown?: () => void;
   onLeverUp?: () => void;
   disabled?: boolean;
+  theme?: GachaMachineTheme;
 }
 
 const CONFETTI = Array.from({ length: 28 }, (_, i) => ({
@@ -173,6 +176,7 @@ export default function LunchGachaMachine({
   onLeverDown,
   onLeverUp,
   disabled = false,
+  theme = LUNCH_GACHA_THEME,
 }: LunchGachaMachineProps) {
   const pileLayout = buildPileLayout(balls.length);
   const leverRef = useRef<HTMLDivElement>(null);
@@ -243,7 +247,7 @@ export default function LunchGachaMachine({
   };
 
   return (
-    <div className="gc-wrap mt-6 mx-auto w-full max-w-2xl px-2" aria-label="점심 로또 추첨기">
+    <div className="gc-wrap mt-6 mx-auto w-full max-w-2xl px-2" aria-label={theme.ariaLabel}>
       <div className="gc-arena">
         <div className="gc-arena-bg" aria-hidden />
         <div className="gc-arena-spotlight" aria-hidden />
@@ -259,8 +263,8 @@ export default function LunchGachaMachine({
                   <div className="gc-cabinet-edge gc-cabinet-edge-l" aria-hidden />
                   <div className="gc-cabinet-edge gc-cabinet-edge-r" aria-hidden />
                   <div className="gc-cabinet-header" aria-hidden>
-                    <span className="gc-cabinet-emoji">🍱</span>
-                    <span className="gc-cabinet-title">LUNCH LOTTO</span>
+                    <span className="gc-cabinet-emoji">{theme.cabinetEmoji}</span>
+                    <span className="gc-cabinet-title">{theme.cabinetTitle}</span>
                     <div className="gc-cabinet-lights">
                       {Array.from({ length: 7 }, (_, i) => (
                         <span key={i} className="gc-led" style={{ '--led-i': i } as CSSProperties} />
@@ -377,9 +381,9 @@ export default function LunchGachaMachine({
               </div>
               <div className="gc-memo-overlay gc-memo-overlay-delayed" role="status" aria-live="polite">
                 <div className="gc-memo-paper">
-                  <span className="gc-memo-tag">🍽️ TODAY&apos;S LUNCH</span>
+                  <span className="gc-memo-tag">{theme.revealTag}</span>
                   <span className="gc-memo-name">{resultName}</span>
-                  <span className="gc-memo-sub">오늘 점심은 여기!</span>
+                  <span className="gc-memo-sub">{theme.revealSub}</span>
                 </div>
               </div>
             </>
@@ -391,7 +395,7 @@ export default function LunchGachaMachine({
 
       <p className={`gc-status gc-status-${phase}`}>
         {phase === 'reveal' && resultName
-          ? `🎉 오늘 점심 — ${resultName}`
+          ? `${theme.statusRevealPrefix} ${resultName}`
           : phaseMessage(phase, leverHeld)}
       </p>
     </div>

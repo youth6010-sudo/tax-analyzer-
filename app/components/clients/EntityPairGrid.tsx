@@ -109,8 +109,8 @@ function CategoryBlock({
         <span className="text-gray-300 text-xs leading-none" aria-hidden>
           ⠿
         </span>
-        <h3 className={`text-sm font-bold ${accent.header}`}>{section.category}</h3>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${accent.badge}`}>
+        <h3 className={`text-base font-bold ${accent.header}`}>{section.category}</h3>
+        <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold tabular-nums ${accent.badge}`}>
           {section.clients.length}
         </span>
       </div>
@@ -120,7 +120,7 @@ function CategoryBlock({
         ) : (
           managerGroups.map(mgr => (
             <div key={mgr.manager} className="border-b border-gray-100 last:border-b-0">
-              <p className="sticky top-0 z-20 flex items-center gap-1.5 text-xs font-semibold text-gray-600 px-3 py-2 bg-slate-100/95 border-b border-gray-200 backdrop-blur-sm">
+              <p className="sticky top-0 z-20 flex items-center gap-1.5 text-sm font-semibold text-gray-700 px-3 py-2.5 bg-slate-100/95 border-b border-gray-200 backdrop-blur-sm">
                 <span className="inline-block w-1 h-3.5 rounded-full bg-slate-400" aria-hidden />
                 {mgr.manager}
                 <span className="font-normal text-gray-400 tabular-nums">({mgr.clients.length})</span>

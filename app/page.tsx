@@ -22,9 +22,9 @@ const TOOLS: {
     accent: 'blue',
   },
   {
-    href: '/lunch',
-    title: '점심 가챠머신',
-    description: '3D 캡슐 뽑기로 맛집 결정 · 먹은 날·별점·리뷰 기록',
+    href: '/gacha',
+    title: '가챠머신',
+    description: '점심 맛집 뽑기 · 담당자 뽑기 — 3D 캡슐 가챠',
     accent: 'orange',
     preview: true,
   },

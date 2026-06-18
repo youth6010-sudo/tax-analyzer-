@@ -2,7 +2,7 @@
  * 청년들 ID.xlsx 전체 import (비품 주문 제외)
  * node scripts/import-youth-workbook.mjs [--link-only] [xlsx경로]
  *
- * --link-only  수임처관리 시트로 client INSERT 금지 (TP export 정본 기준 UPDATE/link만)
+ * --link-only  수임처관리 시트로 client INSERT 금지, roster 필드(fee/program/구분) 덮어쓰기 금지
  */
 import fs from 'fs';
 import path from 'path';
@@ -60,7 +60,7 @@ console.log('파싱:', {
   processes: data.processes.length,
   churns: data.churns.length,
 });
-if (linkOnly) console.log('모드: --link-only (수임처 INSERT 금지)');
+if (linkOnly) console.log('모드: --link-only (수임처 INSERT·roster 덮어쓰기 금지)');
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
@@ -162,17 +162,28 @@ for (const c of data.clients) {
 
   if (target.status === 'intake') continue;
 
-  await sql`
-    UPDATE clients SET
-      business_entity_type = ${c.businessEntityType},
-      fee_summary = ${c.feeSummary},
-      program = ${c.program},
-      converted = ${c.converted},
-      colbert = ${c.colbert},
-      assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
-      updated_at = NOW()
-    WHERE id = ${target.id}
-  `;
+  if (linkOnly) {
+    await sql`
+      UPDATE clients SET
+        converted = ${c.converted},
+        colbert = ${c.colbert},
+        assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+        updated_at = NOW()
+      WHERE id = ${target.id}
+    `;
+  } else {
+    await sql`
+      UPDATE clients SET
+        business_entity_type = ${c.businessEntityType},
+        fee_summary = ${c.feeSummary},
+        program = ${c.program},
+        converted = ${c.converted},
+        colbert = ${c.colbert},
+        assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+        updated_at = NOW()
+      WHERE id = ${target.id}
+    `;
+  }
   clientUpdated++;
 }
 

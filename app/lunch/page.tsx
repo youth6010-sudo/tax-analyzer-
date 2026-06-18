@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { loadLunchDatabase } from '@/app/utils/lunchData';
 import type { LunchDatabase } from '@/app/types/lunch';
@@ -29,14 +30,22 @@ export default function LunchPage() {
   return (
     <main className="flex-1">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-black text-gray-900">점심 가챠머신 🎰</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {db?.officeLabel ?? '사무실 주변'} · 캡슐 뽑기 = 오늘 점심
-            {authorName && (
-              <span className="text-gray-400"> · 리뷰 작성자: {authorName}</span>
-            )}
-          </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900">점심 가챠머신 🎰</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              {db?.officeLabel ?? '사무실 주변'} · 캡슐 뽑기 = 오늘 점심
+              {authorName && (
+                <span className="text-gray-400"> · 리뷰 작성자: {authorName}</span>
+              )}
+            </p>
+          </div>
+          <Link
+            href="/gacha?tab=manager"
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl px-4 py-2 transition-colors"
+          >
+            👤 담당자 뽑기 →
+          </Link>
         </div>
 
         {error && (

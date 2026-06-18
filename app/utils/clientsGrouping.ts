@@ -2,6 +2,10 @@ import type { ClientRecord } from '@/app/types/client';
 import type { BusinessEntityType } from '@/app/types/contact';
 import { BUSINESS_ENTITY_LABEL } from '@/app/types/contact';
 import type { CategoryColumnSide } from '@/app/utils/clientsColumnLayout';
+import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
+
+/** 수임처관리 시트 담당자 열 순서 */
+export const MANAGER_DISPLAY_ORDER = Object.keys(STAFF_REAL_NAMES);
 
 
 export const UNCategorized = '미분류';
@@ -223,6 +227,21 @@ export type ManagerSection = {
   clients: ClientRecord[];
 };
 
+export function compareManagers(a: string, b: string): number {
+  if (a === UNCategorized) return 1;
+  if (b === UNCategorized) return -1;
+  const ia = MANAGER_DISPLAY_ORDER.indexOf(a);
+  const ib = MANAGER_DISPLAY_ORDER.indexOf(b);
+  if (ia >= 0 && ib >= 0) return ia - ib;
+  if (ia >= 0) return -1;
+  if (ib >= 0) return 1;
+  return a.localeCompare(b, 'ko');
+}
+
+export function sumClientFees(clients: ClientRecord[]): number {
+  return clients.reduce((sum, c) => sum + (c.feeSummary ?? 0), 0);
+}
+
 /** 담당자별 소그룹 — 미분류는 맨 뒤 */
 export function groupClientsByManager(
   clients: ClientRecord[],
@@ -236,11 +255,7 @@ export function groupClientsByManager(
     map.set(mgr, arr);
   }
   return [...map.entries()]
-    .sort(([a], [b]) => {
-      if (a === UNCategorized) return 1;
-      if (b === UNCategorized) return -1;
-      return a.localeCompare(b, 'ko');
-    })
+    .sort(([a], [b]) => compareManagers(a, b))
     .map(([manager, list]) => ({
       manager,
       clients: sortClients(list, sort),
