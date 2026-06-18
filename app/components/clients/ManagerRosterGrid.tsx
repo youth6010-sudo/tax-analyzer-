@@ -1,9 +1,11 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ClientRecord } from '@/app/types/client';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
+import { buildClientDetailHref } from '@/app/utils/clientDetailNav';
 import {
   compareManagers,
   groupClientsByManager,
@@ -216,7 +218,7 @@ function ClientRosterRow({
   variant,
   query,
   styles,
-  onGo,
+  returnTo,
   onColbertToggle,
   onFeeChange,
 }: {
@@ -225,15 +227,18 @@ function ClientRosterRow({
   variant: 'personal' | 'corporate';
   query: string;
   styles: PanelStyles;
-  onGo: (id: string, e: React.MouseEvent) => void;
+  returnTo: string;
   onColbertToggle?: (id: string, colbert: boolean) => void;
   onFeeChange?: (id: string, fee: number | null) => void;
 }) {
+  const router = useRouter();
   const isChurned = c.status === 'churned';
   const rep = dash(c.representative);
   const biz = dash(formatBusinessNo(c.businessNo));
   const idVal = panelIdValue(c, variant);
   const contact = contactDisplay(c);
+  const detailPath = `/clients/${c.id}`;
+  const href = buildClientDetailHref(c.id, returnTo);
 
   return (
     <li
@@ -248,9 +253,15 @@ function ClientRosterRow({
     >
       <span className="text-xs font-medium text-gray-400 tabular-nums text-center">{index + 1}</span>
 
-      <a
-        href={`/clients/${c.id}`}
-        onClick={e => onGo(c.id, e)}
+      <Link
+        href={href}
+        prefetch
+        onMouseEnter={() => router.prefetch(detailPath)}
+        onClick={e => {
+          if (!returnTo) return;
+          e.preventDefault();
+          router.push(buildClientDetailHref(c.id, returnTo, window.scrollY));
+        }}
         className={[
           'truncate text-sm font-bold text-gray-900 min-w-0',
           'hover:text-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-400 rounded-sm',
@@ -259,7 +270,7 @@ function ClientRosterRow({
         title={c.companyName}
       >
         <Highlight text={c.companyName} query={query} />
-      </a>
+      </Link>
 
       <CellValue value={rep} query={query} />
       <CellValue value={biz} mono query={query} />
@@ -342,7 +353,7 @@ function EntityPanel({
   variant,
   clients,
   query,
-  onGo,
+  returnTo,
   onColbertToggle,
   onFeeChange,
 }: {
@@ -350,7 +361,7 @@ function EntityPanel({
   variant: 'personal' | 'corporate';
   clients: ClientRecord[];
   query: string;
-  onGo: (id: string, e: React.MouseEvent) => void;
+  returnTo: string;
   onColbertToggle?: (id: string, colbert: boolean) => void;
   onFeeChange?: (id: string, fee: number | null) => void;
 }) {
@@ -394,7 +405,7 @@ function EntityPanel({
                   variant={variant}
                   query={query}
                   styles={s}
-                  onGo={onGo}
+                  returnTo={returnTo}
                   onColbertToggle={onColbertToggle}
                   onFeeChange={onFeeChange}
                 />
@@ -445,23 +456,10 @@ function ManagerSection({
   onColbertToggle?: (id: string, colbert: boolean) => void;
   onFeeChange?: (id: string, fee: number | null) => void;
 }) {
-  const router = useRouter();
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate } = splitPersonalCorporate(clients);
   const totalFee = sumClientFees(clients);
   const theme = MANAGER_THEME[manager] ?? DEFAULT_MANAGER_THEME;
-
-  const go = (clientId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    let from = returnTo ?? '';
-    if (from) {
-      const u = new URL(from, window.location.origin);
-      u.searchParams.set('scroll', String(Math.round(window.scrollY)));
-      from = u.pathname + u.search;
-    }
-    const q = from ? `?from=${encodeURIComponent(from)}` : '';
-    router.push(`/clients/${clientId}${q}`);
-  };
 
   return (
     <section
@@ -506,7 +504,7 @@ function ManagerSection({
           variant="personal"
           clients={personal}
           query={query}
-          onGo={go}
+          returnTo={returnTo}
           onColbertToggle={onColbertToggle}
           onFeeChange={onFeeChange}
         />
@@ -515,7 +513,7 @@ function ManagerSection({
           variant="corporate"
           clients={corporate}
           query={query}
-          onGo={go}
+          returnTo={returnTo}
           onColbertToggle={onColbertToggle}
           onFeeChange={onFeeChange}
         />

@@ -5,8 +5,8 @@ import { getSessionOptions } from './session';
 
 export const PORTAL_ADMIN_LOGIN_ID = 'charlie';
 
-export function isPortalAdmin(user: { loginId: string }) {
-  return user.loginId === PORTAL_ADMIN_LOGIN_ID;
+export function isPortalAdmin(user: { role?: 'staff' | 'admin'; loginId?: string }) {
+  return user.role === 'admin';
 }
 
 export async function getServerSession() {

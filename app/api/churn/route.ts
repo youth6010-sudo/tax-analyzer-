@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth';
+import { handleApiError } from '@/lib/apiError';
+import { requireUser, isPortalAdmin } from '@/lib/auth';
 import { listChurnRecords, listChurnedClientsWithoutRecord } from '@/lib/clientsDb';
 
 export async function GET() {
   try {
-    await requireUser();
+    const user = await requireUser();
+    const mineOnly = !isPortalAdmin(user);
+    const accessFilter = mineOnly
+      ? { mineOnly: true as const, userId: user.id, userName: user.name }
+      : {};
     const [records, missingClients] = await Promise.all([
-      listChurnRecords(),
-      listChurnedClientsWithoutRecord(),
+      listChurnRecords(accessFilter),
+      listChurnedClientsWithoutRecord(accessFilter),
     ]);
     return NextResponse.json({ records, missingClients });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }

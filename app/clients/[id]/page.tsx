@@ -3,10 +3,10 @@ import AppHeader from '../../components/AppHeader';
 import ContactDetailView from '../../components/ContactDetailView';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
 import ClientDouzoneSection from '../../components/ClientDouzoneSection';
-import ClientDetailExtras from '../../components/clients/ClientDetailExtras';
 import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
 import { requireUser } from '@/lib/auth';
 import { getClientById } from '@/lib/clientsDb';
+import { getClientRelatedCounts } from '@/lib/workbookDb';
 import { clientRecordToContact } from '@/lib/clientMapper';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +21,8 @@ export default async function ClientDetailPage({
   const client = await getClientById(id);
   if (!client) notFound();
 
+  const related = await getClientRelatedCounts(id, client.companyName);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
@@ -30,7 +32,6 @@ export default async function ClientDetailPage({
       />
       <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pb-8 space-y-4 -mt-2">
         <ClientContactsPanel clientId={client.id} />
-        <ClientDetailExtras client={client} />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection
             clientId={client.id}
@@ -39,7 +40,7 @@ export default async function ClientDetailPage({
             program={client.program}
           />
         )}
-        <ClientRelatedLinks clientId={client.id} />
+        <ClientRelatedLinks clientId={client.id} initial={related} />
       </div>
     </div>
   );

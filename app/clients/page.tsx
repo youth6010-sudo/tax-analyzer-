@@ -6,7 +6,7 @@ import AppHeader from '../components/AppHeader';
 import EntityPairGrid from '../components/clients/EntityPairGrid';
 import ManagerRosterGrid from '../components/clients/ManagerRosterGrid';
 import type { ClientRecord } from '../types/client';
-import { hydratePortal } from '@/app/utils/portalStore';
+import { hydratePortal, getPortalClients, subscribePortal } from '@/app/utils/portalStore';
 import {
   ALWAYS_VISIBLE_CATEGORIES,
   filterClientsByCategoryVisibility,
@@ -44,13 +44,18 @@ function ClientsPageContent() {
   const scrollRestored = useRef(false);
   const defaultMgrApplied = useRef(false);
 
-  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>(() => getPortalClients());
+  const [loading, setLoading] = useState(() => getPortalClients().length === 0);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
   const state: ClientsListState = urlState;
 
   useEffect(() => {
     hydratePortal();
+    return subscribePortal(() => {
+      const cached = getPortalClients();
+      if (cached.length > 0) setClients(cached);
+    });
   }, []);
 
   useEffect(() => {
@@ -66,9 +71,17 @@ function ClientsPageContent() {
     const params = new URLSearchParams();
     if (state.mineOnly) params.set('mine', '1');
     if (state.includeChurned) params.set('includeChurned', '1');
-    const res = await fetch(`/api/clients?${params}`);
-    const data = await res.json();
-    setClients(data.clients ?? []);
+    setClients(prev => {
+      if (prev.length === 0) setLoading(true);
+      return prev;
+    });
+    try {
+      const res = await fetch(`/api/clients?${params}`);
+      const data = await res.json();
+      setClients(data.clients ?? []);
+    } finally {
+      setLoading(false);
+    }
   }, [state.mineOnly, state.includeChurned]);
 
   useEffect(() => {
@@ -450,7 +463,12 @@ function ClientsPageContent() {
           </div>
         )}
 
-        {state.view === 'manager' ? (
+        {loading && clients.length === 0 ? (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-48 bg-gray-100 rounded-xl" />
+            <div className="h-48 bg-gray-100 rounded-xl" />
+          </div>
+        ) : state.view === 'manager' ? (
           <ManagerRosterGrid
             clients={filtered}
             sort={state.sort}
@@ -472,6 +490,7 @@ function ClientsPageContent() {
         )}
 
         <p className="mt-4 text-sm text-gray-500 text-center">
+          {loading && clients.length > 0 ? '새로고침 중… · ' : ''}
           {totalCount}건 표시 · 행 클릭 시 상세
         </p>
       </main>

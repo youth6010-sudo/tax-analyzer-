@@ -9,7 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import XLSX from 'xlsx';
 import postgres from 'postgres';
-import { detectYouthIdWorkbook, parseWorkbook } from './lib/youth-workbook-parse.mjs';
+import { detectYouthIdWorkbook, mergeChecklists, parseWorkbook } from './lib/youth-workbook-parse.mjs';
 import {
   isManagerNameOnlyRow,
   normBizNo,
@@ -210,86 +210,86 @@ function shouldSkipOperationalRow(row) {
   });
 }
 
-// --- intake_inquiries ---
-for (const row of data.inquiries) {
-  if (shouldSkipOperationalRow(row)) {
-    skippedOps.push({ type: 'inquiry', companyName: row.companyName, manager: row.consultant });
-    await track('skipped');
-    continue;
-  }
-  const clientId = resolveClientId(clientLookup, row.companyName, null, row.businessNo);
-  await track(await upsertInquiry(row, clientId, sql));
-}
-
-// --- intake_processes ---
-for (const row of data.processes) {
-  if (shouldSkipOperationalRow(row)) {
-    skippedOps.push({ type: 'process', companyName: row.companyName });
-    await track('skipped');
-    continue;
-  }
-  const clientId = resolveClientId(clientLookup, row.companyName);
-  let existing = await sql`SELECT id, checklist, excel_key FROM intake_processes WHERE excel_key = ${row.excelKey} LIMIT 1`;
-  if (!existing.length) {
-    existing = await sql`
-      SELECT id, checklist, excel_key FROM intake_processes
-      WHERE company_name = ${row.companyName}
-      ORDER BY updated_at DESC LIMIT 1
-    `;
-  }
-  const mergedChecklist = existing.length
-    ? mergeChecklists(existing[0].checklist ?? {}, row.checklist)
-    : row.checklist;
-
-  if (existing.length) {
-    await sql`
-      UPDATE intake_processes SET client_id=${clientId}, company_name=${row.companyName},
-        fee_start_date=${row.feeStartDate}, monthly_fee=${row.monthlyFee},
-        channel=${row.channel}, checklist=${sql.json(mergedChecklist)},
-        excel_key=${row.excelKey}, updated_at=NOW() WHERE id=${existing[0].id}
-    `;
-    await track('updated');
-  } else {
-    await sql`
-      INSERT INTO intake_processes (client_id, company_name, fee_start_date, monthly_fee, channel, checklist, excel_key)
-      VALUES (${clientId}, ${row.companyName}, ${row.feeStartDate}, ${row.monthlyFee}, ${row.channel}, ${sql.json(row.checklist)}, ${row.excelKey})
-    `;
-    await track('inserted');
-  }
-}
-
-// --- churn_records ---
+// --- intake_inquiries / processes / churn (single transaction) ---
 let churnCount = 0;
-for (const row of data.churns) {
-  if (shouldSkipOperationalRow(row)) {
-    skippedOps.push({ type: 'churn', companyName: row.companyName, manager: row.manager });
-    continue;
-  }
-  const clientId = resolveClientId(clientLookup, row.companyName, row.manager, row.businessNo);
-  const existing = await sql`SELECT id FROM churn_records WHERE excel_key = ${row.excelKey} LIMIT 1`;
-  const churnedAt = row.churnedAt ? new Date(row.churnedAt) : new Date();
-
-  if (existing.length) {
-    await sql`
-      UPDATE churn_records SET client_id=${clientId}, company_name=${row.companyName}, reason=${row.reason},
-        churn_type=${row.churnType}, data_cleanup=${row.dataCleanup}, early_sign=${row.earlySign},
-        fee_amount=${row.feeAmount}, manager=${row.manager}, churned_at=${churnedAt}
-      WHERE id=${existing[0].id}
-    `;
-  } else {
-    await sql`
-      INSERT INTO churn_records (client_id, company_name, reason, detail, churn_type, data_cleanup, early_sign,
-        fee_amount, manager, churned_at, excel_key)
-      VALUES (${clientId}, ${row.companyName}, ${row.reason}, '', ${row.churnType}, ${row.dataCleanup},
-        ${row.earlySign}, ${row.feeAmount}, ${row.manager}, ${churnedAt}, ${row.excelKey})
-    `;
+await sql.begin(async tx => {
+  for (const row of data.inquiries) {
+    if (shouldSkipOperationalRow(row)) {
+      skippedOps.push({ type: 'inquiry', companyName: row.companyName, manager: row.consultant });
+      await track('skipped');
+      continue;
+    }
+    const clientId = resolveClientId(clientLookup, row.companyName, null, row.businessNo);
+    await track(await upsertInquiry(row, clientId, tx));
   }
 
-  if (clientId) {
-    await sql`UPDATE clients SET status = 'churned', updated_at = NOW() WHERE id = ${clientId} AND status = 'active'`;
+  for (const row of data.processes) {
+    if (shouldSkipOperationalRow(row)) {
+      skippedOps.push({ type: 'process', companyName: row.companyName });
+      await track('skipped');
+      continue;
+    }
+    const clientId = resolveClientId(clientLookup, row.companyName);
+    let existing = await tx`SELECT id, checklist, excel_key FROM intake_processes WHERE excel_key = ${row.excelKey} LIMIT 1`;
+    if (!existing.length) {
+      existing = await tx`
+        SELECT id, checklist, excel_key FROM intake_processes
+        WHERE company_name = ${row.companyName}
+        ORDER BY updated_at DESC LIMIT 1
+      `;
+    }
+    const mergedChecklist = existing.length
+      ? mergeChecklists(existing[0].checklist ?? {}, row.checklist)
+      : row.checklist;
+
+    if (existing.length) {
+      await tx`
+        UPDATE intake_processes SET client_id=${clientId}, company_name=${row.companyName},
+          fee_start_date=${row.feeStartDate}, monthly_fee=${row.monthlyFee},
+          channel=${row.channel}, checklist=${tx.json(mergedChecklist)},
+          excel_key=${row.excelKey}, updated_at=NOW() WHERE id=${existing[0].id}
+      `;
+      await track('updated');
+    } else {
+      await tx`
+        INSERT INTO intake_processes (client_id, company_name, fee_start_date, monthly_fee, channel, checklist, excel_key)
+        VALUES (${clientId}, ${row.companyName}, ${row.feeStartDate}, ${row.monthlyFee}, ${row.channel}, ${tx.json(row.checklist)}, ${row.excelKey})
+      `;
+      await track('inserted');
+    }
   }
-  churnCount++;
-}
+
+  for (const row of data.churns) {
+    if (shouldSkipOperationalRow(row)) {
+      skippedOps.push({ type: 'churn', companyName: row.companyName, manager: row.manager });
+      continue;
+    }
+    const clientId = resolveClientId(clientLookup, row.companyName, row.manager, row.businessNo);
+    const existing = await tx`SELECT id FROM churn_records WHERE excel_key = ${row.excelKey} LIMIT 1`;
+    const churnedAt = row.churnedAt ? new Date(row.churnedAt) : new Date();
+
+    if (existing.length) {
+      await tx`
+        UPDATE churn_records SET client_id=${clientId}, company_name=${row.companyName}, reason=${row.reason},
+          churn_type=${row.churnType}, data_cleanup=${row.dataCleanup}, early_sign=${row.earlySign},
+          fee_amount=${row.feeAmount}, manager=${row.manager}, churned_at=${churnedAt}
+        WHERE id=${existing[0].id}
+      `;
+    } else {
+      await tx`
+        INSERT INTO churn_records (client_id, company_name, reason, detail, churn_type, data_cleanup, early_sign,
+          fee_amount, manager, churned_at, excel_key)
+        VALUES (${clientId}, ${row.companyName}, ${row.reason}, '', ${row.churnType}, ${row.dataCleanup},
+          ${row.earlySign}, ${row.feeAmount}, ${row.manager}, ${churnedAt}, ${row.excelKey})
+      `;
+    }
+
+    if (clientId) {
+      await tx`UPDATE clients SET status = 'churned', updated_at = NOW() WHERE id = ${clientId} AND status = 'active'`;
+    }
+    churnCount++;
+  }
+});
 
 await sql.end();
 

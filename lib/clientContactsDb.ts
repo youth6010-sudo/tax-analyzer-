@@ -62,6 +62,35 @@ export async function getPrimaryContactNamesByClientIds(
   return map;
 }
 
+/** clientId → 주 연락처 휴대/전화 (is_primary 우선) */
+export async function getPrimaryContactPhonesByClientIds(
+  clientIds: string[],
+): Promise<Map<string, string>> {
+  if (clientIds.length === 0) return new Map();
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      clientId: clientContacts.clientId,
+      mobilePhone: clientContacts.mobilePhone,
+      phone: clientContacts.phone,
+      isPrimary: clientContacts.isPrimary,
+    })
+    .from(clientContacts)
+    .where(inArray(clientContacts.clientId, clientIds))
+    .orderBy(desc(clientContacts.isPrimary), asc(clientContacts.name));
+
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    const mobile = row.mobilePhone.trim() || row.phone.trim();
+    if (!mobile) continue;
+    if (row.isPrimary || !map.has(row.clientId)) {
+      map.set(row.clientId, mobile);
+    }
+  }
+  return map;
+}
+
 export type ContactSearchData = {
   contactNames: string[];
   searchText: string;

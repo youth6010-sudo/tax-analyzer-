@@ -1,6 +1,5 @@
 import { isPortalAdmin, requireUser } from '@/lib/auth';
 import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '@/lib/clientsDb';
-import { listClientSearchIndex } from '@/lib/clientSearchIndex';
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 import { listInquiries, listIntakeProcesses } from '@/lib/workbookDb';
 
@@ -25,8 +24,11 @@ function statsFromClients(clients: { businessEntityType?: string | null }[]): Po
 export async function getPortalBootstrap() {
   const user = await requireUser();
   const mineOnly = !isPortalAdmin(user);
+  const accessFilter = mineOnly
+    ? { mineOnly: true as const, userId: user.id, userName: user.name }
+    : {};
 
-  const [tasks, activeClients, searchIndex, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
+  const [tasks, activeClients, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
     listDashboardTasks(user.name),
     listClients({
       status: 'active',
@@ -34,11 +36,10 @@ export async function getPortalBootstrap() {
       userId: user.id,
       userName: user.name,
     }),
-    listClientSearchIndex(),
     listInquiries(),
     listIntakeProcesses(),
-    listChurnRecords(),
-    listChurnedClientsWithoutRecord(),
+    listChurnRecords(accessFilter),
+    listChurnedClientsWithoutRecord(accessFilter),
   ]);
 
   return {
@@ -46,10 +47,19 @@ export async function getPortalBootstrap() {
     tasks,
     homeStats: statsFromClients(activeClients),
     clients: activeClients,
-    searchIndex,
+    searchIndex: [],
     inquiries,
     processes,
     churnRecords,
     churnMissingClients,
   };
+}
+
+export async function getPortalSearchIndex() {
+  const user = await requireUser();
+  const mineOnly = !isPortalAdmin(user);
+  const { listClientSearchIndex } = await import('@/lib/clientSearchIndex');
+  return listClientSearchIndex(
+    mineOnly ? { mineOnly: true, userId: user.id, userName: user.name } : {},
+  );
 }

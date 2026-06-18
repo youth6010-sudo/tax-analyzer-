@@ -1,11 +1,11 @@
-import { and, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
 import type { ChurnSummary, ClientStatus } from '@/app/types/client';
-import { clientToRecord } from '@/lib/clientMapper';
-import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
-import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
+import { getPrimaryContactNamesByClientIds, getPrimaryContactPhonesByClientIds } from '@/lib/clientContactsDb';
+import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -43,14 +43,8 @@ export async function listClients(filters: ClientListFilters = {}) {
   if (filters.assignedUserId) {
     conditions.push(eq(clients.assignedUserId, filters.assignedUserId));
   } else if (filters.mineOnly && filters.userId) {
-    const matchNames = getManagerMatchNames(filters.userName ?? '');
-    const managerConds = matchNames.map(name => eq(clients.manager, name));
-    conditions.push(
-      or(
-        eq(clients.assignedUserId, filters.userId),
-        ...(managerConds.length > 0 ? managerConds : []),
-      )!,
-    );
+    const mineCond = buildMineOnlyClientCondition(filters.userId, filters.userName ?? '');
+    if (mineCond) conditions.push(mineCond);
   }
 
   const rows = await db
@@ -59,22 +53,32 @@ export async function listClients(filters: ClientListFilters = {}) {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(clients.companyName);
 
-  return rows.map(clientToRecord);
+  return rows.map(clientToListRecord);
 }
 
 export async function getClientById(id: string) {
   const db = getDb();
   const [row] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
   if (!row) return null;
-  const record = clientToRecord(row);
-  const primaryNames = await getPrimaryContactNamesByClientIds([id]);
+  const [primaryNames, primaryPhones] = await Promise.all([
+    getPrimaryContactNamesByClientIds([id]),
+    getPrimaryContactPhonesByClientIds([id]),
+  ]);
+  const record = clientToRecord(row, { primaryContactMobile: primaryPhones.get(id) });
   const primaryContactName = primaryNames.get(id);
   return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
 export async function searchClients(
   query: string,
-  options?: { includeIntake?: boolean; includeChurned?: boolean; activeOnly?: boolean },
+  options?: {
+    includeIntake?: boolean;
+    includeChurned?: boolean;
+    activeOnly?: boolean;
+    mineOnly?: boolean;
+    userId?: string;
+    userName?: string;
+  },
 ) {
   const q = query.trim();
   if (!q) return [];
@@ -99,6 +103,12 @@ export async function searchClients(
     statusCond = eq(clients.status, 'active');
   }
 
+  let mineCond: SQL | undefined;
+  if (options?.mineOnly && options.userId) {
+    mineCond = buildMineOnlyClientCondition(options.userId, options.userName ?? '');
+  }
+  const accessCond = mergeClientConditions(statusCond, mineCond);
+
   const matchedContactByClient = new Map<string, string>();
   const contactClientIdSet = new Set<string>();
 
@@ -121,7 +131,7 @@ export async function searchClients(
     .select({ clientId: clientContacts.clientId, name: clientContacts.name })
     .from(clientContacts)
     .innerJoin(clients, eq(clients.id, clientContacts.clientId))
-    .where(and(statusCond, or(...contactTextConds)))
+    .where(and(accessCond, or(...contactTextConds)))
     .limit(60);
 
   for (const hit of contactHits) {
@@ -161,7 +171,7 @@ export async function searchClients(
   const rows = await db
     .select()
     .from(clients)
-    .where(and(statusCond, or(...clientConds)))
+    .where(and(accessCond, or(...clientConds)))
     .limit(40);
 
   const sorted = [...rows].sort((a, b) => {
@@ -464,8 +474,14 @@ export async function getChurnRecordByClientId(clientId: string) {
   };
 }
 
-export async function listChurnRecords() {
+export async function listChurnRecords(filters?: { mineOnly?: boolean; userId?: string; userName?: string }) {
   const db = getDb();
+  const conditions: SQL[] = [];
+  if (filters?.mineOnly && filters.userId) {
+    const mineCond = buildMineOnlyClientCondition(filters.userId, filters.userName ?? '');
+    if (mineCond) conditions.push(mineCond);
+  }
+
   const rows = await db
     .select({
       id: churnRecords.id,
@@ -484,6 +500,7 @@ export async function listChurnRecords() {
     .from(churnRecords)
     .leftJoin(clients, eq(churnRecords.clientId, clients.id))
     .leftJoin(users, eq(churnRecords.recordedByUserId, users.id))
+    .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(sql`${churnRecords.churnedAt} desc`);
 
   return rows.map(r => ({
@@ -502,13 +519,19 @@ export async function listChurnRecords() {
   }));
 }
 
-export async function listChurnedClientsWithoutRecord() {
+export async function listChurnedClientsWithoutRecord(filters?: { mineOnly?: boolean; userId?: string; userName?: string }) {
   const db = getDb();
+  const conditions = [eq(clients.status, 'churned'), isNull(churnRecords.id)];
+  if (filters?.mineOnly && filters.userId) {
+    const mineCond = buildMineOnlyClientCondition(filters.userId, filters.userName ?? '');
+    if (mineCond) conditions.push(mineCond);
+  }
+
   const rows = await db
     .select({ client: clients })
     .from(clients)
     .leftJoin(churnRecords, eq(churnRecords.clientId, clients.id))
-    .where(and(eq(clients.status, 'churned'), isNull(churnRecords.id)))
+    .where(and(...conditions))
     .orderBy(clients.companyName);
 
   return rows.map(r => clientToRecord(r.client));
@@ -584,6 +607,22 @@ export async function updateChurnRecord(
     churnedAt: r.churnedAt.toISOString(),
     recordedByName: r.recordedByName,
   };
+}
+
+export async function getChurnRecordById(id: string) {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: churnRecords.id,
+      clientId: churnRecords.clientId,
+      manager: sql<string>`coalesce(${clients.manager}, ${churnRecords.manager})`,
+      assignedUserId: clients.assignedUserId,
+    })
+    .from(churnRecords)
+    .leftJoin(clients, eq(churnRecords.clientId, clients.id))
+    .where(eq(churnRecords.id, id))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function deleteChurnRecord(id: string) {

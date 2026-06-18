@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ClientRecord } from '@/app/types/client';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
+import { buildClientDetailHref } from '@/app/utils/clientDetailNav';
 import { formatBusinessNo, formatPersonOrCorpId } from '@/app/utils/idFormat';
 import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
 
@@ -73,23 +75,19 @@ export default function ClientRowLine({
   const rep = client.representative?.trim() ?? '';
   const showRep = rep && rep !== client.companyName.trim();
   const grid = showCode ? CLIENT_ROW_GRID : CLIENT_ROW_GRID_NO_CODE;
-
-  const go = (e: React.MouseEvent) => {
-    e.preventDefault();
-    let from = returnTo ?? '';
-    if (from) {
-      const u = new URL(from, window.location.origin);
-      u.searchParams.set('scroll', String(Math.round(window.scrollY)));
-      from = u.pathname + u.search;
-    }
-    const q = from ? `?from=${encodeURIComponent(from)}` : '';
-    router.push(`/clients/${client.id}${q}`);
-  };
+  const detailPath = `/clients/${client.id}`;
+  const href = buildClientDetailHref(client.id, returnTo);
 
   return (
-    <a
-      href={`/clients/${client.id}`}
-      onClick={go}
+    <Link
+      href={href}
+      prefetch
+      onMouseEnter={() => router.prefetch(detailPath)}
+      onClick={e => {
+        if (!returnTo) return;
+        e.preventDefault();
+        router.push(buildClientDetailHref(client.id, returnTo, window.scrollY));
+      }}
       className={[
         'group block border-b border-gray-200/80 transition-colors',
         'hover:bg-blue-50/90 hover:border-blue-100/80',
@@ -142,6 +140,6 @@ export default function ClientRowLine({
           <Highlight text={dash(phone)} query={query} />
         </span>
       </div>
-    </a>
+    </Link>
   );
 }

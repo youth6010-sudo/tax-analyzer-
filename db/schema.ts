@@ -1,12 +1,13 @@
 import {
+  boolean,
+  index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
   uuid,
-  integer,
-  boolean,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
@@ -48,7 +49,11 @@ export const clients = pgTable('clients', {
   source: clientSourceEnum('source').notNull().default('tp_import'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, t => [
+  index('clients_business_no_idx').on(t.businessNo),
+  index('clients_manager_idx').on(t.manager),
+  index('clients_assigned_user_id_idx').on(t.assignedUserId),
+]);
 
 export const churnRecords = pgTable('churn_records', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -173,7 +178,9 @@ export const clientContacts = pgTable('client_contacts', {
   excelKey: text('excel_key').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, t => [
+  index('client_contacts_client_id_idx').on(t.clientId),
+]);
 
 /** 세무 신고 통합 케이스 보드 (지점·세목·기간당 1건) */
 export const taxFilingChecks = pgTable(
@@ -192,7 +199,7 @@ export const taxFilingChecks = pgTable(
     checkedAt: timestamp('checked_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  t => [uniqueIndex('tax_filing_checks_scope_period_idx').on(t.scope, t.taxType, t.periodKey)],
+  t => [uniqueIndex('tax_filing_checks_client_scope_period_idx').on(t.clientId, t.scope, t.taxType, t.periodKey)],
 );
 
 /** 점심 맛집 추가 요청 큐 */

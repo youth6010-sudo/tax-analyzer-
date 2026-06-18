@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { handleApiError } from '@/lib/apiError';
+import { assertCanAccessClient } from '@/lib/clientAccess';
 import { requireUser, isPortalAdmin } from '@/lib/auth';
-import { churnClient, listClients } from '@/lib/clientsDb';
+import { churnClient, getClientById, listClients } from '@/lib/clientsDb';
 
 export async function GET() {
   try {
@@ -12,8 +14,8 @@ export async function GET() {
       userName: user.name,
     });
     return NextResponse.json({ clients });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }
 
@@ -34,6 +36,8 @@ export async function POST(request: Request) {
     if (!body.clientId || !body.reason?.trim()) {
       return NextResponse.json({ error: '수임처와 유출 사유를 입력해 주세요.' }, { status: 400 });
     }
+    const existing = await getClientById(body.clientId);
+    assertCanAccessClient(user, existing);
     const client = await churnClient(
       body.clientId,
       {
@@ -50,12 +54,9 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({ client });
   } catch (e) {
-    if (e instanceof Error && e.message === 'NOT_FOUND') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
     if (e instanceof Error && e.message === 'ALREADY_HAS_RECORD') {
       return NextResponse.json({ error: '이미 유출 이력이 있습니다.' }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return handleApiError(e);
   }
 }

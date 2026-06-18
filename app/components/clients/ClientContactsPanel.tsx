@@ -14,12 +14,90 @@ const emptyForm = {
   isPrimary: false,
 };
 
+function ContactAddForm({
+  form,
+  setForm,
+  saving,
+  onSave,
+  onCancel,
+}: {
+  form: typeof emptyForm;
+  setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
+  saving: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          value={form.name}
+          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          placeholder="이름"
+          className="col-span-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          autoFocus
+        />
+        <select
+          value={form.role}
+          onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+          className="col-span-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">역할 선택</option>
+          {CONTACT_ROLES.map(r => (
+            <option key={r} value={r}>
+              {r.replace('_', ' ')}
+            </option>
+          ))}
+        </select>
+        <input
+          value={form.phone}
+          onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+          placeholder="전화번호"
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        />
+        <input
+          value={form.mobilePhone}
+          onChange={e => setForm(f => ({ ...f, mobilePhone: e.target.value }))}
+          placeholder="휴대번호"
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-sm text-gray-600">
+        <input
+          type="checkbox"
+          checked={form.isPrimary}
+          onChange={e => setForm(f => ({ ...f, isPrimary: e.target.checked }))}
+        />
+        주 연락처
+      </label>
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50"
+        >
+          취소
+        </button>
+        <button
+          type="button"
+          disabled={saving || !form.name.trim()}
+          onClick={onSave}
+          className="px-4 py-2 text-sm font-bold rounded-xl bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700"
+        >
+          {saving ? '저장 중…' : '추가'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientContactsPanel({ clientId }: Props) {
   const [contacts, setContacts] = useState<ClientContactRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +114,11 @@ export default function ClientContactsPanel({ clientId }: Props) {
     void load();
   }, [load]);
 
+  const closeAddForm = () => {
+    setShowAddForm(false);
+    setForm(emptyForm);
+  };
+
   const saveNew = async () => {
     setSaving(true);
     try {
@@ -45,7 +128,7 @@ export default function ClientContactsPanel({ clientId }: Props) {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error('저장 실패');
-      setForm(emptyForm);
+      closeAddForm();
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : '저장하지 못했습니다.');
@@ -79,83 +162,75 @@ export default function ClientContactsPanel({ clientId }: Props) {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <h2 className="text-sm font-black text-gray-900">연락처 목록</h2>
-        <p className="text-[10px] text-gray-500 mt-0.5">대표·사모·실무 담당 등 여러 명을 등록할 수 있습니다.</p>
-      </div>
-
-      <div className="p-4 space-y-3">
-        {loading ? (
-          <p className="text-xs text-gray-400">불러오는 중…</p>
-        ) : contacts.length === 0 ? (
-          <p className="text-xs text-gray-400">등록된 연락처가 없습니다.</p>
-        ) : (
-          contacts.map(c => (
-            <ContactRow
-              key={c.id}
-              contact={c}
-              editing={editingId === c.id}
-              saving={saving}
-              onEdit={() => setEditingId(c.id)}
-              onCancel={() => setEditingId(null)}
-              onSave={patch => void saveEdit(c.id, patch)}
-              onDelete={() => void remove(c.id)}
-            />
-          ))
-        )}
-
-        <div className="rounded-xl border border-dashed border-gray-200 p-3 space-y-2">
-          <p className="text-[10px] font-bold text-gray-500">연락처 추가</p>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="이름"
-              className="col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-            />
-            <select
-              value={form.role}
-              onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-              className="col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-            >
-              <option value="">역할 선택</option>
-              {CONTACT_ROLES.map(r => (
-                <option key={r} value={r}>{r.replace('_', ' ')}</option>
-              ))}
-            </select>
-            <input
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              placeholder="전화번호"
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-            />
-            <input
-              value={form.mobilePhone}
-              onChange={e => setForm(f => ({ ...f, mobilePhone: e.target.value }))}
-              placeholder="휴대번호"
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-            />
+    <>
+      <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black text-gray-900">연락처 목록</h2>
+            <p className="text-[10px] text-gray-500 mt-0.5">대표·사모·실무 담당 등 여러 명을 등록할 수 있습니다.</p>
           </div>
-          <label className="flex items-center gap-2 text-[10px] text-gray-600">
-            <input
-              type="checkbox"
-              checked={form.isPrimary}
-              onChange={e => setForm(f => ({ ...f, isPrimary: e.target.checked }))}
-            />
-            주 연락처
-          </label>
           <button
             type="button"
-            disabled={saving || !form.name.trim()}
-            onClick={() => void saveNew()}
-            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white disabled:opacity-50"
+            onClick={() => setShowAddForm(true)}
+            className="shrink-0 px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
           >
-            추가
+            + 연락처 추가
           </button>
         </div>
+
+        <div className="p-4 space-y-3">
+          {loading ? (
+            <p className="text-xs text-gray-400">불러오는 중…</p>
+          ) : contacts.length === 0 ? (
+            <p className="text-xs text-gray-400">등록된 연락처가 없습니다.</p>
+          ) : (
+            contacts.map(c => (
+              <ContactRow
+                key={c.id}
+                contact={c}
+                editing={editingId === c.id}
+                saving={saving}
+                onEdit={() => setEditingId(c.id)}
+                onCancel={() => setEditingId(null)}
+                onSave={patch => void saveEdit(c.id, patch)}
+                onDelete={() => void remove(c.id)}
+              />
+            ))
+          )}
+        </div>
       </div>
-    </div>
+
+      {showAddForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contact-add-title"
+          onClick={closeAddForm}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+              <h3 id="contact-add-title" className="text-base font-black text-gray-900">
+                연락처 추가
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">이름·역할·전화번호를 입력하세요.</p>
+            </div>
+            <div className="p-5">
+              <ContactAddForm
+                form={form}
+                setForm={setForm}
+                saving={saving}
+                onSave={() => void saveNew()}
+                onCancel={closeAddForm}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -217,8 +292,12 @@ function ContactRow({
           </p>
         </div>
         <div className="flex gap-1">
-          <button type="button" onClick={onEdit} className="text-[10px] font-bold px-2 py-1 rounded border border-gray-200">수정</button>
-          <button type="button" onClick={onDelete} className="text-[10px] font-bold px-2 py-1 rounded border border-red-200 text-red-700">삭제</button>
+          <button type="button" onClick={onEdit} className="text-[10px] font-bold px-2 py-1 rounded border border-gray-200">
+            수정
+          </button>
+          <button type="button" onClick={onDelete} className="text-[10px] font-bold px-2 py-1 rounded border border-red-200 text-red-700">
+            삭제
+          </button>
         </div>
       </div>
     );
@@ -230,7 +309,11 @@ function ContactRow({
         <input value={local.name} onChange={e => setLocal(l => ({ ...l, name: e.target.value }))} className="border rounded px-2 py-1 text-xs" />
         <select value={local.role} onChange={e => setLocal(l => ({ ...l, role: e.target.value }))} className="border rounded px-2 py-1 text-xs">
           <option value="">역할</option>
-          {CONTACT_ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+          {CONTACT_ROLES.map(r => (
+            <option key={r} value={r}>
+              {r.replace('_', ' ')}
+            </option>
+          ))}
         </select>
         <input value={local.phone} onChange={e => setLocal(l => ({ ...l, phone: e.target.value }))} placeholder="전화" className="border rounded px-2 py-1 text-xs" />
         <input value={local.mobilePhone} onChange={e => setLocal(l => ({ ...l, mobilePhone: e.target.value }))} placeholder="휴대" className="border rounded px-2 py-1 text-xs" />
@@ -240,8 +323,12 @@ function ContactRow({
         주 연락처
       </label>
       <div className="flex gap-2">
-        <button type="button" disabled={saving} onClick={() => onSave(local)} className="text-[10px] font-bold px-2 py-1 rounded bg-blue-600 text-white">저장</button>
-        <button type="button" onClick={onCancel} className="text-[10px] font-bold px-2 py-1 rounded border">취소</button>
+        <button type="button" disabled={saving} onClick={() => onSave(local)} className="text-[10px] font-bold px-2 py-1 rounded bg-blue-600 text-white">
+          저장
+        </button>
+        <button type="button" onClick={onCancel} className="text-[10px] font-bold px-2 py-1 rounded border">
+          취소
+        </button>
       </div>
     </div>
   );

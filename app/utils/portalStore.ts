@@ -24,11 +24,16 @@ export type PortalBootstrap = {
   churnMissingClients: ClientRecord[];
 };
 
-const STORAGE_KEY = 'portalBootstrap:v4';
+const STORAGE_KEY = 'portalBootstrap:v5';
+const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
+const SEARCH_FRESH_MS = 300_000;
 
 let memory: PortalBootstrap | null = null;
+let searchIndexMemory: ClientSearchResult[] | null = null;
+let searchIndexFetchedAt = 0;
 let inflight: Promise<PortalBootstrap | null> | null = null;
+let searchInflight: Promise<ClientSearchResult[] | null> | null = null;
 const listeners = new Set<() => void>();
 
 function readStorage(): PortalBootstrap | null {
@@ -58,12 +63,39 @@ function writeStorage(data: PortalBootstrap): void {
   }
 }
 
+function readSearchIndexStorage(): ClientSearchResult[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SEARCH_INDEX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { fetchedAt: number; searchIndex: ClientSearchResult[] };
+    searchIndexFetchedAt = parsed.fetchedAt ?? 0;
+    return parsed.searchIndex ?? [];
+  } catch {
+    return null;
+  }
+}
+
+function writeSearchIndexStorage(searchIndex: ClientSearchResult[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    searchIndexFetchedAt = Date.now();
+    localStorage.setItem(
+      SEARCH_INDEX_KEY,
+      JSON.stringify({ fetchedAt: searchIndexFetchedAt, searchIndex }),
+    );
+  } catch {
+    /* quota */
+  }
+}
+
 function notify() {
   for (const fn of listeners) fn();
 }
 
 if (typeof window !== 'undefined') {
   memory = readStorage();
+  searchIndexMemory = readSearchIndexStorage();
 }
 
 export function getPortalBootstrap(): PortalBootstrap | null {
@@ -83,11 +115,11 @@ export function getPortalClients(): ClientRecord[] {
 }
 
 export function getPortalSearchIndex(): ClientSearchResult[] {
-  return memory?.searchIndex ?? [];
+  return searchIndexMemory ?? memory?.searchIndex ?? [];
 }
 
 export function searchPortalClients(query: string, opts?: { activeOnly?: boolean }): ClientSearchResult[] {
-  const index = memory?.searchIndex;
+  const index = searchIndexMemory ?? memory?.searchIndex;
   if (!index?.length) return [];
   const hits = filterClientSearchIndex(index, query);
   if (opts?.activeOnly) return hits.filter(c => c.status === 'active');
@@ -155,6 +187,33 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
     });
 
   return inflight;
+}
+
+export function prefetchSearchIndex(force = false): Promise<ClientSearchResult[] | null> {
+  if (!force && searchIndexMemory && Date.now() - searchIndexFetchedAt < SEARCH_FRESH_MS) {
+    return Promise.resolve(searchIndexMemory);
+  }
+  if (searchInflight) return searchInflight;
+
+  searchInflight = fetch('/api/portal/search-index', { credentials: 'same-origin' })
+    .then(async res => {
+      if (!res.ok) return searchIndexMemory;
+      const data = (await res.json()) as { searchIndex: ClientSearchResult[] };
+      searchIndexMemory = data.searchIndex ?? [];
+      writeSearchIndexStorage(searchIndexMemory);
+      if (memory) {
+        memory = { ...memory, searchIndex: searchIndexMemory };
+        writeStorage(memory);
+      }
+      notify();
+      return searchIndexMemory;
+    })
+    .catch(() => searchIndexMemory)
+    .finally(() => {
+      searchInflight = null;
+    });
+
+  return searchInflight;
 }
 
 export function hydratePortal(): PortalBootstrap | null {

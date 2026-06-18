@@ -113,6 +113,54 @@ if (unknownCategories.length > 0) {
   exitCode = 1;
 }
 
+const duplicateActive = await sql`
+  SELECT company_name, manager, count(*)::int AS n
+  FROM clients
+  WHERE status = 'active'
+  GROUP BY company_name, manager
+  HAVING count(*) > 1
+  ORDER BY n DESC
+  LIMIT 20
+`;
+
+const intakeMobileOnly = await sql`
+  SELECT count(*)::int AS n
+  FROM clients c
+  WHERE c.status IN ('active', 'intake')
+    AND NULLIF(TRIM(c.intake_data->>'mobilePhone'), '') IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM client_contacts cc
+      WHERE cc.client_id = c.id
+        AND NULLIF(TRIM(COALESCE(cc.mobile_phone, cc.phone)), '') IS NOT NULL
+    )
+`;
+
+const orphanContacts = await sql`
+  SELECT count(*)::int AS n FROM client_contacts cc
+  LEFT JOIN clients c ON c.id = cc.client_id
+  WHERE c.id IS NULL
+`;
+
+console.log('\n=== duplicate active (company+manager) ===');
+if (duplicateActive.length === 0) {
+  console.log('  none');
+} else {
+  for (const r of duplicateActive) {
+    console.log(`  ${r.company_name} / ${r.manager}: ${r.n}건`);
+  }
+  exitCode = 1;
+}
+
+console.log('\n=== intake mobile without contact phone ===');
+console.log(`  ${intakeMobileOnly[0].n}건`);
+if (intakeMobileOnly[0].n > 0) {
+  console.log('  ⚠ intake_data.mobilePhone만 있고 연락처 전화가 없는 건');
+}
+
+console.log('\n=== orphan contacts ===');
+console.log(`  ${orphanContacts[0].n}건`);
+if (orphanContacts[0].n > 0) exitCode = 1;
+
 await sql.end();
 
 if (youthClients[0].n > 0) {

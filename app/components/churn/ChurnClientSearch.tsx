@@ -5,6 +5,7 @@ import type { ClientRecord } from '@/app/types/client';
 import {
   getPortalSearchIndex,
   hydratePortal,
+  prefetchSearchIndex,
   searchPortalClients,
 } from '@/app/utils/portalStore';
 
@@ -25,6 +26,7 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
 
   useEffect(() => {
     hydratePortal();
+    void prefetchSearchIndex();
   }, []);
 
   useEffect(() => {

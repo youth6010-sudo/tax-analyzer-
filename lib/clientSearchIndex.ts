@@ -1,25 +1,40 @@
-import { desc, eq, inArray, or } from 'drizzle-orm';
+import { desc, eq, inArray, or, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clients } from '@/db/schema';
 import type { ChurnSummary, ClientSearchResult } from '@/app/types/client';
 import { clientToRecord } from '@/lib/clientMapper';
 import { intakeSearchText } from '@/app/utils/searchNormalize';
+import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 import {
   getContactSearchDataByClientIds,
   getPrimaryContactNamesByClientIds,
+  getPrimaryContactPhonesByClientIds,
 } from '@/lib/clientContactsDb';
 
-/** 헤더 검색용 — active·intake·churned 전체 */
-export async function listClientSearchIndex(): Promise<ClientSearchResult[]> {
+export type ClientSearchIndexFilters = {
+  mineOnly?: boolean;
+  userId?: string;
+  userName?: string;
+};
+
+/** 헤더 검색용 — active·intake·churned */
+export async function listClientSearchIndex(filters: ClientSearchIndexFilters = {}): Promise<ClientSearchResult[]> {
   const db = getDb();
+  const statusCond = or(
+    eq(clients.status, 'active'),
+    eq(clients.status, 'intake'),
+    eq(clients.status, 'churned'),
+  );
+  let mineCond: SQL | undefined;
+  if (filters.mineOnly && filters.userId) {
+    mineCond = buildMineOnlyClientCondition(filters.userId, filters.userName ?? '');
+  }
+  const whereCond = mergeClientConditions(statusCond, mineCond);
+
   const rows = await db
     .select()
     .from(clients)
-    .where(or(
-      eq(clients.status, 'active'),
-      eq(clients.status, 'intake'),
-      eq(clients.status, 'churned'),
-    ))
+    .where(whereCond)
     .orderBy(clients.companyName);
 
   const churnedIds = rows.filter(r => r.status === 'churned').map(r => r.id);
@@ -49,13 +64,14 @@ export async function listClientSearchIndex(): Promise<ClientSearchResult[]> {
   }
 
   const ids = rows.map(r => r.id);
-  const [primaryNames, contactSearch] = await Promise.all([
+  const [primaryNames, primaryPhones, contactSearch] = await Promise.all([
     getPrimaryContactNamesByClientIds(ids),
+    getPrimaryContactPhonesByClientIds(ids),
     getContactSearchDataByClientIds(ids),
   ]);
 
   return rows.map(r => {
-    const record = clientToRecord(r);
+    const record = clientToRecord(r, { primaryContactMobile: primaryPhones.get(r.id) });
     const primaryContactName = primaryNames.get(r.id);
     const contacts = contactSearch.get(r.id);
     const extraIntake = intakeSearchText(record.intakeData);

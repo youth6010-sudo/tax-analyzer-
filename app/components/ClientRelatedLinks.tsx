@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 
 type Related = {
   hasInquiry: boolean;
@@ -10,15 +9,14 @@ type Related = {
   companyName: string;
 };
 
-export default function ClientRelatedLinks({ clientId }: { clientId: string }) {
-  const [data, setData] = useState<Related | null>(null);
-
-  useEffect(() => {
-    void fetch(`/api/clients/${clientId}/related`)
-      .then(r => r.json())
-      .then(setData);
-  }, [clientId]);
-
+export default function ClientRelatedLinks({
+  clientId: _clientId,
+  initial,
+}: {
+  clientId: string;
+  initial?: Related | null;
+}) {
+  const data = initial;
   if (!data) return null;
   const q = encodeURIComponent(data.companyName);
   const links: { show: boolean; label: string; href: string }[] = [

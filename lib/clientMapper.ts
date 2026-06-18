@@ -3,8 +3,22 @@ import type { ContactRecord } from '@/app/types/contact';
 import type { Client } from '@/db/schema';
 import { mobilePhoneFrom } from '@/app/utils/clientPhone';
 
-export function clientToRecord(row: Client): ClientRecord {
+const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel'] as const;
+
+/** 목록 API·bootstrap용 — 큰 intake JSON 제외 */
+export function slimIntakeDataForList(intakeData: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!intakeData) return {};
+  const out: Record<string, unknown> = {};
+  for (const k of LIST_INTAKE_KEYS) {
+    const v = intakeData[k];
+    if (v != null && v !== '') out[k] = v;
+  }
+  return out;
+}
+
+export function clientToRecord(row: Client, opts?: { primaryContactMobile?: string }): ClientRecord {
   const intakeData = row.intakeData ?? {};
+  const fromIntake = mobilePhoneFrom(intakeData);
   return {
     id: row.id,
     companyName: row.companyName,
@@ -14,7 +28,7 @@ export function clientToRecord(row: Client): ClientRecord {
     corporateNo: row.corporateNo,
     residentNo: row.residentNo,
     phone: row.phone,
-    mobilePhone: mobilePhoneFrom(intakeData),
+    mobilePhone: fromIntake || opts?.primaryContactMobile || '',
     fax: row.fax,
     taxTypes: (row.taxTypes ?? []) as ClientRecord['taxTypes'],
     businessEntityType: (row.businessEntityType ?? '') as ClientRecord['businessEntityType'],
@@ -31,6 +45,11 @@ export function clientToRecord(row: Client): ClientRecord {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** 목록 조회 전용 — intakeData 최소 필드만 */
+export function clientToListRecord(row: Client): ClientRecord {
+  return clientToRecord({ ...row, intakeData: slimIntakeDataForList(row.intakeData) });
 }
 
 export function clientRecordToContact(record: ClientRecord): ContactRecord {

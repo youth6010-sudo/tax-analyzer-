@@ -8,6 +8,7 @@ import ClientExpandableCard from './ClientExpandableCard';
 import {
   getPortalSearchIndex,
   hydratePortal,
+  prefetchSearchIndex,
   searchPortalClients,
 } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
@@ -23,6 +24,7 @@ export default function ContactHeaderSearch() {
 
   useEffect(() => {
     hydratePortal();
+    void prefetchSearchIndex();
   }, []);
 
   useEffect(() => {

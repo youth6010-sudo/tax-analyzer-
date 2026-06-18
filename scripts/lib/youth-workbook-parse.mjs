@@ -328,7 +328,7 @@ export function parseWorkChecklists(rows) {
   return out;
 }
 
-function mergeChecklists(prev, next) {
+export function mergeChecklists(prev, next) {
   const out = { ...prev };
   for (const [k, v] of Object.entries(next)) {
     if (v === true) out[k] = true;
