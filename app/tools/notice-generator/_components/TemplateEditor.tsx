@@ -9,6 +9,8 @@ type Props = {
   html: string;
   onChange: (html: string) => void;
   saveState?: SaveState;
+  title?: string;
+  defaultHtml?: string;
 };
 
 const SAVE_BADGE: Record<SaveState, { text: string; cls: string } | null> = {
@@ -18,7 +20,13 @@ const SAVE_BADGE: Record<SaveState, { text: string; cls: string } | null> = {
   error: { text: '저장 실패', cls: 'text-rose-500' },
 };
 
-export default function TemplateEditor({ html, onChange, saveState = 'idle' }: Props) {
+export default function TemplateEditor({
+  html,
+  onChange,
+  saveState = 'idle',
+  title = '안내문 서식 (외부 서식 붙여넣기)',
+  defaultHtml = DEFAULT_TEMPLATE,
+}: Props) {
   const [open, setOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -47,8 +55,8 @@ export default function TemplateEditor({ html, onChange, saveState = 'idle' }: P
   };
 
   const resetTemplate = () => {
-    if (ref.current) ref.current.innerHTML = DEFAULT_TEMPLATE;
-    onChange(DEFAULT_TEMPLATE);
+    if (ref.current) ref.current.innerHTML = defaultHtml;
+    onChange(defaultHtml);
   };
 
   return (
@@ -62,7 +70,7 @@ export default function TemplateEditor({ html, onChange, saveState = 'idle' }: P
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-purple-200 text-sm">
             ✏️
           </span>
-          안내문 서식 (외부 서식 붙여넣기)
+          {title}
         </h2>
         <span className="flex items-center gap-2 text-xs text-slate-400">
           {SAVE_BADGE[saveState] && (

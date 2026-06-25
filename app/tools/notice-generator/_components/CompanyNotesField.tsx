@@ -7,11 +7,19 @@ type Props = {
   onCompanyNameChange: (value: string) => void;
   materials: string;
   onMaterialsChange: (value: string) => void;
+  materialsPlaceholder?: string;
   notes: string;
   onNotesChange: (value: string) => void;
+  notesPlaceholder?: string;
   clientLinked?: boolean;
   saveState?: SaveState;
   clientPicker?: ReactNode;
+  // 원천세 전용: 급여대장 작성 체크박스
+  showPayroll?: boolean;
+  payrollByUs?: boolean;
+  onPayrollChange?: (value: boolean) => void;
+  // 수임처 연결 시 명시적 저장
+  onSave?: () => void;
 };
 
 function SaveBadge({ state }: { state: SaveState }) {
@@ -32,11 +40,17 @@ export default function CompanyNotesField({
   onCompanyNameChange,
   materials,
   onMaterialsChange,
+  materialsPlaceholder,
   notes,
   onNotesChange,
+  notesPlaceholder,
   clientLinked = false,
   saveState = 'idle',
   clientPicker,
+  showPayroll = false,
+  payrollByUs = false,
+  onPayrollChange,
+  onSave,
 }: Props) {
   const inputClass =
     'w-full rounded-2xl border border-rose-100 bg-white/70 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100';
@@ -50,7 +64,6 @@ export default function CompanyNotesField({
           </span>
           업체 정보 · 필요자료
         </h2>
-        {clientLinked && <SaveBadge state={saveState} />}
       </div>
 
       {clientPicker && (
@@ -87,7 +100,7 @@ export default function CompanyNotesField({
             value={materials}
             onChange={e => onMaterialsChange(e.target.value)}
             rows={4}
-            placeholder={'- 매출/매입 세금계산서\n- 카드/현금영수증 매출 내역'}
+            placeholder={materialsPlaceholder ?? '- 매출/매입 세금계산서\n- 카드/현금영수증 매출 내역'}
             className={`${inputClass} resize-y`}
           />
         </div>
@@ -100,11 +113,41 @@ export default function CompanyNotesField({
             value={notes}
             onChange={e => onNotesChange(e.target.value)}
             rows={2}
-            placeholder="예) 4분기 매입 세금계산서는 이미 수령함."
+            placeholder={notesPlaceholder ?? '예) 4분기 매입 세금계산서는 이미 수령함.'}
             className={`${inputClass} resize-y`}
           />
         </div>
+
+        {showPayroll && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl border border-violet-100 bg-violet-50/60 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={payrollByUs}
+              onChange={e => onPayrollChange?.(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-violet-500"
+            />
+            <span className="text-xs leading-relaxed text-slate-600">
+              <span className="font-bold text-slate-800">급여대장 작성 (우리가 작성)</span>
+              <br />
+              체크 시 <b>신고안내</b> 문구, 미체크 시 <b>자료요청</b> 문구로 생성됩니다.
+            </span>
+          </label>
+        )}
       </div>
+
+      {clientLinked && onSave && (
+        <div className="mt-4 flex items-center justify-end gap-3">
+          <SaveBadge state={saveState} />
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saveState === 'saving'}
+            className="rounded-full bg-gradient-to-r from-rose-400 to-pink-400 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:from-rose-500 hover:to-pink-500 active:scale-95 disabled:opacity-60"
+          >
+            💾 수임처에 저장
+          </button>
+        </div>
+      )}
     </section>
   );
 }

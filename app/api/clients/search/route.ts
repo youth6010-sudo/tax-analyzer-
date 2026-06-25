@@ -11,12 +11,13 @@ export async function GET(request: NextRequest) {
     const activeOnly = sp.get('activeOnly') === '1';
     const includeChurned = sp.get('includeChurned') === '1';
     const includeIntake = sp.get('includeIntake') !== '0';
-    // 검색은 담당과 무관하게 누구나 모든 업체를 검색할 수 있어야 한다.
+    // 기본은 전체 검색이지만, mineOnly=1이면 담당(본인) 수임처만 반환한다.
+    const mineOnly = sp.get('mineOnly') === '1';
     const clients = await searchClients(q, {
       activeOnly,
       includeChurned,
       includeIntake,
-      mineOnly: false,
+      mineOnly,
       userId: user.id,
       userName: user.name,
     });

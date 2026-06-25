@@ -87,11 +87,11 @@ export function formatKoreanDate(date: Date, { withWeekday = true } = {}): strin
   return withWeekday ? `${base} (${getWeekdayKo(date)})` : base;
 }
 
-// "2026. 05. 08 (금)" 형식 (점 표기, 0 채움)
+// "2026.07.27" 형식 (점 표기, 0 채움, 끝점 없음). 기본은 요일 포함 "2026.07.27 (월)".
 export function formatDottedDate(date: Date, { withWeekday = true } = {}): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
-  const base = `${y}. ${m}. ${d}`;
+  const base = `${y}.${m}.${d}`;
   return withWeekday ? `${base} (${getWeekdayKo(date)})` : base;
 }

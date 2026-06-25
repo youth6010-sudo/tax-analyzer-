@@ -40,9 +40,8 @@ export default function DeadlineCard({ meta, deadline }: Props) {
       {deadline.wasAdjusted ? (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
           <span className="font-semibold">🎈 휴일 보정</span> · 법정기한{' '}
-          {deadline.statutoryText}이(가){' '}
-          {deadline.skipped.map(s => s.reason).join(', ')}에 해당하여 다음
-          영업일로 자동 조정되었어요.
+          {deadline.statutoryText}이 휴일에 해당하여 다음 영업일로 자동
+          조정되었어요.
         </div>
       ) : (
         <div className="mt-3 text-xs text-slate-400">

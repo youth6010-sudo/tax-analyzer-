@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
-import {
-  getPortalSearchIndex,
-  hydratePortal,
-  prefetchSearchIndex,
-  searchPortalClients,
-} from '@/app/utils/portalStore';
+import { hydratePortal, prefetchSearchIndex } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 
 export type PickedClient = { id: string; companyName: string };
@@ -47,8 +42,8 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const local =
-        getPortalSearchIndex().length > 0 ? (searchPortalClients(q) as ClientRecord[]) : [];
+      // 안내문구 생성기에서는 로그인 사용자가 담당하는 수임처만 노출/편집 가능.
+      const local: ClientRecord[] = [];
       setResults(local);
       setLoading(true);
 
@@ -56,7 +51,7 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
       const ac = new AbortController();
       abortRef.current = ac;
 
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&mineOnly=1`, { signal: ac.signal })
         .then(r => (r.ok ? r.json() : { clients: [] }))
         .then(data => {
           const api = (data.clients ?? []) as ClientSearchResult[];
@@ -109,7 +104,7 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
           }
         }}
         onFocus={() => setOpen(true)}
-        placeholder="수임처 검색 (업체명·사업자번호·대표자·담당자)"
+        placeholder="내 담당 수임처 검색 (업체명·사업자번호·대표자)"
         className="w-full rounded-2xl border border-rose-100 bg-white/70 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
       />
 

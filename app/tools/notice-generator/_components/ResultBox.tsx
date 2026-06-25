@@ -3,9 +3,10 @@ import { htmlToPlainText } from '../_lib/templates';
 
 type Props = {
   messageHtml: string;
+  title?: string;
 };
 
-export default function ResultBox({ messageHtml }: Props) {
+export default function ResultBox({ messageHtml, title = '생성된 안내 문구 (서식 유지)' }: Props) {
   const [copied, setCopied] = useState(false);
   const [copiedPlain, setCopiedPlain] = useState(false);
 
@@ -73,7 +74,7 @@ export default function ResultBox({ messageHtml }: Props) {
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-100 to-rose-200 text-sm">
             💌
           </span>
-          생성된 안내 문구 (서식 유지)
+          {title}
         </h2>
         <div className="flex items-center gap-2">
           <button
