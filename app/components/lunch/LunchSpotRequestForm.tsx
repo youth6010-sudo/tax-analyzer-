@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  portalAccentSection,
+  portalAlertError,
+  portalBtnPrimary,
+  portalInput,
+  portalSectionDesc,
+  portalSectionTitle,
+} from '@/app/components/portal/uiClasses';
 
 type RequestItem = {
   id: string;
@@ -67,53 +75,49 @@ export default function LunchSpotRequestForm() {
   };
 
   return (
-    <section className="mt-10 rounded-2xl border border-orange-200 bg-orange-50/50 p-5">
-      <h2 className="text-lg font-black text-gray-900">맛집 추가 요청</h2>
-      <p className="mt-1 text-sm text-gray-600">
+    <section className={`${portalAccentSection} mt-10`}>
+      <h2 className={portalSectionTitle}>맛집 추가 요청</h2>
+      <p className={portalSectionDesc}>
         목록에 없는 식당이 있으면 이름을 남겨 주세요. 확인 후 가챠 목록에 반영합니다.
       </p>
       <form onSubmit={e => void submit(e)} className="mt-4 space-y-3">
         <label className="block text-sm">
-          <span className="font-semibold text-gray-700">식당 이름</span>
+          <span className="font-medium text-slate-700">식당 이름</span>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="예: ○○국밥"
-            className="mt-1 w-full border border-orange-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
+            className={`${portalInput} mt-1 w-full`}
           />
         </label>
         <label className="block text-sm">
-          <span className="font-semibold text-gray-700">메모 (선택)</span>
+          <span className="font-medium text-slate-700">메모 (선택)</span>
           <input
             value={note}
             onChange={e => setNote(e.target.value)}
             placeholder="위치, 추천 메뉴 등"
-            className="mt-1 w-full border border-orange-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
+            className={`${portalInput} mt-1 w-full`}
           />
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className={portalAlertError}>{error}</p>}
         {message && <p className="text-sm text-emerald-700">{message}</p>}
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-4 py-2 rounded-xl bg-orange-600 text-white text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={saving} className={portalBtnPrimary}>
           {saving ? '등록 중…' : '추가 요청'}
         </button>
       </form>
 
       {isAdmin && pending.length > 0 && (
-        <div className="mt-6 pt-4 border-t border-orange-200/80">
-          <h3 className="text-sm font-black text-gray-800">대기 중인 요청</h3>
+        <div className="mt-6 pt-4 border-t border-orange-200/60">
+          <h3 className="text-sm font-semibold text-slate-800">대기 중인 요청</h3>
           <ul className="mt-2 space-y-2">
             {pending.map(item => (
               <li
                 key={item.id}
-                className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-xs"
+                className="rounded-lg border border-orange-100/80 bg-white/80 px-3 py-2 text-xs"
               >
-                <span className="font-bold text-gray-900">{item.name}</span>
-                {item.note && <span className="text-gray-600"> · {item.note}</span>}
-                <span className="block text-gray-400 mt-0.5">
+                <span className="font-semibold text-slate-900">{item.name}</span>
+                {item.note && <span className="text-slate-600"> · {item.note}</span>}
+                <span className="block portal-meta mt-0.5">
                   {item.requestedByName} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}
                 </span>
               </li>

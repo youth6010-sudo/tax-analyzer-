@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import {
   getPortalTasks,
-  hydratePortal,
+  prefetchPortal,
   subscribePortal,
 } from '@/app/utils/portalStore';
 
@@ -18,9 +18,9 @@ export default function HomeTasksPanel() {
   const [tasks, setTasks] = useState<DashboardTask[]>(() => getPortalTasks());
 
   useEffect(() => {
-    if (!tasks.length) hydratePortal();
+    void prefetchPortal();
     return subscribePortal(() => setTasks(getPortalTasks()));
-  }, [tasks.length]);
+  }, []);
 
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">

@@ -3,9 +3,9 @@ import BackButton from '../../../components/BackButton';
 
 export default function ContactNotFound() {
   return (
-    <main className="flex-1 flex items-center justify-center bg-gray-50 px-4">
+    <div className="flex-1 flex items-center justify-center px-4 py-16">
       <div className="text-center space-y-4">
-        <p className="text-lg font-bold text-gray-700">거래처를 찾을 수 없습니다</p>
+        <p className="text-lg font-semibold text-slate-800">거래처를 찾을 수 없습니다</p>
         <div className="flex items-center justify-center gap-3">
           <BackButton label="이전 페이지" />
           <Link
@@ -16,6 +16,6 @@ export default function ContactNotFound() {
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

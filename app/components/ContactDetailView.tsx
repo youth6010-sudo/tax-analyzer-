@@ -19,6 +19,14 @@ import { TAX_TYPES } from '../config/taxTypes';
 import type { TaxTypeId } from '../config/taxTypes';
 import BackButton from './BackButton';
 import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
+import {
+  portalAlertError,
+  portalBtnDanger,
+  portalBtnPrimary,
+  portalBtnSecondary,
+  portalCard,
+  portalInput,
+} from '@/app/components/portal/uiClasses';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
@@ -163,70 +171,65 @@ export default function ContactDetailView({ contact: initial, primaryContactName
   );
 
   return (
-    <main className="flex-1 bg-gradient-to-br from-slate-50 via-blue-50/20 to-indigo-50/10">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <BackButton />
-          {!editing ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void handleDelete()}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-bold text-red-700 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
-              >
-                {deleting ? '삭제 중…' : '삭제'}
-              </button>
-              <button
-                type="button"
-                onClick={startEdit}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
-              >
-                수정
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={cancelEdit}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSave()}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
-              >
-                {saving ? '저장 중…' : '저장'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <BackButton />
+        {!editing ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+              className={portalBtnDanger}
+            >
+              {deleting ? '삭제 중…' : '삭제'}
+            </button>
+            <button
+              type="button"
+              onClick={startEdit}
+              disabled={deleting}
+              className={portalBtnPrimary}
+            >
+              수정
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className={portalBtnSecondary}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className={portalBtnPrimary}
+            >
+              {saving ? '저장 중…' : '저장'}
+            </button>
           </div>
         )}
+      </div>
 
-        <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-5 bg-blue-50 border-b border-blue-100">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-1">거래처</p>
-            {editing ? (
-              <input
-                type="text"
-                value={form.companyName}
-                onChange={e => updateField('companyName', e.target.value)}
-                className="w-full text-xl font-black text-gray-900 leading-snug border border-blue-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="업체명(상호)"
-              />
-            ) : (
-              <h1 className="text-2xl font-black text-gray-900 leading-snug">{contact.companyName}</h1>
+      {error && <div className={portalAlertError}>{error}</div>}
+
+      <article className={`${portalCard} overflow-hidden`}>
+        <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">거래처</p>
+          {editing ? (
+            <input
+              type="text"
+              value={form.companyName}
+              onChange={e => updateField('companyName', e.target.value)}
+              className={`${portalInput} w-full text-lg font-bold`}
+              placeholder="업체명(상호)"
+            />
+          ) : (
+            <h1 className="text-2xl font-bold text-slate-900 leading-snug">{contact.companyName}</h1>
             )}
 
             <CategorySection title="기업구분">
@@ -351,17 +354,17 @@ export default function ContactDetailView({ contact: initial, primaryContactName
 
           <div className="p-5 grid gap-3 sm:grid-cols-2">
             {viewFields.map(({ key, label, mono }) => (
-              <div key={key} className="rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">{label}</p>
+              <div key={key} className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3">
+                <p className="text-xs font-medium text-slate-400 mb-1">{label}</p>
                 {editing ? (
                   <input
                     type="text"
                     value={form[key] as string}
                     onChange={e => updateField(key, e.target.value)}
-                    className={`w-full text-base font-semibold text-gray-900 border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 ${mono ? 'font-mono' : ''}`}
+                    className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''}`}
                   />
                 ) : (
-                  <p className={`text-base font-semibold text-gray-900 break-all ${mono ? 'font-mono' : ''}`}>
+                  <p className={`text-sm font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''}`}>
                     {key === 'phone'
                       ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
                       : displayValue(contact[key] as string)}
@@ -371,7 +374,6 @@ export default function ContactDetailView({ contact: initial, primaryContactName
             ))}
           </div>
         </article>
-      </div>
-    </main>
+    </div>
   );
 }

@@ -229,16 +229,16 @@ export default function ManagerGachaGame() {
   const realName = winManager ? STAFF_REAL_NAMES[winManager] : undefined;
 
   return (
-    <section className="rounded-2xl border-2 border-indigo-200/80 bg-gradient-to-br from-slate-900 via-indigo-950/25 to-blue-950/10 p-5 sm:p-8 shadow-xl shadow-indigo-200/30">
+    <section className="rounded-2xl border border-indigo-300/40 bg-gradient-to-br from-slate-900 via-indigo-950/30 to-blue-950/15 p-5 sm:p-8 shadow-xl shadow-indigo-900/10 ring-1 ring-white/5">
       <div className="text-center">
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-400">STAFF PICK</p>
-        <h2 className="mt-1 text-2xl sm:text-3xl font-black text-white">담당자 뽑기</h2>
-        <p className="mt-2 text-sm text-indigo-200/70">후보를 고르고 가챠머신으로 한 명을 뽑아요</p>
+        <h2 className="mt-1 text-2xl sm:text-3xl font-bold text-white tracking-tight">담당자 뽑기</h2>
+        <p className="mt-2 text-sm text-indigo-100/90 leading-relaxed">후보를 고르고 가챠머신으로 한 명을 뽑아요</p>
       </div>
 
       <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <p className="text-xs font-semibold text-indigo-200/80">뽑기 후보 ({pool.length}명)</p>
+          <p className="text-sm font-semibold text-indigo-100/90">뽑기 후보 ({pool.length}명)</p>
           <button
             type="button"
             disabled={playing}
@@ -286,7 +286,7 @@ export default function ManagerGachaGame() {
         </div>
       </div>
 
-      <p className="mt-3 text-center text-xs text-indigo-300/60">
+      <p className="mt-3 text-center text-sm text-indigo-200/80">
         공 {pool.length}개 · 최소 1명은 선택해야 해요
       </p>
 

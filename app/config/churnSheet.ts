@@ -1,3 +1,5 @@
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
+
 export type ChurnColumnKey =
   | 'companyName'
   | 'churnedAt'
@@ -21,7 +23,7 @@ export type ChurnSheetColumn = {
 export const CHURN_COLUMNS: ChurnSheetColumn[] = [
   { key: 'companyName', label: '업체명', width: '9rem', sticky: true, readOnly: true },
   { key: 'churnedAt', label: '계약 종료일', width: '7rem', type: 'date' },
-  { key: 'feeAmount', label: '기장료', width: '5.5rem', type: 'number' },
+  { key: 'feeAmount', label: CLIENT_FIELD_LABELS.fee, width: '5.5rem', type: 'number' },
   { key: 'dataCleanup', label: '자료 정리', width: '6rem' },
   { key: 'churnType', label: '유형', width: '6rem' },
   { key: 'earlySign', label: '전조증상', width: '7rem' },

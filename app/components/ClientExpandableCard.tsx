@@ -6,6 +6,7 @@ import type { ChurnSummary, ClientRecord, ClientSearchResult } from '@/app/types
 import { BUSINESS_ENTITY_LABEL, SERVICE_TYPE_LABEL } from '@/app/types/contact';
 import { TAX_TYPES } from '@/app/config/taxTypes';
 import { douzoneExtraEntries } from '@/app/config/douzoneFields';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
@@ -58,7 +59,7 @@ export default function ClientExpandableCard({ client, churn, query = '', onSele
         { label: '자료 정리', value: churn.dataCleanup },
         { label: '전조증상', value: churn.earlySign },
         {
-          label: '기장료',
+          label: CLIENT_FIELD_LABELS.fee,
           value: churn.feeAmount != null ? `${churn.feeAmount.toLocaleString()}원` : '',
         },
       ]
@@ -71,10 +72,10 @@ export default function ClientExpandableCard({ client, churn, query = '', onSele
       ];
 
   const extra: { label: string; value: string; mono?: boolean }[] = [
-    { label: '법인번호', value: client.corporateNo, mono: true },
-    { label: '주민번호', value: client.residentNo, mono: true },
+    { label: CLIENT_FIELD_LABELS.corporateNo, value: client.corporateNo, mono: true },
+    { label: CLIENT_FIELD_LABELS.residentNo, value: client.residentNo, mono: true },
     { label: '팩스', value: client.fax, mono: true },
-    ...(client.feeSummary != null ? [{ label: '기장료', value: client.feeSummary.toLocaleString() }] : []),
+    ...(client.feeSummary != null ? [{ label: CLIENT_FIELD_LABELS.fee, value: client.feeSummary.toLocaleString() }] : []),
     ...(client.program ? [{ label: '프로그램', value: client.program }] : []),
     ...douzoneExtraEntries(client.intakeData ?? {}),
   ].filter(f => f.value && String(f.value).trim() !== '');

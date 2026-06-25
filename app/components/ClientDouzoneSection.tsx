@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import {
   DOUZONE_FIELD_LABELS,
   DOUZONE_NOTE_LABELS,
@@ -12,7 +13,7 @@ type FieldDef = { key: string; label: string; group: 'meta' | 'data' | 'note' | 
 
 function buildFieldDefs(intakeData: Record<string, unknown>): FieldDef[] {
   const defs: FieldDef[] = [
-    { key: '__feeSummary', label: '기장료', group: 'meta' },
+    { key: '__feeSummary', label: CLIENT_FIELD_LABELS.fee, group: 'meta' },
     { key: '__program', label: '프로그램', group: 'meta' },
   ];
 
@@ -130,7 +131,7 @@ export default function ClientDouzoneSection({
 
   const displayEntries = useMemo(() => {
     const rows: { label: string; value: string }[] = [];
-    if (feeSummary != null && feeSummary > 0) rows.push({ label: '기장료', value: feeSummary.toLocaleString() });
+    if (feeSummary != null && feeSummary > 0) rows.push({ label: CLIENT_FIELD_LABELS.fee, value: feeSummary.toLocaleString() });
     if (program.trim()) rows.push({ label: '프로그램', value: program });
 
     for (const { key, label } of fieldDefs) {

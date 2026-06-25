@@ -26,13 +26,13 @@ export async function getClientRelatedCounts(clientId: string, companyName: stri
   };
 }
 
-export async function listInquiries(limit = 200) {
+export async function listInquiries(limit = 1000) {
   return getDb().select().from(intakeInquiries)
     .where(sql`(${intakeInquiries.extra}->>'draft') IS DISTINCT FROM 'true'`)
     .orderBy(desc(intakeInquiries.createdAt))
     .limit(limit);
 }
 
-export async function listIntakeProcesses(limit = 200) {
+export async function listIntakeProcesses(limit = 1000) {
   return getDb().select().from(intakeProcesses).orderBy(desc(intakeProcesses.updatedAt)).limit(limit);
 }

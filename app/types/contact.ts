@@ -57,14 +57,16 @@ export type ContactSearchField =
   | 'phone'
   | 'manager';
 
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
+
 export const CONTACT_FIELD_LABELS: Record<ContactSearchField, string> = {
   companyName: '업체명(상호)',
   representative: '대표자',
-  businessNo: '사업자번호',
-  corporateNo: '법인번호',
-  residentNo: '주민번호',
+  businessNo: CLIENT_FIELD_LABELS.businessNo,
+  corporateNo: CLIENT_FIELD_LABELS.corporateNo,
+  residentNo: CLIENT_FIELD_LABELS.residentNo,
   phone: '전화번호',
-  manager: '담당자',
+  manager: CLIENT_FIELD_LABELS.manager,
 };
 
 export const EDITABLE_FIELDS: {

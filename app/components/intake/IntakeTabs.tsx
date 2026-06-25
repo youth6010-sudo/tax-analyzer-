@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { portalBtnPrimary } from '@/app/components/portal/uiClasses';
 
 export type IntakeTab = 'intake' | 'consultation';
 
@@ -27,31 +28,29 @@ export default function IntakeTabs({ active }: { active: IntakeTab }) {
   };
 
   return (
-    <div className="sticky top-[4.25rem] z-30 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 bg-gray-50/98 backdrop-blur border-b border-gray-200 mb-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="sticky top-[3.75rem] z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-4 bg-[var(--background)]/95 backdrop-blur border-b border-slate-200">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">유입</h1>
-          <p className="text-xs text-gray-600 mt-0.5">유입관리 · 신규상담</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">유입</h1>
+          <p className="portal-meta mt-0.5">유입관리 · 신규상담</p>
         </div>
         {active !== 'consultation' && (
-          <Link
-            href={href('consultation')}
-            className="px-3 py-1.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
+          <Link href={href('consultation')} className={portalBtnPrimary}>
             + 신규상담
           </Link>
         )}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1">
         {TABS.map(t => (
           <Link
             key={t.id}
             href={href(t.id)}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+            className={[
+              'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
               active === t.id
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
-            }`}
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300 hover:text-slate-800',
+            ].join(' ')}
           >
             {t.label}
           </Link>

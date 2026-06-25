@@ -7,14 +7,17 @@ import { requireUser } from '@/lib/auth';
 import {
   deleteClientById,
   getClientById,
+  getClientFeeChanges,
   updateClient,
-  updateClientColbert,
   updateClientDetail,
   updateClientFeeSummary,
+  updateClientFeeBreakdown,
   type ClientPatch,
 } from '@/lib/clientsDb';
 
-import { clientRecordToContact } from '@/lib/clientMapper';
+import { clientRecordToContact, clientRecordToListRecord } from '@/lib/clientMapper';
+
+const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,7 +25,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const client = await getClientById(id);
     assertCanAccessClient(user, client);
-    return NextResponse.json({ client, contact: clientRecordToContact(client!) });
+    return NextResponse.json(
+      { client, contact: clientRecordToContact(client!) },
+      NO_STORE,
+    );
   } catch (e) {
     return handleApiError(e);
   }
@@ -32,12 +38,21 @@ function isDetailOnlyPatch(body: Partial<ClientPatch>): boolean {
   return body.companyName === undefined && body.intakeData !== undefined;
 }
 
-function isColbertOnlyPatch(body: Record<string, unknown>): body is { colbert: boolean } {
-  return typeof body.colbert === 'boolean' && Object.keys(body).length === 1;
-}
-
 function isFeeSummaryOnlyPatch(body: Record<string, unknown>): body is { feeSummary: number | null } {
   return Object.keys(body).length === 1 && 'feeSummary' in body && (body.feeSummary === null || typeof body.feeSummary === 'number');
+}
+
+function isFeeBreakdownPatch(body: Record<string, unknown>): body is {
+  bookkeepingFee: number | null;
+  adjustmentFee: number | null;
+} {
+  return (
+    'bookkeepingFee' in body &&
+    'adjustmentFee' in body &&
+    (body.bookkeepingFee === null || typeof body.bookkeepingFee === 'number') &&
+    (body.adjustmentFee === null || typeof body.adjustmentFee === 'number') &&
+    Object.keys(body).length === 2
+  );
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -49,14 +64,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const body = (await request.json()) as Partial<ClientPatch> & Record<string, unknown>;
 
-    if (isColbertOnlyPatch(body)) {
-      const client = await updateClientColbert(id, body.colbert);
-      return NextResponse.json({ client, contact: clientRecordToContact(client) });
+    if (isFeeBreakdownPatch(body)) {
+      const client = clientRecordToListRecord(
+        await updateClientFeeBreakdown(
+          id,
+          { bookkeepingFee: body.bookkeepingFee, adjustmentFee: body.adjustmentFee },
+          user.id,
+        ),
+      );
+      const feeChanges = await getClientFeeChanges(id);
+      return NextResponse.json(
+        { client, contact: clientRecordToContact(client), feeChanges },
+        NO_STORE,
+      );
     }
 
     if (isFeeSummaryOnlyPatch(body)) {
-      const client = await updateClientFeeSummary(id, body.feeSummary);
-      return NextResponse.json({ client, contact: clientRecordToContact(client) });
+      const client = clientRecordToListRecord(
+        await updateClientFeeSummary(id, body.feeSummary, user.id),
+      );
+      const feeChanges = await getClientFeeChanges(id);
+      return NextResponse.json(
+        { client, contact: clientRecordToContact(client), feeChanges },
+        NO_STORE,
+      );
     }
 
     const client = isDetailOnlyPatch(body)
@@ -67,7 +98,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         })
       : await updateClient(id, body as ClientPatch);
 
-    return NextResponse.json({ client, contact: clientRecordToContact(client) });
+    return NextResponse.json(
+      { client, contact: clientRecordToContact(client) },
+      NO_STORE,
+    );
   } catch (e) {
     return handleApiError(e);
   }

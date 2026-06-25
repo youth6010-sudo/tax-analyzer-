@@ -1,8 +1,10 @@
 /**
- * 청년들 ID.xlsx 전체 import (비품 주문 제외)
- * node scripts/import-youth-workbook.mjs [--link-only] [xlsx경로]
+ * 청년들 ID.xlsx import (비품 주문 제외)
+ * node scripts/import-youth-workbook.mjs [--fees-only|--operational-only|--link-only] [xlsx경로]
  *
- * --link-only  수임처관리 시트로 client INSERT 금지, roster 필드(fee/program/구분) 덮어쓰기 금지
+ * --fees-only         0618id 수임료만 반영 (TP 매칭 실패 → client_fee_import_pending)
+ * --operational-only  유입·프로세스·유출만 upsert (수임처관리 시트 건너뜀)
+ * --link-only         수임처 INSERT·roster 덮어쓰기 금지 (legacy)
  */
 import fs from 'fs';
 import path from 'path';
@@ -16,6 +18,10 @@ import {
   normalizeCompanyKey,
   reportSkippedRows,
 } from './lib/client-import-guards.mjs';
+import {
+  inquiryMatchesProcess,
+  upsertInquiryFromProcess,
+} from './lib/intake-link.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -36,7 +42,9 @@ function loadEnv() {
 loadEnv();
 
 const args = process.argv.slice(2);
-const linkOnly = args.includes('--link-only');
+const feesOnly = args.includes('--fees-only');
+const operationalOnly = args.includes('--operational-only');
+const linkOnly = args.includes('--link-only') && !feesOnly && !operationalOnly;
 const desktop = path.join(process.env.USERPROFILE || '', 'Desktop');
 const xlsxPath =
   args.find(a => !a.startsWith('--')) ||
@@ -48,19 +56,24 @@ if (!fs.existsSync(xlsxPath)) {
 }
 
 const wb = XLSX.readFile(xlsxPath);
-if (!detectYouthIdWorkbook(wb.SheetNames)) {
-  console.error('청년들 ID.xlsx 형식이 아닙니다.');
+const getSheetRows = name =>
+  XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+if (!detectYouthIdWorkbook(wb.SheetNames, getSheetRows)) {
+  console.error('청년들 ID.xlsx 형식이 아닙니다. (수임처관리·청년들ID 또는 수임처관리 블록 레이아웃 필요)');
   process.exit(1);
 }
 
 const data = parseWorkbook(wb, XLSX);
+const sourceBasename = path.basename(xlsxPath);
 console.log('파싱:', {
   clients: data.clients.length,
   inquiries: data.inquiries.length,
   processes: data.processes.length,
   churns: data.churns.length,
 });
-if (linkOnly) console.log('모드: --link-only (수임처 INSERT·roster 덮어쓰기 금지)');
+if (feesOnly) console.log('모드: --fees-only (0618id 수임료만)');
+else if (operationalOnly) console.log('모드: --operational-only (유입·유출만)');
+else if (linkOnly) console.log('모드: --link-only (수임처 INSERT·roster 덮어쓰기 금지)');
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
@@ -69,6 +82,24 @@ if (!dbUrl) {
 }
 
 const sql = postgres(dbUrl, { max: 1 });
+
+async function ensureFeePendingTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS client_fee_import_pending (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_name text NOT NULL,
+      manager text NOT NULL DEFAULT '',
+      fee_summary integer,
+      source_file text NOT NULL DEFAULT '',
+      excel_key text NOT NULL UNIQUE,
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS client_fee_import_pending_manager_idx
+    ON client_fee_import_pending (manager)
+  `;
+}
 
 function buildClientLookup(rows) {
   const byBiz = new Map();
@@ -105,30 +136,96 @@ function resolveClientId(lookup, companyName, manager, businessNo) {
   return null;
 }
 
-async function upsertInquiry(row, clientId, sql) {
-  const existing = await sql`SELECT id FROM intake_inquiries WHERE excel_key = ${row.excelKey} LIMIT 1`;
+function findClientForFee(clientRows, companyName, manager) {
+  const key = `${companyName}||${manager}`;
+  const existing = clientRows.find(r => `${r.company_name}||${r.manager}` === key);
+  if (existing) return existing;
+  const nameKey = normalizeCompanyKey(companyName);
+  return clientRows.find(r => normalizeCompanyKey(r.company_name) === nameKey) ?? null;
+}
+
+async function upsertInquiry(row, clientId, db) {
+  const existing = await db`SELECT id FROM intake_inquiries WHERE excel_key = ${row.excelKey} LIMIT 1`;
   if (existing.length) {
-    await sql`
+    await db`
       UPDATE intake_inquiries SET client_id=${clientId}, company_name=${row.companyName}, phone=${row.phone},
         channel=${row.channel}, consultant=${row.consultant}, inquiry_date=${row.inquiryDate},
         inquiry_content=${row.inquiryContent}, contract_status=${row.contractStatus},
         proposed_fee=${row.proposedFee}, industry=${row.industry},
         business_no=${row.businessNo}, representative=${row.representative}, address=${row.address},
-        extra=${sql.json(row.extra)} WHERE id=${existing[0].id}
+        extra=${db.json(row.extra)} WHERE id=${existing[0].id}
     `;
     return 'updated';
   }
-  await sql`
+  await db`
     INSERT INTO intake_inquiries (client_id, company_name, phone, channel, consultant, inquiry_date,
       inquiry_content, contract_status, proposed_fee, industry, business_no, representative, address, extra, excel_key)
     VALUES (${clientId}, ${row.companyName}, ${row.phone}, ${row.channel}, ${row.consultant}, ${row.inquiryDate},
       ${row.inquiryContent}, ${row.contractStatus}, ${row.proposedFee}, ${row.industry}, ${row.businessNo},
-      ${row.representative}, ${row.address}, ${sql.json(row.extra)}, ${row.excelKey})
+      ${row.representative}, ${row.address}, ${db.json(row.extra)}, ${row.excelKey})
   `;
   return 'inserted';
 }
 
-// --- clients (수임처관리) — 보강만 ---
+// --- fees-only ---
+if (feesOnly) {
+  await ensureFeePendingTable();
+
+  const userRows = await sql`SELECT id, name FROM users`;
+  const userByName = new Map(userRows.map(u => [u.name.trim(), u.id]));
+  let clientRows = await sql`SELECT id, company_name, manager, business_no, status FROM clients`;
+  let feeUpdated = 0;
+  let feePending = 0;
+  const skippedNameOnly = [];
+
+  for (const c of data.clients) {
+    if (isManagerNameOnlyRow(c)) {
+      skippedNameOnly.push({
+        companyName: c.companyName,
+        representative: '',
+        manager: c.manager,
+        status: '',
+      });
+      continue;
+    }
+
+    const target = findClientForFee(clientRows, c.companyName, c.manager);
+    const assignedUserId = userByName.get(c.manager) ?? null;
+    const excelKey = `fee||${sourceBasename}||${c.companyName}||${c.manager}`;
+
+    if (!target || target.status === 'intake') {
+      await sql`
+        INSERT INTO client_fee_import_pending (company_name, manager, fee_summary, source_file, excel_key)
+        VALUES (${c.companyName}, ${c.manager}, ${c.feeSummary}, ${sourceBasename}, ${excelKey})
+        ON CONFLICT (excel_key) DO UPDATE SET
+          company_name = EXCLUDED.company_name,
+          manager = EXCLUDED.manager,
+          fee_summary = EXCLUDED.fee_summary,
+          source_file = EXCLUDED.source_file
+      `;
+      feePending++;
+      continue;
+    }
+
+    await sql`
+      UPDATE clients SET
+        fee_summary = ${c.feeSummary},
+        converted = ${c.converted},
+        colbert = ${c.colbert},
+        assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+        updated_at = NOW()
+      WHERE id = ${target.id}
+    `;
+    feeUpdated++;
+  }
+
+  reportSkippedRows(skippedNameOnly, { maxLog: 20 });
+  await sql.end();
+  console.log(`✓ 수임료 반영: updated=${feeUpdated}, pending=${feePending}`);
+  process.exit(0);
+}
+
+// --- clients (수임처관리) — operational-only 시 건너뜀 ---
 const userRows = await sql`SELECT id, name FROM users`;
 const userByName = new Map(userRows.map(u => [u.name.trim(), u.id]));
 let clientRows = await sql`SELECT id, company_name, manager, business_no, status FROM clients`;
@@ -136,58 +233,55 @@ let clientUpdated = 0;
 let clientSkippedLink = 0;
 const skippedNameOnly = [];
 
-for (const c of data.clients) {
-  if (isManagerNameOnlyRow(c)) {
-    skippedNameOnly.push({
-      companyName: c.companyName,
-      representative: '',
-      manager: c.manager,
-      status: '',
-    });
-    continue;
+if (!operationalOnly) {
+  for (const c of data.clients) {
+    if (isManagerNameOnlyRow(c)) {
+      skippedNameOnly.push({
+        companyName: c.companyName,
+        representative: '',
+        manager: c.manager,
+        status: '',
+      });
+      continue;
+    }
+
+    const target = findClientForFee(clientRows, c.companyName, c.manager);
+    const assignedUserId = userByName.get(c.manager) ?? null;
+
+    if (!target) {
+      clientSkippedLink++;
+      continue;
+    }
+
+    if (target.status === 'intake') continue;
+
+    if (linkOnly) {
+      await sql`
+        UPDATE clients SET
+          converted = ${c.converted},
+          colbert = ${c.colbert},
+          assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+          updated_at = NOW()
+        WHERE id = ${target.id}
+      `;
+    } else {
+      await sql`
+        UPDATE clients SET
+          business_entity_type = ${c.businessEntityType},
+          fee_summary = ${c.feeSummary},
+          program = ${c.program},
+          converted = ${c.converted},
+          colbert = ${c.colbert},
+          assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
+          updated_at = NOW()
+        WHERE id = ${target.id}
+      `;
+    }
+    clientUpdated++;
   }
 
-  const key = `${c.companyName}||${c.manager}`;
-  const existing = clientRows.find(r => `${r.company_name}||${r.manager}` === key);
-  const nameMatch = clientRows.find(
-    r => normalizeCompanyKey(r.company_name) === normalizeCompanyKey(c.companyName),
-  );
-  const target = existing ?? nameMatch;
-  const assignedUserId = userByName.get(c.manager) ?? null;
-
-  if (!target) {
-    clientSkippedLink++;
-    continue;
-  }
-
-  if (target.status === 'intake') continue;
-
-  if (linkOnly) {
-    await sql`
-      UPDATE clients SET
-        converted = ${c.converted},
-        colbert = ${c.colbert},
-        assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
-        updated_at = NOW()
-      WHERE id = ${target.id}
-    `;
-  } else {
-    await sql`
-      UPDATE clients SET
-        business_entity_type = ${c.businessEntityType},
-        fee_summary = ${c.feeSummary},
-        program = ${c.program},
-        converted = ${c.converted},
-        colbert = ${c.colbert},
-        assigned_user_id = COALESCE(${assignedUserId}, assigned_user_id),
-        updated_at = NOW()
-      WHERE id = ${target.id}
-    `;
-  }
-  clientUpdated++;
+  reportSkippedRows(skippedNameOnly, { maxLog: 20 });
 }
-
-reportSkippedRows(skippedNameOnly, { maxLog: 20 });
 
 clientRows = await sql`SELECT id, company_name, manager, business_no FROM clients`;
 const clientLookup = buildClientLookup(clientRows);
@@ -210,8 +304,9 @@ function shouldSkipOperationalRow(row) {
   });
 }
 
-// --- intake_inquiries / processes / churn (single transaction) ---
+// --- intake_inquiries / processes / churn ---
 let churnCount = 0;
+let processInquiryLinked = 0;
 await sql.begin(async tx => {
   for (const row of data.inquiries) {
     if (shouldSkipOperationalRow(row)) {
@@ -289,12 +384,30 @@ await sql.begin(async tx => {
     }
     churnCount++;
   }
+
+  const linkedInquiries = await tx`
+    SELECT id, company_name, excel_key, extra
+    FROM intake_inquiries
+    WHERE coalesce(extra->>'draft', '') != 'true'
+  `;
+  for (const row of data.processes) {
+    if (shouldSkipOperationalRow(row)) continue;
+    if (linkedInquiries.some(i => inquiryMatchesProcess(i, row))) continue;
+    const clientId = resolveClientId(clientLookup, row.companyName);
+    await upsertInquiryFromProcess(row, clientId, tx);
+    processInquiryLinked++;
+  }
 });
 
 await sql.end();
 
-console.log(`✓ 수임처 보강: updated=${clientUpdated}, link-only skip=${clientSkippedLink}`);
+if (!operationalOnly) {
+  console.log(`✓ 수임처 보강: updated=${clientUpdated}, link-only skip=${clientSkippedLink}`);
+}
 console.log(`✓ 운영 데이터: inserted=${stats.inserted}, updated=${stats.updated}, skip=${stats.skippedOps}`);
+if (processInquiryLinked > 0) {
+  console.log(`✓ 프로세스 전용 → 유입관리 스텁 ${processInquiryLinked}건 연결`);
+}
 console.log(`✓ 유출: ${churnCount}건`);
 if (skippedOps.length > 0) {
   console.log(`⚠ 운영 데이터 제외 ${skippedOps.length}건 (담당·이름만):`);

@@ -3,7 +3,7 @@ import type { ContactRecord } from '@/app/types/contact';
 import type { Client } from '@/db/schema';
 import { mobilePhoneFrom } from '@/app/utils/clientPhone';
 
-const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel'] as const;
+const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel', 'bookkeepingFee', 'adjustmentFee'] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 */
 export function slimIntakeDataForList(intakeData: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -50,6 +50,11 @@ export function clientToRecord(row: Client, opts?: { primaryContactMobile?: stri
 /** 목록 조회 전용 — intakeData 최소 필드만 */
 export function clientToListRecord(row: Client): ClientRecord {
   return clientToRecord({ ...row, intakeData: slimIntakeDataForList(row.intakeData) });
+}
+
+/** PATCH 응답 등 — ClientRecord를 목록 API와 동일 형식으로 */
+export function clientRecordToListRecord(record: ClientRecord): ClientRecord {
+  return { ...record, intakeData: slimIntakeDataForList(record.intakeData) };
 }
 
 export function clientRecordToContact(record: ClientRecord): ContactRecord {

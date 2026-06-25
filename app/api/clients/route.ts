@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
           : undefined,
     });
 
-    return NextResponse.json({ clients });
+    return NextResponse.json(
+      { clients },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

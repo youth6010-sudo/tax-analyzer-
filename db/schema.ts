@@ -55,6 +55,31 @@ export const clients = pgTable('clients', {
   index('clients_assigned_user_id_idx').on(t.assignedUserId),
 ]);
 
+/** 0618id 수임료 import — TP 매칭 실패 대기 */
+export const clientFeeImportPending = pgTable('client_fee_import_pending', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  companyName: text('company_name').notNull(),
+  manager: text('manager').notNull().default(''),
+  feeSummary: integer('fee_summary'),
+  sourceFile: text('source_file').notNull().default(''),
+  excelKey: text('excel_key').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('client_fee_import_pending_manager_idx').on(t.manager),
+]);
+
+export const clientFeeChanges = pgTable('client_fee_changes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  previousFee: integer('previous_fee'),
+  newFee: integer('new_fee'),
+  changedByUserId: uuid('changed_by_user_id').notNull().references(() => users.id),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('client_fee_changes_client_id_idx').on(t.clientId),
+  index('client_fee_changes_changed_at_idx').on(t.changedAt),
+]);
+
 export const churnRecords = pgTable('churn_records', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: text('client_id').references(() => clients.id),
@@ -213,6 +238,8 @@ export const lunchSpotRequests = pgTable('lunch_spot_requests', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
+export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type ChurnRecord = typeof churnRecords.$inferSelect;

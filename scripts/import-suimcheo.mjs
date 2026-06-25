@@ -2,7 +2,7 @@
  * 더존 수임처 export → Postgres clients
  * node scripts/import-suimcheo.mjs [--replace] [xlsx경로]
  *
- * --replace  기존 active/churned 수임처 전부 삭제 후 엑셀 기준으로 새로 적재
+ * --replace  active/churned 수임처를 엑셀 기준으로 교체 (사업자번호 일치 시 client_id 유지)
  */
 import fs from 'fs';
 import path from 'path';
@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import XLSX from 'xlsx';
 import postgres from 'postgres';
 import { detectSuimcheoExport, parseSuimcheoExportRows } from './lib/suimcheo-export-parse.mjs';
-import { filterImportableClients, reportSkippedRows } from './lib/client-import-guards.mjs';
+import { filterImportableClients, normBizNo, reportSkippedRows } from './lib/client-import-guards.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -35,7 +35,7 @@ const args = process.argv.slice(2);
 const replace = args.includes('--replace');
 const xlsxPath =
   args.find(a => !a.startsWith('--')) ||
-  path.join(process.env.USERPROFILE || '', 'Desktop', '수임처-20260612.xlsx');
+  path.join(process.env.USERPROFILE || '', 'Desktop', '수임처-20260618153548.xlsx');
 
 if (!fs.existsSync(xlsxPath)) {
   console.error('파일을 찾을 수 없습니다:', xlsxPath);
@@ -78,38 +78,139 @@ const userRows = await sql`SELECT id, name, real_name FROM users`;
 const userByNick = new Map(userRows.map(u => [u.name.trim(), u.id]));
 const userByReal = new Map(userRows.map(u => [u.real_name.trim(), u.id]));
 
-if (replace) {
-  console.log('기존 수임처(active/churned) 삭제 중…');
-  await sql`UPDATE intake_inquiries SET client_id = NULL WHERE client_id IS NOT NULL`;
-  await sql`UPDATE intake_processes SET client_id = NULL WHERE client_id IS NOT NULL`;
-  await sql`UPDATE churn_records SET client_id = NULL WHERE client_id IS NOT NULL`;
-  await sql`UPDATE client_meetings SET client_id = NULL WHERE client_id IS NOT NULL`;
-  await sql`UPDATE report_deliveries SET client_id = NULL WHERE client_id IS NOT NULL`;
-  await sql`UPDATE settlement_visits SET client_id = NULL WHERE client_id IS NOT NULL`;
-  const deleted = await sql`DELETE FROM clients WHERE status IN ('active', 'churned') RETURNING id`;
-  console.log(`  삭제: ${deleted.length}건 (유입중 intake는 유지)`);
+async function detachClientLinks(clientId) {
+  await sql`UPDATE intake_inquiries SET client_id = NULL WHERE client_id = ${clientId}`;
+  await sql`UPDATE intake_processes SET client_id = NULL WHERE client_id = ${clientId}`;
+  await sql`UPDATE churn_records SET client_id = NULL WHERE client_id = ${clientId}`;
+  await sql`UPDATE client_meetings SET client_id = NULL WHERE client_id = ${clientId}`;
+  await sql`UPDATE report_deliveries SET client_id = NULL WHERE client_id = ${clientId}`;
+  await sql`UPDATE settlement_visits SET client_id = NULL WHERE client_id = ${clientId}`;
 }
 
-let inserted = 0;
+function mergeKey(companyName, manager) {
+  return `${companyName.trim()}||${manager.trim()}`;
+}
 
-for (const c of clients) {
-  const assignedUserId =
-    userByNick.get(c.manager) ?? userByReal.get(c.managerReal) ?? null;
+const clientValues = (id, c, assignedUserId) => ({
+  id,
+  companyName: c.companyName,
+  manager: c.manager,
+  representative: c.representative,
+  businessNo: c.businessNo,
+  corporateNo: c.corporateNo,
+  residentNo: c.residentNo,
+  phone: c.phone,
+  fax: c.fax,
+  taxTypes: c.taxTypes,
+  businessEntityType: c.businessEntityType,
+  feeSummary: null,
+  program: c.program,
+  status: c.status,
+  assignedUserId,
+  intakeData: c.intakeData,
+  converted: c.converted,
+});
 
+async function upsertClient(row) {
   await sql`
     INSERT INTO clients (
       id, company_name, manager, representative, business_no, corporate_no, resident_no,
       phone, fax, tax_types, business_entity_type, fee_summary, program, status,
       assigned_user_id, intake_data, source, converted
     ) VALUES (
-      ${randomUUID()}, ${c.companyName}, ${c.manager}, ${c.representative}, ${c.businessNo},
-      ${c.corporateNo}, ${c.residentNo}, ${c.phone}, ${c.fax}, ${sql.json(c.taxTypes)},
-      ${c.businessEntityType}, ${c.feeSummary}, ${c.program}, ${c.status},
-      ${assignedUserId}, ${sql.json(c.intakeData)}, 'douzone_export', ${c.converted}
+      ${row.id}, ${row.companyName}, ${row.manager}, ${row.representative}, ${row.businessNo},
+      ${row.corporateNo}, ${row.residentNo}, ${row.phone}, ${row.fax}, ${sql.json(row.taxTypes)},
+      ${row.businessEntityType}, ${row.feeSummary}, ${row.program}, ${row.status},
+      ${row.assignedUserId}, ${sql.json(row.intakeData)}, 'douzone_export', ${row.converted}
     )
+    ON CONFLICT (id) DO UPDATE SET
+      company_name = EXCLUDED.company_name,
+      manager = EXCLUDED.manager,
+      representative = EXCLUDED.representative,
+      business_no = EXCLUDED.business_no,
+      corporate_no = EXCLUDED.corporate_no,
+      resident_no = EXCLUDED.resident_no,
+      phone = EXCLUDED.phone,
+      fax = EXCLUDED.fax,
+      tax_types = EXCLUDED.tax_types,
+      business_entity_type = EXCLUDED.business_entity_type,
+      program = EXCLUDED.program,
+      status = EXCLUDED.status,
+      assigned_user_id = EXCLUDED.assigned_user_id,
+      intake_data = EXCLUDED.intake_data,
+      source = 'douzone_export',
+      converted = EXCLUDED.converted,
+      updated_at = NOW()
   `;
-  inserted++;
+}
+
+let inserted = 0;
+let updated = 0;
+let deleted = 0;
+let idsReused = 0;
+
+if (replace) {
+  const existingRows = await sql`
+    SELECT id, company_name, manager, business_no, status
+    FROM clients
+    WHERE status IN ('active', 'churned')
+  `;
+
+  const byBiz = new Map();
+  const byKey = new Map();
+  for (const r of existingRows) {
+    const biz = normBizNo(r.business_no);
+    if (biz.length >= 10 && !byBiz.has(biz)) byBiz.set(biz, r.id);
+    const key = mergeKey(r.company_name, r.manager);
+    if (!byKey.has(key)) byKey.set(key, r.id);
+  }
+
+  const importIds = new Set();
+
+  for (const c of clients) {
+    const assignedUserId =
+      userByNick.get(c.manager) ?? userByReal.get(c.managerReal) ?? null;
+
+    const biz = normBizNo(c.businessNo);
+    const key = mergeKey(c.companyName, c.manager);
+    const existingId =
+      (biz.length >= 10 ? byBiz.get(biz) : null) ?? byKey.get(key) ?? null;
+    const id = existingId ?? randomUUID();
+
+    if (existingId) idsReused++;
+    importIds.add(id);
+
+    const row = clientValues(id, c, assignedUserId);
+    if (existingId) {
+      await upsertClient(row);
+      updated++;
+    } else {
+      await upsertClient(row);
+      inserted++;
+    }
+  }
+
+  const toDelete = existingRows.filter(r => !importIds.has(r.id));
+  if (toDelete.length > 0) {
+    console.log(`엑셀에 없는 active/churned ${toDelete.length}건 삭제 중…`);
+    for (const r of toDelete) {
+      await detachClientLinks(r.id);
+    }
+    await sql`DELETE FROM clients WHERE id IN ${sql(toDelete.map(r => r.id))}`;
+    deleted = toDelete.length;
+  }
+
+  console.log(`  ID 재사용: ${idsReused}건 (사업자번호·상호+담당 매칭)`);
+} else {
+  for (const c of clients) {
+    const assignedUserId =
+      userByNick.get(c.manager) ?? userByReal.get(c.managerReal) ?? null;
+    await upsertClient(clientValues(randomUUID(), c, assignedUserId));
+    inserted++;
+  }
 }
 
 await sql.end();
-console.log(`✓ DB: ${replace ? '교체' : '추가'} 적재 ${inserted}건 · 정본 douzone_export`);
+console.log(
+  `✓ DB: ${replace ? '교체' : '추가'} upsert ${inserted + updated}건 (신규 ${inserted}, 갱신 ${updated}, 삭제 ${deleted}) · 정본 douzone_export`,
+);

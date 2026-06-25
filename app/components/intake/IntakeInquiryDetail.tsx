@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ConsultationFormConfig } from '../../types/consultation';
 import { formatIntakeDate } from '../../utils/intakeDates';
 import BlueholeCaseLink from './BlueholeCaseLink';
+import BlueholeRegisterCopyButton from './BlueholeRegisterCopyButton';
 import {
   inquiryFormFields,
   inquiryNote,
@@ -322,6 +323,9 @@ export default function IntakeInquiryDetail({
         </button>
       </div>
       <MetaGrid items={metaItems} compact={compact} />
+      <div className="flex flex-wrap items-center gap-2">
+        <BlueholeRegisterCopyButton inquiry={inquiry} />
+      </div>
       <TextBlock label="특이사항" value={note} compact={compact} />
       {bluehole.trim() ? (
         <div>

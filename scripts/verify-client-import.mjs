@@ -81,21 +81,34 @@ let exitCode = 0;
 console.log('=== clients by source ===');
 for (const r of bySource) console.log(`  ${r.source} / ${r.status}: ${r.n}`);
 
+let feePendingCount = 0;
+try {
+  const feePending = await sql`SELECT count(*)::int AS n FROM client_fee_import_pending`;
+  feePendingCount = feePending[0]?.n ?? 0;
+} catch {
+  feePendingCount = 0;
+}
+
 console.log('\n=== source summary ===');
 console.log(`  douzone_export: ${douzoneClients[0].n}건`);
-console.log(`  youth_excel: ${youthClients[0].n}건 (0 expected with --link-only)`);
+console.log(`  youth_excel: ${youthClients[0].n}건`);
 
 console.log('\n=== orphan client_id ===');
 console.log(`  inquiries: ${orphans[0].inquiries}`);
 console.log(`  processes: ${orphans[0].processes}`);
 console.log(`  churns: ${orphans[0].churns}`);
-console.log(`  contacts: ${orphans[0].contacts}`);
+
+console.log('\n=== fee import pending (0618id 미매칭) ===');
+console.log(`  ${feePendingCount}건 → /admin/fee-link`);
+
+if (orphans[0].inquiries + orphans[0].processes + orphans[0].churns > 0) {
+  console.log('  ⚠ 미연결 유입·유출 → /admin/fee-link 미연결 탭');
+}
 
 console.log('\n=== active fee_summary NULL ===');
 console.log(`  ${feeNullActive[0].n}건`);
 if (feeNullActive[0].n > 0) {
-  console.log('  ⚠ active 수임처 중 기장료 미입력 건이 있습니다.');
-  exitCode = 1;
+  console.log('  ⚠ active 수임처 중 수수료 미입력 — 0618id 매칭·pending 확인');
 }
 
 console.log('\n=== category distribution (active/churned) ===');

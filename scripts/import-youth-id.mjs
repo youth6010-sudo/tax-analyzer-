@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import XLSX from 'xlsx';
 import postgres from 'postgres';
-import { parseSuimcheoRows, detectYouthIdWorkbook } from './lib/youth-id-parse.mjs';
+import { parseSuimcheoRows, detectYouthIdWorkbook, detectSuimcheoManagementLayout } from './lib/youth-id-parse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -38,12 +38,16 @@ if (!fs.existsSync(xlsxPath)) {
 }
 
 const wb = XLSX.readFile(xlsxPath);
-if (!detectYouthIdWorkbook(wb.SheetNames)) {
-  console.error('청년들 ID.xlsx 형식이 아닙니다. (수임처관리·청년들ID 시트 필요)');
+const getSheetRows = name =>
+  XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+if (!detectYouthIdWorkbook(wb.SheetNames, getSheetRows)) {
+  console.error('청년들 ID.xlsx 형식이 아닙니다. (수임처관리·청년들ID 또는 수임처관리 블록 레이아웃 필요)');
   process.exit(1);
 }
 
-const rows = XLSX.utils.sheet_to_json(wb.Sheets['수임처관리'], { header: 1, defval: '' });
+const rows = wb.Sheets['수임처관리']
+  ? getSheetRows('수임처관리')
+  : (wb.SheetNames.map(name => getSheetRows(name)).find(r => detectSuimcheoManagementLayout(r)) ?? []);
 const clients = parseSuimcheoRows(rows);
 console.log(`수임처관리 파싱: ${clients.length}건`);
 

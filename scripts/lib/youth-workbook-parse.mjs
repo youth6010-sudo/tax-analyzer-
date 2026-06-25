@@ -1,9 +1,9 @@
 /**
  * 청년들 ID.xlsx 시트 파서 (비품 주문 제외)
  */
-import { parseSuimcheoRows, cellText, parseBool } from './youth-id-parse.mjs';
+import { parseSuimcheoRows, detectSuimcheoManagementLayout, cellText, parseBool } from './youth-id-parse.mjs';
 
-export { parseSuimcheoRows, detectYouthIdWorkbook } from './youth-id-parse.mjs';
+export { parseSuimcheoRows, detectYouthIdWorkbook, detectSuimcheoManagementLayout } from './youth-id-parse.mjs';
 
 const MANAGER_BLOCKS = [
   { manager: '블루', col: 0 },
@@ -370,6 +370,17 @@ export function parseWorkbook(wb, XLSX) {
     return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
   };
 
+  let clientRows = get('수임처관리');
+  if (!clientRows.length) {
+    for (const name of wb.SheetNames) {
+      const rows = get(name);
+      if (detectSuimcheoManagementLayout(rows)) {
+        clientRows = rows;
+        break;
+      }
+    }
+  }
+
   const inquiries = parseIntakeInquiries(get('유입관리'));
   const processes = enrichProcessesWithInquiries(
     parseIntakeProcesses(get('유입프로세스')),
@@ -377,7 +388,7 @@ export function parseWorkbook(wb, XLSX) {
   );
 
   return {
-    clients: parseSuimcheoRows(get('수임처관리')),
+    clients: parseSuimcheoRows(clientRows),
     inquiries,
     processes,
     churns: parseChurnRows(get('유출')),

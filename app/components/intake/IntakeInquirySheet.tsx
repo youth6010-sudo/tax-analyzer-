@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { INQUIRY_LIST_COLUMNS } from '@/app/config/intakeSheets';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import IntakeInquiryDetail from './IntakeInquiryDetail';
@@ -62,10 +62,29 @@ export default function IntakeInquirySheet({
   deletingId: string | null;
 }) {
   const [linkedProcessId, setLinkedProcessId] = useState<string | null>(forcedProcessId ?? null);
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   useEffect(() => {
     setLinkedProcessId(forcedProcessId ?? null);
   }, [selectedId, forcedProcessId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    const tryScroll = (attempt = 0) => {
+      if (cancelled) return;
+      const row = rowRefs.current.get(selectedId);
+      if (row) {
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      if (attempt < 8) {
+        window.setTimeout(() => tryScroll(attempt + 1), 50 * (attempt + 1));
+      }
+    };
+    tryScroll();
+    return () => { cancelled = true; };
+  }, [selectedId, rows]);
 
   const selectedInquiry = useMemo(
     () => rows.find(r => r.id === selectedId) ?? null,
@@ -119,6 +138,10 @@ export default function IntakeInquirySheet({
               return (
                 <tr
                   key={row.id}
+                  ref={el => {
+                    if (el) rowRefs.current.set(row.id, el);
+                    else rowRefs.current.delete(row.id);
+                  }}
                   onClick={() => onSelect(active ? null : row.id)}
                   className={`cursor-pointer transition-colors ${
                     active ? 'bg-amber-50 ring-1 ring-inset ring-amber-200' : 'hover:bg-slate-50'

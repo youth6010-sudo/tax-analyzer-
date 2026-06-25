@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
-import AppHeader from '../../components/AppHeader';
 import ContactDetailView from '../../components/ContactDetailView';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
 import ClientDouzoneSection from '../../components/ClientDouzoneSection';
 import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
+import PortalPageShell from '../../components/portal/PortalPageShell';
 import { requireUser } from '@/lib/auth';
 import { getClientById } from '@/lib/clientsDb';
 import { getClientRelatedCounts } from '@/lib/workbookDb';
@@ -24,13 +24,12 @@ export default async function ClientDetailPage({
   const related = await getClientRelatedCounts(id, client.companyName);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <AppHeader />
+    <PortalPageShell narrow>
       <ContactDetailView
         contact={clientRecordToContact(client)}
         primaryContactName={client.primaryContactName}
       />
-      <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pb-8 space-y-4 -mt-2">
+      <div className="space-y-4 -mt-2">
         <ClientContactsPanel clientId={client.id} />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection
@@ -42,6 +41,6 @@ export default async function ClientDetailPage({
         )}
         <ClientRelatedLinks clientId={client.id} initial={related} />
       </div>
-    </div>
+    </PortalPageShell>
   );
 }

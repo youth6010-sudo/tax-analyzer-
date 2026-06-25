@@ -1,5 +1,6 @@
 import { CHECKLIST_KEYS } from '@/app/types/intake';
 import { CHECKLIST_LABEL, CHECKLIST_LABEL_FULL } from '@/app/components/intake/intakeUtils';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 export type InquiryColumnKey =
   | 'inquiryDate'
@@ -72,7 +73,7 @@ export const INQUIRY_COLUMNS: SheetColumn[] = [
 export const PROCESS_META_COLUMNS: SheetColumn[] = [
   { key: 'companyName', label: '업체명', width: '7rem', sticky: true },
   { key: 'feeStartDate', label: '수수료 발생일', width: '6rem', editable: true },
-  { key: 'monthlyFee', label: '기장료', width: '4.5rem', editable: true, type: 'number' },
+  { key: 'monthlyFee', label: CLIENT_FIELD_LABELS.fee, width: '4.5rem', editable: true, type: 'number' },
   { key: 'channel', label: '유입 경로', width: '5.5rem', editable: true },
 ];
 

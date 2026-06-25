@@ -1,10 +1,5 @@
-import AppHeader from '../components/AppHeader';
+import PortalPageShell from '../components/portal/PortalPageShell';
 
 export default function GachaLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <AppHeader />
-      {children}
-    </div>
-  );
+  return <PortalPageShell>{children}</PortalPageShell>;
 }

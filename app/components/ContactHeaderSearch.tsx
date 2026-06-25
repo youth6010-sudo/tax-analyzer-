@@ -110,7 +110,7 @@ export default function ContactHeaderSearch() {
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="업체·대표·연락처 이름·전화·담당자 검색"
-          className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent focus:bg-white transition-all"
+          className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400 focus:bg-white transition-colors"
         />
         {query && (
           <button
@@ -126,7 +126,7 @@ export default function ContactHeaderSearch() {
 
       <Link
         href="/clients/intake?tab=consultation"
-        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
         title="신규 유입"
         aria-label="신규 유입"
       >
@@ -136,7 +136,7 @@ export default function ContactHeaderSearch() {
       </Link>
 
       {showPanel && (
-        <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,28rem)] sm:w-[32rem] z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,28rem)] sm:w-[32rem] z-50 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           {results.length === 0 ? (
             <p className="px-4 py-6 text-sm text-gray-500 text-center">
               {searching ? `"${query}" 검색 중…` : `"${query}" 검색 결과 없음`}

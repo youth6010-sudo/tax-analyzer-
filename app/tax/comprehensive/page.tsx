@@ -22,6 +22,17 @@ import { computeRow } from '@/app/lib/businessRowCompute';
 import { loadIndustryRates, formatKRW, formatPct } from '@/app/utils/calculator';
 import type { IndustryRate } from '@/app/types';
 import {
+  portalBtnDark,
+  portalBtnDangerFill,
+  portalBtnPrimary,
+  portalBtnSecondary,
+  portalBtnSuccessFill,
+  portalCard,
+  portalContent,
+  portalFieldLabel,
+  portalInput,
+} from '@/app/components/portal/uiClasses';
+import {
   LS_MAIN,
   LS_SIM,
   SESSION_FILE_VERSION,
@@ -627,7 +638,7 @@ export default function Home() {
   const prevYearPrintPrefix = prevYear.trim() ? `${prevYear.trim()}년 ` : '';
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+    <div className="flex-1 bg-[var(--background)]">
 
       {/* ── 인쇄 전용 헤더 ── */}
       <div className="print-only hidden border-b-2 border-gray-900 pb-2 mb-3 px-2">
@@ -651,31 +662,35 @@ export default function Home() {
       )}
 
       {/* ── 화면 헤더 ── */}
-      <header className="bg-white border-b border-gray-100 shadow-sm no-print">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
-          {/* 타이틀 행 */}
-          <div className="flex items-end gap-3 mb-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow shrink-0 self-center">
+      <header className="no-print sticky top-[3.75rem] z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm shadow-slate-200/30">
+        <div className={`${portalContent} py-4 space-y-4`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/25">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round"
                   d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            {taxpayer && <span className="text-2xl font-black text-blue-900 leading-none self-center mr-4">{taxpayer}</span>}
-            <span className="text-lg font-black text-gray-900">종합소득세 분석</span>
-            <span className="text-xs font-normal text-gray-400 ml-2">{today}</span>
-            <div className="flex gap-2 ml-auto items-center">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                {taxpayer && (
+                  <span className="text-lg font-bold text-blue-800">{taxpayer}</span>
+                )}
+                <h1 className="text-lg font-semibold text-slate-900">종합소득세 분석</h1>
+                <span className="portal-meta">{today}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               {analyzed && (
-                <>
-                  <button onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors shadow">
+                <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 border border-slate-200/70">
+                  <button onClick={() => window.print()} className={portalBtnDark}>
                     🖨 인쇄
                   </button>
                   <button
                     onClick={() => handleSave('pdf')}
                     disabled={saving !== null}
                     title="Chrome·Edge: 저장 위치와 파일명을 선택할 수 있습니다. Safari 등은 다운로드 폴더로 저장됩니다."
-                    className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 transition-colors shadow disabled:opacity-50">
+                    className={portalBtnDangerFill}>
                     {saving === 'pdf' ? (
                       <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -687,7 +702,7 @@ export default function Home() {
                     onClick={() => handleSave('jpg')}
                     disabled={saving !== null}
                     title="Chrome·Edge: 저장 위치와 파일명을 선택할 수 있습니다. Safari 등은 다운로드 폴더로 저장됩니다."
-                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors shadow disabled:opacity-50">
+                    className={portalBtnSuccessFill}>
                     {saving === 'jpg' ? (
                       <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -695,58 +710,60 @@ export default function Home() {
                       </svg>
                     ) : '🖼'} JPG
                   </button>
-                </>
+                </div>
               )}
-              <button onClick={() => void exportWorkJson()}
-                className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
-                title="입력·시뮬레이션을 JSON으로 저장 (Chrome·Edge에서는 저장 위치 선택 가능)">
-                💾 작업저장
-              </button>
-              <button type="button" onClick={() => fileImportRef.current?.click()}
-                className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
-                title="JSON 파일에서 불러오기 (페이지가 새로고침됩니다)">
-                📂 작업불러오기
-              </button>
-              <input ref={fileImportRef} type="file" accept=".json,application/json" className="hidden" onChange={onPickImportFile} />
-              <button onClick={handleReset}
-                className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                초기화
-              </button>
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 border border-slate-200/70">
+                <button onClick={() => void exportWorkJson()}
+                  className={portalBtnSecondary}
+                  title="입력·시뮬레이션을 JSON으로 저장 (Chrome·Edge에서는 저장 위치 선택 가능)">
+                  💾 저장
+                </button>
+                <button type="button" onClick={() => fileImportRef.current?.click()}
+                  className={portalBtnSecondary}
+                  title="JSON 파일에서 불러오기 (페이지가 새로고침됩니다)">
+                  📂 불러오기
+                </button>
+                <input ref={fileImportRef} type="file" accept=".json,application/json" className="hidden" onChange={onPickImportFile} />
+                <button onClick={handleReset} className={portalBtnSecondary}>
+                  초기화
+                </button>
+              </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="세무법인청년들" className="h-[2.7rem] w-auto max-h-[2.7rem] object-contain ml-2 border-l border-gray-100 pl-3 shrink-0 self-center" />
+              <img src="/logo.png" alt="세무법인청년들" className="h-9 w-auto object-contain ml-1 border-l border-slate-200 pl-3 shrink-0 hidden sm:block" />
             </div>
           </div>
 
-          {/* 입력 3개 한 줄 */}
-          <div className="flex gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs font-bold text-gray-500 shrink-0 w-8">전기</span>
-              <input type="text" value={prevYear} onChange={e => setPrevYear(e.target.value)}
-                placeholder="연도 (예: 2024)"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50 font-mono"
-              />
-              <span className="text-xs text-gray-400 shrink-0">년</span>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs font-bold text-gray-500 shrink-0 w-8">당기</span>
-              <input type="text" value={currYear} onChange={e => setCurrYear(e.target.value)}
-                placeholder="연도 (예: 2025)"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 font-mono"
-              />
-              <span className="text-xs text-gray-400 shrink-0">년</span>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs font-bold text-gray-500 shrink-0 w-12">소득자</span>
-              <input type="text" value={taxpayer} onChange={e => setTaxpayer(e.target.value)}
-                placeholder="성명 / 상호"
-                className="flex-1 border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50/40 font-medium"
-              />
+          <div className={`${portalCard} p-3 bg-slate-50/60`}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="flex items-center gap-2 min-w-0">
+                <span className={portalFieldLabel + ' shrink-0 w-8'}>전기</span>
+                <input type="text" value={prevYear} onChange={e => setPrevYear(e.target.value)}
+                  placeholder="2024"
+                  className={`${portalInput} flex-1 font-mono`}
+                />
+                <span className="text-xs text-slate-400 shrink-0">년</span>
+              </label>
+              <label className="flex items-center gap-2 min-w-0">
+                <span className={portalFieldLabel + ' shrink-0 w-8'}>당기</span>
+                <input type="text" value={currYear} onChange={e => setCurrYear(e.target.value)}
+                  placeholder="2025"
+                  className={`${portalInput} flex-1 font-mono`}
+                />
+                <span className="text-xs text-slate-400 shrink-0">년</span>
+              </label>
+              <label className="flex items-center gap-2 min-w-0">
+                <span className={portalFieldLabel + ' shrink-0 w-12'}>소득자</span>
+                <input type="text" value={taxpayer} onChange={e => setTaxpayer(e.target.value)}
+                  placeholder="성명 / 상호"
+                  className={`${portalInput} flex-1 bg-blue-50/60 border-blue-200/80 font-medium`}
+                />
+              </label>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <div className={`${portalContent} py-6 space-y-5`}>
 
         {industryRatesStatus === 'loading' && (
           <div className="no-print rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-2.5 text-xs text-blue-800 flex flex-wrap items-center justify-between gap-2">
@@ -776,16 +793,16 @@ export default function Home() {
         )}
 
         {/* ── 입력 테이블 (인쇄 제외) ── */}
-        <div className="no-print bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className={`no-print ${portalCard} overflow-hidden`}>
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-gray-800">
+              <h2 className="text-base font-semibold text-slate-900">
                 {prevYear.trim() ? `${prevYear.trim()}년 ` : ''}총수입금액 및 필요경비 명세
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">업종코드별 수입·경비 입력 — 행별 <span className="text-amber-600 font-semibold">상세분석</span> 버튼으로 필요경비 항목 입력 가능</p>
+              <p className="portal-meta mt-1">업종코드별 수입·경비 입력 — 행별 <span className="text-amber-700 font-semibold">상세분석</span> 버튼으로 필요경비 항목 입력 가능</p>
             </div>
             <button onClick={addRow}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow">
+              className={`${portalBtnPrimary} px-4 py-2`}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
@@ -794,9 +811,9 @@ export default function Home() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-[11px]">
+                <tr className="bg-slate-50 border-b border-slate-200 [&_th]:portal-table-head">
                   <th className="text-left px-2 py-2 font-semibold w-6">#</th>
                   <th className="text-left px-2 py-2 font-semibold">주업종코드</th>
                   <th className="text-right px-2 py-2 font-semibold">총수입금액</th>
@@ -1408,6 +1425,6 @@ export default function Home() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

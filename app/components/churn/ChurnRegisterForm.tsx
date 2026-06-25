@@ -13,6 +13,7 @@ import {
   REASON_ITEMS,
 } from '@/app/config/churnOptions';
 import type { ClientRecord } from '@/app/types/client';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 export type ChurnFormValues = {
   churnedAt: string;
@@ -97,7 +98,7 @@ export default function ChurnRegisterForm({
             />
           </label>
           <label className="block">
-            <span className="text-[10px] font-bold text-gray-500">기장료</span>
+            <span className="text-[10px] font-bold text-gray-500">{CLIENT_FIELD_LABELS.fee}</span>
             <input
               type="text"
               inputMode="numeric"

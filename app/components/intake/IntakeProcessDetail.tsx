@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CHECKLIST_KEYS, CHECKLIST_LABEL_FULL, type ProcessRow } from './intakeUtils';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
 
@@ -95,7 +96,7 @@ export default function IntakeProcessDetail({
             <input type="date" value={feeStartDate} onChange={e => setFeeStartDate(e.target.value)} className={inputCls} />
           </label>
           <label className="block text-xs">
-            <span className="font-semibold text-gray-600">월 기장료</span>
+            <span className="font-semibold text-gray-600">{CLIENT_FIELD_LABELS.fee}</span>
             <input value={monthlyFee} onChange={e => setMonthlyFee(e.target.value)} className={inputCls} />
           </label>
           <label className="block text-xs">
@@ -119,7 +120,7 @@ export default function IntakeProcessDetail({
           )}
           {process.monthlyFee != null && process.monthlyFee > 0 && (
             <div>
-              <dt className="text-[10px] font-bold text-gray-400 uppercase">월 기장료</dt>
+              <dt className="text-[10px] font-bold text-gray-400 uppercase">{CLIENT_FIELD_LABELS.fee}</dt>
               <dd className="text-gray-800">{process.monthlyFee.toLocaleString()}원</dd>
             </div>
           )}

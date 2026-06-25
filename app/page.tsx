@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import AppHeader from './components/AppHeader';
 import HomeLunchPreview from './components/lunch/HomeLunchPreview';
 import HomeTasksSidebar from './components/dashboard/HomeTasksSidebar';
 import HomeWelcomeSection from './components/dashboard/HomeWelcomeSection';
+import PortalPageShell from './components/portal/PortalPageShell';
+import { portalCard, portalMain, portalSectionTitle } from './components/portal/uiClasses';
 import { requireUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,12 @@ const TOOLS: {
     accent: 'blue',
   },
   {
+    href: '/tools/notice-generator',
+    title: '세무 신고 안내 문구 생성기',
+    description: '세목·기간 선택 → 마감일 자동 계산 + 안내문 생성',
+    accent: 'blue',
+  },
+  {
     href: '/gacha',
     title: '가챠머신',
     description: '점심 맛집 뽑기 · 담당자 뽑기 — 3D 캡슐 가챠',
@@ -31,37 +38,35 @@ const TOOLS: {
 ] as const;
 
 const ACCENT: Record<string, string> = {
-  blue: 'border-blue-200 hover:border-blue-300 hover:shadow-blue-100',
-  orange: 'border-orange-200 hover:border-orange-300 hover:shadow-orange-100',
-  gray: 'border-gray-200 opacity-75',
+  blue: 'border-blue-200 hover:border-blue-300 hover:shadow-blue-100/50',
+  orange: 'border-orange-200 hover:border-orange-300 hover:shadow-orange-100/50',
+  gray: 'border-slate-200 opacity-75',
 };
 
 export default async function HomePage() {
   const user = await requireUser();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--background)]">
-      <AppHeader />
-      <main className="flex-1 flex flex-col">
-        <HomeTasksSidebar>
-          <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10 w-full">
-            <HomeWelcomeSection userName={user.name} />
+    <PortalPageShell bare>
+      <HomeTasksSidebar>
+        <div className={`${portalMain} space-y-10 w-full`}>
+          <HomeWelcomeSection userName={user.name} />
 
-            <section>
-              <h2 className="text-lg font-bold text-gray-900 mb-4">도구</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {TOOLS.map(tool => {
-                  const cardClass = `block rounded-xl border bg-white p-5 shadow-sm transition-all ${
-                    ACCENT[tool.accent] ?? ACCENT.gray
-                  } ${tool.disabled ? 'pointer-events-none' : 'hover:shadow-md'}`;
+          <section>
+            <h2 className={`${portalSectionTitle} mb-4`}>도구</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {TOOLS.map(tool => {
+                const cardClass = `block ${portalCard} p-5 transition-all ${
+                  ACCENT[tool.accent] ?? ACCENT.gray
+                } ${tool.disabled ? 'pointer-events-none' : 'hover:shadow-md'}`;
 
                   const inner = (
                     <>
-                      <h3 className="text-lg font-bold text-gray-900">{tool.title}</h3>
-                      <p className="mt-2 text-sm text-gray-700 leading-relaxed">{tool.description}</p>
+                      <h3 className="text-lg font-semibold text-slate-900">{tool.title}</h3>
+                      <p className="mt-2 text-sm text-slate-700 leading-relaxed">{tool.description}</p>
                       {'preview' in tool && tool.preview ? <HomeLunchPreview /> : null}
                       {!tool.disabled && (
-                        <span className="mt-4 inline-flex text-sm font-semibold text-gray-800">
+                        <span className="mt-4 inline-flex text-sm font-medium text-slate-700">
                           열기 →
                         </span>
                       )}
@@ -82,11 +87,10 @@ export default async function HomePage() {
                     </Link>
                   );
                 })}
-              </div>
-            </section>
-          </div>
-        </HomeTasksSidebar>
-      </main>
-    </div>
+            </div>
+          </section>
+        </div>
+      </HomeTasksSidebar>
+    </PortalPageShell>
   );
 }

@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ClientRecord } from '@/app/types/client';
+import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
 import {
   getPortalSearchIndex,
   hydratePortal,
   prefetchSearchIndex,
   searchPortalClients,
 } from '@/app/utils/portalStore';
+import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 
 type Props = {
   value: ClientRecord | null;
@@ -57,28 +58,26 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const index = getPortalSearchIndex();
-      if (index.length > 0) {
-        const local = searchPortalClients(q, { activeOnly: true }) as ClientRecord[];
-        if (local.length > 0) {
-          setResults(local);
-          setLoading(false);
-          return;
-        }
-      }
+      const local = getPortalSearchIndex().length > 0
+        ? (searchPortalClients(q) as ClientRecord[])
+        : [];
+      setResults(local);
+      setLoading(true);
 
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      setLoading(true);
 
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&activeOnly=1&includeIntake=0`, {
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&includeChurned=1&forChurn=1`, {
         signal: ac.signal,
       })
         .then(r => (r.ok ? r.json() : { clients: [] }))
-        .then(data => setResults(data.clients ?? []))
+        .then(data => {
+          const api = (data.clients ?? []) as ClientSearchResult[];
+          setResults(mergeClientSearchResults(local, api));
+        })
         .catch(err => {
-          if (err?.name !== 'AbortError') setResults([]);
+          if (err?.name !== 'AbortError') setResults(local);
         })
         .finally(() => setLoading(false));
     }, 150);

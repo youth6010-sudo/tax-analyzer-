@@ -45,9 +45,23 @@ async function wipe(label, query) {
   return rows.length;
 }
 
+async function wipeIfExists(table) {
+  const exists = await sql`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ${table}
+    LIMIT 1
+  `;
+  if (exists.length === 0) {
+    console.log(`  ${table}: (테이블 없음, 건너뜀)`);
+    return 0;
+  }
+  return wipe(table, sql.unsafe(`DELETE FROM ${table} RETURNING id`));
+}
+
 console.log('업체 관련 데이터 전량 삭제 중…');
 
 await wipe('tax_filing_checks', sql`DELETE FROM tax_filing_checks RETURNING id`);
+await wipeIfExists('client_fee_changes');
 await wipe('churn_records', sql`DELETE FROM churn_records RETURNING id`);
 await wipe('intake_inquiries', sql`DELETE FROM intake_inquiries RETURNING id`);
 await wipe('intake_processes', sql`DELETE FROM intake_processes RETURNING id`);
@@ -62,7 +76,8 @@ const verify = await sql`
     (SELECT count(*)::int FROM clients) AS clients,
     (SELECT count(*)::int FROM intake_inquiries) AS inquiries,
     (SELECT count(*)::int FROM intake_processes) AS processes,
-    (SELECT count(*)::int FROM churn_records) AS churn
+    (SELECT count(*)::int FROM churn_records) AS churn,
+    (SELECT count(*)::int FROM client_contacts) AS contacts
 `;
 
 console.log('\n검증 (모두 0이어야 함):', verify[0]);

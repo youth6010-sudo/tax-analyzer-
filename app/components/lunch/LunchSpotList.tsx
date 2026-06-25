@@ -5,6 +5,14 @@ import type { LunchSpot } from '@/app/types/lunch';
 import type { LunchJournalStore } from '@/app/types/lunchJournal';
 import { getSpotJournal } from '@/app/utils/lunchJournal';
 import { buildWalkDistanceBands, filterSpotsByDistanceBand } from '@/app/utils/lunchDistance';
+import {
+  portalCard,
+  portalEmptyState,
+  portalInput,
+  portalSectionDesc,
+  portalSectionTitle,
+  portalSelect,
+} from '@/app/components/portal/uiClasses';
 import LunchSpotCard from './LunchSpotCard';
 
 interface LunchSpotListProps {
@@ -51,36 +59,40 @@ export default function LunchSpotList({
   }, [spots, query, distanceBand, bands]);
 
   return (
-    <section className="mt-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-black text-gray-900">맛집 도감</h2>
-          <p className="mt-1 text-sm text-gray-500">{filtered.length}곳 · 팀원 리뷰는 이 브라우저에 저장</p>
-        </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <input
-            type="search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="이름, 태그 검색"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-orange-200"
-          />
-          <select
-            value={distanceBand}
-            onChange={e => setDistanceBand(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-orange-200"
-          >
-            <option value="all">전체 거리</option>
-            {bands.map(band => (
-              <option key={band.id} value={band.id}>
-                {band.emoji} {band.label}
-              </option>
-            ))}
-          </select>
+    <section className="mt-10">
+      <div className={`${portalCard} p-4 sm:p-5 mb-4`}>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className={portalSectionTitle}>맛집 도감</h2>
+            <p className={portalSectionDesc}>
+              {filtered.length}곳 · 팀원 리뷰는 이 브라우저에 저장
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:min-w-[20rem]">
+            <input
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="이름, 태그 검색"
+              className={`${portalInput} flex-1 min-w-[10rem]`}
+            />
+            <select
+              value={distanceBand}
+              onChange={e => setDistanceBand(e.target.value)}
+              className={portalSelect}
+            >
+              <option value="all">전체 거리</option>
+              {bands.map(band => (
+                <option key={band.id} value={band.id}>
+                  {band.emoji} {band.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {filtered.map(spot => (
           <LunchSpotCard
             key={spot.id}
@@ -96,9 +108,7 @@ export default function LunchSpotList({
       </div>
 
       {filtered.length === 0 && (
-        <p className="mt-6 text-center text-sm text-gray-500 py-8 rounded-2xl border border-dashed border-gray-200 bg-white">
-          조건에 맞는 맛집이 없습니다.
-        </p>
+        <p className={portalEmptyState}>조건에 맞는 맛집이 없습니다.</p>
       )}
     </section>
   );

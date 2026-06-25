@@ -13,6 +13,7 @@ export const TAX_MENU = [
     label: '홈',
     items: [
       { label: '대시보드', href: '/' },
+      { label: '안내문 생성기', href: '/tools/notice-generator' },
       { label: '가챠머신', href: '/gacha' },
       { label: '담당자 뽑기', href: '/gacha?tab=manager' },
     ],
@@ -32,6 +33,7 @@ export const TAX_MENU = [
     adminOnly: true,
     items: [
       { label: '데이터 백업', href: '/admin/backup' },
+      { label: '수임료·연결', href: '/admin/fee-link' },
     ],
   },
   {

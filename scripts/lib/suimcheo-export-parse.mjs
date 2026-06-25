@@ -40,6 +40,7 @@ export const CANONICAL_CATEGORIES = ['개인', '법인', '신고대리', '미사
 export const CATEGORY_ALIASES = {
   세무사랑: '',
   더존: '',
+  지주택: '',
   신고대리: '신고대리',
 };
 
@@ -51,18 +52,11 @@ function categoryFromEntityType(entityType) {
 }
 
 /**
- * 더존 `대분류` → canonical category
- * @param {string} raw
- * @param {string} [entityType] corporate | individual | nonBusiness
+ * TP `대분류` — Excel 값 그대로 저장. 비어 있을 때만 구분 fallback.
  */
 export function normalizeCategory(raw, entityType = '') {
   const s = cellText(raw);
   if (!s) return categoryFromEntityType(entityType);
-  if (CANONICAL_CATEGORIES.includes(s)) return s;
-  if (Object.prototype.hasOwnProperty.call(CATEGORY_ALIASES, s)) {
-    const mapped = CATEGORY_ALIASES[s];
-    return mapped || categoryFromEntityType(entityType);
-  }
   return s;
 }
 

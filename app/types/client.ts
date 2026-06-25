@@ -3,6 +3,14 @@ import type { ContactRecord } from './contact';
 export type ClientStatus = 'intake' | 'active' | 'churned';
 export type ClientSource = 'tp_import' | 'manual_intake' | 'youth_excel' | 'douzone_export';
 
+export interface ClientFeeChange {
+  id: string;
+  previousFee: number | null;
+  newFee: number | null;
+  changedByName: string;
+  changedAt: string;
+}
+
 export interface ClientRecord extends ContactRecord {
   status: ClientStatus;
   assignedUserId: string | null;

@@ -140,8 +140,7 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
 
   const clientRows = await db
     .select({ id: clients.id, companyName: clients.companyName })
-    .from(clients)
-    .where(eq(clients.status, 'active'));
+    .from(clients);
   const clientRefs: ClientNameRef[] = clientRows.map(c => ({
     id: c.id,
     companyName: c.companyName,
@@ -163,7 +162,7 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
     .from(intakeProcesses)
     .leftJoin(clients, eq(clients.id, intakeProcesses.clientId))
     .orderBy(desc(intakeProcesses.updatedAt))
-    .limit(40);
+    .limit(100);
 
   for (const raw of processRows) {
     const process = toProcessRow(raw);

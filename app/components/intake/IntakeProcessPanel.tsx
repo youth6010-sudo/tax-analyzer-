@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import ProcessChecklistPanel from './ProcessChecklistPanel';
+import BlueholeRegisterCopyButton from './BlueholeRegisterCopyButton';
 import {
   inquiryBlueholeCase,
   processRowFromApi,
   type InquiryRow,
   type ProcessRow,
 } from './intakeUtils';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 const inputCls = 'mt-1 w-full min-w-0 border border-indigo-200 rounded-md px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none';
 
@@ -179,7 +181,7 @@ export default function IntakeProcessPanel({
           />
         </label>
         <label className="block text-xs">
-          <span className="font-semibold text-indigo-900">기장료</span>
+          <span className="font-semibold text-indigo-900">{CLIENT_FIELD_LABELS.fee}</span>
           <input
             value={form.monthlyFee}
             onChange={e => setForm(prev => ({ ...prev, monthlyFee: e.target.value }))}
@@ -208,6 +210,8 @@ export default function IntakeProcessPanel({
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <BlueholeRegisterCopyButton inquiry={inquiry} process={process} />
 
       <ProcessChecklistPanel
         process={process}

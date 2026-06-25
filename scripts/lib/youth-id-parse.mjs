@@ -59,6 +59,22 @@ export function parseSuimcheoRows(rows) {
   return parsed;
 }
 
-export function detectYouthIdWorkbook(sheetNames) {
-  return sheetNames.includes('수임처관리') && sheetNames.includes('청년들ID');
+export function detectSuimcheoManagementLayout(rows) {
+  if (!rows?.length || rows.length < 3) return false;
+  const header = rows[0]?.map(cellText) ?? [];
+  const sub = rows[1]?.map(cellText) ?? [];
+  const hasManagerBlock = MANAGER_BLOCKS.some(b => header.some(h => h === b.manager));
+  const hasNoRow = sub.includes('NO') && sub.includes('구분') && sub.includes('업체명');
+  return hasManagerBlock && hasNoRow;
+}
+
+export function detectYouthIdWorkbook(sheetNames, getSheetRows) {
+  if (sheetNames.includes('수임처관리') && sheetNames.includes('청년들ID')) return true;
+  if (typeof getSheetRows === 'function') {
+    for (const name of sheetNames) {
+      const rows = getSheetRows(name);
+      if (detectSuimcheoManagementLayout(rows)) return true;
+    }
+  }
+  return false;
 }

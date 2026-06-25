@@ -1,8 +1,8 @@
 import type { ClientRecord } from '@/app/types/client';
 import type { BusinessEntityType } from '@/app/types/contact';
 import { BUSINESS_ENTITY_LABEL } from '@/app/types/contact';
-import type { CategoryColumnSide } from '@/app/utils/clientsColumnLayout';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
+import { resolveClientRecordFee } from '@/app/utils/feeBreakdown';
 
 /** 수임처관리 시트 담당자 열 순서 */
 export const MANAGER_DISPLAY_ORDER = Object.keys(STAFF_REAL_NAMES);
@@ -14,15 +14,52 @@ export const SINGO_DAERI = '신고대리';
 /** 구분·대분류 공통 표시 순서 */
 export const GROUP_DISPLAY_ORDER = ['개인', '법인', SINGO_DAERI, '미사용', '비사업자'] as const;
 
+/** UI 대분류 canonical (import·표시 공통) */
+export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_DAERI, '미사용', '비사업자']);
+
 export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
-  if (s) return s;
-  const entity = client.businessEntityType;
-  if (entity === 'corporate') return '법인';
-  if (entity === 'individual') return '개인';
-  if (entity === 'nonBusiness') return '비사업자';
-  return UNCategorized;
+  return s || UNCategorized;
+}
+
+export type OtherCategoryGroup = {
+  category: string;
+  clients: ClientRecord[];
+};
+
+/** 담당자 컬럼: 대분류 === 개인 | 법인 | 그 외(분류별) */
+export function splitManagerClientsByCategory(clients: ClientRecord[]): {
+  personal: ClientRecord[];
+  corporate: ClientRecord[];
+  otherCategories: OtherCategoryGroup[];
+} {
+  const personal: ClientRecord[] = [];
+  const corporate: ClientRecord[] = [];
+  const otherMap = new Map<string, ClientRecord[]>();
+
+  for (const c of clients) {
+    const cat = getClientCategory(c);
+    if (cat === '개인') personal.push(c);
+    else if (cat === '법인') corporate.push(c);
+    else {
+      const arr = otherMap.get(cat) ?? [];
+      arr.push(c);
+      otherMap.set(cat, arr);
+    }
+  }
+
+  const otherCategories = [...otherMap.entries()]
+    .sort(([a], [b]) => compareGroupLabels(a, b))
+    .map(([category, list]) => ({ category, clients: list }));
+
+  return { personal, corporate, otherCategories };
+}
+
+/** @deprecated splitManagerClientsByCategory 사용 */
+export function splitClientsByRosterPanel(clients: ClientRecord[]) {
+  const { personal, corporate } = splitManagerClientsByCategory(clients);
+  return { personal, corporate };
 }
 
 export function getEntityLabel(entityType: BusinessEntityType | '' | undefined): string {
@@ -206,20 +243,23 @@ export function collectCategories(clients: ClientRecord[]): string[] {
   return [...set].sort(compareGroupLabels);
 }
 
-/** 개인·법인 제외 opt-in 대분류 목록 */
-export function getOptionalCategories(clients: ClientRecord[]): string[] {
+export function collectOptionalCategories(clients: ClientRecord[]): string[] {
   return collectCategories(clients).filter(cat => !ALWAYS_VISIBLE_CATEGORIES.has(cat));
 }
 
-export function filterClientsByCategoryVisibility(
-  clients: ClientRecord[],
-  visibleOptional: string[],
-): ClientRecord[] {
-  const visible = new Set(visibleOptional);
-  return clients.filter(c => {
+export function countMainCategoryClients(clients: ClientRecord[]): {
+  personal: number;
+  corporate: number;
+  total: number;
+} {
+  let personal = 0;
+  let corporate = 0;
+  for (const c of clients) {
     const cat = getClientCategory(c);
-    return ALWAYS_VISIBLE_CATEGORIES.has(cat) || visible.has(cat);
-  });
+    if (cat === '개인') personal++;
+    else if (cat === '법인') corporate++;
+  }
+  return { personal, corporate, total: personal + corporate };
 }
 
 export type ManagerSection = {
@@ -239,7 +279,7 @@ export function compareManagers(a: string, b: string): number {
 }
 
 export function sumClientFees(clients: ClientRecord[]): number {
-  return clients.reduce((sum, c) => sum + (c.feeSummary ?? 0), 0);
+  return clients.reduce((sum, c) => sum + (resolveClientRecordFee(c) ?? 0), 0);
 }
 
 /** 담당자별 소그룹 — 미분류는 맨 뒤 */
@@ -260,78 +300,4 @@ export function groupClientsByManager(
       manager,
       clients: sortClients(list, sort),
     }));
-}
-
-/** 목록 UI — 왼쪽 개인·비사업 등 / 오른쪽 법인 */
-export function splitClientsPersonalCorporate(
-  clients: ClientRecord[],
-  sort: 'name' | 'code',
-): { personal: ClientRecord[]; corporate: ClientRecord[] } {
-  const personal: ClientRecord[] = [];
-  const corporate: ClientRecord[] = [];
-  for (const c of clients) {
-    if (c.businessEntityType === 'corporate') corporate.push(c);
-    else personal.push(c);
-  }
-  return {
-    personal: sortClients(personal, sort),
-    corporate: sortClients(corporate, sort),
-  };
-}
-
-export type CategorySection = {
-  category: string;
-  clients: ClientRecord[];
-};
-
-function splitSectionsByColumnLayout(
-  sections: CategorySection[],
-  layout: Record<string, CategoryColumnSide> | null,
-): { left: CategorySection[]; right: CategorySection[] } {
-  const left: CategorySection[] = [];
-  const right: CategorySection[] = [];
-  const rest: CategorySection[] = [];
-
-  for (const sec of sections) {
-    const custom = layout?.[sec.category];
-    if (custom === 'left') left.push(sec);
-    else if (custom === 'right') right.push(sec);
-    else if (LEFT_COLUMN_LABELS.has(sec.category)) left.push(sec);
-    else if (RIGHT_COLUMN_LABELS.has(sec.category)) right.push(sec);
-    else rest.push(sec);
-  }
-
-  const sortedRest = [...rest].sort((a, b) => compareGroupLabels(a.category, b.category));
-  sortedRest.forEach((sec, i) => {
-    const side = layout?.[sec.category] ?? (i % 2 === 0 ? 'left' : 'right');
-    if (side === 'right') right.push(sec);
-    else left.push(sec);
-  });
-
-  left.sort((a, b) => compareGroupLabels(a.category, b.category));
-  right.sort((a, b) => compareGroupLabels(a.category, b.category));
-
-  return { left, right };
-}
-
-/** 대분류별 묶음 → 왼쪽·오른쪽 열에 세로로 쌓기 */
-export function groupClientsByCategoryColumns(
-  clients: ClientRecord[],
-  sort: 'name' | 'code',
-  columnLayout?: Record<string, CategoryColumnSide> | null,
-): { left: CategorySection[]; right: CategorySection[] } {
-  const byCategory = new Map<string, ClientRecord[]>();
-  for (const c of clients) {
-    const cat = getClientCategory(c);
-    const arr = byCategory.get(cat) ?? [];
-    arr.push(c);
-    byCategory.set(cat, arr);
-  }
-
-  const sections: CategorySection[] = [...byCategory.entries()].map(([category, list]) => ({
-    category,
-    clients: sortClients(list, sort),
-  }));
-
-  return splitSectionsByColumnLayout(sections, columnLayout ?? null);
 }

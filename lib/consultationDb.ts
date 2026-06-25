@@ -348,7 +348,7 @@ export async function updateProcessChecklist(
 
 export async function updateProcessField(
   id: string,
-  patch: { monthlyFee?: number | null; feeStartDate?: string; channel?: string },
+  patch: { clientId?: string | null; monthlyFee?: number | null; feeStartDate?: string; channel?: string },
 ) {
   const db = getDb();
   const [row] = await db.update(intakeProcesses)
@@ -360,6 +360,7 @@ export async function updateProcessField(
 }
 
 export type InquiryPatch = {
+  clientId?: string | null;
   companyName?: string;
   phone?: string;
   channel?: string;

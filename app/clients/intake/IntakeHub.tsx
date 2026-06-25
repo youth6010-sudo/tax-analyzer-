@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import AppHeader from '../../components/AppHeader';
 import IntakeTabs, { resolveIntakeTab } from '../../components/intake/IntakeTabs';
 import ConsultationFormPanel from '../../components/intake/ConsultationFormPanel';
 import IntakeSplitView from '../../components/intake/IntakeSplitView';
+import PortalPageShell from '../../components/portal/PortalPageShell';
+import { portalFooterMeta, portalInput, portalSelect, portalToolbar } from '../../components/portal/uiClasses';
 import {
   buildIntakeDeepLink,
   companyMatchKeys,
@@ -100,18 +101,18 @@ function IntakeToolbar({
   onSortChange: (v: IntakeSort) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3">
+    <div className={portalToolbar}>
       <input
         type="search"
         value={search}
         onChange={e => onSearchChange(e.target.value)}
         placeholder="상호 검색…"
-        className="w-full max-w-md border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"
+        className={`${portalInput} w-full max-w-md`}
       />
       <select
         value={sort}
         onChange={e => onSortChange(e.target.value as IntakeSort)}
-        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"
+        className={portalSelect}
         aria-label="정렬"
       >
         <option value="inquiryDate">문의일순</option>
@@ -147,10 +148,23 @@ export default function IntakeHub() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
 
-  const clientRefs = useMemo<ClientNameRef[]>(
-    () => getPortalClients().map(c => ({ id: c.id, companyName: c.companyName })),
-    [inquiries, processes],
-  );
+  const clientRefs = useMemo<ClientNameRef[]>(() => {
+    const byId = new Map<string, string>();
+    for (const c of getPortalClients()) {
+      byId.set(c.id, c.companyName);
+    }
+    for (const inq of inquiries) {
+      if (inq.clientId && inq.companyName.trim()) {
+        byId.set(inq.clientId, inq.companyName);
+      }
+    }
+    for (const proc of processes) {
+      if (proc.clientId && proc.companyName.trim()) {
+        byId.set(proc.clientId, proc.companyName);
+      }
+    }
+    return [...byId.entries()].map(([id, companyName]) => ({ id, companyName }));
+  }, [inquiries, processes]);
 
   useEffect(() => { setSearch(urlQ); }, [urlQ]);
   useEffect(() => {
@@ -188,12 +202,33 @@ export default function IntakeHub() {
   }, []);
 
   useEffect(() => {
-    if (!inquiries.length && !processes.length) hydratePortal();
+    if (urlInquiry || urlProcessId) {
+      void load();
+    } else if (!inquiries.length && !processes.length) {
+      hydratePortal();
+    }
+  }, [urlInquiry, urlProcessId, load, inquiries.length, processes.length]);
+
+  useEffect(() => {
     return subscribePortal(() => {
       setInquiries(getPortalInquiries().map(r => normalizeInquiry(r)));
       setProcesses(getPortalProcesses().map(r => normalizeProcess(r)));
     });
-  }, [inquiries.length, processes.length]);
+  }, []);
+
+  useEffect(() => {
+    if (!urlInquiry) return;
+    if (inquiries.some(i => i.id === urlInquiry)) return;
+    let cancelled = false;
+    void fetch(`/api/intake/inquiries/${urlInquiry}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data?.inquiry) return;
+        const row = normalizeInquiry(data.inquiry as Record<string, unknown>);
+        setInquiries(prev => (prev.some(i => i.id === row.id) ? prev : [...prev, row]));
+      });
+    return () => { cancelled = true; };
+  }, [urlInquiry, inquiries]);
 
   const filterText = search.trim().toLowerCase();
   const filterFn = (list: InquiryRow[]) => {
@@ -201,10 +236,16 @@ export default function IntakeHub() {
     return list.filter(i => i.companyName.toLowerCase().includes(filterText));
   };
 
-  const filteredInquiries = useMemo(
-    () => sortInquiries(filterFn(inquiries), sort),
-    [inquiries, filterText, sort],
-  );
+  const pinInquiryId = urlInquiry || selectedId;
+
+  const filteredInquiries = useMemo(() => {
+    const base = sortInquiries(filterFn(inquiries), sort);
+    if (!pinInquiryId) return base;
+    if (base.some(i => i.id === pinInquiryId)) return base;
+    const pinned = inquiries.find(i => i.id === pinInquiryId);
+    if (!pinned) return base;
+    return sortInquiries([pinned, ...base], sort);
+  }, [inquiries, filterText, sort, pinInquiryId]);
   const filteredProcesses = useMemo(
     () => sortProcesses(
       filterText
@@ -334,55 +375,52 @@ export default function IntakeHub() {
   const selectedInquiry = filteredInquiries.find(i => i.id === selectedId);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <AppHeader />
-      <main className="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 py-6">
-        <IntakeTabs active={tab} />
+    <PortalPageShell>
+      <IntakeTabs active={tab} />
 
-        {tab !== 'consultation' && (
-          <IntakeToolbar
-            search={search}
-            sort={sort}
-            onSearchChange={onSearchChange}
-            onSortChange={onSortChange}
-          />
-        )}
+      {tab !== 'consultation' && (
+        <IntakeToolbar
+          search={search}
+          sort={sort}
+          onSearchChange={onSearchChange}
+          onSortChange={onSortChange}
+        />
+      )}
 
-        {tab === 'consultation' ? (
-          <ConsultationFormPanel
-            key={draftId ?? 'new'}
-            initialDraftId={draftId}
-            onSuccess={({ inquiryId, processId }) => {
-              void load();
-              router.push(buildIntakeDeepLink({ inquiryId, processId }));
-            }}
-          />
-        ) : (
-          <IntakeSplitView
-            inquiries={filteredInquiries}
-            processes={processes}
-            selectedId={selectedId}
-            forcedProcessId={urlProcessId}
-            clientRefs={clientRefs}
-            onSelect={onSelectInquiry}
-            onInquiryUpdated={onInquiryUpdated}
-            onProcessUpdated={onProcessUpdated}
-            onProcessCreated={onProcessCreated}
-            onToggleCheck={toggleCheck}
-            onSyncBlueholeCheck={syncBlueholeCheck}
-            onRegisterClient={registerClient}
-            onDeleteInquiry={deleteInquiry}
-            deletingId={deletingId}
-          />
-        )}
+      {tab === 'consultation' ? (
+        <ConsultationFormPanel
+          key={draftId ?? 'new'}
+          initialDraftId={draftId}
+          onSuccess={({ inquiryId, processId }) => {
+            void load();
+            router.push(buildIntakeDeepLink({ inquiryId, processId }));
+          }}
+        />
+      ) : (
+        <IntakeSplitView
+          inquiries={filteredInquiries}
+          processes={processes}
+          selectedId={selectedId}
+          forcedProcessId={urlProcessId}
+          clientRefs={clientRefs}
+          onSelect={onSelectInquiry}
+          onInquiryUpdated={onInquiryUpdated}
+          onProcessUpdated={onProcessUpdated}
+          onProcessCreated={onProcessCreated}
+          onToggleCheck={toggleCheck}
+          onSyncBlueholeCheck={syncBlueholeCheck}
+          onRegisterClient={registerClient}
+          onDeleteInquiry={deleteInquiry}
+          deletingId={deletingId}
+        />
+      )}
 
-        {tab !== 'consultation' && (
-          <p className="mt-4 text-xs text-gray-400 text-center">
-            유입관리 {filteredInquiries.length}건 · 유입프로세스 {filteredProcesses.length}건
-            {selectedInquiry && <span> · 선택: {selectedInquiry.companyName || '(미입력)'}</span>}
-          </p>
-        )}
-      </main>
-    </div>
+      {tab !== 'consultation' && (
+        <p className={portalFooterMeta}>
+          유입관리 {filteredInquiries.length}건 · 유입프로세스 {filteredProcesses.length}건
+          {selectedInquiry && <span> · 선택: {selectedInquiry.companyName || '(미입력)'}</span>}
+        </p>
+      )}
+    </PortalPageShell>
   );
 }

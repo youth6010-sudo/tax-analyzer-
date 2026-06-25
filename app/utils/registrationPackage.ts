@@ -1,5 +1,5 @@
-import { BUSINESS_ENTITY_LABEL } from '@/app/types/contact';
-import type { BusinessEntityType } from '@/app/types/contact';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
+import { BUSINESS_ENTITY_LABEL, type BusinessEntityType } from '@/app/types/contact';
 import { TAX_TYPES } from '@/app/config/taxTypes';
 
 export type RegistrationPackageInput = {
@@ -27,7 +27,7 @@ export function buildRegistrationPackage(input: RegistrationPackageInput): strin
   if (input.representative?.trim()) lines.push(`[대표] ${input.representative.trim()}`);
   if (input.phone?.trim()) lines.push(`[연락처] ${input.phone.trim()}`);
   if (input.monthlyFee != null) {
-    lines.push(`[기장료] ${input.monthlyFee.toLocaleString('ko-KR')}원`);
+    lines.push(`[${CLIENT_FIELD_LABELS.fee}] ${input.monthlyFee.toLocaleString('ko-KR')}원`);
   }
   if (input.manager?.trim()) lines.push(`[담당] ${input.manager.trim()}`);
   if (input.channel?.trim()) lines.push(`[유입] ${input.channel.trim()}`);

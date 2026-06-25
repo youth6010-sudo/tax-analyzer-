@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
     const activeOnly = sp.get('activeOnly') === '1';
     const includeChurned = sp.get('includeChurned') === '1';
     const includeIntake = sp.get('includeIntake') !== '0';
-    const mineOnly = !isPortalAdmin(user);
+    const forChurn = sp.get('forChurn') === '1';
+    const mineOnly = forChurn ? false : !isPortalAdmin(user);
     const clients = await searchClients(q, {
       activeOnly,
       includeChurned,

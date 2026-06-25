@@ -1,5 +1,6 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { ChurnRecordView, ClientRecord, ClientSearchResult } from '@/app/types/client';
 import { filterClientSearchIndex } from '@/app/utils/searchFilter';
@@ -114,6 +115,11 @@ export function getPortalClients(): ClientRecord[] {
   return memory?.clients ?? [];
 }
 
+/** SSR·hydration 시 빈 배열, 마운트 후 localStorage 캐시 반영 */
+export function usePortalClients(): ClientRecord[] {
+  return useSyncExternalStore(subscribePortal, getPortalClients, () => []);
+}
+
 export function getPortalSearchIndex(): ClientSearchResult[] {
   return searchIndexMemory ?? memory?.searchIndex ?? [];
 }
@@ -155,6 +161,24 @@ export function patchPortalChurn(
   };
   writeStorage(memory);
   notify();
+}
+
+/** 수임처 목록 캐시 — 수수료 등 인라인 수정 반영 */
+export function patchPortalClient(id: string, patch: Partial<ClientRecord>): void {
+  if (!memory?.clients?.length) return;
+  const idx = memory.clients.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const clients = memory.clients.map(c => (c.id === id ? { ...c, ...patch } : c));
+  memory = { ...memory, clients, fetchedAt: Date.now() };
+  writeStorage(memory);
+  notify();
+}
+
+/** bootstrap TTL 내 prefetch가 패치를 덮지 않도록 fetchedAt 갱신 */
+export function markPortalClientsFresh(): void {
+  if (!memory) return;
+  memory = { ...memory, fetchedAt: Date.now() };
+  writeStorage(memory);
 }
 
 export function subscribePortal(listener: () => void): () => void {

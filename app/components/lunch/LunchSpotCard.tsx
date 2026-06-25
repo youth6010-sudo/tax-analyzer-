@@ -13,6 +13,7 @@ import {
   authorKey,
 } from '@/app/utils/lunchJournal';
 import { LunchVisitForm, LunchVisitHistory, getTodayVisitDefaults } from './LunchVisitPanel';
+import { portalBtnSecondary, portalCard } from '@/app/components/portal/uiClasses';
 
 function MapLink({ href, label }: { href: string; label: string }) {
   if (!href) return null;
@@ -21,7 +22,7 @@ function MapLink({ href, label }: { href: string; label: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+      className={portalBtnSecondary}
     >
       {label}
     </a>
@@ -64,16 +65,14 @@ export default function LunchSpotCard({
 
   return (
     <article
-      className={`rounded-2xl border bg-white p-4 shadow-sm transition-shadow ${
-        highlight
-          ? 'border-orange-300 ring-2 ring-orange-200 shadow-md'
-          : 'border-gray-200 hover:shadow-md'
+      className={`${portalCard} p-4 transition-all hover:shadow-md hover:shadow-slate-200/50 ${
+        highlight ? 'ring-2 ring-orange-200 border-orange-200' : ''
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-bold text-gray-900">{spot.name}</h3>
+            <h3 className="text-base font-semibold text-slate-900">{spot.name}</h3>
             {ateToday && (
               <span className="inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-green-100 text-green-700 border border-green-200">
                 내가 오늘 먹음
@@ -85,18 +84,18 @@ export default function LunchSpotCard({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-slate-500">
             {spot.category} · 도보 {spot.walkMinutes > 0 ? `${spot.walkMinutes}분` : '—'} ·{' '}
             {spot.priceRange !== '미입력' ? spot.priceRange : '가격 미입력'}
           </p>
           {avg !== null && (
             <p className="mt-1 text-sm text-amber-600 font-medium">
               ★ {avg}{' '}
-              <span className="text-gray-400 font-normal text-xs">({visits.length}개 리뷰)</span>
+              <span className="text-slate-400 font-normal text-xs">({visits.length}개 리뷰)</span>
             </p>
           )}
           {last && !ateToday && (
-            <p className="mt-0.5 text-xs text-gray-400">
+            <p className="mt-0.5 portal-meta">
               마지막 방문 {formatVisitDate(last.date)}
             </p>
           )}
@@ -108,8 +107,8 @@ export default function LunchSpotCard({
       </div>
 
       {spot.menuHints.length > 0 && (
-        <p className="mt-3 text-sm text-gray-700">
-          <span className="font-semibold text-gray-800">메뉴</span> {spot.menuHints.join(', ')}
+        <p className="mt-3 text-sm text-slate-700">
+          <span className="font-medium text-slate-800">메뉴</span> {spot.menuHints.join(', ')}
         </p>
       )}
 

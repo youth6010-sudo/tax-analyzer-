@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CHURN_COLUMNS, churnDateInputValue } from '@/app/config/churnSheet';
+import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import {
   ChurnCheckboxGroup,
   ChurnManagerSelect,
@@ -190,7 +191,7 @@ export default function ChurnRecordPanel({
                 <input type="date" value={form.churnedAt} onChange={e => setForm(f => ({ ...f, churnedAt: e.target.value }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
               </label>
               <label className="block">
-                <span className="text-[10px] font-bold text-gray-400">기장료</span>
+                <span className="text-[10px] font-bold text-gray-400">{CLIENT_FIELD_LABELS.fee}</span>
                 <input type="text" inputMode="numeric" value={form.feeAmount} onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono" />
               </label>
             </div>

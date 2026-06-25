@@ -1,10 +1,5 @@
-import AppHeader from '../components/AppHeader';
+import PortalPageShell from '../components/portal/PortalPageShell';
 
 export default function TaxLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <AppHeader />
-      {children}
-    </div>
-  );
+  return <PortalPageShell bare>{children}</PortalPageShell>;
 }

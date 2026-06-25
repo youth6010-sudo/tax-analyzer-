@@ -354,11 +354,11 @@ export default function LunchPickGame({
   const showGachaCapsule = mode === 'gacha' && (gachaPhase === 'drop' || gachaPhase === 'reveal');
 
   return (
-    <section className="rounded-2xl border-2 border-violet-200/80 bg-gradient-to-br from-slate-900 via-violet-950/20 to-fuchsia-950/10 p-5 sm:p-8 shadow-xl shadow-violet-200/30">
+    <section className="rounded-2xl border border-violet-300/40 bg-gradient-to-br from-slate-900 via-violet-950/30 to-fuchsia-950/15 p-5 sm:p-8 shadow-xl shadow-violet-900/10 ring-1 ring-white/5">
       <div className="text-center">
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-400">LUCKY LUNCH</p>
-        <h2 className="mt-1 text-2xl sm:text-3xl font-black text-white">점심 뽑기</h2>
-        <p className="mt-2 text-sm text-violet-200/70">
+        <h2 className="mt-1 text-2xl sm:text-3xl font-bold text-white tracking-tight">점심 뽑기</h2>
+        <p className="mt-2 text-sm text-violet-100/90 leading-relaxed">
           {mode === 'gacha' ? '가챠머신으로 한 방에!' : '승부차기로 운명을 가르자!'}
         </p>
       </div>
@@ -421,7 +421,7 @@ export default function LunchPickGame({
         ))}
       </div>
 
-      <p className="mt-3 text-center text-xs text-violet-300/60">
+      <p className="mt-3 text-center text-sm text-violet-200/80">
         {distanceBand === 'all'
           ? `전체 ${pool.length}곳 · 공 ${pool.length}개 · 내가 오늘·어제 먹은 곳 제외`
           : `${bands.find(b => b.id === distanceBand)?.label ?? ''} · 추첨 ${pool.length}곳 · 공 ${pool.length}개`}

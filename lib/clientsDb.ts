@@ -1,9 +1,10 @@
 import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { churnRecords, clientContacts, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
+import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
-import type { ChurnSummary, ClientStatus } from '@/app/types/client';
+import type { ChurnSummary, ClientFeeChange, ClientStatus } from '@/app/types/client';
 import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
+import { computeFeeSummary, readFeeBreakdown } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds, getPrimaryContactPhonesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 
@@ -356,28 +357,107 @@ export async function updateClientDetail(
   return clientToRecord(row);
 }
 
-export async function updateClientColbert(id: string, colbert: boolean) {
+export async function getClientFeeChanges(clientId: string, limit = 50): Promise<ClientFeeChange[]> {
   const db = getDb();
-  const [row] = await db
-    .update(clients)
-    .set({ colbert, updatedAt: new Date() })
-    .where(eq(clients.id, id))
-    .returning();
+  const rows = await db
+    .select({
+      id: clientFeeChanges.id,
+      previousFee: clientFeeChanges.previousFee,
+      newFee: clientFeeChanges.newFee,
+      changedAt: clientFeeChanges.changedAt,
+      changedByName: users.name,
+    })
+    .from(clientFeeChanges)
+    .innerJoin(users, eq(clientFeeChanges.changedByUserId, users.id))
+    .where(eq(clientFeeChanges.clientId, clientId))
+    .orderBy(desc(clientFeeChanges.changedAt))
+    .limit(limit);
 
-  if (!row) throw new Error('NOT_FOUND');
-  return clientToRecord(row);
+  return rows.map(r => ({
+    id: r.id,
+    previousFee: r.previousFee ?? null,
+    newFee: r.newFee ?? null,
+    changedByName: r.changedByName,
+    changedAt: r.changedAt.toISOString(),
+  }));
 }
 
-export async function updateClientFeeSummary(id: string, feeSummary: number | null) {
+export async function updateClientFeeSummary(
+  id: string,
+  feeSummary: number | null,
+  changedByUserId: string,
+) {
   const db = getDb();
-  const [row] = await db
-    .update(clients)
-    .set({ feeSummary, updatedAt: new Date() })
-    .where(eq(clients.id, id))
-    .returning();
+  const existing = await getClientById(id);
+  if (!existing) throw new Error('NOT_FOUND');
 
-  if (!row) throw new Error('NOT_FOUND');
-  return clientToRecord(row);
+  const previousFee = existing.feeSummary ?? null;
+  if (previousFee === feeSummary) return existing;
+
+  return db.transaction(async tx => {
+    await tx.insert(clientFeeChanges).values({
+      clientId: id,
+      previousFee,
+      newFee: feeSummary,
+      changedByUserId,
+    });
+
+    const [row] = await tx
+      .update(clients)
+      .set({ feeSummary, updatedAt: new Date() })
+      .where(eq(clients.id, id))
+      .returning();
+
+    if (!row) throw new Error('NOT_FOUND');
+    return clientToRecord(row);
+  });
+}
+
+export async function updateClientFeeBreakdown(
+  id: string,
+  data: { bookkeepingFee: number | null; adjustmentFee: number | null },
+  changedByUserId: string,
+) {
+  const db = getDb();
+  const existing = await getClientById(id);
+  if (!existing) throw new Error('NOT_FOUND');
+
+  const feeSummary = computeFeeSummary(data.bookkeepingFee, data.adjustmentFee);
+  const previousFee = existing.feeSummary ?? null;
+  const prevBreakdown = readFeeBreakdown(existing.intakeData);
+  const breakdownChanged =
+    (prevBreakdown.bookkeepingFee ?? null) !== (data.bookkeepingFee ?? null) ||
+    (prevBreakdown.adjustmentFee ?? null) !== (data.adjustmentFee ?? null);
+
+  if (!breakdownChanged && previousFee === feeSummary) return existing;
+
+  const intakeData = {
+    ...(existing.intakeData ?? {}),
+    bookkeepingFee: data.bookkeepingFee,
+    adjustmentFee: data.adjustmentFee,
+  };
+
+  const logHistory = previousFee !== feeSummary || breakdownChanged;
+
+  return db.transaction(async tx => {
+    if (logHistory) {
+      await tx.insert(clientFeeChanges).values({
+        clientId: id,
+        previousFee,
+        newFee: feeSummary,
+        changedByUserId,
+      });
+    }
+
+    const [row] = await tx
+      .update(clients)
+      .set({ feeSummary, intakeData, updatedAt: new Date() })
+      .where(eq(clients.id, id))
+      .returning();
+
+    if (!row) throw new Error('NOT_FOUND');
+    return clientToRecord(row);
+  });
 }
 
 export async function churnClient(
@@ -540,6 +620,7 @@ export async function listChurnedClientsWithoutRecord(filters?: { mineOnly?: boo
 export async function updateChurnRecord(
   id: string,
   data: {
+    clientId?: string | null;
     reason?: string;
     detail?: string;
     churnedAt?: string;
@@ -552,6 +633,7 @@ export async function updateChurnRecord(
 ) {
   const db = getDb();
   const patch: Record<string, unknown> = {};
+  if (data.clientId !== undefined) patch.clientId = data.clientId;
   if (data.reason !== undefined) patch.reason = data.reason.trim();
   if (data.detail !== undefined) patch.detail = data.detail.trim();
   if (data.churnType !== undefined) patch.churnType = data.churnType.trim();

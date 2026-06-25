@@ -10,6 +10,12 @@ import LunchSpotList from '@/app/components/lunch/LunchSpotList';
 import LunchSpotRequestForm from '@/app/components/lunch/LunchSpotRequestForm';
 import { useLunchJournal } from '@/app/components/lunch/useLunchJournal';
 import ManagerGachaGame from '@/app/components/gacha/ManagerGachaGame';
+import {
+  PortalLoading,
+  PortalPageHeader,
+  PortalToolTabs,
+} from '@/app/components/portal/PortalPageShell';
+import { portalAlertError, portalFooterMeta } from '@/app/components/portal/uiClasses';
 
 type GachaTab = 'lunch' | 'manager';
 
@@ -46,101 +52,69 @@ function GachaPageContent() {
   }, [tab, db?.officeLabel]);
 
   return (
-    <main className="flex-1">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-black text-gray-900">가챠머신 🎰</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {subtitle}
-            {tab === 'lunch' && authorName && (
-              <span className="text-gray-400"> · 리뷰 작성자: {authorName}</span>
-            )}
-          </p>
-        </div>
+    <>
+      <PortalPageHeader
+        icon="🎰"
+        title="가챠머신"
+        description={
+          subtitle +
+          (tab === 'lunch' && authorName ? ` · 리뷰 작성자: ${authorName}` : '')
+        }
+      />
 
-        <div className="mb-6 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => switchTab('lunch')}
-            className={[
-              'px-5 py-2.5 text-sm font-black rounded-xl border transition-all',
-              tab === 'lunch'
-                ? 'bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/25'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-orange-200 hover:bg-orange-50',
-            ].join(' ')}
-          >
-            🍱 점심
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab('manager')}
-            className={[
-              'px-5 py-2.5 text-sm font-black rounded-xl border transition-all',
-              tab === 'manager'
-                ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg shadow-indigo-500/25'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50',
-            ].join(' ')}
-          >
-            👤 담당자
-          </button>
-        </div>
+      <PortalToolTabs
+        className="mb-6"
+        value={tab}
+        onChange={switchTab}
+        tabs={[
+          { id: 'lunch', label: '🍱 점심', accent: 'orange' },
+          { id: 'manager', label: '👤 담당자', accent: 'indigo' },
+        ]}
+      />
 
-        {tab === 'manager' && <ManagerGachaGame />}
+      {tab === 'manager' && <ManagerGachaGame />}
 
-        {tab === 'lunch' && (
-          <>
-            {error && (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
+      {tab === 'lunch' && (
+        <>
+          {error && <div className={`${portalAlertError} mb-4`}>{error}</div>}
+
+          {!db && !error && <PortalLoading label="맛집 목록을 불러오는 중…" />}
+
+          {db && (
+            <>
+              <LunchPickGame
+                spots={db.spots}
+                journal={store}
+                authorName={authorName}
+                onRecordVisit={recordVisit}
+                onEditVisit={editVisit}
+                onDeleteVisit={removeVisit}
+                onCancelToday={cancelToday}
+              />
+              <LunchSpotList
+                spots={db.spots}
+                journal={store}
+                authorName={authorName}
+                onRecordVisit={recordVisit}
+                onEditVisit={editVisit}
+                onDeleteVisit={removeVisit}
+                onCancelToday={cancelToday}
+              />
+              <LunchSpotRequestForm />
+              <p className={portalFooterMeta}>
+                방문·리뷰는 브라우저에 저장 · 맛집 목록: {db.updatedAt}
               </p>
-            )}
-
-            {!db && !error && (
-              <p className="text-sm text-gray-500 py-12 text-center">맛집 목록을 불러오는 중…</p>
-            )}
-
-            {db && (
-              <>
-                <LunchPickGame
-                  spots={db.spots}
-                  journal={store}
-                  authorName={authorName}
-                  onRecordVisit={recordVisit}
-                  onEditVisit={editVisit}
-                  onDeleteVisit={removeVisit}
-                  onCancelToday={cancelToday}
-                />
-                <LunchSpotList
-                  spots={db.spots}
-                  journal={store}
-                  authorName={authorName}
-                  onRecordVisit={recordVisit}
-                  onEditVisit={editVisit}
-                  onDeleteVisit={removeVisit}
-                  onCancelToday={cancelToday}
-                />
-                <LunchSpotRequestForm />
-                <p className="mt-8 text-xs text-gray-400 text-center">
-                  방문·리뷰는 브라우저에 저장 · 맛집 목록: {db.updatedAt}
-                </p>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </main>
+            </>
+          )}
+        </>
+      )}
+    </>
   );
 }
 
 export default function GachaPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          <p className="text-sm text-gray-500">불러오는 중…</p>
-        </main>
-      }
-    >
+    <Suspense fallback={<PortalLoading />}>
       <GachaPageContent />
     </Suspense>
   );
