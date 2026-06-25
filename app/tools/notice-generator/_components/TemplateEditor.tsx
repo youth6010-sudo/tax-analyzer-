@@ -3,12 +3,22 @@ import { TOKENS, DEFAULT_TEMPLATE } from '../_lib/template';
 
 // 외부(웹/한글/워드/메신저)에서 복사한 서식(색상·이모지·줄간격 등)을 그대로
 // 붙여넣어 유지하는 리치 에디터. 본문에 토큰을 넣으면 결과에서 자동 치환됩니다.
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
 type Props = {
   html: string;
   onChange: (html: string) => void;
+  saveState?: SaveState;
 };
 
-export default function TemplateEditor({ html, onChange }: Props) {
+const SAVE_BADGE: Record<SaveState, { text: string; cls: string } | null> = {
+  idle: null,
+  saving: { text: '저장 중…', cls: 'text-slate-400' },
+  saved: { text: '담당자 서식 저장됨', cls: 'text-emerald-600' },
+  error: { text: '저장 실패', cls: 'text-rose-500' },
+};
+
+export default function TemplateEditor({ html, onChange, saveState = 'idle' }: Props) {
   const [open, setOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -54,7 +64,12 @@ export default function TemplateEditor({ html, onChange }: Props) {
           </span>
           안내문 서식 (외부 서식 붙여넣기)
         </h2>
-        <span className="text-xs text-slate-400">{open ? '접기 ▲' : '펼치기 ▼'}</span>
+        <span className="flex items-center gap-2 text-xs text-slate-400">
+          {SAVE_BADGE[saveState] && (
+            <span className={SAVE_BADGE[saveState]!.cls}>{SAVE_BADGE[saveState]!.text}</span>
+          )}
+          {open ? '접기 ▲' : '펼치기 ▼'}
+        </span>
       </button>
 
       {open && (

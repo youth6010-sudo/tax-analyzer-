@@ -14,7 +14,13 @@ export const TAX_TYPES = {
 export type VatPeriod = {
   id: string;
   label: string;
+  shortLabel: string;
   coverage: string;
+  // 과세기간 시작/종료 (기준 연도 대비 월·일)
+  startMonth: number;
+  startDay: number;
+  endMonth: number;
+  endDay: number;
   dueYearOffset: number;
   dueMonth: number;
   dueDay: number;
@@ -27,7 +33,12 @@ export const VAT_PERIODS: VatPeriod[] = [
   {
     id: '1-pre',
     label: '1기 예정 (1월~3월)',
+    shortLabel: '1기 예정',
     coverage: '1월 1일 ~ 3월 31일',
+    startMonth: 1,
+    startDay: 1,
+    endMonth: 3,
+    endDay: 31,
     dueYearOffset: 0,
     dueMonth: 4,
     dueDay: 25,
@@ -35,7 +46,12 @@ export const VAT_PERIODS: VatPeriod[] = [
   {
     id: '1-final',
     label: '1기 확정 (4월~6월)',
+    shortLabel: '1기 확정',
     coverage: '4월 1일 ~ 6월 30일',
+    startMonth: 4,
+    startDay: 1,
+    endMonth: 6,
+    endDay: 30,
     dueYearOffset: 0,
     dueMonth: 7,
     dueDay: 25,
@@ -43,7 +59,12 @@ export const VAT_PERIODS: VatPeriod[] = [
   {
     id: '2-pre',
     label: '2기 예정 (7월~9월)',
+    shortLabel: '2기 예정',
     coverage: '7월 1일 ~ 9월 30일',
+    startMonth: 7,
+    startDay: 1,
+    endMonth: 9,
+    endDay: 30,
     dueYearOffset: 0,
     dueMonth: 10,
     dueDay: 25,
@@ -51,7 +72,12 @@ export const VAT_PERIODS: VatPeriod[] = [
   {
     id: '2-final',
     label: '2기 확정 (10월~12월)',
+    shortLabel: '2기 확정',
     coverage: '10월 1일 ~ 12월 31일',
+    startMonth: 10,
+    startDay: 1,
+    endMonth: 12,
+    endDay: 31,
     dueYearOffset: 1,
     dueMonth: 1,
     dueDay: 25,
@@ -86,7 +112,7 @@ export const TAX_TYPE_META: Record<TaxTypeKey, TaxTypeMeta> = {
     short: '원천징수이행상황신고',
     deadlineKind: 'withholding',
     accent: 'violet',
-    rule: '귀속 월의 다음 달 10일까지 신고·납부',
+    rule: '지급 월의 다음 달 10일까지 신고·납부',
   },
   [TAX_TYPES.VAT]: {
     key: TAX_TYPES.VAT,

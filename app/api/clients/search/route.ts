@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/apiError';
-import { requireUser, isPortalAdmin } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
 import { searchClients } from '@/lib/clientsDb';
 
 export async function GET(request: NextRequest) {
@@ -11,13 +11,12 @@ export async function GET(request: NextRequest) {
     const activeOnly = sp.get('activeOnly') === '1';
     const includeChurned = sp.get('includeChurned') === '1';
     const includeIntake = sp.get('includeIntake') !== '0';
-    const forChurn = sp.get('forChurn') === '1';
-    const mineOnly = forChurn ? false : !isPortalAdmin(user);
+    // 검색은 담당과 무관하게 누구나 모든 업체를 검색할 수 있어야 한다.
     const clients = await searchClients(q, {
       activeOnly,
       includeChurned,
       includeIntake,
-      mineOnly,
+      mineOnly: false,
       userId: user.id,
       userName: user.name,
     });

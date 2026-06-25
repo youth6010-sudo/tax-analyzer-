@@ -12,16 +12,22 @@ import type { DeadlineParams, DeadlineResult, TaxTypeKey } from './types';
 function buildResult({
   periodLabel,
   coverage = '',
+  coverageStart,
+  coverageEnd,
   statutory,
 }: {
   periodLabel: string;
   coverage?: string;
+  coverageStart: Date;
+  coverageEnd: Date;
   statutory: Date;
 }): DeadlineResult {
   const adj = adjustToNextBusinessDay(statutory);
   return {
     periodLabel,
     coverage, // 화면 표시용 과세기간 (안내문구에는 포함하지 않음)
+    coverageStart,
+    coverageEnd,
     statutory,
     final: adj.adjusted,
     wasAdjusted: adj.wasAdjusted,
@@ -36,7 +42,9 @@ function calcWithholding({ year, month }: DeadlineParams): DeadlineResult {
   // 다음 달 10일 (12월 귀속 → 다음 해 1월 10일)
   const dueDate = new Date(year, month, 10); // month는 1~12, month 인덱스가 곧 "다음 달"
   return buildResult({
-    periodLabel: `${year}년 ${month}월 귀속`,
+    periodLabel: `${year}년 ${month}월 지급`,
+    coverageStart: new Date(year, month - 1, 1),
+    coverageEnd: lastDayOfMonth(year, month),
     statutory: dueDate,
   });
 }
@@ -47,8 +55,10 @@ function calcVat({ year, vatPeriodId }: DeadlineParams): DeadlineResult {
   const dueYear = year + period.dueYearOffset;
   const dueDate = new Date(dueYear, period.dueMonth - 1, period.dueDay);
   return buildResult({
-    periodLabel: `${year}년 ${period.label}`,
+    periodLabel: `${year}년 ${period.shortLabel}`,
     coverage: `과세기간 ${period.coverage}`,
+    coverageStart: new Date(year, period.startMonth - 1, period.startDay),
+    coverageEnd: new Date(year, period.endMonth - 1, period.endDay),
     statutory: dueDate,
   });
 }
@@ -64,8 +74,14 @@ function calcCorporate({ year, fyEndMonth }: DeadlineParams): DeadlineResult {
     dueYear += 1;
   }
   const dueDate = lastDayOfMonth(dueYear, dueMonth);
+  // 사업연도(과세기간): 종료월 말일 기준 직전 12개월
+  // 12월 결산 → 1/1~12/31, 3월 결산 → 전년 4/1~당해 3/31
+  const coverageEnd = lastDayOfMonth(year, fyEndMonth);
+  const coverageStart = new Date(year, fyEndMonth - 12, 1);
   return buildResult({
-    periodLabel: `${year}년 ${fyEndMonth}월 결산 법인`,
+    periodLabel: `${year}년 ${fyEndMonth}월 결산`,
+    coverageStart,
+    coverageEnd,
     statutory: dueDate,
   });
 }
@@ -76,7 +92,10 @@ function calcIncome({ year, filingTypeId }: DeadlineParams): DeadlineResult {
     INCOME_FILING_TYPES.find(f => f.id === filingTypeId) || INCOME_FILING_TYPES[0];
   const dueDate = new Date(year + 1, filing.dueMonth - 1, filing.dueDay);
   return buildResult({
-    periodLabel: `${year}년 귀속 (${filing.label})`,
+    periodLabel:
+      filingTypeId === 'general' ? `${year}년 귀속` : `${year}년 귀속 (${filing.label})`,
+    coverageStart: new Date(year, 0, 1),
+    coverageEnd: new Date(year, 11, 31),
     statutory: dueDate,
   });
 }

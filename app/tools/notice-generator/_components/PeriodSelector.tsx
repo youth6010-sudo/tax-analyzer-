@@ -59,7 +59,7 @@ export default function PeriodSelector({ taxType, params, onChange }: Props) {
 
         {/* 원천세: 귀속 월 */}
         {taxType === TAX_TYPES.WITHHOLDING && (
-          <Field label="귀속 월">
+          <Field label="지급 월">
             <select
               className={selectClass}
               value={params.month}

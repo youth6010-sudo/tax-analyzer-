@@ -22,6 +22,7 @@ export const users = pgTable('users', {
   realName: text('real_name').notNull().default(''),
   pinHash: text('pin_hash').notNull(),
   role: userRoleEnum('role').notNull().default('staff'),
+  noticeTemplate: text('notice_template').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -56,10 +56,8 @@ export async function getPortalBootstrap() {
 }
 
 export async function getPortalSearchIndex() {
-  const user = await requireUser();
-  const mineOnly = !isPortalAdmin(user);
+  // 검색은 담당과 무관하게 모든 업체를 대상으로 한다.
+  await requireUser();
   const { listClientSearchIndex } = await import('@/lib/clientSearchIndex');
-  return listClientSearchIndex(
-    mineOnly ? { mineOnly: true, userId: user.id, userName: user.name } : {},
-  );
+  return listClientSearchIndex({});
 }

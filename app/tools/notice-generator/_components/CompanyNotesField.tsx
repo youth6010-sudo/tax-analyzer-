@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
 type Props = {
   companyName: string;
   onCompanyNameChange: (value: string) => void;
@@ -5,7 +9,23 @@ type Props = {
   onMaterialsChange: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
+  clientLinked?: boolean;
+  saveState?: SaveState;
+  clientPicker?: ReactNode;
 };
+
+function SaveBadge({ state }: { state: SaveState }) {
+  if (state === 'saving') {
+    return <span className="text-[11px] font-semibold text-slate-400">저장 중…</span>;
+  }
+  if (state === 'saved') {
+    return <span className="text-[11px] font-semibold text-emerald-600">저장됨 ✓</span>;
+  }
+  if (state === 'error') {
+    return <span className="text-[11px] font-semibold text-rose-500">저장 실패</span>;
+  }
+  return null;
+}
 
 export default function CompanyNotesField({
   companyName,
@@ -14,18 +34,33 @@ export default function CompanyNotesField({
   onMaterialsChange,
   notes,
   onNotesChange,
+  clientLinked = false,
+  saveState = 'idle',
+  clientPicker,
 }: Props) {
   const inputClass =
     'w-full rounded-2xl border border-rose-100 bg-white/70 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100';
 
   return (
     <section className="rounded-3xl border border-white bg-white/75 p-4 shadow-[0_10px_30px_-12px_rgba(244,114,182,0.35)] backdrop-blur-sm sm:p-5">
-      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-rose-100 to-pink-200 text-sm">
-          🏢
-        </span>
-        업체 정보 · 필요자료
-      </h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-rose-100 to-pink-200 text-sm">
+            🏢
+          </span>
+          업체 정보 · 필요자료
+        </h2>
+        {clientLinked && <SaveBadge state={saveState} />}
+      </div>
+
+      {clientPicker && (
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-slate-500">
+            수임처 연결 <span className="text-slate-400">(선택 시 세목별 필요자료·특이사항 자동 불러오기)</span>
+          </label>
+          {clientPicker}
+        </div>
+      )}
 
       <div className="space-y-3">
         <div>
@@ -44,7 +79,9 @@ export default function CompanyNotesField({
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-500">
             업체별 필요자료 · 서식의 {'{필요자료}'}에 반영{' '}
-            <span className="text-slate-400">(업체마다 이 부분만 교체)</span>
+            <span className="text-slate-400">
+              {clientLinked ? '(세목별로 수임처에 자동 저장)' : '(업체마다 이 부분만 교체)'}
+            </span>
           </label>
           <textarea
             value={materials}
