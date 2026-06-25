@@ -371,7 +371,7 @@ export function buildVatReportHtml({
   if (isPay && r.finalTax > 0) {
     parts.push(blank);
     parts.push(line('💳 [분납(분할 납부) 안내]'));
-    parts.push(line('분할 납부를 원하시면 희망 납부일자별 금액을 댓글로 남겨 주세요.'));
+    parts.push(line('분할 납부를 원하시면 "확인 완료" 댓글과 함께 희망 납부일자별 금액도 같이 남겨 주시면 신청을 도와드리겠습니다.'));
     parts.push(line('다음 신고기한과 겹치지 않도록 아래 일정 내 최대 3회(약 3개월) 분납을 권장드립니다.'));
     if (deadline) {
       const labels = ['1차 (신고·납부일)', '2차 (+1개월 말일)', '3차 (+2개월 말일)'];
