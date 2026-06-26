@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LunchSpot } from '@/app/types/lunch';
 
-const STORAGE_KEY = 'lunch.activeOverrides';
+// v2: 초기 배포 때 시험 토글로 가챠에 섞인 비활성 식당을 한 번 정리하기 위해 키 갱신
+const STORAGE_KEY = 'lunch.activeOverrides.v2';
 
 // 식당 활성/비활성은 JSON(active)이 기본값. 사용자가 이 브라우저에서 토글하면
 // localStorage 에 override 로 저장돼, 기본값보다 우선 적용된다.

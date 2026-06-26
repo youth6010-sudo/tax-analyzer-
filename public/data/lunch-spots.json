@@ -256,6 +256,22 @@
       "active": true
     },
     {
+      "name": "청춘식당 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%AD%EC%B6%98%EC%8B%9D%EB%8B%B9%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/27545122",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": true,
+      "id": "spot-030-청춘식당-센텀점"
+    },
+    {
       "id": "spot-001-쿠킹마더스",
       "name": "쿠킹마더스",
       "category": "분식",
@@ -270,6 +286,22 @@
       "menuHints": [],
       "notes": "주소: 부산 해운대구 센텀중앙로 90",
       "active": true
+    },
+    {
+      "name": "퇴근길숯불막창",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "곱창,막창"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%87%B4%EA%B7%BC%EA%B8%B8%EC%88%AF%EB%B6%88%EB%A7%89%EC%B0%BD%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1125219297",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true,
+      "id": "spot-029-퇴근길숯불막창"
     },
     {
       "id": "spot-025-할머니의부뚜막-센텀점",
@@ -864,22 +896,6 @@
       "id": "spot-165-착한까스"
     },
     {
-      "name": "청춘식당 센텀점",
-      "category": "한식",
-      "tags": [
-        "한식",
-        "육류,고기"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%AD%EC%B6%98%EC%8B%9D%EB%8B%B9%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/27545122",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 90",
-      "active": false,
-      "id": "spot-030-청춘식당-센텀점"
-    },
-    {
       "name": "치킨신드롬 센텀시티점",
       "category": "기타",
       "tags": [
@@ -894,22 +910,6 @@
       "notes": "주소: 부산 해운대구 센텀중앙로 90",
       "active": false,
       "id": "spot-095-치킨신드롬-센텀시티점"
-    },
-    {
-      "name": "퇴근길숯불막창",
-      "category": "한식",
-      "tags": [
-        "육류,고기",
-        "곱창,막창"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%ED%87%B4%EA%B7%BC%EA%B8%B8%EC%88%AF%EB%B6%88%EB%A7%89%EC%B0%BD%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/1125219297",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90",
-      "active": false,
-      "id": "spot-029-퇴근길숯불막창"
     },
     {
       "name": "파스타루",
