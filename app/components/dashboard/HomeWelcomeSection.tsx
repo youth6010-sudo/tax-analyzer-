@@ -33,8 +33,13 @@ export default function HomeWelcomeSection({ userName }: { userName: string }) {
         부산지점 수임처 포털 · 담당 수임처 {ready ? `${mainTotal}곳` : '…'}
       </p>
       {ready && mainTotal > 0 && (
-        <p className="mt-1.5 portal-meta">
-          법인 {corporate} · 개인 {personal}
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="rounded-md bg-sky-50 px-2 py-0.5 font-semibold tabular-nums text-sky-700">
+            법인 {corporate}
+          </span>
+          <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-semibold tabular-nums text-emerald-700">
+            개인 {personal}
+          </span>
         </p>
       )}
       <div className="mt-5 flex flex-wrap gap-x-3 gap-y-2">

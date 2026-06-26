@@ -203,6 +203,14 @@ export default function NoticeGeneratorPage() {
       refundClaimed: false,
       installments: [],
     });
+    // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경
+    // (원천세 -3일 / 부가세 -2주 / 종소세 -3주 / 법인세 직전 달 15일)
+    const nextDeadline = calculateDeadline(next, params);
+    if (nextDeadline) {
+      const def = defaultMaterialDate(next, nextDeadline.final);
+      lastAutoMaterialDate.current = def;
+      setMaterialDeadline(prev => ({ ...prev, enabled: true, date: def }));
+    }
     if (selectedClient) loadForTax(selectedClient.noticeMap, next);
   };
 

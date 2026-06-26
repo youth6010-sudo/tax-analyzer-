@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient } from '@/app/utils/filingCheck';
 import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
@@ -225,7 +226,7 @@ export default function MyClientsBoard() {
               type="checkbox"
               checked={showSingo}
               onChange={e => toggleSingo(e.target.checked)}
-              className="h-4 w-4 accent-indigo-500"
+              className="h-4 w-4 accent-violet-500"
             />
             신고대리 표시
           </label>
@@ -237,23 +238,23 @@ export default function MyClientsBoard() {
       </div>
 
       <div className="grid items-start gap-4 sm:grid-cols-2">
-        {/* 왼쪽: 법인 */}
+        {/* 왼쪽: 법인(파랑) */}
         <SectionCard
           label="법인"
-          dotClass="bg-blue-500"
-          countClass="text-blue-700"
+          dotClass={CATEGORY_COLORS.법인.dot}
+          countClass={CATEGORY_COLORS.법인.text}
           clients={corporate}
           excludedIds={excludedIds}
           summaryIds={summaryIds}
           ready={ready}
         />
 
-        {/* 오른쪽: 개인 → 그 아래 신고대리(표시 체크 시) */}
+        {/* 오른쪽: 개인(초록) → 그 아래 신고대리(보라, 표시 체크 시) */}
         <div className="space-y-4">
           <SectionCard
             label="개인"
-            dotClass="bg-sky-500"
-            countClass="text-sky-700"
+            dotClass={CATEGORY_COLORS.개인.dot}
+            countClass={CATEGORY_COLORS.개인.text}
             clients={personal}
             excludedIds={excludedIds}
             summaryIds={summaryIds}
@@ -262,8 +263,8 @@ export default function MyClientsBoard() {
           {showSingo && (
             <SectionCard
               label="신고대리"
-              dotClass="bg-indigo-500"
-              countClass="text-indigo-700"
+              dotClass={CATEGORY_COLORS.신고대리.dot}
+              countClass={CATEGORY_COLORS.신고대리.text}
               clients={singoDaeri}
               excludedIds={excludedIds}
               summaryIds={summaryIds}

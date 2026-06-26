@@ -61,7 +61,7 @@ export function formatMaterialDeadlineNote(md: MaterialDeadline | null | undefin
   const [y, m, d] = md.date.split('-').map(Number);
   if (!y || !m || !d) return '';
   const twoDaysBefore = addDays(new Date(y, m - 1, d), -2);
-  return `※ 원활한 신고 업무를 위해 기한 준수를 부탁드리며, 일정 조정이 필요하시면 ${formatDottedDate(twoDaysBefore, { withWeekday: false })}까지 말씀해 주시기 바랍니다.`;
+  return `※ 원활한 신고를 위해 기한을 지켜 주시고, 일정 조정이 필요하시면 ${formatDottedDate(twoDaysBefore, { withWeekday: false })}까지 알려 주세요.`;
 }
 
 // 대상기간(과세/귀속 기간)을 "2026. 01. 01 ~ 2026. 03. 31" 형태로 표기
@@ -97,7 +97,7 @@ function refundTimingLine(taxType: TaxTypeKey, refundClaimed: boolean): string {
   return '환급 예정: 신고 마감일 이후 1개월 이내';
 }
 
-const OVERDUE_NOTE = '※ 기한 내 미납부 시 납부지연가산세가 부과될 수 있으니 유의 부탁드립니다.';
+const OVERDUE_NOTE = '※ 기한 내 미납부 시 납부지연가산세가 부과될 수 있으니 유의하시기 바랍니다.';
 
 // "YYYY-MM-DD" → 점 표기 날짜(요일 포함). 비었으면 빈 문자열.
 function isoToDottedDate(iso: string): string {
@@ -124,7 +124,7 @@ function buildVatInstallmentHtml({
   const total = installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
 
   const parts: string[] = [];
-  parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부해 드립니다. 분할 납부 일정은 아래와 같습니다.`));
+  parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부했습니다. 분할 납부 일정은 아래와 같습니다.`));
   parts.push(blank);
   parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`));
   installments.forEach((it, i) => {
@@ -207,7 +207,7 @@ export function buildPaymentNoticeHtml({
   } else {
     // 전액 납부 (기본). 입력 전(0원) 상태 포함.
     const listForBreakdown = payItems.length > 0 ? payItems : items;
-    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부해 드립니다. 금액 확인 후 기한 내 납부 부탁드립니다.`));
+    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부했습니다. 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`));
     parts.push(blank);
     parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`));
     parts.push(breakdown(listForBreakdown));
@@ -360,19 +360,19 @@ export function buildVatReportHtml({
   parts.push(line('📋 [신고 결과 보고 및 검토 안내]'));
   parts.push(blank);
   parts.push(line(`안녕하세요. ${belong} ${escapeHtml(name)} 신고 결과를 안내드립니다.`));
-  parts.push(line('매입매출장과 결과 보고서를 함께 첨부하오니,'));
-  parts.push(line('아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.'));
+  parts.push(line('매입매출장과 결과 보고서를 함께 첨부했습니다.'));
+  parts.push(line('아래 요약과 첨부 자료에 누락·오류가 없는지 확인해 주세요.'));
   parts.push(blank);
   parts.push(line('[신고 결과 요약]'));
   parts.push(vatSummaryTable(report, r, taxLabel));
   parts.push(blank);
-  parts.push(line('✅ 검토 후 이상이 없으시면 "확인 완료" 댓글 부탁드립니다.'));
+  parts.push(line('✅ 검토 후 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.'));
 
   if (isPay && r.finalTax > 0) {
     parts.push(blank);
     parts.push(line('💳 [분납(분할 납부) 안내]'));
-    parts.push(line('분할 납부를 원하시면 "확인 완료" 댓글과 함께 희망 납부일자별 금액도 같이 남겨 주시면 신청을 도와드리겠습니다.'));
-    parts.push(line('다음 신고기한과 겹치지 않도록 아래 일정 내 최대 3회(약 3개월) 분납을 권장드립니다.'));
+    parts.push(line('분할 납부를 원하시면 "확인 완료" 댓글에 희망 납부일자별 금액을 함께 적어 주시면 신청을 도와드리겠습니다.'));
+    parts.push(line('다음 신고기한과 겹치지 않도록 아래 일정 내 최대 3회(약 3개월) 분납을 권장합니다.'));
     if (deadline) {
       const labels = ['1차 (신고·납부일)', '2차 (+1개월 말일)', '3차 (+2개월 말일)'];
       installmentSchedule(deadline.final).forEach((d, i) => {

@@ -24,7 +24,7 @@ export const TOKENS: TemplateToken[] = [
 
 // 기본 서식(HTML). 색상·이모지 예시 포함 — 사용자가 외부 서식으로 덮어쓰면 됩니다.
 export const DEFAULT_TEMPLATE = `<div style="line-height:1.8;">
-<div>{귀속} {세목} 신고와 관련하여 자료 요청드립니다. 첨부된 공문을 확인하시어 해당하시는 자료를 업로드 부탁드립니다.</div>
+<div>{귀속} {세목} 신고를 위해 첨부된 공문을 확인하시고, 해당 자료 업로드를 부탁드립니다.</div>
 <div><br></div>
 <div>📢 <b>[ 중요 ] 신고 일정 안내</b></div>
 <div>대상 기간: {대상기간}</div>
@@ -60,7 +60,7 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
     label: '자료요청',
     desc: '인건비 자료를 요청하는 안내',
     html: `<div style="line-height:1.8;">
-<div>{귀속} {세목} 신고와 관련하여 자료 요청드립니다. 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.</div>
+<div>{귀속} {세목} 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.</div>
 <div><br></div>
 <div>📢 <b>신고 일정 안내</b></div>
 <div>{자료제출마감}</div>

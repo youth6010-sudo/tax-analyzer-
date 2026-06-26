@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { PaymentNotice } from '../_lib/types';
 
@@ -10,12 +10,52 @@ function formatComma(n: number): string {
   return n !== 0 ? n.toLocaleString('ko-KR') : '';
 }
 
-// 음수(-) 허용: 환급 금액 입력용
-function parseComma(raw: string): number {
-  const neg = /-/.test(raw);
-  const digits = raw.replace(/[^\d]/g, '');
-  const n = digits ? Number(digits) : 0;
-  return neg ? -n : n;
+// 금액 입력 — '-'를 먼저 입력해도 유지(환급), 천 단위 콤마 자동.
+// 숫자 값(0)으로 인해 '-'가 사라지지 않도록 입력 중에는 로컬 텍스트를 유지한다.
+function MoneyInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [text, setText] = useState(() => formatComma(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setText(formatComma(value));
+  }, [value]);
+
+  const handle = (raw: string) => {
+    const neg = raw.includes('-');
+    const digits = raw.replace(/[^\d]/g, '');
+    const grouped = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    setText((neg ? '-' : '') + grouped);
+    const n = digits ? Number(digits) : 0;
+    onChange(neg ? -n : n);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="text"
+      value={text}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={() => {
+        focused.current = false;
+        setText(formatComma(value));
+      }}
+      onChange={e => handle(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
 }
 
 // "2026-07-27"(ISO) → "2026.07.27"
@@ -113,11 +153,9 @@ export default function PaymentNoticeField({
               {hasLocalTax ? `${taxTypeName} 납부금액` : '납부금액'}
             </label>
             <div className="relative">
-              <input
-                type="text"
-                inputMode="text"
-                value={formatComma(value.amount)}
-                onChange={e => update({ amount: parseComma(e.target.value) })}
+              <MoneyInput
+                value={value.amount}
+                onChange={n => update({ amount: n })}
                 placeholder="예) 1,250,000"
                 className={`${inputClass} pr-8`}
               />
@@ -131,11 +169,9 @@ export default function PaymentNoticeField({
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">지방소득세</label>
               <div className="relative">
-                <input
-                  type="text"
-                  inputMode="text"
-                  value={formatComma(value.localAmount)}
-                  onChange={e => update({ localAmount: parseComma(e.target.value) })}
+                <MoneyInput
+                  value={value.localAmount}
+                  onChange={n => update({ localAmount: n })}
                   placeholder="예) 125,000"
                   className={`${inputClass} pr-8`}
                 />
@@ -167,11 +203,9 @@ export default function PaymentNoticeField({
                 className={inputClass}
               />
               <div className="relative">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formatComma(it.amount)}
-                  onChange={e => updateInstallment(i, { amount: parseComma(e.target.value) })}
+                <MoneyInput
+                  value={it.amount}
+                  onChange={n => updateInstallment(i, { amount: n })}
                   placeholder="금액"
                   className={`${inputClass} pr-7`}
                 />

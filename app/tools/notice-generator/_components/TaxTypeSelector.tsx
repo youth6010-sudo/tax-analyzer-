@@ -59,14 +59,6 @@ export default function TaxTypeSelector({ selected, onSelect }: Props) {
                 {s.emoji}
               </span>
               <span className="text-sm font-bold">{tax.name}</span>
-              <span
-                className={[
-                  'text-[11px] leading-tight',
-                  isActive ? 'opacity-70' : 'text-slate-400',
-                ].join(' ')}
-              >
-                {tax.short}
-              </span>
             </button>
           );
         })}

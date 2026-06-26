@@ -93,21 +93,23 @@ function CellValue({
 }
 
 const PANEL = {
+  // 개인 = 초록(emerald)
   personal: {
+    accent: 'border-l-emerald-300',
+    headerBg: 'bg-emerald-50/80',
+    headerText: 'text-emerald-800',
+    badge: 'bg-emerald-100/90 text-emerald-800',
+    footer: 'bg-emerald-50/60 border-emerald-100/80 text-emerald-900',
+    dot: 'bg-emerald-400',
+  },
+  // 법인 = 하늘/파랑(sky)
+  corporate: {
     accent: 'border-l-sky-300',
     headerBg: 'bg-sky-50/80',
     headerText: 'text-sky-800',
     badge: 'bg-sky-100/90 text-sky-800',
     footer: 'bg-sky-50/60 border-sky-100/80 text-sky-900',
     dot: 'bg-sky-400',
-  },
-  corporate: {
-    accent: 'border-l-violet-300',
-    headerBg: 'bg-violet-50/80',
-    headerText: 'text-violet-800',
-    badge: 'bg-violet-100/90 text-violet-800',
-    footer: 'bg-violet-50/70 border-violet-100/80 text-violet-900',
-    dot: 'bg-violet-400',
   },
   other: {
     accent: 'border-l-amber-300',
@@ -116,6 +118,15 @@ const PANEL = {
     badge: 'bg-amber-100/90 text-amber-900',
     footer: 'bg-amber-50/60 border-amber-100/80 text-amber-950',
     dot: 'bg-amber-400',
+  },
+  // 신고대리 = 보라(violet)
+  singo: {
+    accent: 'border-l-violet-300',
+    headerBg: 'bg-violet-50/80',
+    headerText: 'text-violet-800',
+    badge: 'bg-violet-100/90 text-violet-800',
+    footer: 'bg-violet-50/70 border-violet-100/80 text-violet-900',
+    dot: 'bg-violet-400',
   },
 } as const;
 
@@ -258,7 +269,7 @@ function EntityPanel({
   showFooter?: boolean;
 }) {
   const feeSum = sumClientFees(clients);
-  const s = PANEL[variant];
+  const s = variant === 'other' && title === SINGO_DAERI ? PANEL.singo : PANEL[variant];
   const showFee = variant !== 'other';
   const rowVariant = (c: ClientRecord): 'personal' | 'corporate' =>
     c.businessEntityType === 'corporate' ? 'corporate' : 'personal';
@@ -344,10 +355,10 @@ function MainCategorySummary({
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap gap-2 text-sm">
-        <span className="rounded-md bg-violet-50 px-2.5 py-1 font-medium tabular-nums text-violet-800 ring-1 ring-violet-100">
+        <span className="rounded-md bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
           법인 {corporate.length} · {formatFee(corporateFee)}
         </span>
-        <span className="rounded-md bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
+        <span className="rounded-md bg-emerald-50 px-2.5 py-1 font-medium tabular-nums text-emerald-800 ring-1 ring-emerald-100">
           개인 {personal.length} · {formatFee(personalFee)}
         </span>
       </div>
@@ -417,10 +428,10 @@ function ManagerSection({
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5 shrink-0">
-            <span className="rounded-md bg-violet-50 px-2 py-0.5 text-sm font-medium tabular-nums text-violet-800">
+            <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sm font-medium tabular-nums text-sky-800">
               법인 {corporate.length}
             </span>
-            <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sm font-medium tabular-nums text-sky-800">
+            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-sm font-medium tabular-nums text-emerald-800">
               개인 {personal.length}
             </span>
           </div>

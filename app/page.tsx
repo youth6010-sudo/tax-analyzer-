@@ -76,25 +76,25 @@ export default async function HomePage() {
                 <h2 className="mb-3 flex items-center gap-1.5 text-sm font-extrabold tracking-tight text-slate-800">
                   <span aria-hidden>🧰</span> 도구
                 </h2>
-                <div className="grid flex-1 content-start gap-2 sm:grid-cols-2">
+                <div className="grid flex-1 content-start gap-2.5">
                   {TOOLS.map(tool => {
                     const inner = (
                       <>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-200 text-sm shadow-sm">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-200 text-base shadow-sm">
                           {tool.emoji}
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-bold text-slate-800">
                             {tool.title}
                           </span>
-                          <span className="mt-0.5 block text-[11px] leading-snug text-slate-500 line-clamp-2">
+                          <span className="mt-0.5 block text-xs leading-snug text-slate-500">
                             {tool.description}
                           </span>
                         </span>
                       </>
                     );
                     const cardClass =
-                      'flex items-start gap-2.5 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-2.5 transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/60';
+                      'flex items-start gap-3 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-3 transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/60';
 
                     if (tool.disabled) {
                       return (

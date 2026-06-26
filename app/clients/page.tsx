@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerRosterGrid from '../components/clients/ManagerRosterGrid';
+import ManagerChips from '../components/clients/ManagerChips';
 import PortalPageShell, { PortalLoading } from '../components/portal/PortalPageShell';
 import {
   portalBtnSecondary,
@@ -189,17 +190,8 @@ function ClientsPageContent() {
     if (searchParams.get('mgr')) return;
     if (!currentUserName) return;
     defaultMgrApplied.current = true;
-    updateState({ visibleManagers: [currentUserName], mineOnly: true });
+    updateState({ visibleManagers: [currentUserName], mineOnly: false });
   }, [currentUserName, searchParams, updateState]);
-
-  /** 내 담당만 켜져 있으면 담당자 선택도 본인만 */
-  useEffect(() => {
-    if (!state.mineOnly || !currentUserName) return;
-    const onlySelf =
-      state.visibleManagers.length === 1 && state.visibleManagers[0] === currentUserName;
-    if (onlySelf) return;
-    updateState({ visibleManagers: [currentUserName] });
-  }, [state.mineOnly, state.visibleManagers, currentUserName, updateState]);
 
   useEffect(() => {
     if (scrollRestored.current || state.scroll <= 0) return;
@@ -279,17 +271,6 @@ function ClientsPageContent() {
     [state.visibleManagers, compareByOrder],
   );
 
-  const moveManager = useCallback(
-    (index: number, dir: -1 | 1) => {
-      const arr = [...managerOptions];
-      const j = index + dir;
-      if (j < 0 || j >= arr.length) return;
-      [arr[index], arr[j]] = [arr[j], arr[index]];
-      setManagerOrder(arr);
-    },
-    [managerOptions, setManagerOrder],
-  );
-
   const managerCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const c of filtered) {
@@ -299,34 +280,35 @@ function ClientsPageContent() {
     return counts;
   }, [filtered]);
 
-  const toggleVisibleManager = useCallback(
-    (manager: string, checked: boolean) => {
-      const next = checked
-        ? [...new Set([...state.visibleManagers, manager])]
-        : state.visibleManagers.filter(m => m !== manager);
-      updateState({ visibleManagers: next, mineOnly: false });
+  /** 담당자 탭 → 선택/해제(다중 선택) */
+  const toggleManager = useCallback(
+    (manager: string) => {
+      const set = new Set(state.visibleManagers);
+      if (set.has(manager)) set.delete(manager);
+      else set.add(manager);
+      updateState({ visibleManagers: [...set], mineOnly: false, manager: '' });
     },
     [state.visibleManagers, updateState],
   );
 
   const selectAllManagers = useCallback(() => {
-    updateState({ visibleManagers: [...managerOptions], mineOnly: false });
+    updateState({ visibleManagers: [...managerOptions], mineOnly: false, manager: '' });
   }, [managerOptions, updateState]);
 
   const clearManagers = useCallback(() => {
-    updateState({ visibleManagers: [], mineOnly: false });
+    updateState({ visibleManagers: [], mineOnly: false, manager: '' });
   }, [updateState]);
 
-  const applyMineOnly = useCallback(
-    (checked: boolean) => {
-      if (checked && currentUserName) {
-        updateState({ mineOnly: true, visibleManagers: [currentUserName], manager: '' });
-      } else {
-        updateState({ mineOnly: false, manager: '' });
-      }
-    },
-    [currentUserName, updateState],
-  );
+  /** 내 담당 빠른 선택 */
+  const selectMine = useCallback(() => {
+    if (!currentUserName) return;
+    updateState({ visibleManagers: [currentUserName], mineOnly: false, manager: '' });
+  }, [currentUserName, updateState]);
+
+  const isMineOnlySelected =
+    !!currentUserName &&
+    state.visibleManagers.length === 1 &&
+    state.visibleManagers[0] === currentUserName;
 
   const optionalCategoryOptions = useMemo(
     () => collectOptionalCategories(filtered),
@@ -363,15 +345,6 @@ function ClientsPageContent() {
 
   const mainStats = useMemo(() => countMainCategoryClients(filtered), [filtered]);
   const returnTo = buildClientsListUrl({ ...state, scroll: 0 });
-
-  const filterSummary = [
-    `담당 ${state.visibleManagers.length}`,
-    state.visibleOptionalCategories.length > 0
-      ? `대분류 ${state.visibleOptionalCategories.length}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   const compactChip = (active: boolean, self?: boolean) =>
     [
@@ -422,15 +395,6 @@ function ClientsPageContent() {
         <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
           <input
             type="checkbox"
-            checked={state.mineOnly}
-            onChange={e => applyMineOnly(e.target.checked)}
-            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
-          />
-          내 담당
-        </label>
-        <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
-          <input
-            type="checkbox"
             checked={state.includeChurned}
             onChange={e => updateState({ includeChurned: e.target.checked })}
             className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
@@ -439,80 +403,41 @@ function ClientsPageContent() {
         </label>
       </div>
 
-      <details className={`${portalCard} shrink-0 mb-2 group`}>
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 select-none [&::-webkit-details-marker]:hidden">
-          <span className="text-slate-400 transition-transform group-open:rotate-90" aria-hidden>
-            ▸
-          </span>
-          <span>필터</span>
-          <span className="text-xs font-normal text-slate-400">{filterSummary || '담당 0'}</span>
-          <span className="ml-auto flex gap-1.5" onClick={e => e.preventDefault()}>
-            <button type="button" onClick={selectAllManagers} className={`${portalBtnSecondary} !px-2 !py-1 text-xs`}>
-              담당 전체
-            </button>
-          </span>
-        </summary>
-        <div className="border-t border-slate-100 px-3 py-2 space-y-2">
-          <div>
-            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-              <span className="text-xs font-semibold text-slate-500">담당자</span>
-              <button type="button" onClick={clearManagers} className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px] ml-auto`}>
+      <div className={`${portalCard} shrink-0 mb-2 px-3 py-2.5 space-y-2`}>
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className="text-xs font-semibold text-slate-500">담당자</span>
+            <span className="text-[10px] text-slate-400">탭 = 선택/해제(다중) · 꾹 눌러 드래그하면 순서 변경</span>
+            <span className="ml-auto flex flex-wrap gap-1">
+              {currentUserName && (
+                <button
+                  type="button"
+                  onClick={selectMine}
+                  className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px] ${
+                    isMineOnlySelected ? '!border-blue-300 !bg-blue-50 !text-blue-700' : ''
+                  }`}
+                >
+                  내 담당
+                </button>
+              )}
+              <button type="button" onClick={selectAllManagers} className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px]`}>
+                전체
+              </button>
+              <button type="button" onClick={clearManagers} className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px]`}>
                 해제
               </button>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {managerOptions.map(mgr => {
-                const count = managerCounts.get(mgr) ?? 0;
-                const checked = state.visibleManagers.includes(mgr);
-                const isSelf = currentUserName === mgr;
-                return (
-                  <button
-                    key={mgr}
-                    type="button"
-                    onClick={() => toggleVisibleManager(mgr, !checked)}
-                    className={[compactChip(checked, isSelf), count === 0 && !checked ? 'opacity-40' : ''].join(' ')}
-                  >
-                    {mgr}
-                    {isSelf && <span className="text-[9px] font-bold text-blue-600">나</span>}
-                    <span className={compactChipCount(checked)}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-2">
-              <span className="text-xs font-semibold text-slate-500">표시 순서</span>
-              <span className="ml-1 text-[10px] text-slate-400">‹ › 로 담당자 순서를 바꿀 수 있어요</span>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {managerOptions.map((mgr, i) => (
-                  <span
-                    key={mgr}
-                    className="inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white py-0.5 pl-1.5 pr-0.5 text-xs"
-                  >
-                    <button
-                      type="button"
-                      disabled={i === 0}
-                      onClick={() => moveManager(i, -1)}
-                      className="px-1 text-slate-400 enabled:hover:text-blue-600 disabled:opacity-30"
-                      aria-label={`${mgr} 앞으로`}
-                    >
-                      ‹
-                    </button>
-                    <span className="font-medium text-slate-700">{mgr}</span>
-                    <button
-                      type="button"
-                      disabled={i === managerOptions.length - 1}
-                      onClick={() => moveManager(i, 1)}
-                      className="px-1 text-slate-400 enabled:hover:text-blue-600 disabled:opacity-30"
-                      aria-label={`${mgr} 뒤로`}
-                    >
-                      ›
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
+            </span>
           </div>
-          {optionalCategoryOptions.length > 0 && (
+          <ManagerChips
+            managers={managerOptions}
+            counts={managerCounts}
+            selected={state.visibleManagers}
+            currentUserName={currentUserName}
+            onToggle={toggleManager}
+            onReorder={setManagerOrder}
+          />
+        </div>
+        {optionalCategoryOptions.length > 0 && (
             <div>
               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                 <span className="text-xs font-semibold text-slate-500">대분류</span>
@@ -551,8 +476,7 @@ function ClientsPageContent() {
               </div>
             </div>
           )}
-        </div>
-      </details>
+      </div>
 
       {loading && clients.length === 0 ? (
         <div className="space-y-2 animate-pulse">
