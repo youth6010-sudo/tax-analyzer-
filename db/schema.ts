@@ -23,6 +23,10 @@ export const users = pgTable('users', {
   pinHash: text('pin_hash').notNull(),
   role: userRoleEnum('role').notNull().default('staff'),
   noticeTemplate: text('notice_template').notNull().default(''),
+  blueholeLoginId: text('bluehole_login_id').notNull().default(''),
+  blueholePasswordEnc: text('bluehole_password_enc').notNull().default(''),
+  blueholeSessionCookie: text('bluehole_session_cookie').notNull().default(''),
+  blueholeSessionAt: timestamp('bluehole_session_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -48,6 +52,7 @@ export const clients = pgTable('clients', {
   intakeStep: integer('intake_step').notNull().default(0),
   intakeData: jsonb('intake_data').notNull().$type<Record<string, unknown>>().default({}),
   source: clientSourceEnum('source').notNull().default('tp_import'),
+  blueholeClientId: text('bluehole_client_id').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
