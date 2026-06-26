@@ -5,7 +5,6 @@ import type { ClientRecord } from '@/app/types/client';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
 import {
-  compareManagers,
   groupClientsByManager,
   MANAGER_DISPLAY_ORDER,
   splitManagerClientsByCategory,
@@ -345,11 +344,11 @@ function MainCategorySummary({
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap gap-2 text-sm">
-        <span className="rounded-md bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
-          개인 {personal.length} · {formatFee(personalFee)}
-        </span>
         <span className="rounded-md bg-violet-50 px-2.5 py-1 font-medium tabular-nums text-violet-800 ring-1 ring-violet-100">
           법인 {corporate.length} · {formatFee(corporateFee)}
+        </span>
+        <span className="rounded-md bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
+          개인 {personal.length} · {formatFee(personalFee)}
         </span>
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2 text-base text-slate-700 border-t border-slate-200/80 pt-2.5">
@@ -418,11 +417,11 @@ function ManagerSection({
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5 shrink-0">
-            <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sm font-medium tabular-nums text-sky-800">
-              개인 {personal.length}
-            </span>
             <span className="rounded-md bg-violet-50 px-2 py-0.5 text-sm font-medium tabular-nums text-violet-800">
               법인 {corporate.length}
+            </span>
+            <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sm font-medium tabular-nums text-sky-800">
+              개인 {personal.length}
             </span>
           </div>
         </div>
@@ -430,18 +429,18 @@ function ManagerSection({
 
       <div className="flex flex-col gap-2 p-2">
         <EntityPanel
-          title="개인"
-          variant="personal"
-          clients={personal}
+          title="법인"
+          variant="corporate"
+          clients={corporate}
           query={query}
           returnTo={returnTo}
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
         />
         <EntityPanel
-          title="법인"
-          variant="corporate"
-          clients={corporate}
+          title="개인"
+          variant="personal"
+          clients={personal}
           query={query}
           returnTo={returnTo}
           onFeeChange={onFeeChange}
@@ -665,24 +664,16 @@ export default function ManagerRosterGrid({
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
 }) {
+  // visibleManagers는 호출부에서 사용자가 지정한 순서대로 전달된다 → 그 순서를 그대로 유지
   const managerGroups = useMemo(() => {
     const grouped = groupClientsByManager(clients, sort);
     const byManager = new Map(grouped.map(g => [g.manager, g.clients]));
 
-    return visibleManagers
-      .slice()
-      .sort((a, b) => {
-        if (currentUserName) {
-          if (a === currentUserName) return -1;
-          if (b === currentUserName) return 1;
-        }
-        return compareManagers(a, b);
-      })
-      .map(manager => ({
-        manager,
-        clients: byManager.get(manager) ?? [],
-      }));
-  }, [clients, sort, visibleManagers, currentUserName]);
+    return visibleManagers.map(manager => ({
+      manager,
+      clients: byManager.get(manager) ?? [],
+    }));
+  }, [clients, sort, visibleManagers]);
 
   if (visibleManagers.length === 0) {
     return (

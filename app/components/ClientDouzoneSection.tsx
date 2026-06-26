@@ -112,11 +112,13 @@ export default function ClientDouzoneSection({
   intakeData: initialIntake,
   feeSummary: initialFee,
   program: initialProgram,
+  canEdit = true,
 }: {
   clientId: string;
   intakeData: Record<string, unknown>;
   feeSummary: number | null;
   program: string;
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [intakeData, setIntakeData] = useState(initialIntake);
@@ -192,7 +194,7 @@ export default function ClientDouzoneSection({
     <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
         <h2 className="text-sm font-black text-gray-800">상세내용</h2>
-        {!editing ? (
+        {!canEdit ? null : !editing ? (
           <button
             type="button"
             onClick={startEdit}

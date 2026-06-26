@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { handleApiError } from '@/lib/apiError';
-import { assertCanAccessClient } from '@/lib/clientAccess';
+import { assertCanAccessClient, assertClientExists } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
 
 import {
@@ -21,10 +21,10 @@ const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    await requireUser();
     const { id } = await params;
     const client = await getClientById(id);
-    assertCanAccessClient(user, client);
+    assertClientExists(client); // 조회는 전체 허용
     return NextResponse.json(
       { client, contact: clientRecordToContact(client!) },
       NO_STORE,

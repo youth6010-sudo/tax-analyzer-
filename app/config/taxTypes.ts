@@ -19,7 +19,7 @@ export const TAX_MENU = [
     items: [
       { label: '수임처 관리', href: '/clients' },
       { label: '유입', href: '/clients/intake' },
-      { label: '유출 관리', href: '/clients/churn' },
+      { label: '유출', href: '/clients/churn' },
     ],
   },
   {
@@ -34,7 +34,8 @@ export const TAX_MENU = [
   {
     id: 'youth-id',
     label: '청년들 ID',
-    items: [{ label: '계정 · 계좌 · 자료', href: '/youth-ids' }],
+    href: '/youth-ids',
+    items: [] as { label: string; href: string }[],
   },
   {
     id: 'fun',

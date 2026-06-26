@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CONTACT_ROLES, type ClientContactRecord } from '@/app/types/clientContact';
 
-type Props = { clientId: string };
+type Props = { clientId: string; canEdit?: boolean };
 
 const emptyForm = {
   name: '',
@@ -91,7 +91,7 @@ function ContactAddForm({
   );
 }
 
-export default function ClientContactsPanel({ clientId }: Props) {
+export default function ClientContactsPanel({ clientId, canEdit = true }: Props) {
   const [contacts, setContacts] = useState<ClientContactRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -169,13 +169,15 @@ export default function ClientContactsPanel({ clientId }: Props) {
             <h2 className="text-sm font-black text-gray-900">연락처 목록</h2>
             <p className="text-[10px] text-gray-500 mt-0.5">대표·사모·실무 담당 등 여러 명을 등록할 수 있습니다.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddForm(true)}
-            className="shrink-0 px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            + 연락처 추가
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowAddForm(true)}
+              className="shrink-0 px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              + 연락처 추가
+            </button>
+          )}
         </div>
 
         <div className="p-4 space-y-3">
@@ -188,6 +190,7 @@ export default function ClientContactsPanel({ clientId }: Props) {
               <ContactRow
                 key={c.id}
                 contact={c}
+                canEdit={canEdit}
                 editing={editingId === c.id}
                 saving={saving}
                 onEdit={() => setEditingId(c.id)}
@@ -236,6 +239,7 @@ export default function ClientContactsPanel({ clientId }: Props) {
 
 function ContactRow({
   contact,
+  canEdit = true,
   editing,
   saving,
   onEdit,
@@ -244,6 +248,7 @@ function ContactRow({
   onDelete,
 }: {
   contact: ClientContactRecord;
+  canEdit?: boolean;
   editing: boolean;
   saving: boolean;
   onEdit: () => void;
@@ -291,14 +296,16 @@ function ContactRow({
             {!contact.phone && !contact.mobilePhone && '—'}
           </p>
         </div>
-        <div className="flex gap-1">
-          <button type="button" onClick={onEdit} className="text-[10px] font-bold px-2 py-1 rounded border border-gray-200">
-            수정
-          </button>
-          <button type="button" onClick={onDelete} className="text-[10px] font-bold px-2 py-1 rounded border border-red-200 text-red-700">
-            삭제
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-1">
+            <button type="button" onClick={onEdit} className="text-[10px] font-bold px-2 py-1 rounded border border-gray-200">
+              수정
+            </button>
+            <button type="button" onClick={onDelete} className="text-[10px] font-bold px-2 py-1 rounded border border-red-200 text-red-700">
+              삭제
+            </button>
+          </div>
+        )}
       </div>
     );
   }

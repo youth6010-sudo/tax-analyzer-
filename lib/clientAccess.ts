@@ -23,6 +23,20 @@ export function assertCanAccessClient(
   if (!canAccessClient(user, client)) throw new Error('FORBIDDEN');
 }
 
+/** 정보 수정 권한 = 담당자 본인 또는 관리자(찰리). assertCanAccessClient와 동일 규칙. */
+export const canEditClient = canAccessClient;
+export const assertCanEditClient = assertCanAccessClient;
+
+/**
+ * 조회(읽기)용 — 로그인한 직원은 모든 수임처를 볼 수 있다(전체 업체 파악).
+ * 존재 여부만 확인하고 담당자 제한은 두지 않는다.
+ */
+export function assertClientExists(
+  client: ClientAccessFields | null | undefined,
+): asserts client is ClientAccessFields {
+  if (!client) throw new Error('NOT_FOUND');
+}
+
 /** list/search 쿼리용 — 담당자·배정 사용자 필터 */
 export function buildMineOnlyClientCondition(
   userId: string,

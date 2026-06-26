@@ -35,6 +35,8 @@ const TAX_LABEL: Record<string, string> = Object.fromEntries(
 interface ContactDetailViewProps {
   contact: ContactRecord;
   primaryContactName?: string;
+  /** 담당자/관리자만 수정 가능. false면 조회 전용 */
+  canEdit?: boolean;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -68,7 +70,7 @@ function CategorySection({ title, children }: { title: string; children: React.R
   );
 }
 
-export default function ContactDetailView({ contact: initial, primaryContactName }: ContactDetailViewProps) {
+export default function ContactDetailView({ contact: initial, primaryContactName, canEdit = true }: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -174,7 +176,7 @@ export default function ContactDetailView({ contact: initial, primaryContactName
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <BackButton />
-        {!editing ? (
+        {!canEdit ? null : !editing ? (
           <div className="flex gap-2">
             <button
               type="button"

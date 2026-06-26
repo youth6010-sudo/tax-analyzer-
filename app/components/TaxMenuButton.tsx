@@ -61,7 +61,28 @@ export default function TaxMenuButton() {
           role="menu"
           className="absolute left-0 top-full mt-2 w-56 z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden py-1"
         >
-          {TAX_MENU.filter(group => !('adminOnly' in group && group.adminOnly) || isAdmin).map(group => (
+          {TAX_MENU.filter(group => !('adminOnly' in group && group.adminOnly) || isAdmin).map(group => {
+            const groupHref = 'href' in group ? (group.href as string) : undefined;
+            // href만 있는 그룹(예: 청년들 ID)은 라벨 자체를 클릭 가능한 단일 메뉴로 렌더
+            if (groupHref) {
+              const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
+              return (
+                <div key={group.id} role="none" className="px-2 py-1.5">
+                  <Link
+                    href={groupHref}
+                    role="menuitem"
+                    onClick={() => setOpen(false)}
+                    className={`block px-3 py-2 text-sm rounded-xl font-semibold transition-colors ${
+                      active ? 'bg-blue-600 text-white' : 'text-gray-800 hover:bg-gray-100'
+                    }`}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    {group.label}
+                  </Link>
+                </div>
+              );
+            }
+            return (
             <div key={group.id} role="none" className="px-2 py-1.5">
               <p
                 role="none"
@@ -96,7 +117,8 @@ export default function TaxMenuButton() {
                 </ul>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -45,6 +45,10 @@ export default function HomeWelcomeSection({ userName }: { userName: string }) {
         <Link href="/clients/intake" className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline">
           유입
         </Link>
+        <span className="text-slate-300" aria-hidden>·</span>
+        <Link href="/clients/churn" className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline">
+          유출
+        </Link>
       </div>
       {ready && clients.length === 0 && (
         <div className={`${portalEmptyState} mt-6 ${portalCard} border-solid`}>

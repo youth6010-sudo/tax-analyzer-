@@ -3,7 +3,7 @@ export default function NoticeHeader() {
     <header className="border-b border-white/60 bg-white/60 backdrop-blur-md">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 sm:px-6">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-300 via-pink-300 to-violet-300 text-xl shadow-md shadow-rose-200/60">
-          <span aria-hidden>🧾</span>
+          <span aria-hidden>💌</span>
         </div>
         <div>
           <h1 className="flex items-center gap-1.5 text-base font-extrabold tracking-tight text-slate-800 sm:text-lg">

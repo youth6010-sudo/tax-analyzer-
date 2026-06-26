@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerRosterGrid from '../components/clients/ManagerRosterGrid';
 import PortalPageShell, { PortalLoading } from '../components/portal/PortalPageShell';
 import {
-  portalBtnPrimary,
   portalBtnSecondary,
   portalCard,
   portalInput,
@@ -33,6 +32,7 @@ import {
   parseClientsListState,
   type ClientsListState,
 } from '@/app/utils/clientsListState';
+import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 
 export default function ClientsPage() {
   return (
@@ -58,6 +58,11 @@ function ClientsPageContent() {
   const [fetching, setFetching] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [feeRefreshKeys, setFeeRefreshKeys] = useState<Record<string, number>>({});
+  // 담당자 표시 순서(사용자가 자유롭게 변경 · 브라우저에 저장)
+  const [managerOrder, setManagerOrder] = useLocalStorage<string[]>(
+    'clients.managerOrder.v1',
+    [...MANAGER_DISPLAY_ORDER],
+  );
 
   const clients = fetchedClients ?? cachedClients;
   const loading = fetchedClients === null && cachedClients.length === 0;
@@ -246,22 +251,44 @@ function ClientsPageContent() {
     return list;
   }, [clients, state]);
 
+  const compareByOrder = useCallback(
+    (a: string, b: string) => {
+      if (a === UNCategorized) return 1;
+      if (b === UNCategorized) return -1;
+      const ia = managerOrder.indexOf(a);
+      const ib = managerOrder.indexOf(b);
+      const ra = ia >= 0 ? ia : Number.MAX_SAFE_INTEGER;
+      const rb = ib >= 0 ? ib : Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) return ra - rb;
+      return a.localeCompare(b, 'ko');
+    },
+    [managerOrder],
+  );
+
   const managerOptions = useMemo(() => {
     const set = new Set<string>(MANAGER_DISPLAY_ORDER);
     for (const c of filtered) {
       set.add(c.manager?.trim() || UNCategorized);
     }
-    return [...set].sort((a, b) => {
-      const ia = MANAGER_DISPLAY_ORDER.indexOf(a);
-      const ib = MANAGER_DISPLAY_ORDER.indexOf(b);
-      if (ia >= 0 && ib >= 0) return ia - ib;
-      if (ia >= 0) return -1;
-      if (ib >= 0) return 1;
-      if (a === UNCategorized) return 1;
-      if (b === UNCategorized) return -1;
-      return a.localeCompare(b, 'ko');
-    });
-  }, [filtered]);
+    return [...set].sort(compareByOrder);
+  }, [filtered, compareByOrder]);
+
+  /** 로스터에 넘길 담당자 목록 — 사용자가 지정한 순서대로 */
+  const orderedVisibleManagers = useMemo(
+    () => [...state.visibleManagers].sort(compareByOrder),
+    [state.visibleManagers, compareByOrder],
+  );
+
+  const moveManager = useCallback(
+    (index: number, dir: -1 | 1) => {
+      const arr = [...managerOptions];
+      const j = index + dir;
+      if (j < 0 || j >= arr.length) return;
+      [arr[index], arr[j]] = [arr[j], arr[index]];
+      setManagerOrder(arr);
+    },
+    [managerOptions, setManagerOrder],
+  );
 
   const managerCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -423,15 +450,6 @@ function ClientsPageContent() {
             <button type="button" onClick={selectAllManagers} className={`${portalBtnSecondary} !px-2 !py-1 text-xs`}>
               담당 전체
             </button>
-            {currentUserName && (
-              <button
-                type="button"
-                onClick={() => applyMineOnly(true)}
-                className={`${portalBtnPrimary} !px-2 !py-1 text-xs`}
-              >
-                내 담당
-              </button>
-            )}
           </span>
         </summary>
         <div className="border-t border-slate-100 px-3 py-2 space-y-2">
@@ -460,6 +478,38 @@ function ClientsPageContent() {
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-2">
+              <span className="text-xs font-semibold text-slate-500">표시 순서</span>
+              <span className="ml-1 text-[10px] text-slate-400">‹ › 로 담당자 순서를 바꿀 수 있어요</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {managerOptions.map((mgr, i) => (
+                  <span
+                    key={mgr}
+                    className="inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white py-0.5 pl-1.5 pr-0.5 text-xs"
+                  >
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => moveManager(i, -1)}
+                      className="px-1 text-slate-400 enabled:hover:text-blue-600 disabled:opacity-30"
+                      aria-label={`${mgr} 앞으로`}
+                    >
+                      ‹
+                    </button>
+                    <span className="font-medium text-slate-700">{mgr}</span>
+                    <button
+                      type="button"
+                      disabled={i === managerOptions.length - 1}
+                      onClick={() => moveManager(i, 1)}
+                      className="px-1 text-slate-400 enabled:hover:text-blue-600 disabled:opacity-30"
+                      aria-label={`${mgr} 뒤로`}
+                    >
+                      ›
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
           {optionalCategoryOptions.length > 0 && (
@@ -514,7 +564,7 @@ function ClientsPageContent() {
             sort={state.sort}
             query={state.q}
             returnTo={returnTo}
-            visibleManagers={state.visibleManagers}
+            visibleManagers={orderedVisibleManagers}
             visibleOptionalCategories={state.visibleOptionalCategories}
             currentUserName={currentUserName}
             onFeeChange={handleFeeChange}

@@ -14,15 +14,15 @@ export const dynamic = 'force-dynamic';
 const TOOL_META: Record<string, { emoji: string; description: string }> = {
   '/clients/filing-check': {
     emoji: '✅',
-    description: '세목·기간별 신고대상 대비 홈택스 접수현황 대조',
+    description: '세목·기간별 신고대상 대비 접수현황 대조',
   },
   '/tools/notice-generator': {
-    emoji: '🧾',
-    description: '세목·기간 선택 → 마감일 자동 계산 + 안내문 생성',
+    emoji: '💌',
+    description: '마감일 자동 계산 + 안내문 생성',
   },
   '/tax/comprehensive': {
     emoji: '📊',
-    description: '단순경비율·실제 소득율 비교, 시뮬레이션',
+    description: '단순경비율·실제 소득율 비교',
   },
 };
 
@@ -64,7 +64,7 @@ export default async function HomePage() {
             </header>
 
             {/* 상단 밴드: 인사(좌) + 도구(우, 같은 높이 박스 안에 배치) */}
-            <section className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <section className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_26rem]">
               <div className="flex flex-col rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm shadow-blue-100/40 sm:p-6">
                 <HomeWelcomeSection userName={user.name} />
                 <div className="mt-5 border-t border-blue-100 pt-4">
@@ -72,29 +72,29 @@ export default async function HomePage() {
                 </div>
               </div>
 
-              <div className="flex max-h-[20rem] min-h-[14rem] flex-col rounded-2xl border border-blue-100 bg-white/80 p-4 shadow-sm shadow-blue-100/40">
+              <div className="flex flex-col rounded-2xl border border-blue-100 bg-white/80 p-4 shadow-sm shadow-blue-100/40">
                 <h2 className="mb-3 flex items-center gap-1.5 text-sm font-extrabold tracking-tight text-slate-800">
                   <span aria-hidden>🧰</span> 도구
                 </h2>
-                <div className="-mr-1 grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto pr-1">
+                <div className="grid flex-1 content-start gap-2 sm:grid-cols-2">
                   {TOOLS.map(tool => {
                     const inner = (
                       <>
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-200 text-base shadow-sm">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-200 text-sm shadow-sm">
                           {tool.emoji}
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-bold text-slate-800">
                             {tool.title}
                           </span>
-                          <span className="mt-0.5 block text-xs leading-snug text-slate-500">
+                          <span className="mt-0.5 block text-[11px] leading-snug text-slate-500 line-clamp-2">
                             {tool.description}
                           </span>
                         </span>
                       </>
                     );
                     const cardClass =
-                      'flex items-start gap-3 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-3 transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/60';
+                      'flex items-start gap-2.5 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-2.5 transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/60';
 
                     if (tool.disabled) {
                       return (
