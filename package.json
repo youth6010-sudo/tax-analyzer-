@@ -12,6 +12,8 @@
     "start": "node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3000",
     "start:lan": "node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3000",
     "stable": "npm run build && npm run start",
+    "host:office": "powershell -ExecutionPolicy Bypass -File scripts/office-host-run.ps1",
+    "host:office:setup": "powershell -ExecutionPolicy Bypass -File scripts/office-host-setup.ps1",
     "lint": "eslint",
     "import:contacts": "node scripts/import-contacts.mjs",
     "delete:damdang-excel": "node scripts/delete-damdang-excel.mjs",
