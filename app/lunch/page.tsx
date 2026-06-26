@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { loadLunchDatabase } from '@/app/utils/lunchData';
 import type { LunchDatabase } from '@/app/types/lunch';
 import LunchPickGame from '@/app/components/lunch/LunchPickGame';
 import LunchSpotList from '@/app/components/lunch/LunchSpotList';
 import LunchSpotRequestForm from '@/app/components/lunch/LunchSpotRequestForm';
 import { useLunchJournal } from '@/app/components/lunch/useLunchJournal';
+import { useLunchActiveOverrides } from '@/app/components/lunch/useLunchActiveOverrides';
 import { PortalLoading, PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import {
   portalAlertError,
@@ -26,12 +27,24 @@ export default function LunchPage() {
     removeVisit,
     cancelToday,
   } = useLunchJournal();
+  const { setActive, applyOverrides } = useLunchActiveOverrides();
 
   useEffect(() => {
     loadLunchDatabase()
       .then(setDb)
       .catch(e => setError(String(e)));
   }, []);
+
+  // 기본 active + 브라우저 override 를 합친 실효 목록
+  const effectiveSpots = useMemo(
+    () => (db ? applyOverrides(db.spots) : []),
+    [db, applyOverrides],
+  );
+  // 가챠/추첨에는 활성 식당만 사용
+  const activeSpots = useMemo(
+    () => effectiveSpots.filter(s => s.active),
+    [effectiveSpots],
+  );
 
   const description =
     (db?.officeLabel ?? '사무실 주변') +
@@ -58,7 +71,7 @@ export default function LunchPage() {
       {db && (
         <>
           <LunchPickGame
-            spots={db.spots}
+            spots={activeSpots}
             journal={store}
             authorName={authorName}
             onRecordVisit={recordVisit}
@@ -67,13 +80,14 @@ export default function LunchPage() {
             onCancelToday={cancelToday}
           />
           <LunchSpotList
-            spots={db.spots}
+            spots={effectiveSpots}
             journal={store}
             authorName={authorName}
             onRecordVisit={recordVisit}
             onEditVisit={editVisit}
             onDeleteVisit={removeVisit}
             onCancelToday={cancelToday}
+            onToggleActive={setActive}
           />
           <LunchSpotRequestForm />
           <p className={portalFooterMeta}>

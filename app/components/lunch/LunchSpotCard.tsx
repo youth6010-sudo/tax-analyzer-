@@ -39,6 +39,8 @@ interface LunchSpotCardProps {
   onCancelToday?: (spotId: string) => void;
   showVisitForm?: boolean;
   highlight?: boolean;
+  /** 활성/비활성 토글 제공 시 표시. active 는 현재 실효 활성 상태. */
+  onToggleActive?: (spotId: string, active: boolean) => void;
 }
 
 export default function LunchSpotCard({
@@ -51,6 +53,7 @@ export default function LunchSpotCard({
   onCancelToday,
   showVisitForm = false,
   highlight = false,
+  onToggleActive,
 }: LunchSpotCardProps) {
   const [formOpen, setFormOpen] = useState(showVisitForm);
   const visits = journal?.visits ?? [];
@@ -63,11 +66,13 @@ export default function LunchSpotCard({
     : [];
   const todayDefaults = getTodayVisitDefaults(journal, author);
 
+  const inactive = onToggleActive ? !spot.active : false;
+
   return (
     <article
       className={`${portalCard} p-4 transition-all hover:shadow-md hover:shadow-slate-200/50 ${
         highlight ? 'ring-2 ring-orange-200 border-orange-200' : ''
-      }`}
+      } ${inactive ? 'opacity-70 border-dashed' : ''}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -101,6 +106,20 @@ export default function LunchSpotCard({
           )}
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          {onToggleActive && (
+            <button
+              type="button"
+              onClick={() => onToggleActive(spot.id, !spot.active)}
+              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                spot.active
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+              }`}
+              title={spot.active ? '가챠 풀에서 빼기' : '가챠 풀에 추가'}
+            >
+              {spot.active ? '✓ 활성' : '+ 활성화'}
+            </button>
+          )}
           <MapLink href={spot.naverMapUrl} label="네이버" />
           <MapLink href={spot.kakaoMapUrl} label="카카오" />
         </div>

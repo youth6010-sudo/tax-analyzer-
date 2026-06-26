@@ -21,6 +21,8 @@ export interface LunchSpot {
   kakaoMapUrl: string;
   menuHints: string[];
   notes?: string;
+  /** 가챠/추첨 풀에 포함할지 여부. 기존 등록 식당은 true, 자동 수집된 주변 식당은 false. */
+  active: boolean;
 }
 
 export interface LunchDatabase {

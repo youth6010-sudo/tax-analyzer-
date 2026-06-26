@@ -1,142 +1,7 @@
 {
-  "updatedAt": "2026-06-17",
-  "officeLabel": "센텀 E타워 15층 · 센텀중앙로 90",
+  "updatedAt": "2026-06-26",
+  "officeLabel": "큐비E센텀 15층 · 센텀중앙로 90",
   "spots": [
-    {
-      "id": "spot-001-쿠킹마더스",
-      "name": "쿠킹마더스",
-      "category": "분식",
-      "tags": [
-        "음식점",
-        "분식"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BF%A0%ED%82%B9%EB%A7%88%EB%8D%94%EC%8A%A4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/27233884",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-002-마녀김밥-센텀점",
-      "name": "마녀김밥 센텀점",
-      "category": "분식",
-      "tags": [
-        "음식점",
-        "분식"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%88%EB%85%80%EA%B9%80%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/448665978",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-003-금오유비끼",
-      "name": "금오유비끼",
-      "category": "한식",
-      "tags": [
-        "해물,생선",
-        "회"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B8%88%EC%98%A4%EC%9C%A0%EB%B9%84%EB%81%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/24991629",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-004-미례국밥-센텀점",
-      "name": "미례국밥 센텀점",
-      "category": "한식",
-      "tags": [
-        "한식",
-        "국밥"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EB%A1%80%EA%B5%AD%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/1666258503",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 90"
-    },
-    {
-      "id": "spot-005-우미남-센텀점",
-      "name": "우미남 센텀점",
-      "category": "한식",
-      "tags": [
-        "한식",
-        "육류,고기"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9A%B0%EB%AF%B8%EB%82%A8%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
-      "kakaoMapUrl": "https://place.map.kakao.com/77230769",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 102"
-    },
-    {
-      "id": "spot-006-상무초밥-해운대센텀점",
-      "name": "상무초밥 해운대센텀점",
-      "category": "일식",
-      "tags": [
-        "일식",
-        "초밥,롤"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 7,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%81%EB%AC%B4%EC%B4%88%EB%B0%A5%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2041",
-      "kakaoMapUrl": "https://place.map.kakao.com/1560348526",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀5로 41"
-    },
-    {
-      "id": "spot-007-동네짬뽕-센텀점",
-      "name": "동네짬뽕 센텀점",
-      "category": "중식",
-      "tags": [
-        "중식",
-        "중국요리"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 3,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EB%84%A4%EC%A7%AC%EB%BD%95%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2071",
-      "kakaoMapUrl": "https://place.map.kakao.com/1524069044",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 71"
-    },
-    {
-      "id": "spot-008-짚신매운갈비찜-센텀점",
-      "name": "짚신매운갈비찜 센텀점",
-      "category": "한식",
-      "tags": [
-        "육류,고기",
-        "갈비"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A7%9A%EC%8B%A0%EB%A7%A4%EC%9A%B4%EA%B0%88%EB%B9%84%EC%B0%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
-      "kakaoMapUrl": "https://place.map.kakao.com/18148611",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 102"
-    },
-    {
-      "id": "spot-009-느린마을양조장-부산해운대센텀점",
-      "name": "느린마을양조장 부산해운대센텀점",
-      "category": "기타",
-      "tags": [
-        "호프,요리주점",
-        "느린마을양조장"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 2,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8A%90%EB%A6%B0%EB%A7%88%EC%9D%84%EC%96%91%EC%A1%B0%EC%9E%A5%20%EB%B6%80%EC%82%B0%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
-      "kakaoMapUrl": "https://place.map.kakao.com/449597630",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 102"
-    },
     {
       "id": "spot-010-배덕장코다리-센텀점",
       "name": "배덕장코다리 센텀점",
@@ -147,64 +12,8 @@
       "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%B0%EB%8D%95%EC%9E%A5%EC%BD%94%EB%8B%A4%EB%A6%AC%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
       "kakaoMapUrl": "https://place.map.kakao.com/554176889",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-011-청담면옥",
-      "name": "청담면옥",
-      "category": "기타",
-      "tags": [],
-      "priceRange": "미입력",
-      "walkMinutes": 0,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%AD%EB%8B%B4%EB%A9%B4%EC%98%A5%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
-      "kakaoMapUrl": "https://place.map.kakao.com/1453032994",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 99"
-    },
-    {
-      "id": "spot-012-미분당-부산센텀시티점",
-      "name": "미분당 부산센텀시티점",
-      "category": "기타",
-      "tags": [
-        "베트남음식",
-        "미분당"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 6,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EB%B6%84%EB%8B%B9%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2048",
-      "kakaoMapUrl": "https://place.map.kakao.com/272899926",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 48"
-    },
-    {
-      "id": "spot-013-해운대맛집-하숙집-본점-부산애견동반식",
-      "name": "해운대맛집 하숙집 본점 부산애견동반식당",
-      "category": "한식",
-      "tags": [
-        "한식",
-        "육류,고기"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A7%9B%EC%A7%91%20%ED%95%98%EC%88%99%EC%A7%91%20%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%EC%95%A0%EA%B2%AC%EB%8F%99%EB%B0%98%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/25812093",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-014-언양닭칼국수-센텀점",
-      "name": "언양닭칼국수 센텀점",
-      "category": "한식",
-      "tags": [
-        "국수",
-        "칼국수"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%96%B8%EC%96%91%EB%8B%AD%EC%B9%BC%EA%B5%AD%EC%88%98%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
-      "kakaoMapUrl": "https://place.map.kakao.com/803280692",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 99"
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
     },
     {
       "id": "spot-015-엄마손식당",
@@ -219,97 +28,8 @@
       "naverMapUrl": "https://map.naver.com/v5/search/%EC%97%84%EB%A7%88%EC%86%90%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
       "kakaoMapUrl": "https://place.map.kakao.com/319995996",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-016-맘스터치-부산센텀점",
-      "name": "맘스터치 부산센텀점",
-      "category": "양식",
-      "tags": [
-        "패스트푸드",
-        "맘스터치"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%98%EC%8A%A4%ED%84%B0%EC%B9%98%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/22831348",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
-    },
-    {
-      "id": "spot-017-버거킹-부산센텀시티점",
-      "name": "버거킹 부산센텀시티점",
-      "category": "양식",
-      "tags": [
-        "패스트푸드",
-        "버거킹"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 8,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%84%EA%B1%B0%ED%82%B9%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
-      "kakaoMapUrl": "https://place.map.kakao.com/2102393054",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 25"
-    },
-    {
-      "id": "spot-018-현풍닭칼국수-센텀점",
-      "name": "현풍닭칼국수 센텀점",
-      "category": "한식",
-      "tags": [
-        "국수",
-        "칼국수"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 8,
-      "naverMapUrl": "https://map.naver.com/v5/search/%ED%98%84%ED%92%8D%EB%8B%AD%EC%B9%BC%EA%B5%AD%EC%88%98%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
-      "kakaoMapUrl": "https://place.map.kakao.com/842858438",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 25"
-    },
-    {
-      "id": "spot-019-백소정-센텀점",
-      "name": "백소정 센텀점",
-      "category": "일식",
-      "tags": [
-        "일식",
-        "백소정"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 7,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%B1%EC%86%8C%EC%A0%95%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
-      "kakaoMapUrl": "https://place.map.kakao.com/491316960",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 35"
-    },
-    {
-      "id": "spot-020-유가네닭갈비-부산센텀점",
-      "name": "유가네닭갈비 부산센텀점",
-      "category": "한식",
-      "tags": [
-        "닭요리",
-        "유가네닭갈비"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9C%A0%EA%B0%80%EB%84%A4%EB%8B%AD%EA%B0%88%EB%B9%84%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/1935790861",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 90"
-    },
-    {
-      "id": "spot-021-전주남문토종순대국-부산센텀점",
-      "name": "전주남문토종순대국 부산센텀점",
-      "category": "한식",
-      "tags": [
-        "한식",
-        "순대"
-      ],
-      "priceRange": "미입력",
-      "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%84%EC%A3%BC%EB%82%A8%EB%AC%B8%ED%86%A0%EC%A2%85%EC%88%9C%EB%8C%80%EA%B5%AD%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
-      "kakaoMapUrl": "https://place.map.kakao.com/26952311",
-      "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
     },
     {
       "id": "spot-022-이태리부대찌개-부산센텀시티점",
@@ -324,22 +44,21 @@
       "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%B4%ED%83%9C%EB%A6%AC%EB%B6%80%EB%8C%80%EC%B0%8C%EA%B0%9C%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
       "kakaoMapUrl": "https://place.map.kakao.com/2061849042",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀중앙로 90"
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
     },
     {
-      "id": "spot-023-콩나라",
-      "name": "콩나라",
-      "category": "한식",
-      "tags": [
-        "음식점",
-        "한식"
-      ],
+      "id": "spot-011-청담면옥",
+      "name": "청담면옥",
+      "category": "기타",
+      "tags": [],
       "priceRange": "미입력",
-      "walkMinutes": 5,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BD%A9%EB%82%98%EB%9D%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2051",
-      "kakaoMapUrl": "https://place.map.kakao.com/1239559567",
+      "walkMinutes": 0,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%AD%EB%8B%B4%EB%A9%B4%EC%98%A5%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/1453032994",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 51"
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": true
     },
     {
       "id": "spot-024-개미집-센텀점",
@@ -354,22 +73,72 @@
       "naverMapUrl": "https://map.naver.com/v5/search/%EA%B0%9C%EB%AF%B8%EC%A7%91%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
       "kakaoMapUrl": "https://place.map.kakao.com/2140210498",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 90"
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": true
     },
     {
-      "id": "spot-025-할머니의부뚜막-센텀점",
-      "name": "할머니의부뚜막 센텀점",
+      "id": "spot-003-금오유비끼",
+      "name": "금오유비끼",
       "category": "한식",
       "tags": [
-        "음식점",
-        "한식"
+        "해물,생선",
+        "회"
       ],
       "priceRange": "미입력",
       "walkMinutes": 1,
-      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%A0%EB%A8%B8%EB%8B%88%EC%9D%98%EB%B6%80%EB%9A%9C%EB%A7%89%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
-      "kakaoMapUrl": "https://place.map.kakao.com/1900017839",
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B8%88%EC%98%A4%EC%9C%A0%EB%B9%84%EB%81%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/24991629",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 99"
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
+    },
+    {
+      "id": "spot-002-마녀김밥-센텀점",
+      "name": "마녀김밥 센텀점",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%88%EB%85%80%EA%B9%80%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/448665978",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
+    },
+    {
+      "id": "spot-016-맘스터치-부산센텀점",
+      "name": "맘스터치 부산센텀점",
+      "category": "양식",
+      "tags": [
+        "패스트푸드",
+        "맘스터치"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%98%EC%8A%A4%ED%84%B0%EC%B9%98%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/22831348",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
+    },
+    {
+      "id": "spot-004-미례국밥-센텀점",
+      "name": "미례국밥 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국밥"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EB%A1%80%EA%B5%AD%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1666258503",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": true
     },
     {
       "id": "spot-026-바로바로횟집",
@@ -387,22 +156,72 @@
       "menuHints": [
         "점심특선"
       ],
-      "notes": "주소: 부산 해운대구 센텀동로 90 센텀필2 1층 115호"
+      "notes": "주소: 부산 해운대구 센텀동로 90 센텀필2 1층 115호",
+      "active": true
     },
     {
-      "id": "spot-027-동경규동-센텀시티점",
-      "name": "동경규동 센텀시티점",
-      "category": "일식",
+      "id": "spot-014-언양닭칼국수-센텀점",
+      "name": "언양닭칼국수 센텀점",
+      "category": "한식",
       "tags": [
-        "돈까스,우동",
-        "동경규동"
+        "국수",
+        "칼국수"
       ],
       "priceRange": "미입력",
-      "walkMinutes": 2,
-      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EA%B2%BD%EA%B7%9C%EB%8F%99%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
-      "kakaoMapUrl": "https://place.map.kakao.com/1823077040",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%96%B8%EC%96%91%EB%8B%AD%EC%B9%BC%EA%B5%AD%EC%88%98%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/803280692",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 102"
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": true
+    },
+    {
+      "id": "spot-005-우미남-센텀점",
+      "name": "우미남 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9A%B0%EB%AF%B8%EB%82%A8%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/77230769",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": true
+    },
+    {
+      "id": "spot-020-유가네닭갈비-부산센텀점",
+      "name": "유가네닭갈비 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "닭요리",
+        "유가네닭갈비"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9C%A0%EA%B0%80%EB%84%A4%EB%8B%AD%EA%B0%88%EB%B9%84%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1935790861",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": true
+    },
+    {
+      "id": "spot-021-전주남문토종순대국-부산센텀점",
+      "name": "전주남문토종순대국 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "순대"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%84%EC%A3%BC%EB%82%A8%EB%AC%B8%ED%86%A0%EC%A2%85%EC%88%9C%EB%8C%80%EA%B5%AD%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/26952311",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
     },
     {
       "id": "spot-028-진소문난칼국수",
@@ -417,7 +236,3751 @@
       "naverMapUrl": "https://map.naver.com/v5/search/%EC%A7%84%EC%86%8C%EB%AC%B8%EB%82%9C%EC%B9%BC%EA%B5%AD%EC%88%98%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
       "kakaoMapUrl": "https://place.map.kakao.com/784829673",
       "menuHints": [],
-      "notes": "주소: 부산 해운대구 센텀동로 102"
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": true
+    },
+    {
+      "id": "spot-008-짚신매운갈비찜-센텀점",
+      "name": "짚신매운갈비찜 센텀점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "갈비"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A7%9A%EC%8B%A0%EB%A7%A4%EC%9A%B4%EA%B0%88%EB%B9%84%EC%B0%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/18148611",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": true
+    },
+    {
+      "id": "spot-001-쿠킹마더스",
+      "name": "쿠킹마더스",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BF%A0%ED%82%B9%EB%A7%88%EB%8D%94%EC%8A%A4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/27233884",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
+    },
+    {
+      "id": "spot-025-할머니의부뚜막-센텀점",
+      "name": "할머니의부뚜막 센텀점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%A0%EB%A8%B8%EB%8B%88%EC%9D%98%EB%B6%80%EB%9A%9C%EB%A7%89%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/1900017839",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": true
+    },
+    {
+      "id": "spot-013-해운대맛집-하숙집-본점-부산애견동반식",
+      "name": "해운대맛집 하숙집 본점 부산애견동반식당",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A7%9B%EC%A7%91%20%ED%95%98%EC%88%99%EC%A7%91%20%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%EC%95%A0%EA%B2%AC%EB%8F%99%EB%B0%98%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/25812093",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": true
+    },
+    {
+      "id": "spot-009-느린마을양조장-부산해운대센텀점",
+      "name": "느린마을양조장 부산해운대센텀점",
+      "category": "기타",
+      "tags": [
+        "호프,요리주점",
+        "느린마을양조장"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8A%90%EB%A6%B0%EB%A7%88%EC%9D%84%EC%96%91%EC%A1%B0%EC%9E%A5%20%EB%B6%80%EC%82%B0%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/449597630",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": true
+    },
+    {
+      "id": "spot-027-동경규동-센텀시티점",
+      "name": "동경규동 센텀시티점",
+      "category": "일식",
+      "tags": [
+        "돈까스,우동",
+        "동경규동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EA%B2%BD%EA%B7%9C%EB%8F%99%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/1823077040",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": true
+    },
+    {
+      "id": "spot-007-동네짬뽕-센텀점",
+      "name": "동네짬뽕 센텀점",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EB%84%A4%EC%A7%AC%EB%BD%95%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2071",
+      "kakaoMapUrl": "https://place.map.kakao.com/1524069044",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 71",
+      "active": true
+    },
+    {
+      "id": "spot-023-콩나라",
+      "name": "콩나라",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BD%A9%EB%82%98%EB%9D%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2051",
+      "kakaoMapUrl": "https://place.map.kakao.com/1239559567",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 51",
+      "active": true
+    },
+    {
+      "id": "spot-012-미분당-부산센텀시티점",
+      "name": "미분당 부산센텀시티점",
+      "category": "기타",
+      "tags": [
+        "베트남음식",
+        "미분당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EB%B6%84%EB%8B%B9%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2048",
+      "kakaoMapUrl": "https://place.map.kakao.com/272899926",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 48",
+      "active": true
+    },
+    {
+      "id": "spot-019-백소정-센텀점",
+      "name": "백소정 센텀점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "백소정"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%B1%EC%86%8C%EC%A0%95%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/491316960",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": true
+    },
+    {
+      "id": "spot-006-상무초밥-해운대센텀점",
+      "name": "상무초밥 해운대센텀점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "초밥,롤"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%81%EB%AC%B4%EC%B4%88%EB%B0%A5%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2041",
+      "kakaoMapUrl": "https://place.map.kakao.com/1560348526",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 41",
+      "active": true
+    },
+    {
+      "id": "spot-017-버거킹-부산센텀시티점",
+      "name": "버거킹 부산센텀시티점",
+      "category": "양식",
+      "tags": [
+        "패스트푸드",
+        "버거킹"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%84%EA%B1%B0%ED%82%B9%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/2102393054",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": true
+    },
+    {
+      "id": "spot-018-현풍닭칼국수-센텀점",
+      "name": "현풍닭칼국수 센텀점",
+      "category": "한식",
+      "tags": [
+        "국수",
+        "칼국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%98%84%ED%92%8D%EB%8B%AD%EC%B9%BC%EA%B5%AD%EC%88%98%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/842858438",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": true
+    },
+    {
+      "name": "가야포차선지국밥 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국밥"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B0%80%EC%95%BC%ED%8F%AC%EC%B0%A8%EC%84%A0%EC%A7%80%EA%B5%AD%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/349240491",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-171-가야포차선지국밥-센텀점"
+    },
+    {
+      "name": "고택남",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B3%A0%ED%83%9D%EB%82%A8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/995067379",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-092-고택남"
+    },
+    {
+      "name": "구이면막회리",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "회"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B5%AC%EC%9D%B4%EB%A9%B4%EB%A7%89%ED%9A%8C%EB%A6%AC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1109146879",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-096-구이면막회리"
+    },
+    {
+      "name": "농부꼬마김밥 큐비e센텀점",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%86%8D%EB%B6%80%EA%BC%AC%EB%A7%88%EA%B9%80%EB%B0%A5%20%ED%81%90%EB%B9%84e%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1481123188",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-169-농부꼬마김밥-큐비e센텀점"
+    },
+    {
+      "name": "다와푸드 큐비점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "구내식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8B%A4%EC%99%80%ED%91%B8%EB%93%9C%20%ED%81%90%EB%B9%84%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1859879676",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-161-다와푸드-큐비점"
+    },
+    {
+      "name": "마린비어",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "호프,요리주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%88%EB%A6%B0%EB%B9%84%EC%96%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/2146919394",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-172-마린비어"
+    },
+    {
+      "name": "만나",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%8C%EB%82%98%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/772931673",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": false,
+      "id": "spot-085-만나"
+    },
+    {
+      "name": "멘제이텐",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "일본식라면"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A9%98%EC%A0%9C%EC%9D%B4%ED%85%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/1390801566",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": false,
+      "id": "spot-081-멘제이텐"
+    },
+    {
+      "name": "모스멕시칸그릴",
+      "category": "양식",
+      "tags": [
+        "양식",
+        "멕시칸,브라질"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AA%A8%EC%8A%A4%EB%A9%95%EC%8B%9C%EC%B9%B8%EA%B7%B8%EB%A6%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/1408180107",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": false,
+      "id": "spot-082-모스멕시칸그릴"
+    },
+    {
+      "name": "미스사이공 센텀점",
+      "category": "기타",
+      "tags": [
+        "동남아음식",
+        "베트남음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EC%8A%A4%EC%82%AC%EC%9D%B4%EA%B3%B5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/2050247721",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-167-미스사이공-센텀점"
+    },
+    {
+      "name": "미식가의우동 센텀점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EC%8B%9D%EA%B0%80%EC%9D%98%EC%9A%B0%EB%8F%99%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1192590124",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-170-미식가의우동-센텀점"
+    },
+    {
+      "name": "버닝팜치킨",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%84%EB%8B%9D%ED%8C%9C%EC%B9%98%ED%82%A8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/26946868",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-083-버닝팜치킨"
+    },
+    {
+      "name": "봉구스밥버거 센텀점",
+      "category": "한식",
+      "tags": [
+        "주먹밥",
+        "봉구스밥버거"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B4%89%EA%B5%AC%EC%8A%A4%EB%B0%A5%EB%B2%84%EA%B1%B0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/1076081192",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": false,
+      "id": "spot-079-봉구스밥버거-센텀점"
+    },
+    {
+      "name": "부산오뎅&을지로통골뱅이",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "오뎅바"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B6%80%EC%82%B0%EC%98%A4%EB%8E%85%26%EC%9D%84%EC%A7%80%EB%A1%9C%ED%86%B5%EA%B3%A8%EB%B1%85%EC%9D%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/27233944",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-090-부산오뎅-을지로통골뱅이"
+    },
+    {
+      "name": "불백고수락 센텀본점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B6%88%EB%B0%B1%EA%B3%A0%EC%88%98%EB%9D%BD%20%EC%84%BC%ED%85%80%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/987828015",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-166-불백고수락-센텀본점"
+    },
+    {
+      "name": "사대천왕시텐노우 센텀점",
+      "category": "일식",
+      "tags": [
+        "술집",
+        "일본식주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%82%AC%EB%8C%80%EC%B2%9C%EC%99%95%EC%8B%9C%ED%85%90%EB%85%B8%EC%9A%B0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/24766932",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-179-사대천왕시텐노우-센텀점"
+    },
+    {
+      "name": "생활맥주 부산센텀점",
+      "category": "기타",
+      "tags": [
+        "호프,요리주점",
+        "생활맥주"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%9D%ED%99%9C%EB%A7%A5%EC%A3%BC%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1435564500",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-174-생활맥주-부산센텀점"
+    },
+    {
+      "name": "석문어 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "해물,생선"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%9D%EB%AC%B8%EC%96%B4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1904008294",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-176-석문어-부산센텀점"
+    },
+    {
+      "name": "스시마이우 센텀시티점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "초밥,롤"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8A%A4%EC%8B%9C%EB%A7%88%EC%9D%B4%EC%9A%B0%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1537548406",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-173-스시마이우-센텀시티점"
+    },
+    {
+      "name": "스페이스바",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "술집"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8A%A4%ED%8E%98%EC%9D%B4%EC%8A%A4%EB%B0%94%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1312822226",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-091-스페이스바"
+    },
+    {
+      "name": "양정명동찌개마을",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "찌개,전골"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%96%91%EC%A0%95%EB%AA%85%EB%8F%99%EC%B0%8C%EA%B0%9C%EB%A7%88%EC%9D%84%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/39874674",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-177-양정명동찌개마을"
+    },
+    {
+      "name": "왓더버거 센텀점",
+      "category": "양식",
+      "tags": [
+        "햄버거",
+        "왓더버거"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%99%93%EB%8D%94%EB%B2%84%EA%B1%B0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/2021048595",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-164-왓더버거-센텀점"
+    },
+    {
+      "name": "인생냉면&인생김치찌개 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "냉면"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%B8%EC%83%9D%EB%83%89%EB%A9%B4%26%EC%9D%B8%EC%83%9D%EA%B9%80%EC%B9%98%EC%B0%8C%EA%B0%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2099",
+      "kakaoMapUrl": "https://place.map.kakao.com/385810475",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 99",
+      "active": false,
+      "id": "spot-080-인생냉면-인생김치찌개-센텀점"
+    },
+    {
+      "name": "장돌뱅이 부산오뎅",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "오뎅바"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9E%A5%EB%8F%8C%EB%B1%85%EC%9D%B4%20%EB%B6%80%EC%82%B0%EC%98%A4%EB%8E%85%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1671756551",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-160-장돌뱅이-부산오뎅"
+    },
+    {
+      "name": "쭈모",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%AD%88%EB%AA%A8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/780221334",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-180-쭈모"
+    },
+    {
+      "name": "착한까스",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B0%A9%ED%95%9C%EA%B9%8C%EC%8A%A4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1207584998",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-165-착한까스"
+    },
+    {
+      "name": "청춘식당 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%AD%EC%B6%98%EC%8B%9D%EB%8B%B9%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/27545122",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-030-청춘식당-센텀점"
+    },
+    {
+      "name": "치킨신드롬 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "치킨신드롬"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B9%98%ED%82%A8%EC%8B%A0%EB%93%9C%EB%A1%AC%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/79530576",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-095-치킨신드롬-센텀시티점"
+    },
+    {
+      "name": "퇴근길숯불막창",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "곱창,막창"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%87%B4%EA%B7%BC%EA%B8%B8%EC%88%AF%EB%B6%88%EB%A7%89%EC%B0%BD%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1125219297",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-029-퇴근길숯불막창"
+    },
+    {
+      "name": "파스타루",
+      "category": "양식",
+      "tags": [
+        "양식",
+        "이탈리안"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%EC%8A%A4%ED%83%80%EB%A3%A8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/1013568952",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-093-파스타루"
+    },
+    {
+      "name": "하도족발",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "족발,보쌈"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%98%EB%8F%84%EC%A1%B1%EB%B0%9C%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/756668680",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-178-하도족발"
+    },
+    {
+      "name": "한솥도시락 센텀중앙로점",
+      "category": "기타",
+      "tags": [
+        "도시락",
+        "한솥도시락"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%9C%EC%86%A5%EB%8F%84%EC%8B%9C%EB%9D%BD%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/492846293",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-157-한솥도시락-센텀중앙로점"
+    },
+    {
+      "name": "해성막창집 센텀점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "곱창,막창"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%B4%EC%84%B1%EB%A7%89%EC%B0%BD%EC%A7%91%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/928880596",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-162-해성막창집-센텀점"
+    },
+    {
+      "name": "해운대맛집 봉계한우로스구이 애견동반식당",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A7%9B%EC%A7%91%20%EB%B4%89%EA%B3%84%ED%95%9C%EC%9A%B0%EB%A1%9C%EC%8A%A4%EA%B5%AC%EC%9D%B4%20%EC%95%A0%EA%B2%AC%EB%8F%99%EB%B0%98%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/826934259",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-094-해운대맛집-봉계한우로스구이-애견동반식"
+    },
+    {
+      "name": "해장원",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "해장국"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%B4%EC%9E%A5%EC%9B%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/64645907",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 90",
+      "active": false,
+      "id": "spot-175-해장원"
+    },
+    {
+      "name": "흑돈하르방 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%9D%91%EB%8F%88%ED%95%98%EB%A5%B4%EB%B0%A9%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/351815859",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-168-흑돈하르방-센텀점"
+    },
+    {
+      "name": "BHC치킨 센텀중앙점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "BHC치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 1,
+      "naverMapUrl": "https://map.naver.com/v5/search/BHC%EC%B9%98%ED%82%A8%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2090",
+      "kakaoMapUrl": "https://place.map.kakao.com/27540445",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 90",
+      "active": false,
+      "id": "spot-163-BHC치킨-센텀중앙점"
+    },
+    {
+      "name": "교촌치킨 센텀파크점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "교촌치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B5%90%EC%B4%8C%EC%B9%98%ED%82%A8%20%EC%84%BC%ED%85%80%ED%8C%8C%ED%81%AC%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/162153017",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-182-교촌치킨-센텀파크점"
+    },
+    {
+      "name": "달빛에구운고등어 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "달빛에구운고등어"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8B%AC%EB%B9%9B%EC%97%90%EA%B5%AC%EC%9A%B4%EA%B3%A0%EB%93%B1%EC%96%B4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2079",
+      "kakaoMapUrl": "https://place.map.kakao.com/1435993425",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 79",
+      "active": false,
+      "id": "spot-060-달빛에구운고등어-부산센텀점"
+    },
+    {
+      "name": "더레시피",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8D%94%EB%A0%88%EC%8B%9C%ED%94%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/121680114",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-063-더레시피"
+    },
+    {
+      "name": "더파티 센텀점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "뷔페"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8D%94%ED%8C%8C%ED%8B%B0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2079",
+      "kakaoMapUrl": "https://place.map.kakao.com/20555831",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 79",
+      "active": false,
+      "id": "spot-069-더파티-센텀점"
+    },
+    {
+      "name": "도야족발 센텀점",
+      "category": "한식",
+      "tags": [
+        "족발,보쌈",
+        "도야족발"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%84%EC%95%BC%EC%A1%B1%EB%B0%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/1853166452",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-186-도야족발-센텀점"
+    },
+    {
+      "name": "라무진 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%9D%BC%EB%AC%B4%EC%A7%84%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%B6%81%EB%8C%80%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/659953835",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀북대로 60",
+      "active": false,
+      "id": "spot-076-라무진-부산센텀점"
+    },
+    {
+      "name": "르꽁비브",
+      "category": "양식",
+      "tags": [
+        "음식점",
+        "양식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A5%B4%EA%BD%81%EB%B9%84%EB%B8%8C%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%B6%81%EB%8C%80%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/27418950",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀북대로 60",
+      "active": false,
+      "id": "spot-075-르꽁비브"
+    },
+    {
+      "name": "모리모리덮밥 센텀점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "도시락"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AA%A8%EB%A6%AC%EB%AA%A8%EB%A6%AC%EB%8D%AE%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/2002096030",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-061-모리모리덮밥-센텀점"
+    },
+    {
+      "name": "몽불",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AA%BD%EB%B6%88%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/21296549",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-184-몽불"
+    },
+    {
+      "name": "보돌미역 센텀스카이비즈점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B3%B4%EB%8F%8C%EB%AF%B8%EC%97%AD%20%EC%84%BC%ED%85%80%EC%8A%A4%EC%B9%B4%EC%9D%B4%EB%B9%84%EC%A6%88%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/721282215",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-059-보돌미역-센텀스카이비즈점"
+    },
+    {
+      "name": "빠리당",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B9%A0%EB%A6%AC%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%B6%81%EB%8C%80%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/1463332224",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀북대로 60",
+      "active": false,
+      "id": "spot-074-빠리당"
+    },
+    {
+      "name": "샐러바웃 부산센텀점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샐러드"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%90%EB%9F%AC%EB%B0%94%EC%9B%83%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/123106782",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-188-샐러바웃-부산센텀점"
+    },
+    {
+      "name": "센텀가야밀면돈까스",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%BC%ED%85%80%EA%B0%80%EC%95%BC%EB%B0%80%EB%A9%B4%EB%8F%88%EA%B9%8C%EC%8A%A4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/813420558",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-067-센텀가야밀면돈까스"
+    },
+    {
+      "name": "슈마우스만찬",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8A%88%EB%A7%88%EC%9A%B0%EC%8A%A4%EB%A7%8C%EC%B0%AC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/1059583169",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-056-슈마우스만찬"
+    },
+    {
+      "name": "싸와디식당 센텀점",
+      "category": "기타",
+      "tags": [
+        "동남아음식",
+        "태국음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8B%B8%EC%99%80%EB%94%94%EC%8B%9D%EB%8B%B9%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/1465786120",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-068-싸와디식당-센텀점"
+    },
+    {
+      "name": "역 센텀점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%97%AD%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/388429051",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-183-역-센텀점"
+    },
+    {
+      "name": "오니기리와이규동 부산센텀점",
+      "category": "일식",
+      "tags": [
+        "퓨전일식",
+        "오니기리와이규동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%A4%EB%8B%88%EA%B8%B0%EB%A6%AC%EC%99%80%EC%9D%B4%EA%B7%9C%EB%8F%99%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%B6%81%EB%8C%80%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/13064047",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀북대로 60",
+      "active": false,
+      "id": "spot-077-오니기리와이규동-부산센텀점"
+    },
+    {
+      "name": "일공일일공이 센텀점",
+      "category": "양식",
+      "tags": [
+        "음식점",
+        "양식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%BC%EA%B3%B5%EC%9D%BC%EC%9D%BC%EA%B3%B5%EC%9D%B4%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/726920568",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-062-일공일일공이-센텀점"
+    },
+    {
+      "name": "재벌김밥 센텀점",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9E%AC%EB%B2%8C%EA%B9%80%EB%B0%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/127130087",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-055-재벌김밥-센텀점"
+    },
+    {
+      "name": "정담생고기",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EB%8B%B4%EC%83%9D%EA%B3%A0%EA%B8%B0%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2071",
+      "kakaoMapUrl": "https://place.map.kakao.com/520381049",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 71",
+      "active": false,
+      "id": "spot-151-정담생고기"
+    },
+    {
+      "name": "정담식당",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EB%8B%B4%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/604494770",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-057-정담식당"
+    },
+    {
+      "name": "제이앤제이 스카이비즈점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "구내식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%9C%EC%9D%B4%EC%95%A4%EC%A0%9C%EC%9D%B4%20%EC%8A%A4%EC%B9%B4%EC%9D%B4%EB%B9%84%EC%A6%88%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/783593849",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-064-제이앤제이-스카이비즈점"
+    },
+    {
+      "name": "차이밍",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B0%A8%EC%9D%B4%EB%B0%8D%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/526584972",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-187-차이밍"
+    },
+    {
+      "name": "타코비 부산센텀스카이비즈점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "타코비"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%83%80%EC%BD%94%EB%B9%84%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8A%A4%EC%B9%B4%EC%9D%B4%EB%B9%84%EC%A6%88%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/671655306",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-065-타코비-부산센텀스카이비즈점"
+    },
+    {
+      "name": "탕화쿵푸마라탕 센텀시티점",
+      "category": "중식",
+      "tags": [
+        "중국요리",
+        "탕화쿵푸마라탕"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%83%95%ED%99%94%EC%BF%B5%ED%91%B8%EB%A7%88%EB%9D%BC%ED%83%95%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%B6%81%EB%8C%80%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/643513387",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀북대로 60",
+      "active": false,
+      "id": "spot-073-탕화쿵푸마라탕-센텀시티점"
+    },
+    {
+      "name": "포앤스마일",
+      "category": "기타",
+      "tags": [
+        "동남아음식",
+        "베트남음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8F%AC%EC%95%A4%EC%8A%A4%EB%A7%88%EC%9D%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/1893601165",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-066-포앤스마일"
+    },
+    {
+      "name": "하루엔소쿠 부산센텀점",
+      "category": "일식",
+      "tags": [
+        "돈까스,우동",
+        "하루엔소쿠"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%98%EB%A3%A8%EC%97%94%EC%86%8C%EC%BF%A0%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20102",
+      "kakaoMapUrl": "https://place.map.kakao.com/26458527",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 102",
+      "active": false,
+      "id": "spot-181-하루엔소쿠-부산센텀점"
+    },
+    {
+      "name": "BBQ 부산센텀점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "BBQ"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 2,
+      "naverMapUrl": "https://map.naver.com/v5/search/BBQ%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2097",
+      "kakaoMapUrl": "https://place.map.kakao.com/2029143528",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 97",
+      "active": false,
+      "id": "spot-058-BBQ-부산센텀점"
+    },
+    {
+      "name": "때깔 센텀직영점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%95%8C%EA%B9%94%20%EC%84%BC%ED%85%80%EC%A7%81%EC%98%81%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2071",
+      "kakaoMapUrl": "https://place.map.kakao.com/440380880",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 71",
+      "active": false,
+      "id": "spot-154-때깔-센텀직영점"
+    },
+    {
+      "name": "샤브애작 센텀본점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샤브샤브"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%A4%EB%B8%8C%EC%95%A0%EC%9E%91%20%EC%84%BC%ED%85%80%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2067",
+      "kakaoMapUrl": "https://place.map.kakao.com/838383967",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 67",
+      "active": false,
+      "id": "spot-155-샤브애작-센텀본점"
+    },
+    {
+      "name": "시바라구",
+      "category": "일식",
+      "tags": [
+        "술집",
+        "일본식주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8B%9C%EB%B0%94%EB%9D%BC%EA%B5%AC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2066",
+      "kakaoMapUrl": "https://place.map.kakao.com/21304570",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 66",
+      "active": false,
+      "id": "spot-147-시바라구"
+    },
+    {
+      "name": "와 참가자미 전문점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "회"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%99%80%20%EC%B0%B8%EA%B0%80%EC%9E%90%EB%AF%B8%20%EC%A0%84%EB%AC%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2071",
+      "kakaoMapUrl": "https://place.map.kakao.com/1404535120",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 71",
+      "active": false,
+      "id": "spot-152-와-참가자미-전문점"
+    },
+    {
+      "name": "장박사양곱창전문점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "곱창,막창"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 3,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9E%A5%EB%B0%95%EC%82%AC%EC%96%91%EA%B3%B1%EC%B0%BD%EC%A0%84%EB%AC%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2066",
+      "kakaoMapUrl": "https://place.map.kakao.com/2122493265",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 66",
+      "active": false,
+      "id": "spot-148-장박사양곱창전문점"
+    },
+    {
+      "name": "꽁띠꽁띠뉴",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%BD%81%EB%9D%A0%EA%BD%81%EB%9D%A0%EB%89%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1707743242",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-070-꽁띠꽁띠뉴"
+    },
+    {
+      "name": "대궐면옥 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8C%80%EA%B6%90%EB%A9%B4%EC%98%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%806%EB%A1%9C%2021",
+      "kakaoMapUrl": "https://place.map.kakao.com/530308972",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀6로 21",
+      "active": false,
+      "id": "spot-153-대궐면옥-센텀점"
+    },
+    {
+      "name": "뚜레쥬르 부산센텀점",
+      "category": "카페",
+      "tags": [
+        "제과,베이커리",
+        "뚜레쥬르"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%9A%9C%EB%A0%88%EC%A5%AC%EB%A5%B4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1985926689",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 55",
+      "active": false,
+      "id": "spot-146-뚜레쥬르-부산센텀점"
+    },
+    {
+      "name": "미진축산 해운대센텀점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "미진축산"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EC%A7%84%EC%B6%95%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/1088799887",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 60",
+      "active": false,
+      "id": "spot-150-미진축산-해운대센텀점"
+    },
+    {
+      "name": "봉이동동 부산센텀시티점",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "호프,요리주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B4%89%EC%9D%B4%EB%8F%99%EB%8F%99%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%806%EB%A1%9C%2021",
+      "kakaoMapUrl": "https://place.map.kakao.com/13337368",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀6로 21",
+      "active": false,
+      "id": "spot-158-봉이동동-부산센텀시티점"
+    },
+    {
+      "name": "비움",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "와인바"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B9%84%EC%9B%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2060",
+      "kakaoMapUrl": "https://place.map.kakao.com/17672699",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 60",
+      "active": false,
+      "id": "spot-149-비움"
+    },
+    {
+      "name": "식당3선 센텀점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "갈비"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8B%9D%EB%8B%B93%EC%84%A0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C%20230",
+      "kakaoMapUrl": "https://place.map.kakao.com/807850458",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로 230",
+      "active": false,
+      "id": "spot-099-식당3선-센텀점"
+    },
+    {
+      "name": "일광바로손만두 센텀점",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%BC%EA%B4%91%EB%B0%94%EB%A1%9C%EC%86%90%EB%A7%8C%EB%91%90%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1134117438",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-071-일광바로손만두-센텀점"
+    },
+    {
+      "name": "파티박스",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "구내식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 4,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%ED%8B%B0%EB%B0%95%EC%8A%A4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/533034603",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 55",
+      "active": false,
+      "id": "spot-145-파티박스"
+    },
+    {
+      "name": "고민석불오뎅가마솥떡볶이 센텀점",
+      "category": "분식",
+      "tags": [
+        "분식",
+        "떡볶이"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B3%A0%EB%AF%BC%EC%84%9D%EB%B6%88%EC%98%A4%EB%8E%85%EA%B0%80%EB%A7%88%EC%86%A5%EB%96%A1%EB%B3%B6%EC%9D%B4%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/2043979311",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-078-고민석불오뎅가마솥떡볶이-센텀점"
+    },
+    {
+      "name": "고민석원조불오뎅가마솥떡볶이",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B3%A0%EB%AF%BC%EC%84%9D%EC%9B%90%EC%A1%B0%EB%B6%88%EC%98%A4%EB%8E%85%EA%B0%80%EB%A7%88%EC%86%A5%EB%96%A1%EB%B3%B6%EC%9D%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/552917855",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-054-고민석원조불오뎅가마솥떡볶이"
+    },
+    {
+      "name": "고봉민김밥인 부산센텀점",
+      "category": "분식",
+      "tags": [
+        "분식",
+        "고봉민김밥인"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B3%A0%EB%B4%89%EB%AF%BC%EA%B9%80%EB%B0%A5%EC%9D%B8%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/11946203",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-072-고봉민김밥인-부산센텀점"
+    },
+    {
+      "name": "깐부치킨 부산센텀시티점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "깐부치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B9%90%EB%B6%80%EC%B9%98%ED%82%A8%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%806%EB%A1%9C%2021",
+      "kakaoMapUrl": "https://place.map.kakao.com/12887299",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀6로 21",
+      "active": false,
+      "id": "spot-156-깐부치킨-부산센텀시티점"
+    },
+    {
+      "name": "냉삼스타",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "삼겹살"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%83%89%EC%82%BC%EC%8A%A4%ED%83%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20123",
+      "kakaoMapUrl": "https://place.map.kakao.com/312813656",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 123",
+      "active": false,
+      "id": "spot-088-냉삼스타"
+    },
+    {
+      "name": "다와푸드 센텀점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "구내식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8B%A4%EC%99%80%ED%91%B8%EB%93%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2048",
+      "kakaoMapUrl": "https://place.map.kakao.com/23211257",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 48",
+      "active": false,
+      "id": "spot-217-다와푸드-센텀점"
+    },
+    {
+      "name": "본전",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B3%B8%EC%A0%84%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20123",
+      "kakaoMapUrl": "https://place.map.kakao.com/123867798",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 123",
+      "active": false,
+      "id": "spot-086-본전"
+    },
+    {
+      "name": "섬들애복국 센텀본점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "복어"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%AC%EB%93%A4%EC%95%A0%EB%B3%B5%EA%B5%AD%20%EC%84%BC%ED%85%80%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2048",
+      "kakaoMapUrl": "https://place.map.kakao.com/18305998",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 48",
+      "active": false,
+      "id": "spot-218-섬들애복국-센텀본점"
+    },
+    {
+      "name": "소미돈까스 센텀점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%86%8C%EB%AF%B8%EB%8F%88%EA%B9%8C%EC%8A%A4%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%2048",
+      "kakaoMapUrl": "https://place.map.kakao.com/797384350",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 48",
+      "active": false,
+      "id": "spot-220-소미돈까스-센텀점"
+    },
+    {
+      "name": "아라치 센텀스타점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "아라치"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EB%9D%BC%EC%B9%98%20%EC%84%BC%ED%85%80%EC%8A%A4%ED%83%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20123",
+      "kakaoMapUrl": "https://place.map.kakao.com/2086681824",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 123",
+      "active": false,
+      "id": "spot-089-아라치-센텀스타점"
+    },
+    {
+      "name": "안녕한우 센텀점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%88%EB%85%95%ED%95%9C%EC%9A%B0%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C%20222",
+      "kakaoMapUrl": "https://place.map.kakao.com/2020254340",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로 222",
+      "active": false,
+      "id": "spot-098-안녕한우-센텀점"
+    },
+    {
+      "name": "야시장",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "호프,요리주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%BC%EC%8B%9C%EC%9E%A5%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20123",
+      "kakaoMapUrl": "https://place.map.kakao.com/27464154",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 123",
+      "active": false,
+      "id": "spot-084-야시장"
+    },
+    {
+      "name": "역전할머니맥주 부산센텀시티점",
+      "category": "기타",
+      "tags": [
+        "호프,요리주점",
+        "역전할머니맥주"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%97%AD%EC%A0%84%ED%95%A0%EB%A8%B8%EB%8B%88%EB%A7%A5%EC%A3%BC%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2051",
+      "kakaoMapUrl": "https://place.map.kakao.com/1649506568",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 51",
+      "active": false,
+      "id": "spot-221-역전할머니맥주-부산센텀시티점"
+    },
+    {
+      "name": "올레",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "호프,요리주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%AC%EB%A0%88%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%20123",
+      "kakaoMapUrl": "https://place.map.kakao.com/11782651",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 123",
+      "active": false,
+      "id": "spot-087-올레"
+    },
+    {
+      "name": "유가솜씨 센텀시티점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "닭요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9C%A0%EA%B0%80%EC%86%9C%EC%94%A8%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2051",
+      "kakaoMapUrl": "https://place.map.kakao.com/805948973",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 51",
+      "active": false,
+      "id": "spot-219-유가솜씨-센텀시티점"
+    },
+    {
+      "name": "홍콩반점0410 부산센텀인텔리움점",
+      "category": "중식",
+      "tags": [
+        "중국요리",
+        "홍콩반점0410"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 5,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%99%8D%EC%BD%A9%EB%B0%98%EC%A0%900410%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%9D%B8%ED%85%94%EB%A6%AC%EC%9B%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%806%EB%A1%9C%2021",
+      "kakaoMapUrl": "https://place.map.kakao.com/27304942",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀6로 21",
+      "active": false,
+      "id": "spot-159-홍콩반점0410-부산센텀인텔리움점"
+    },
+    {
+      "name": "더차이나",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8D%94%EC%B0%A8%EC%9D%B4%EB%82%98%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%84%9C%EB%A1%9C%2030",
+      "kakaoMapUrl": "https://place.map.kakao.com/23182470",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀서로 30",
+      "active": false,
+      "id": "spot-143-더차이나"
+    },
+    {
+      "name": "던킨 센텀KNN점",
+      "category": "기타",
+      "tags": [
+        "도넛",
+        "던킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8D%98%ED%82%A8%20%EC%84%BC%ED%85%80KNN%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%84%9C%EB%A1%9C%2030",
+      "kakaoMapUrl": "https://place.map.kakao.com/849379455",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀서로 30",
+      "active": false,
+      "id": "spot-144-던킨-센텀KNN점"
+    },
+    {
+      "name": "만수르가야밀면",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%8C%EC%88%98%EB%A5%B4%EA%B0%80%EC%95%BC%EB%B0%80%EB%A9%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%84%9C%EB%A1%9C%2030",
+      "kakaoMapUrl": "https://place.map.kakao.com/1011502892",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀서로 30",
+      "active": false,
+      "id": "spot-141-만수르가야밀면"
+    },
+    {
+      "name": "배스킨라빈스 부산센텀파크점",
+      "category": "기타",
+      "tags": [
+        "아이스크림",
+        "배스킨라빈스"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%B0%EC%8A%A4%ED%82%A8%EB%9D%BC%EB%B9%88%EC%8A%A4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%ED%8C%8C%ED%81%AC%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/933497396",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-046-배스킨라빈스-부산센텀파크점"
+    },
+    {
+      "name": "베이커리토끼굴 센텀파크점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%A0%EC%9D%B4%EC%BB%A4%EB%A6%AC%ED%86%A0%EB%81%BC%EA%B5%B4%20%EC%84%BC%ED%85%80%ED%8C%8C%ED%81%AC%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20142",
+      "kakaoMapUrl": "https://place.map.kakao.com/673781220",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 142",
+      "active": false,
+      "id": "spot-053-베이커리토끼굴-센텀파크점"
+    },
+    {
+      "name": "세프길",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%B8%ED%94%84%EA%B8%B8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/26068890",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-044-세프길"
+    },
+    {
+      "name": "케이디씨",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "일식집"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BC%80%EC%9D%B4%EB%94%94%EC%94%A8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%84%9C%EB%A1%9C%2030",
+      "kakaoMapUrl": "https://place.map.kakao.com/772216246",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀서로 30",
+      "active": false,
+      "id": "spot-142-케이디씨"
+    },
+    {
+      "name": "타이거분식",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 6,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%83%80%EC%9D%B4%EA%B1%B0%EB%B6%84%EC%8B%9D%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1468075681",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-048-타이거분식"
+    },
+    {
+      "name": "꼼따따",
+      "category": "양식",
+      "tags": [
+        "음식점",
+        "양식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%BC%BC%EB%94%B0%EB%94%B0%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C12%EB%B2%88%EA%B8%B8%2011",
+      "kakaoMapUrl": "https://place.map.kakao.com/1712852580",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로12번길 11",
+      "active": false,
+      "id": "spot-185-꼼따따"
+    },
+    {
+      "name": "담스시",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "초밥,롤"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8B%B4%EC%8A%A4%EC%8B%9C%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/2015661083",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-233-담스시"
+    },
+    {
+      "name": "대독장 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "찌개,전골"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8C%80%EB%8F%85%EC%9E%A5%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/27464306",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-231-대독장-센텀점"
+    },
+    {
+      "name": "동래삼계탕",
+      "category": "한식",
+      "tags": [
+        "닭요리",
+        "삼계탕"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EB%9E%98%EC%82%BC%EA%B3%84%ED%83%95%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/21240338",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-235-동래삼계탕"
+    },
+    {
+      "name": "뜨돈 센텀점",
+      "category": "일식",
+      "tags": [
+        "돈까스,우동",
+        "뜨돈"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%9C%A8%EB%8F%88%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/854269757",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-236-뜨돈-센텀점"
+    },
+    {
+      "name": "봉추찜닭 부산센텀시티점",
+      "category": "한식",
+      "tags": [
+        "닭요리",
+        "봉추찜닭"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B4%89%EC%B6%94%EC%B0%9C%EB%8B%AD%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/13061748",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-232-봉추찜닭-부산센텀시티점"
+    },
+    {
+      "name": "서울깍두기",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "설렁탕"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%9C%EC%9A%B8%EA%B9%8D%EB%91%90%EA%B8%B0%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1963041623",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-222-서울깍두기"
+    },
+    {
+      "name": "석암생소금구이 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "삼겹살"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%9D%EC%95%94%EC%83%9D%EC%86%8C%EA%B8%88%EA%B5%AC%EC%9D%B4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1635825154",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-237-석암생소금구이-부산센텀점"
+    },
+    {
+      "name": "센텀신가야밀면",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%BC%ED%85%80%EC%8B%A0%EA%B0%80%EC%95%BC%EB%B0%80%EB%A9%B4%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/16018422",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-238-센텀신가야밀면"
+    },
+    {
+      "name": "스시잇센",
+      "category": "일식",
+      "tags": [
+        "음식점",
+        "일식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8A%A4%EC%8B%9C%EC%9E%87%EC%84%BC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/1254993894",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-223-스시잇센"
+    },
+    {
+      "name": "써브웨이 부산센텀점",
+      "category": "양식",
+      "tags": [
+        "샌드위치",
+        "써브웨이"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8D%A8%EB%B8%8C%EC%9B%A8%EC%9D%B4%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1197993385",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-228-써브웨이-부산센텀점"
+    },
+    {
+      "name": "어지샐러드&포케 센텀점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샐러드"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%96%B4%EC%A7%80%EC%83%90%EB%9F%AC%EB%93%9C%26%ED%8F%AC%EC%BC%80%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1005244277",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-234-어지샐러드-포케-센텀점"
+    },
+    {
+      "name": "옛추억갈비탕 센텀시티점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%9B%EC%B6%94%EC%96%B5%EA%B0%88%EB%B9%84%ED%83%95%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1857430085",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-230-옛추억갈비탕-센텀시티점"
+    },
+    {
+      "name": "정성순대 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "순대"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EC%84%B1%EC%88%9C%EB%8C%80%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/39103531",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-229-정성순대-센텀점"
+    },
+    {
+      "name": "제주돈가",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%9C%EC%A3%BC%EB%8F%88%EA%B0%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/18057825",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-239-제주돈가"
+    },
+    {
+      "name": "파리바게뜨 센텀시티점",
+      "category": "카페",
+      "tags": [
+        "제과,베이커리",
+        "파리바게뜨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%EB%A6%AC%EB%B0%94%EA%B2%8C%EB%9C%A8%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/12354632",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-226-파리바게뜨-센텀시티점"
+    },
+    {
+      "name": "파리바게뜨 해운대센텀점",
+      "category": "카페",
+      "tags": [
+        "제과,베이커리",
+        "파리바게뜨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%EB%A6%AC%EB%B0%94%EA%B2%8C%EB%9C%A8%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20142",
+      "kakaoMapUrl": "https://place.map.kakao.com/12354731",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 142",
+      "active": false,
+      "id": "spot-097-파리바게뜨-해운대센텀점"
+    },
+    {
+      "name": "팔선생",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%94%EC%84%A0%EC%83%9D%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/11246001",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-227-팔선생"
+    },
+    {
+      "name": "프랭크버거 부산센텀시티점",
+      "category": "양식",
+      "tags": [
+        "햄버거",
+        "프랭크버거"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%94%84%EB%9E%AD%ED%81%AC%EB%B2%84%EA%B1%B0%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/695417792",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-224-프랭크버거-부산센텀시티점"
+    },
+    {
+      "name": "피자스쿨 부산센텀시티점",
+      "category": "양식",
+      "tags": [
+        "피자",
+        "피자스쿨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 7,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%94%BC%EC%9E%90%EC%8A%A4%EC%BF%A8%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/140727170",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 35",
+      "active": false,
+      "id": "spot-225-피자스쿨-부산센텀시티점"
+    },
+    {
+      "name": "동동국밥 부산센텀점",
+      "category": "한식",
+      "tags": [
+        "국밥",
+        "동동국밥"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EB%8F%99%EA%B5%AD%EB%B0%A5%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/1368492982",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-213-동동국밥-부산센텀점"
+    },
+    {
+      "name": "본죽&비빔밥cafe 센텀시티역점",
+      "category": "한식",
+      "tags": [
+        "퓨전한식",
+        "본죽&비빔밥cafe"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B3%B8%EC%A3%BD%26%EB%B9%84%EB%B9%94%EB%B0%A5cafe%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%97%AD%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2026",
+      "kakaoMapUrl": "https://place.map.kakao.com/13027990",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 26",
+      "active": false,
+      "id": "spot-242-본죽-비빔밥cafe-센텀시티역점"
+    },
+    {
+      "name": "블랑제리아띠랑",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B8%94%EB%9E%91%EC%A0%9C%EB%A6%AC%EC%95%84%EB%9D%A0%EB%9E%91%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/21685264",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-042-블랑제리아띠랑"
+    },
+    {
+      "name": "신원관",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8B%A0%EC%9B%90%EA%B4%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C27%EB%B2%88%EA%B8%B8%201",
+      "kakaoMapUrl": "https://place.map.kakao.com/16520070",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로27번길 1",
+      "active": false,
+      "id": "spot-107-신원관"
+    },
+    {
+      "name": "알마튜나 센텀점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "참치회"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%8C%EB%A7%88%ED%8A%9C%EB%82%98%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/1446005619",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-215-알마튜나-센텀점"
+    },
+    {
+      "name": "우적 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9A%B0%EC%A0%81%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%805%EB%A1%9C%2055",
+      "kakaoMapUrl": "https://place.map.kakao.com/1519776452",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀5로 55",
+      "active": false,
+      "id": "spot-240-우적-센텀점"
+    },
+    {
+      "name": "정동진아구찜 센텀점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "아구"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EB%8F%99%EC%A7%84%EC%95%84%EA%B5%AC%EC%B0%9C%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C191%EB%B2%88%EA%B8%B8%2010",
+      "kakaoMapUrl": "https://place.map.kakao.com/963199981",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로191번길 10",
+      "active": false,
+      "id": "spot-100-정동진아구찜-센텀점"
+    },
+    {
+      "name": "정월당치킨 센텀월드마크점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EC%9B%94%EB%8B%B9%EC%B9%98%ED%82%A8%20%EC%84%BC%ED%85%80%EC%9B%94%EB%93%9C%EB%A7%88%ED%81%AC%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/1898914586",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-241-정월당치킨-센텀월드마크점"
+    },
+    {
+      "name": "정직유부 센텀점",
+      "category": "일식",
+      "tags": [
+        "초밥,롤",
+        "정직유부"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EC%A7%81%EC%9C%A0%EB%B6%80%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/278141587",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-211-정직유부-센텀점"
+    },
+    {
+      "name": "칸타로 신세계센텀시티점",
+      "category": "일식",
+      "tags": [
+        "음식점",
+        "일식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 8,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B9%B8%ED%83%80%EB%A1%9C%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1937622180",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-126-칸타로-신세계센텀시티점"
+    },
+    {
+      "name": "고담현불고기 해운대본점",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "불고기,두루치기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B3%A0%EB%8B%B4%ED%98%84%EB%B6%88%EA%B3%A0%EA%B8%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%B3%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2026",
+      "kakaoMapUrl": "https://place.map.kakao.com/1126856217",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 26",
+      "active": false,
+      "id": "spot-248-고담현불고기-해운대본점"
+    },
+    {
+      "name": "구트",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "와인바"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B5%AC%ED%8A%B8%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2026",
+      "kakaoMapUrl": "https://place.map.kakao.com/1977376805",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 26",
+      "active": false,
+      "id": "spot-247-구트"
+    },
+    {
+      "name": "굽네치킨 부산수영점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "굽네치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B5%BD%EB%84%A4%EC%B9%98%ED%82%A8%20%EB%B6%80%EC%82%B0%EC%88%98%EC%98%81%EC%A0%90%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%88%98%EC%98%81%EB%A1%9C741%EB%B2%88%EA%B8%B8%2080",
+      "kakaoMapUrl": "https://place.map.kakao.com/10138939",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 수영로741번길 80",
+      "active": false,
+      "id": "spot-037-굽네치킨-부산수영점"
+    },
+    {
+      "name": "남산왕돈까스 신세계센텀몰점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%82%A8%EC%82%B0%EC%99%95%EB%8F%88%EA%B9%8C%EC%8A%A4%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1070221620",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-123-남산왕돈까스-신세계센텀몰점"
+    },
+    {
+      "name": "로코스 비비큐 신세계센텀직영점",
+      "category": "양식",
+      "tags": [
+        "양식",
+        "스테이크,립"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A1%9C%EC%BD%94%EC%8A%A4%20%EB%B9%84%EB%B9%84%ED%81%90%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%A7%81%EC%98%81%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/27507550",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-136-로코스-비비큐-신세계센텀직영점"
+    },
+    {
+      "name": "모모유부 키자니아부산점",
+      "category": "일식",
+      "tags": [
+        "초밥,롤",
+        "모모유부"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AA%A8%EB%AA%A8%EC%9C%A0%EB%B6%80%20%ED%82%A4%EC%9E%90%EB%8B%88%EC%95%84%EB%B6%80%EC%82%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/2128076338",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-130-모모유부-키자니아부산점"
+    },
+    {
+      "name": "베이커리토끼굴 센텀점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%A0%EC%9D%B4%EC%BB%A4%EB%A6%AC%ED%86%A0%EB%81%BC%EA%B5%B4%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/1502449778",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-212-베이커리토끼굴-센텀점"
+    },
+    {
+      "name": "빌라드스파이시 신세계센텀시티몰점",
+      "category": "분식",
+      "tags": [
+        "분식",
+        "떡볶이"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B9%8C%EB%9D%BC%EB%93%9C%EC%8A%A4%ED%8C%8C%EC%9D%B4%EC%8B%9C%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/27507553",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-138-빌라드스파이시-신세계센텀시티몰점"
+    },
+    {
+      "name": "새벽기사식당",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "기사식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%88%EB%B2%BD%EA%B8%B0%EC%82%AC%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/20037365",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로 35",
+      "active": false,
+      "id": "spot-109-새벽기사식당"
+    },
+    {
+      "name": "서리재 신세계센텀시티점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "육류,고기"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%9C%EB%A6%AC%EC%9E%AC%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1629413917",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-122-서리재-신세계센텀시티점"
+    },
+    {
+      "name": "센텀미냉삼집",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "삼겹살"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%BC%ED%85%80%EB%AF%B8%EB%83%89%EC%82%BC%EC%A7%91%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2026",
+      "kakaoMapUrl": "https://place.map.kakao.com/1709926751",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 26",
+      "active": false,
+      "id": "spot-249-센텀미냉삼집"
+    },
+    {
+      "name": "센텀숯불갈비",
+      "category": "한식",
+      "tags": [
+        "육류,고기",
+        "갈비"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%BC%ED%85%80%EC%88%AF%EB%B6%88%EA%B0%88%EB%B9%84%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C%20185-15",
+      "kakaoMapUrl": "https://place.map.kakao.com/1004459754",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로 185-15",
+      "active": false,
+      "id": "spot-101-센텀숯불갈비"
+    },
+    {
+      "name": "속초코다리냉면 신세계센텀시티몰점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "냉면"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%86%8D%EC%B4%88%EC%BD%94%EB%8B%A4%EB%A6%AC%EB%83%89%EB%A9%B4%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/98078225",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-125-속초코다리냉면-신세계센텀시티몰점"
+    },
+    {
+      "name": "손오공식탁",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%86%90%EC%98%A4%EA%B3%B5%EC%8B%9D%ED%83%81%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/27573081",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-043-손오공식탁"
+    },
+    {
+      "name": "쉐이크쉑 부산센텀점",
+      "category": "양식",
+      "tags": [
+        "패스트푸드",
+        "쉐이크쉑"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%89%90%EC%9D%B4%ED%81%AC%EC%89%91%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/2085234284",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-140-쉐이크쉑-부산센텀점"
+    },
+    {
+      "name": "아그라 센텀시티몰점",
+      "category": "기타",
+      "tags": [
+        "아시아음식",
+        "인도음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EA%B7%B8%EB%9D%BC%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/651798723",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-139-아그라-센텀시티몰점"
+    },
+    {
+      "name": "아그라홀딩스 노야 센텀시티",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샤브샤브"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EA%B7%B8%EB%9D%BC%ED%99%80%EB%94%A9%EC%8A%A4%20%EB%85%B8%EC%95%BC%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1948528305",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-128-아그라홀딩스-노야-센텀시티"
+    },
+    {
+      "name": "아웃백스테이크하우스 부산신세계센텀시티점",
+      "category": "기타",
+      "tags": [
+        "패밀리레스토랑",
+        "아웃백스테이크하우스"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EC%9B%83%EB%B0%B1%EC%8A%A4%ED%85%8C%EC%9D%B4%ED%81%AC%ED%95%98%EC%9A%B0%EC%8A%A4%20%EB%B6%80%EC%82%B0%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1416807240",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-133-아웃백스테이크하우스-부산신세계센텀시티"
+    },
+    {
+      "name": "앤티앤스프레즐 신세계센텀시티몰점",
+      "category": "카페",
+      "tags": [
+        "제과,베이커리",
+        "앤티앤스프레즐"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%A4%ED%8B%B0%EC%95%A4%EC%8A%A4%ED%94%84%EB%A0%88%EC%A6%90%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1463893208",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-121-앤티앤스프레즐-신세계센텀시티몰점"
+    },
+    {
+      "name": "양포생아구찜",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "아구"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%96%91%ED%8F%AC%EC%83%9D%EC%95%84%EA%B5%AC%EC%B0%9C%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C191%EB%B2%88%EA%B8%B8%2027",
+      "kakaoMapUrl": "https://place.map.kakao.com/16223496",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로191번길 27",
+      "active": false,
+      "id": "spot-105-양포생아구찜"
+    },
+    {
+      "name": "영광기사식당",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "기사식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%81%EA%B4%91%EA%B8%B0%EC%82%AC%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%88%98%EC%98%81%EB%A1%9C741%EB%B2%88%EA%B8%B8%2080",
+      "kakaoMapUrl": "https://place.map.kakao.com/15548151",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 수영로741번길 80",
+      "active": false,
+      "id": "spot-034-영광기사식당"
+    },
+    {
+      "name": "온천골",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%A8%EC%B2%9C%EA%B3%A8%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%A2%8C%EC%88%98%EC%98%81%EB%A1%9C%20111",
+      "kakaoMapUrl": "https://place.map.kakao.com/201001436",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 좌수영로 111",
+      "active": false,
+      "id": "spot-033-온천골"
+    },
+    {
+      "name": "우나기 욘다이메 키쿠카와 센텀몰점",
+      "category": "일식",
+      "tags": [
+        "음식점",
+        "일식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9A%B0%EB%82%98%EA%B8%B0%20%EC%9A%98%EB%8B%A4%EC%9D%B4%EB%A9%94%20%ED%82%A4%EC%BF%A0%EC%B9%B4%EC%99%80%20%EC%84%BC%ED%85%80%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1511755249",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-132-우나기-욘다이메-키쿠카와-센텀몰점"
+    },
+    {
+      "name": "젤라띠젤라띠 신세계센텀시티몰점",
+      "category": "기타",
+      "tags": [
+        "간식",
+        "아이스크림"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%A4%EB%9D%BC%EB%9D%A0%EC%A0%A4%EB%9D%BC%EB%9D%A0%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/27507503",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-137-젤라띠젤라띠-신세계센텀시티몰점"
+    },
+    {
+      "name": "주와리소바",
+      "category": "일식",
+      "tags": [
+        "음식점",
+        "일식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A3%BC%EC%99%80%EB%A6%AC%EC%86%8C%EB%B0%94%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%A2%8C%EC%88%98%EC%98%81%EB%A1%9C83%EB%B2%88%EA%B8%B8%2020",
+      "kakaoMapUrl": "https://place.map.kakao.com/23613088",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 좌수영로83번길 20",
+      "active": false,
+      "id": "spot-036-주와리소바"
+    },
+    {
+      "name": "차이797 딤섬앤누들바 센텀시티몰점",
+      "category": "중식",
+      "tags": [
+        "중국요리",
+        "차이797"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B0%A8%EC%9D%B4797%20%EB%94%A4%EC%84%AC%EC%95%A4%EB%88%84%EB%93%A4%EB%B0%94%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1205884176",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-131-차이797-딤섬앤누들바-센텀시티몰점"
+    },
+    {
+      "name": "캐빈오두막",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BA%90%EB%B9%88%EC%98%A4%EB%91%90%EB%A7%89%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%A2%8C%EC%88%98%EC%98%81%EB%A1%9C101%EB%B2%88%EA%B8%B8%2022",
+      "kakaoMapUrl": "https://place.map.kakao.com/1877078129",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 좌수영로101번길 22",
+      "active": false,
+      "id": "spot-031-캐빈오두막"
+    },
+    {
+      "name": "콘타이 신세계센텀시티몰점",
+      "category": "기타",
+      "tags": [
+        "아시아음식",
+        "동남아음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%BD%98%ED%83%80%EC%9D%B4%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/27507555",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-135-콘타이-신세계센텀시티몰점"
+    },
+    {
+      "name": "키쿠카와 신세계센텀시티몰점",
+      "category": "일식",
+      "tags": [
+        "음식점",
+        "일식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%82%A4%EC%BF%A0%EC%B9%B4%EC%99%80%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1358818460",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-124-키쿠카와-신세계센텀시티몰점"
+    },
+    {
+      "name": "파파존스 센텀시티점",
+      "category": "양식",
+      "tags": [
+        "피자",
+        "파파존스"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%ED%8C%8C%EC%A1%B4%EC%8A%A4%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%2025",
+      "kakaoMapUrl": "https://place.map.kakao.com/20027109",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 25",
+      "active": false,
+      "id": "spot-206-파파존스-센텀시티점"
+    },
+    {
+      "name": "포항생아구",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "아구"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8F%AC%ED%95%AD%EC%83%9D%EC%95%84%EA%B5%AC%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C%2029",
+      "kakaoMapUrl": "https://place.map.kakao.com/1570188653",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로 29",
+      "active": false,
+      "id": "spot-110-포항생아구"
+    },
+    {
+      "name": "푸디스트 키자니아점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "구내식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%91%B8%EB%94%94%EC%8A%A4%ED%8A%B8%20%ED%82%A4%EC%9E%90%EB%8B%88%EC%95%84%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1413103721",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-129-푸디스트-키자니아점"
+    },
+    {
+      "name": "피에프창 신세계센텀시티몰점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "아시아음식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%94%BC%EC%97%90%ED%94%84%EC%B0%BD%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EB%AA%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/27507546",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-127-피에프창-신세계센텀시티몰점"
+    },
+    {
+      "name": "JVL부대찌개 센텀시티점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "찌개,전골"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 9,
+      "naverMapUrl": "https://map.naver.com/v5/search/JVL%EB%B6%80%EB%8C%80%EC%B0%8C%EA%B0%9C%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%804%EB%A1%9C%2015",
+      "kakaoMapUrl": "https://place.map.kakao.com/1523251573",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀4로 15",
+      "active": false,
+      "id": "spot-134-JVL부대찌개-센텀시티점"
+    },
+    {
+      "name": "그래인스 신세계백화점센텀시티점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B7%B8%EB%9E%98%EC%9D%B8%EC%8A%A4%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/21432519",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-115-그래인스-신세계백화점센텀시티점"
+    },
+    {
+      "name": "긴자료코 부산센텀점",
+      "category": "일식",
+      "tags": [
+        "돈까스,우동",
+        "긴자료코"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B8%B4%EC%9E%90%EB%A3%8C%EC%BD%94%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/1704292036",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-246-긴자료코-부산센텀점"
+    },
+    {
+      "name": "김호권의청년어부 센텀점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "회"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%B9%80%ED%98%B8%EA%B6%8C%EC%9D%98%EC%B2%AD%EB%85%84%EC%96%B4%EB%B6%80%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1601049614",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-047-김호권의청년어부-센텀점"
+    },
+    {
+      "name": "꼭지식당",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EA%BC%AD%EC%A7%80%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EA%B5%AC%EB%9D%BD%EB%A1%9C%2040",
+      "kakaoMapUrl": "https://place.map.kakao.com/1632573635",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 구락로 40",
+      "active": false,
+      "id": "spot-040-꼭지식당"
+    },
+    {
+      "name": "달달집",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8B%AC%EB%8B%AC%EC%A7%91%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/247875141",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-045-달달집"
+    },
+    {
+      "name": "도르리충무김밥 롯데백화점 센텀시티점",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%84%EB%A5%B4%EB%A6%AC%EC%B6%A9%EB%AC%B4%EA%B9%80%EB%B0%A5%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/2096365553",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-190-도르리충무김밥-롯데백화점-센텀시티점"
+    },
+    {
+      "name": "동대문엽기떡볶이 해운대센텀점",
+      "category": "분식",
+      "tags": [
+        "떡볶이",
+        "동대문엽기떡볶이"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%8F%99%EB%8C%80%EB%AC%B8%EC%97%BD%EA%B8%B0%EB%96%A1%EB%B3%B6%EC%9D%B4%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/26776926",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-210-동대문엽기떡볶이-해운대센텀점"
+    },
+    {
+      "name": "리오네레스토랑",
+      "category": "양식",
+      "tags": [
+        "양식",
+        "이탈리안"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A6%AC%EC%98%A4%EB%84%A4%EB%A0%88%EC%8A%A4%ED%86%A0%EB%9E%91%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EA%B5%AC%EB%9D%BD%EB%A1%9C%2036",
+      "kakaoMapUrl": "https://place.map.kakao.com/2070327105",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 구락로 36",
+      "active": false,
+      "id": "spot-035-리오네레스토랑"
+    },
+    {
+      "name": "맛있는순두부 센텀직영점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "두부전문점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%A7%9B%EC%9E%88%EB%8A%94%EC%88%9C%EB%91%90%EB%B6%80%20%EC%84%BC%ED%85%80%EC%A7%81%EC%98%81%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/16013042",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-243-맛있는순두부-센텀직영점"
+    },
+    {
+      "name": "미스카츠 롯데백화점센텀시티점",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "돈까스,우동"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%AF%B8%EC%8A%A4%EC%B9%B4%EC%B8%A0%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1281763247",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-194-미스카츠-롯데백화점센텀시티점"
+    },
+    {
+      "name": "밀리언즈 신세계백화점 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샐러드"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B0%80%EB%A6%AC%EC%96%B8%EC%A6%88%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/274185025",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-119-밀리언즈-신세계백화점-센텀시티점"
+    },
+    {
+      "name": "버거킹 부산센텀오일뱅크점",
+      "category": "양식",
+      "tags": [
+        "패스트푸드",
+        "버거킹"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%84%EA%B1%B0%ED%82%B9%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%98%A4%EC%9D%BC%EB%B1%85%ED%81%AC%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C%20179",
+      "kakaoMapUrl": "https://place.map.kakao.com/2081807441",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로 179",
+      "active": false,
+      "id": "spot-102-버거킹-부산센텀오일뱅크점"
+    },
+    {
+      "name": "베이글덴유",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B2%A0%EC%9D%B4%EA%B8%80%EB%8D%B4%EC%9C%A0%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/183973755",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-216-베이글덴유"
+    },
+    {
+      "name": "복만당 센텀시티역점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "곰탕"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B3%B5%EB%A7%8C%EB%8B%B9%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%97%AD%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/794774587",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-244-복만당-센텀시티역점"
+    },
+    {
+      "name": "본죽&비빔밥cafe 해운대센텀역점",
+      "category": "한식",
+      "tags": [
+        "퓨전한식",
+        "본죽&비빔밥cafe"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EB%B3%B8%EC%A3%BD%26%EB%B9%84%EB%B9%94%EB%B0%A5cafe%20%ED%95%B4%EC%9A%B4%EB%8C%80%EC%84%BC%ED%85%80%EC%97%AD%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1948923597",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-049-본죽-비빔밥cafe-해운대센텀역점"
+    },
+    {
+      "name": "상궁전 롯데백화점센텀시티점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%81%EA%B6%81%EC%A0%84%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/321574772",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-195-상궁전-롯데백화점센텀시티점"
+    },
+    {
+      "name": "샤브진 신세계백화점센텀시티점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샤브샤브"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%83%A4%EB%B8%8C%EC%A7%84%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/27501080",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-116-샤브진-신세계백화점센텀시티점"
+    },
+    {
+      "name": "서울깍두기 롯데백화점센텀시티점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "설렁탕"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%9C%EC%9A%B8%EA%B9%8D%EB%91%90%EA%B8%B0%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/652339514",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-200-서울깍두기-롯데백화점센텀시티점"
+    },
+    {
+      "name": "선어가",
+      "category": "기타",
+      "tags": [
+        "음식점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%A0%EC%96%B4%EA%B0%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/20543002",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-052-선어가"
+    },
+    {
+      "name": "센텀바지락칼국수",
+      "category": "한식",
+      "tags": [
+        "국수",
+        "칼국수"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%84%BC%ED%85%80%EB%B0%94%EC%A7%80%EB%9D%BD%EC%B9%BC%EA%B5%AD%EC%88%98%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%ED%95%B4%EC%9A%B4%EB%8C%80%EB%A1%9C191%EB%B2%88%EA%B8%B8%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/27503489",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 해운대로191번길 35",
+      "active": false,
+      "id": "spot-106-센텀바지락칼국수"
+    },
+    {
+      "name": "소금집샌드위치 신세계백화점 센텀시티점",
+      "category": "양식",
+      "tags": [
+        "패스트푸드",
+        "샌드위치"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%86%8C%EA%B8%88%EC%A7%91%EC%83%8C%EB%93%9C%EC%9C%84%EC%B9%98%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/69220487",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-118-소금집샌드위치-신세계백화점-센텀시티점"
+    },
+    {
+      "name": "속초코다리냉면 롯데백화점 센텀시티점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "냉면"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%86%8D%EC%B4%88%EC%BD%94%EB%8B%A4%EB%A6%AC%EB%83%89%EB%A9%B4%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/2138105022",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-198-속초코다리냉면-롯데백화점-센텀시티점"
+    },
+    {
+      "name": "스시츠카무 센텀",
+      "category": "일식",
+      "tags": [
+        "일식",
+        "초밥,롤"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%8A%A4%EC%8B%9C%EC%B8%A0%EC%B9%B4%EB%AC%B4%20%EC%84%BC%ED%85%80%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/614643410",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-202-스시츠카무-센텀"
+    },
+    {
+      "name": "아딸 롯데백화점센텀시티점",
+      "category": "분식",
+      "tags": [
+        "분식",
+        "아딸"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EB%94%B8%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1804697888",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-196-아딸-롯데백화점센텀시티점"
+    },
+    {
+      "name": "아리키친 신세계백화점 센텀시티점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%84%EB%A6%AC%ED%82%A4%EC%B9%9C%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/2140034068",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-111-아리키친-신세계백화점-센텀시티점"
+    },
+    {
+      "name": "애플꼬마김밥 부산센텀점",
+      "category": "분식",
+      "tags": [
+        "분식",
+        "애플꼬마김밥"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%95%A0%ED%94%8C%EA%BC%AC%EB%A7%88%EA%B9%80%EB%B0%A5%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1325950374",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-050-애플꼬마김밥-부산센텀점"
+    },
+    {
+      "name": "엘올리브",
+      "category": "양식",
+      "tags": [
+        "양식",
+        "이탈리안"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%97%98%EC%98%AC%EB%A6%AC%EB%B8%8C%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%A2%8C%EC%88%98%EC%98%81%EB%A1%9C%20129-1",
+      "kakaoMapUrl": "https://place.map.kakao.com/17453447",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 좌수영로 129-1",
+      "active": false,
+      "id": "spot-032-엘올리브"
+    },
+    {
+      "name": "연정",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "술집"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%97%B0%EC%A0%95%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EC%88%98%EB%AF%B8%EB%A1%9C86%EB%B2%88%EA%B8%B8%2030",
+      "kakaoMapUrl": "https://place.map.kakao.com/24207517",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 수미로86번길 30",
+      "active": false,
+      "id": "spot-041-연정"
+    },
+    {
+      "name": "오소아 센텀재송점",
+      "category": "양식",
+      "tags": [
+        "음식점",
+        "양식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%98%A4%EC%86%8C%EC%95%84%20%EC%84%BC%ED%85%80%EC%9E%AC%EC%86%A1%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C11%EB%B2%88%EA%B8%B8%2063",
+      "kakaoMapUrl": "https://place.map.kakao.com/1064073833",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로11번길 63",
+      "active": false,
+      "id": "spot-103-오소아-센텀재송점"
+    },
+    {
+      "name": "우정",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9A%B0%EC%A0%95%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/20542979",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-245-우정"
+    },
+    {
+      "name": "움트 신세계백화점센텀시티점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9B%80%ED%8A%B8%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/21548031",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-114-움트-신세계백화점센텀시티점"
+    },
+    {
+      "name": "원조전복죽 센텀점",
+      "category": "한식",
+      "tags": [
+        "한식",
+        "죽"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9B%90%EC%A1%B0%EC%A0%84%EB%B3%B5%EC%A3%BD%20%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/15748978",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-209-원조전복죽-센텀점"
+    },
+    {
+      "name": "이대명과 신세계센텀점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%B4%EB%8C%80%EB%AA%85%EA%B3%BC%20%EC%8B%A0%EC%84%B8%EA%B3%84%EC%84%BC%ED%85%80%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/1110073224",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-189-이대명과-신세계센텀점"
+    },
+    {
+      "name": "이흥용과자점 신세계백화점 센텀시티직영점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%9D%B4%ED%9D%A5%EC%9A%A9%EA%B3%BC%EC%9E%90%EC%A0%90%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A7%81%EC%98%81%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/27233832",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-113-이흥용과자점-신세계백화점-센텀시티직영"
+    },
+    {
+      "name": "정장닭컴",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "치킨"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EC%9E%A5%EB%8B%AD%EC%BB%B4%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EA%B5%AC%EB%9D%BD%EB%A1%9C%2039",
+      "kakaoMapUrl": "https://place.map.kakao.com/398852005",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 구락로 39",
+      "active": false,
+      "id": "spot-039-정장닭컴"
+    },
+    {
+      "name": "정직하게장사",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%95%EC%A7%81%ED%95%98%EA%B2%8C%EC%9E%A5%EC%82%AC%20%EB%B6%80%EC%82%B0%20%EC%88%98%EC%98%81%EA%B5%AC%20%EA%B5%AC%EB%9D%BD%EB%A1%9C%2039",
+      "kakaoMapUrl": "https://place.map.kakao.com/859883933",
+      "menuHints": [],
+      "notes": "주소: 부산 수영구 구락로 39",
+      "active": false,
+      "id": "spot-038-정직하게장사"
+    },
+    {
+      "name": "제주오전복 롯데백화점센텀시티점",
+      "category": "한식",
+      "tags": [
+        "해물,생선",
+        "굴,전복"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%A0%9C%EC%A3%BC%EC%98%A4%EC%A0%84%EB%B3%B5%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/2029866197",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-193-제주오전복-롯데백화점센텀시티점"
+    },
+    {
+      "name": "찬합 블랙 롯데백화점 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "샐러드"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B0%AC%ED%95%A9%20%EB%B8%94%EB%9E%99%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1012382791",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-197-찬합-블랙-롯데백화점-센텀시티점"
+    },
+    {
+      "name": "찹찹떡떡 롯데백화점센텀시티점",
+      "category": "기타",
+      "tags": [
+        "간식",
+        "떡,한과"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B0%B9%EC%B0%B9%EB%96%A1%EB%96%A1%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1064181014",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-205-찹찹떡떡-롯데백화점센텀시티점"
+    },
+    {
+      "name": "철판미학 롯데백화점센텀시티점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B2%A0%ED%8C%90%EB%AF%B8%ED%95%99%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/381169499",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-204-철판미학-롯데백화점센텀시티점"
+    },
+    {
+      "name": "충무김밥이랑수제비",
+      "category": "분식",
+      "tags": [
+        "음식점",
+        "분식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%EC%B6%A9%EB%AC%B4%EA%B9%80%EB%B0%A5%EC%9D%B4%EB%9E%91%EC%88%98%EC%A0%9C%EB%B9%84%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/12681238",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-214-충무김밥이랑수제비"
+    },
+    {
+      "name": "크리스피크림도넛 롯데센텀시티점",
+      "category": "기타",
+      "tags": [
+        "도넛",
+        "크리스피크림도넛"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%81%AC%EB%A6%AC%EC%8A%A4%ED%94%BC%ED%81%AC%EB%A6%BC%EB%8F%84%EB%84%9B%20%EB%A1%AF%EB%8D%B0%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/13496041",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-207-크리스피크림도넛-롯데센텀시티점"
+    },
+    {
+      "name": "파스퇴르밀크바 롯데백화점 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "간식",
+        "아이스크림"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%8C%EC%8A%A4%ED%87%B4%EB%A5%B4%EB%B0%80%ED%81%AC%EB%B0%94%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1735687881",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-201-파스퇴르밀크바-롯데백화점-센텀시티점"
+    },
+    {
+      "name": "팔선생 신세계백화점센텀시티점",
+      "category": "중식",
+      "tags": [
+        "중식",
+        "중국요리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%8C%94%EC%84%A0%EC%83%9D%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/24121338",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-117-팔선생-신세계백화점센텀시티점"
+    },
+    {
+      "name": "피에르마르콜리니 신세계백화점 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "간식",
+        "초콜릿"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%94%BC%EC%97%90%EB%A5%B4%EB%A7%88%EB%A5%B4%EC%BD%9C%EB%A6%AC%EB%8B%88%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/277836149",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-120-피에르마르콜리니-신세계백화점-센텀시티"
+    },
+    {
+      "name": "하나야끼 신세계백화점 센텀시티점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "간식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%98%EB%82%98%EC%95%BC%EB%81%BC%20%EC%8B%A0%EC%84%B8%EA%B3%84%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2035",
+      "kakaoMapUrl": "https://place.map.kakao.com/1603684896",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 35",
+      "active": false,
+      "id": "spot-112-하나야끼-신세계백화점-센텀시티점"
+    },
+    {
+      "name": "하루끝집",
+      "category": "기타",
+      "tags": [
+        "술집",
+        "호프,요리주점"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%98%EB%A3%A8%EB%81%9D%EC%A7%91%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%8F%99%EB%A1%9C%209",
+      "kakaoMapUrl": "https://place.map.kakao.com/1858047038",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀동로 9",
+      "active": false,
+      "id": "spot-208-하루끝집"
+    },
+    {
+      "name": "한빛기사식당",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "기사식당"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%9C%EB%B9%9B%EA%B8%B0%EC%82%AC%EC%8B%9D%EB%8B%B9%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C%2035-1",
+      "kakaoMapUrl": "https://place.map.kakao.com/626545300",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로 35-1",
+      "active": false,
+      "id": "spot-108-한빛기사식당"
+    },
+    {
+      "name": "항아리수제면가 롯데백화점 센텀시티점",
+      "category": "한식",
+      "tags": [
+        "음식점",
+        "한식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%95%AD%EC%95%84%EB%A6%AC%EC%88%98%EC%A0%9C%EB%A9%B4%EA%B0%80%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%20%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/501227642",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-192-항아리수제면가-롯데백화점-센텀시티점"
+    },
+    {
+      "name": "호두방정 롯데백화점센텀시티점",
+      "category": "기타",
+      "tags": [
+        "음식점",
+        "간식"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%98%B8%EB%91%90%EB%B0%A9%EC%A0%95%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/290485777",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-191-호두방정-롯데백화점센텀시티점"
+    },
+    {
+      "name": "홍루이젠 부산더샵센텀파크점 24시 무인점",
+      "category": "양식",
+      "tags": [
+        "샌드위치",
+        "홍루이젠"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%99%8D%EB%A3%A8%EC%9D%B4%EC%A0%A0%20%EB%B6%80%EC%82%B0%EB%8D%94%EC%83%B5%EC%84%BC%ED%85%80%ED%8C%8C%ED%81%AC%EC%A0%90%2024%EC%8B%9C%20%EB%AC%B4%EC%9D%B8%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EC%A4%91%EC%95%99%EB%A1%9C%20145",
+      "kakaoMapUrl": "https://place.map.kakao.com/1553401228",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀중앙로 145",
+      "active": false,
+      "id": "spot-051-홍루이젠-부산더샵센텀파크점-24시-무"
+    },
+    {
+      "name": "화전리제빵소 롯데백화점센텀시티점",
+      "category": "카페",
+      "tags": [
+        "간식",
+        "제과,베이커리"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%99%94%EC%A0%84%EB%A6%AC%EC%A0%9C%EB%B9%B5%EC%86%8C%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/288714159",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-203-화전리제빵소-롯데백화점센텀시티점"
+    },
+    {
+      "name": "히노아지 롯데백화점센텀시티점",
+      "category": "일식",
+      "tags": [
+        "일본식라면",
+        "히노아지"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/%ED%9E%88%EB%85%B8%EC%95%84%EC%A7%80%20%EB%A1%AF%EB%8D%B0%EB%B0%B1%ED%99%94%EC%A0%90%EC%84%BC%ED%85%80%EC%8B%9C%ED%8B%B0%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%84%BC%ED%85%80%EB%82%A8%EB%8C%80%EB%A1%9C%2059",
+      "kakaoMapUrl": "https://place.map.kakao.com/1196968355",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 센텀남대로 59",
+      "active": false,
+      "id": "spot-199-히노아지-롯데백화점센텀시티점"
+    },
+    {
+      "name": "BBQ 부산센텀재송점",
+      "category": "기타",
+      "tags": [
+        "치킨",
+        "BBQ"
+      ],
+      "priceRange": "미입력",
+      "walkMinutes": 10,
+      "naverMapUrl": "https://map.naver.com/v5/search/BBQ%20%EB%B6%80%EC%82%B0%EC%84%BC%ED%85%80%EC%9E%AC%EC%86%A1%EC%A0%90%20%EB%B6%80%EC%82%B0%20%ED%95%B4%EC%9A%B4%EB%8C%80%EA%B5%AC%20%EC%9E%AC%EB%B0%98%EB%A1%9C11%EB%B2%88%EA%B8%B8%2063",
+      "kakaoMapUrl": "https://place.map.kakao.com/636179297",
+      "menuHints": [],
+      "notes": "주소: 부산 해운대구 재반로11번길 63",
+      "active": false,
+      "id": "spot-104-BBQ-부산센텀재송점"
     }
   ]
 }
