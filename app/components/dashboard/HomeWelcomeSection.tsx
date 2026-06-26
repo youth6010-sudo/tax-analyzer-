@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { type BusinessEntityType } from '@/app/types/contact';
-import { portalCard, portalEmptyState, portalH1 } from '@/app/components/portal/uiClasses';
+import { portalCard, portalEmptyState } from '@/app/components/portal/uiClasses';
 import {
   getPortalHomeStats,
   hydratePortal,
@@ -35,10 +35,10 @@ export default function HomeWelcomeSection({ userName }: { userName: string }) {
 
   return (
     <div>
-      <h1 className={`${portalH1} sm:text-3xl`}>
-        {userName}님, 안녕하세요
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 sm:text-3xl">
+        {userName}님, 안녕하세요 <span aria-hidden>👋</span>
       </h1>
-      <p className="mt-2 portal-body">
+      <p className="mt-2 text-sm text-slate-500 sm:text-base">
         부산지점 수임처 포털 · 담당 수임처 {stats != null ? `${stats.count}곳` : '…'}
       </p>
       {stats && stats.count > 0 && (

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "세무 분석 도구",
-  description: "종합소득세 분석 및 세목별 담당자 검색 도구",
+  title: "청년들 B-System",
+  description: "세무법인청년들 부산지점 업무 포털",
 };
 
 export default function RootLayout({
