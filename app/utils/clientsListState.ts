@@ -16,7 +16,7 @@ export type ClientsListState = {
 
 export const DEFAULT_CLIENTS_LIST_STATE: ClientsListState = {
   q: '',
-  sort: 'name',
+  sort: 'code',
   mineOnly: true,
   includeChurned: false,
   entity: '',
@@ -47,7 +47,7 @@ export function parseClientsListState(
 
   return {
     q: params.get('q') ?? '',
-    sort: params.get('sort') === 'code' || params.get('sort') === 'fee' ? 'code' : 'name',
+    sort: params.get('sort') === 'name' ? 'name' : 'code',
     mineOnly: mine !== '0',
     includeChurned: params.get('includeChurned') === '1',
     entity: params.get('entity') ?? '',
@@ -61,7 +61,7 @@ export function parseClientsListState(
 export function buildClientsListUrl(state: ClientsListState, opts?: { includeScroll?: boolean }): string {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
-  if (state.sort === 'code') p.set('sort', 'code');
+  if (state.sort === 'name') p.set('sort', 'name');
   if (!state.mineOnly) p.set('mine', '0');
   if (state.includeChurned) p.set('includeChurned', '1');
   if (state.entity) p.set('entity', state.entity);

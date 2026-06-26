@@ -4,12 +4,13 @@ import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 
 export type FilingCycle = 'month' | 'vat' | 'year';
 
-// 신고대상확인/대시보드에서 쓰는 세목 id (세목 4종 + 사업장현황신고)
-export type FilingTaxId = TaxTypeId | 'businessStatus';
+// 신고대상확인/대시보드에서 쓰는 세목 id (세목 4종 + 사업장현황신고 + 연말정산)
+export type FilingTaxId = TaxTypeId | 'businessStatus' | 'yearEnd';
 
-// 신고대상확인 대상 세목 (원천세·부가세·사업장현황·종소세·법인세)
+// 신고대상확인 대상 세목 (원천세·연말정산·부가세·사업장현황·종소세·법인세)
 export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle; icon: string }[] = [
   { id: 'withholding', label: '원천세', cycle: 'month', icon: '💸' },
+  { id: 'yearEnd', label: '연말정산', cycle: 'year', icon: '🧮' },
   { id: 'vat', label: '부가세', cycle: 'vat', icon: '🧾' },
   { id: 'businessStatus', label: '면세', cycle: 'year', icon: '🆓' },
   { id: 'comprehensive', label: '종소세', cycle: 'year', icon: '💰' },
@@ -116,7 +117,9 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
   // 종소세 외에는 사업자번호 없는/000 시작 업체 제외
   const withBizNo = clients.filter(c => !hasPlaceholderBizNo(c));
 
-  if (taxId === 'withholding') {
+  if (taxId === 'withholding' || taxId === 'yearEnd') {
+    // 연말정산은 원천세와 동일한 모집단(신고대리 제외) — 실제 대상 여부는
+    // 해당 연도 원천세 신고이력으로 신고대상확인 화면에서 가린다.
     return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);
   }
   if (taxId === 'vat') {

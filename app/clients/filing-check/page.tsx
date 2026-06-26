@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
 import {
   portalAlertInfo,
@@ -8,7 +9,12 @@ import {
   portalBtnSecondary,
   portalCard,
 } from '../../components/portal/uiClasses';
-import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
+import {
+  getClientDouzoneCode,
+  MANAGER_DISPLAY_ORDER,
+  UNCategorized,
+} from '@/app/utils/clientsGrouping';
+import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import {
   FILING_TAXES,
   VAT_PHASES,
@@ -100,7 +106,14 @@ const EMPTY_RECORD: CheckRecord = {
   extraClients: [],
 };
 
-const STORAGE_PREFIX = 'filingCheck:v1:';
+// v2: 담당자별로 분리 저장 → filingCheck:v2:{담당자}:{세목}:{기간}
+const STORAGE_PREFIX = 'filingCheck:v2:';
+const ALL_MANAGERS = '전체';
+
+// 담당자 기록 prefix (담당자별 신고리스트 분리)
+function managerPrefix(manager: string): string {
+  return `${STORAGE_PREFIX}${manager}:`;
+}
 
 function readRecord(keyId: string): CheckRecord | null {
   if (typeof window === 'undefined') return null;
@@ -122,13 +135,14 @@ function writeRecord(keyId: string, record: CheckRecord): void {
   }
 }
 
-// 같은 세목의 직전(가장 최근 이전 기간) 신고 기록 찾기 — 자동 불러오기용
+// 같은 담당자·세목의 직전(가장 최근 이전 기간) 신고 기록 찾기 — 자동 불러오기용
 function findPreviousFiling(
+  manager: string,
   taxId: FilingTaxId,
   currentPk: string,
 ): { record: CheckRecord; key: string } | null {
   if (typeof window === 'undefined') return null;
-  const prefix = `${STORAGE_PREFIX}${taxId}:`;
+  const prefix = `${managerPrefix(manager)}${taxId}:`;
   let bestKey = '';
   let bestRec: CheckRecord | null = null;
   for (let i = 0; i < localStorage.length; i += 1) {
@@ -161,7 +175,15 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 }
 
 export default function FilingCheckPage() {
-  const clients = usePortalClients();
+  const cachedClients = usePortalClients();
+  // 신고대상확인은 로그인한 사람과 무관하게 담당자별로 셋팅 → 전체 수임처를 받아 담당자로 가른다.
+  const [allClients, setAllClients] = useState<ClientRecord[] | null>(null);
+  const clients = allClients ?? cachedClients;
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+  // 선택 담당자(브라우저 저장). 비어 있으면 현재 로그인 담당자, 그것도 없으면 전체.
+  const [storedManager, setStoredManager] = useLocalStorage<string>('filingCheck.manager.v1', '');
+  const selManager = storedManager || currentUserName || ALL_MANAGERS;
+
   const [tax, setTax] = useState<FilingTaxId>('withholding');
   const [period, setPeriod] = useState<FilingPeriod>(() => defaultPeriod());
   const [record, setRecord] = useState<CheckRecord>(EMPTY_RECORD);
@@ -174,11 +196,23 @@ export default function FilingCheckPage() {
 
   const cycle = getCycle(tax);
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
-  const keyId = `${tax}:${periodKey(tax, period)}`;
+  const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
 
   useEffect(() => {
     hydratePortal();
+    fetch('/api/clients', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.clients) setAllClients(d.clients as ClientRecord[]);
+      })
+      .catch(() => {});
+    fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.user?.name) setCurrentUserName(String(d.user.name).trim());
+      })
+      .catch(() => {});
   }, []);
 
   // 세목·기간이 바뀌면 저장된 기록을 불러오고,
@@ -190,7 +224,7 @@ export default function FilingCheckPage() {
       setRecord(saved);
       setCarriedFrom(null);
     } else {
-      const prev = findPreviousFiling(tax, periodKey(tax, period));
+      const prev = findPreviousFiling(selManager, tax, periodKey(tax, period));
       if (prev) {
         setRecord({
           ...EMPTY_RECORD,
@@ -229,10 +263,41 @@ export default function FilingCheckPage() {
     setTax(next);
   };
 
+  // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
+  const taxTargetsAll = useMemo(() => filingTargets(clients, tax), [clients, tax]);
+
+  // 담당자 칩 목록(수임처관리와 동일한 표시 순서) + 세목별 대상 수
+  const managerCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of taxTargetsAll) {
+      const k = c.manager?.trim() || UNCategorized;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [taxTargetsAll]);
+
+  const managerOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of clients) set.add(c.manager?.trim() || UNCategorized);
+    return [...set].sort((a, b) => {
+      if (a === UNCategorized) return 1;
+      if (b === UNCategorized) return -1;
+      const ia = MANAGER_DISPLAY_ORDER.indexOf(a);
+      const ib = MANAGER_DISPLAY_ORDER.indexOf(b);
+      const ra = ia >= 0 ? ia : Number.MAX_SAFE_INTEGER;
+      const rb = ib >= 0 ? ib : Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) return ra - rb;
+      return a.localeCompare(b, 'ko');
+    });
+  }, [clients]);
+
   const targets = useMemo(() => {
-    const base = filingTargets(clients, tax);
+    const scoped =
+      selManager === ALL_MANAGERS
+        ? taxTargetsAll
+        : taxTargetsAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager);
     const manual = record.extraClients.map(manualToClient);
-    return [...base, ...manual].sort((a, b) => {
+    return [...scoped, ...manual].sort((a, b) => {
       const ca = getClientDouzoneCode(a);
       const cb = getClientDouzoneCode(b);
       if (ca && cb) {
@@ -245,23 +310,58 @@ export default function FilingCheckPage() {
       if (cb) return 1;
       return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
     });
-  }, [clients, tax, record.extraClients]);
+  }, [taxTargetsAll, selManager, record.extraClients]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const isReceived = (id: string, bizNo: string) =>
     record.overrides[id] ?? excelSet.has(normalizeBizNo(bizNo));
-  const isExcluded = (id: string) => Object.prototype.hasOwnProperty.call(record.excluded, id);
+  const isManualExcluded = (id: string) =>
+    Object.prototype.hasOwnProperty.call(record.excluded, id);
 
-  // 제외 처리된 업체는 신고대상에서 빠짐
+  // 연말정산: 해당 연도에 원천세 신고이력(접수)이 한 번이라도 있는 업체만 대상.
+  // 저장된 원천세 신고분(월별)에서 접수된 사업자번호/업체id를 모은다.
+  const withheld = useMemo(() => {
+    const bizNos = new Set<string>();
+    const ids = new Set<string>();
+    if (tax !== 'yearEnd' || typeof window === 'undefined') return { bizNos, ids };
+    const prefix = `${managerPrefix(selManager)}withholding:${period.year}-`;
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      try {
+        const rec = JSON.parse(localStorage.getItem(k) || 'null') as CheckRecord | null;
+        if (!rec) continue;
+        for (const b of rec.excelBizNos ?? []) bizNos.add(normalizeBizNo(b));
+        for (const [id, v] of Object.entries(rec.overrides ?? {})) if (v) ids.add(id);
+      } catch {
+        /* skip */
+      }
+    }
+    return { bizNos, ids };
+  }, [tax, period.year, savedTick, selManager]);
+
+  const AUTO_NO_WH = '원천세 신고내역 없음';
+  const hasWithholdingHistory = (c: ClientRecord) => {
+    const b = normalizeBizNo(c.businessNo);
+    return withheld.ids.has(c.id) || (b !== '' && withheld.bizNos.has(b));
+  };
+  // 제외 사유(수동 제외 우선) — 미제외면 null
+  const excludeReasonOf = (c: ClientRecord): string | null => {
+    if (isManualExcluded(c.id)) return record.excluded[c.id] ?? '';
+    if (tax === 'yearEnd' && !hasWithholdingHistory(c)) return AUTO_NO_WH;
+    return null;
+  };
+
+  // 제외 처리된 업체는 신고대상에서 빠짐 (수동 제외 + 연말정산 자동 제외)
   const activeTargets = useMemo(
-    () => targets.filter(c => !isExcluded(c.id)),
+    () => targets.filter(c => excludeReasonOf(c) === null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded],
+    [targets, record.excluded, tax, withheld],
   );
   const excludedTargets = useMemo(
-    () => targets.filter(c => isExcluded(c.id)),
+    () => targets.filter(c => excludeReasonOf(c) !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded],
+    [targets, record.excluded, tax, withheld],
   );
 
   const receivedCount = activeTargets.filter(c => isReceived(c.id, c.businessNo)).length;
@@ -361,8 +461,9 @@ export default function FilingCheckPage() {
   };
 
   const summary = useMemo(() => {
+    const mgrLabel = selManager === ALL_MANAGERS ? '전체' : selManager;
     const lines = [
-      `[신고대상확인] ${taxLabel} · ${periodLabel(tax, period)}`,
+      `[신고대상확인] ${taxLabel} · ${periodLabel(tax, period)} · ${mgrLabel}`,
       `· 신고대상: ${targetCount}곳`,
       `· 접수완료: ${receivedCount}곳`,
       `· 차이: ${diff}곳`,
@@ -383,7 +484,7 @@ export default function FilingCheckPage() {
     if (excludedTargets.length > 0) {
       lines.push(`· 신고제외 ${excludedTargets.length}곳`);
       for (const c of excludedTargets) {
-        const r = record.excluded[c.id]?.trim();
+        const r = (excludeReasonOf(c) ?? '').trim();
         lines.push(`  - ${c.companyName || '(이름없음)'}${r ? ` (${r})` : ''}`);
       }
     }
@@ -401,10 +502,12 @@ export default function FilingCheckPage() {
       lines.push(`· 접수목록 중 비대상: ${extraCount}건`);
     }
     return lines.join('\n');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taxLabel,
     tax,
     period,
+    selManager,
     targetCount,
     receivedCount,
     diff,
@@ -417,6 +520,7 @@ export default function FilingCheckPage() {
     excludedTargets,
     notReceived,
     extraCount,
+    withheld,
   ]);
 
   const copySummary = async () => {
@@ -440,8 +544,8 @@ export default function FilingCheckPage() {
         icon="✅"
       />
 
-      {/* 세목 탭 */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* 세목 탭 — 균일 너비, 한 줄 고정 */}
+      <div className="mb-4 grid grid-cols-6 gap-2">
         {FILING_TAXES.map(t => {
           const active = t.id === tax;
           return (
@@ -449,7 +553,7 @@ export default function FilingCheckPage() {
               key={t.id}
               type="button"
               onClick={() => handleTaxChange(t.id)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-bold transition-all ${
+              className={`flex w-full items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-sm font-bold transition-all ${
                 active
                   ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50/50'
@@ -460,6 +564,58 @@ export default function FilingCheckPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* 담당자 선택 — 담당자별 신고리스트(수임처관리 담당 기준, 로그인과 무관) */}
+      <div className={`${portalCard} mb-3 p-3`}>
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold text-slate-500">담당자</span>
+          <span className="text-[10px] text-slate-400">
+            선택한 담당자의 수임처 기준으로 신고리스트가 셋팅됩니다
+          </span>
+          {currentUserName && (
+            <button
+              type="button"
+              onClick={() => setStoredManager(currentUserName)}
+              className={`${portalBtnSecondary} ml-auto !px-2 !py-0.5 text-[11px] ${
+                selManager === currentUserName ? '!border-blue-300 !bg-blue-50 !text-blue-700' : ''
+              }`}
+            >
+              내 담당
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {[ALL_MANAGERS, ...managerOptions].map(name => {
+            const active = selManager === name;
+            const isAll = name === ALL_MANAGERS;
+            const count = isAll ? taxTargetsAll.length : (managerCounts.get(name) ?? 0);
+            const self = !isAll && name === currentUserName;
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setStoredManager(isAll ? ALL_MANAGERS : name)}
+                className={[
+                  'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                  active
+                    ? 'border-blue-300 bg-blue-50 text-blue-700'
+                    : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
+                ].join(' ')}
+              >
+                {name}
+                {self && <span className="text-[9px] font-bold text-blue-500">나</span>}
+                <span
+                  className={`min-w-[1rem] rounded px-1 py-px text-center text-[10px] font-semibold tabular-nums ${
+                    active ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 기간 + 엑셀 업로드 */}
@@ -625,6 +781,21 @@ export default function FilingCheckPage() {
         </p>
       )}
 
+      {tax === 'yearEnd' && (
+        <p
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            withheld.bizNos.size === 0 && withheld.ids.size === 0
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : 'border-slate-200 bg-slate-50 text-slate-600'
+          }`}
+        >
+          {period.year}년 중 원천세 신고이력(접수)이 있는 업체만 연말정산 대상으로 표시됩니다.
+          {withheld.bizNos.size === 0 && withheld.ids.size === 0
+            ? ' 해당 연도 원천세 신고 기록이 없어 전부 “원천세 신고내역 없음”으로 제외됩니다. 먼저 원천세 신고대상확인을 진행해 주세요.'
+            : ' 이력이 없는 업체는 “원천세 신고내역 없음”으로 제외 처리됩니다.'}
+        </p>
+      )}
+
       {/* 업체 직접 추가 */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
@@ -678,16 +849,16 @@ export default function FilingCheckPage() {
 
       {/* 대상 목록 */}
       <div className={`${portalCard} overflow-hidden`}>
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-              <th className="w-12 px-3 py-2 text-center font-semibold">접수</th>
-              <th className="w-10 px-2 py-2 text-right font-semibold">#</th>
-              <th className="w-24 px-3 py-2 text-left font-semibold">코드</th>
-              <th className="px-2 py-2 text-left font-semibold">업체명</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">사업자번호</th>
-              <th className="w-full px-3 py-2 text-left font-semibold">제외사유 · 특이사항</th>
-              <th className="w-14 px-3 py-2 text-center font-semibold">제외</th>
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">접수</th>
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
+              <th className="w-20 whitespace-nowrap px-2 py-2 text-left font-semibold">코드</th>
+              <th className="w-64 whitespace-nowrap px-2 py-2 text-left font-semibold">업체명</th>
+              <th className="w-32 whitespace-nowrap px-2 py-2 text-left font-semibold">사업자번호</th>
+              <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">특이사항(제외사유 등)</th>
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">제외</th>
             </tr>
           </thead>
           <tbody>
@@ -699,7 +870,10 @@ export default function FilingCheckPage() {
               </tr>
             ) : (
               targets.map((c, i) => {
-                const excluded = isExcluded(c.id);
+                const manualExcluded = isManualExcluded(c.id);
+                const reason = excludeReasonOf(c);
+                const excluded = reason !== null;
+                const autoExcluded = excluded && !manualExcluded; // 연말정산: 원천세 이력 없음
                 const received = !excluded && isReceived(c.id, c.businessNo);
                 return (
                   <tr
@@ -708,7 +882,7 @@ export default function FilingCheckPage() {
                       excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
                     }`}
                   >
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-2 py-2 text-center">
                       <input
                         type="checkbox"
                         checked={received}
@@ -721,64 +895,86 @@ export default function FilingCheckPage() {
                         className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                       />
                     </td>
-                    <td className="px-2 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
-                    <td className="px-3 py-2 tabular-nums text-slate-500">{getClientDouzoneCode(c) || '-'}</td>
+                    <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{i + 1}</td>
+                    <td className="px-2 py-2 tabular-nums text-slate-500">{getClientDouzoneCode(c) || '-'}</td>
                     <td className="px-2 py-2">
-                      <span
-                        className={`font-semibold ${
-                          excluded ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'
-                        }`}
-                      >
-                        {c.companyName || '(이름 없음)'}
-                      </span>
-                      {c.representative && (
-                        <span className="ml-1.5 text-xs text-slate-400">{c.representative}</span>
-                      )}
-                      {tax === 'vat' && isVatSummaryOnlyClient(c) && (
-                        <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
-                          합계표제출
-                        </span>
-                      )}
-                      {isManualId(c.id) && (
-                        <>
-                          <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                            직접추가
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeManualClient(c.id)}
-                            className="ml-1.5 text-xs text-slate-400 hover:text-rose-500"
-                            title="추가한 업체 삭제"
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {isManualId(c.id) ? (
+                          <span
+                            className={`break-words font-semibold ${
+                              excluded ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'
+                            }`}
                           >
-                            삭제
-                          </button>
-                        </>
-                      )}
+                            {c.companyName || '(이름 없음)'}
+                          </span>
+                        ) : (
+                          <Link
+                            href={`/clients/${c.id}`}
+                            className={`break-words font-semibold hover:underline ${
+                              excluded
+                                ? 'text-slate-400 line-through decoration-slate-400'
+                                : 'text-slate-800 hover:text-blue-600'
+                            }`}
+                          >
+                            {c.companyName || '(이름 없음)'}
+                          </Link>
+                        )}
+                        {c.representative && (
+                          <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
+                        )}
+                        {tax === 'vat' && isVatSummaryOnlyClient(c) && (
+                          <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                            합계표제출
+                          </span>
+                        )}
+                        {isManualId(c.id) && (
+                          <>
+                            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                              직접추가
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeManualClient(c.id)}
+                              className="shrink-0 text-xs text-slate-400 hover:text-rose-500"
+                              title="추가한 업체 삭제"
+                            >
+                              삭제
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-2 py-2 tabular-nums text-slate-600">{c.businessNo || '-'}</td>
-                    <td className="px-3 py-2">
-                      <input
-                        value={excluded ? (record.excluded[c.id] ?? '') : (record.rowNotes[c.id] ?? '')}
-                        onChange={e =>
-                          excluded
-                            ? setExcludeReason(c.id, e.target.value)
-                            : setRowNote(c.id, e.target.value)
-                        }
-                        placeholder={excluded ? '제외 사유 (예: 폐업·무실적)' : '신고 특이사항'}
-                        className={`w-full rounded-lg border bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none ${
-                          excluded
-                            ? 'border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40'
-                            : 'border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
-                        }`}
-                      />
+                    <td className="px-2 py-2">
+                      {autoExcluded ? (
+                        <span className="inline-block truncate text-xs font-medium text-slate-400">
+                          {reason}
+                        </span>
+                      ) : (
+                        <input
+                          value={manualExcluded ? (record.excluded[c.id] ?? '') : (record.rowNotes[c.id] ?? '')}
+                          onChange={e =>
+                            manualExcluded
+                              ? setExcludeReason(c.id, e.target.value)
+                              : setRowNote(c.id, e.target.value)
+                          }
+                          placeholder={manualExcluded ? '제외 사유 (예: 폐업·무실적)' : '신고 특이사항'}
+                          className={`w-full rounded-lg border bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none ${
+                            manualExcluded
+                              ? 'border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40'
+                              : 'border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
+                          }`}
+                        />
+                      )}
                     </td>
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-2 py-2 text-center">
                       <input
                         type="checkbox"
                         checked={excluded}
+                        disabled={autoExcluded}
                         onChange={e => toggleExclude(c.id, e.target.checked)}
-                        className="h-4 w-4 accent-slate-400"
-                        title="신고목록에서 제외"
+                        className="h-4 w-4 accent-slate-400 disabled:opacity-40"
+                        title={autoExcluded ? '원천세 신고내역이 없어 자동 제외' : '신고목록에서 제외'}
                       />
                     </td>
                   </tr>

@@ -7,7 +7,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
   return (
     <header
       className={[
-        sticky ? 'sticky top-0 z-40' : 'relative z-10',
+        sticky ? 'sticky top-0 z-50' : 'relative z-50',
         'bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm shadow-slate-200/40 no-print',
       ].join(' ')}
     >

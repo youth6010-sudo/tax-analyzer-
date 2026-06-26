@@ -361,12 +361,12 @@ export function buildVatReportHtml({
   parts.push(blank);
   parts.push(line(`안녕하세요. ${belong} ${escapeHtml(name)} 신고 결과를 안내드립니다.`));
   parts.push(line('매입매출장과 결과 보고서를 함께 첨부했습니다.'));
-  parts.push(line('아래 요약과 첨부 자료에 누락·오류가 없는지 확인해 주세요.'));
+  parts.push(line('아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.'));
   parts.push(blank);
   parts.push(line('[신고 결과 요약]'));
   parts.push(vatSummaryTable(report, r, taxLabel));
   parts.push(blank);
-  parts.push(line('✅ 검토 후 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.'));
+  parts.push(line('✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.'));
 
   if (isPay && r.finalTax > 0) {
     parts.push(blank);

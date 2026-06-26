@@ -11,7 +11,10 @@ export const TAX_MENU = [
   {
     id: 'home',
     label: '홈',
-    items: [{ label: '대시보드', href: '/' }],
+    items: [
+      { label: '대시보드', href: '/' },
+      { label: '청년들 ID', href: '/youth-ids' },
+    ],
   },
   {
     id: 'clients',
@@ -30,12 +33,6 @@ export const TAX_MENU = [
       { label: '안내문 생성기', href: '/tools/notice-generator' },
       { label: '종합소득세 분석', href: '/tax/comprehensive' },
     ],
-  },
-  {
-    id: 'youth-id',
-    label: '청년들 ID',
-    href: '/youth-ids',
-    items: [] as { label: string; href: string }[],
   },
   {
     id: 'fun',

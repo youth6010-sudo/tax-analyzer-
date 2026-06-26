@@ -7,7 +7,7 @@ import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/util
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient } from '@/app/utils/filingCheck';
-import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
+import { getPortalClients, hydratePortal } from '@/app/utils/portalStore';
 
 type SortKey = 'name' | 'code';
 
@@ -131,7 +131,7 @@ function SectionCard({
 const SHOW_SINGO_KEY = 'dashboard.showSingoDaeri';
 
 export default function MyClientsBoard() {
-  const [clients, setClients] = useState<ClientRecord[]>(() => getPortalClients());
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [ready, setReady] = useState(false);
   const [sort, setSort] = useState<SortKey>('code');
   const [showSingo, setShowSingo] = useState(true);
@@ -139,14 +139,18 @@ export default function MyClientsBoard() {
 
   useEffect(() => {
     hydratePortal();
-    setClients(getPortalClients());
-    setReady(true);
     try {
       if (localStorage.getItem(SHOW_SINGO_KEY) === '0') setShowSingo(false);
     } catch {
       /* ignore */
     }
-    return subscribePortal(() => setClients(getPortalClients()));
+    // 로그인 직후 본인 담당 수임처를 바로 표시 — 서버에서 '내 담당'만(담당자명·배정 모두 매칭),
+    // 포털 부트스트랩 타이밍/관리자 전체노출과 무관하게 항상 본인 것만 뜬다.
+    fetch('/api/clients?mine=1', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setClients((d?.clients as ClientRecord[]) ?? getPortalClients()))
+      .catch(() => setClients(getPortalClients()))
+      .finally(() => setReady(true));
   }, []);
 
   const toggleSingo = (next: boolean) => {

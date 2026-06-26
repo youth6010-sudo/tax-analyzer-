@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { portalEmptyState, portalInput } from '@/app/components/portal/uiClasses';
-import type { YouthIdCategory, YouthIdEntry, YouthIdField } from '@/lib/youthIds';
+import type { YouthIdCategory, YouthIdEntry } from '@/lib/youthIds';
 
 type Props = {
   categories: YouthIdCategory[];
@@ -10,46 +10,84 @@ type Props = {
   configured: boolean;
 };
 
-const chipCls = (active: boolean) =>
-  [
-    'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-    active
-      ? 'border-blue-300 bg-blue-50 text-blue-800'
-      : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
-  ].join(' ');
+// 왼쪽(우선순위) 열에 이 순서대로
+const PRIORITY_IDS = [
+  'comm',
+  'hometax',
+  'semusarang',
+  'tp',
+  'wemembers',
+  'google',
+  'naverworks',
+  'platform',
+  'bluehole',
+  'wacampus',
+];
 
-const chipCountCls = (active: boolean) =>
-  [
-    'tabular-nums rounded px-1 py-px text-[10px] font-semibold',
-    active ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500',
-  ].join(' ');
+// 표 열 정렬 우선순위(없으면 등장 순서대로 뒤에)
+const COL_ORDER = [
+  '내선',
+  '전화',
+  'ID',
+  'PW',
+  '카톡ID',
+  '카톡PW',
+  '대표번호',
+  '은행',
+  '계좌',
+  '예금주',
+  '사업자',
+  '카드',
+  'CVC/유효',
+  '비번',
+  '이메일',
+];
+
+function columnsOf(cat: YouthIdCategory): string[] {
+  const seen: string[] = [];
+  for (const e of cat.entries) {
+    for (const f of e.fields) {
+      if (!seen.includes(f.label)) seen.push(f.label);
+    }
+  }
+  const rank = (l: string) => {
+    const i = COL_ORDER.indexOf(l);
+    return i === -1 ? 100 + seen.indexOf(l) : i;
+  };
+  return seen.slice().sort((a, b) => rank(a) - rank(b));
+}
+
+function entryMatches(e: YouthIdEntry, q: string): boolean {
+  if (e.title.toLowerCase().includes(q)) return true;
+  if (e.note?.toLowerCase().includes(q)) return true;
+  if (e.owner?.toLowerCase().includes(q)) return true;
+  return e.fields.some(f => f.label.toLowerCase().includes(q) || f.value.toLowerCase().includes(q));
+}
 
 export default function YouthIdsBoard({ categories, me, configured }: Props) {
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState<string>('all');
   const [viewAll, setViewAll] = useState(false);
 
   const q = query.trim().toLowerCase();
 
-  // 내 계정 + 공용만(기본) / 전체보기 시 전부
-  const scoped = useMemo(() => {
+  const sections = useMemo(() => {
     return categories
-      .map(cat => ({
-        ...cat,
-        entries: viewAll ? cat.entries : cat.entries.filter(e => !e.owner || e.owner === me),
-      }))
+      .map(cat => {
+        const scoped = viewAll ? cat.entries : cat.entries.filter(e => !e.owner || e.owner === me);
+        const entries = q ? scoped.filter(e => entryMatches(e, q)) : scoped;
+        return { ...cat, entries };
+      })
       .filter(cat => cat.entries.length > 0);
-  }, [categories, viewAll, me]);
+  }, [categories, viewAll, me, q]);
 
-  const filtered = useMemo(() => {
-    return scoped
-      .filter(cat => active === 'all' || cat.id === active)
-      .map(cat => ({
-        ...cat,
-        entries: q ? cat.entries.filter(e => entryMatches(e, q)) : cat.entries,
-      }))
-      .filter(cat => cat.entries.length > 0);
-  }, [scoped, active, q]);
+  // 왼쪽 = 우선순위(블루홀까지), 오른쪽 = 나머지 — 전체보기와 무관하게 고정 분할
+  const { left, right } = useMemo(() => {
+    const l = PRIORITY_IDS.map(id => sections.find(c => c.id === id)).filter(
+      (c): c is (typeof sections)[number] => Boolean(c),
+    );
+    const r = sections.filter(c => !PRIORITY_IDS.includes(c.id));
+    return { left: l, right: r };
+  }, [sections]);
 
   if (!configured) {
     return (
@@ -63,8 +101,10 @@ export default function YouthIdsBoard({ categories, me, configured }: Props) {
     );
   }
 
+  const total = sections.reduce((n, c) => n + c.entries.length, 0);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
@@ -86,152 +126,134 @@ export default function YouthIdsBoard({ categories, me, configured }: Props) {
         </button>
         <span className="ml-auto text-xs text-slate-500">
           {viewAll ? (
-            <>전 직원 계정·자료를 모두 표시 중</>
+            <>전 직원 계정·자료 모두 표시 · {total}건</>
           ) : (
             <>
-              <b className="text-slate-700">{me}</b>님 계정 + 공용만 표시
+              <b className="text-slate-700">{me}</b>님 + 공용 · {total}건
             </>
           )}
         </span>
       </div>
 
-      {scoped.length === 0 ? (
-        <div className={portalEmptyState}>표시할 자료가 없습니다.</div>
+      {sections.length === 0 ? (
+        <div className={portalEmptyState}>{q ? '검색 결과가 없습니다.' : '표시할 자료가 없습니다.'}</div>
       ) : (
-        <>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setActive('all')} className={chipCls(active === 'all')}>
-              전체
-              <span className={chipCountCls(active === 'all')}>
-                {scoped.reduce((n, c) => n + c.entries.length, 0)}
-              </span>
-            </button>
-            {scoped.map(cat => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setActive(cat.id)}
-                className={chipCls(active === cat.id)}
-              >
-                {cat.icon ? <span aria-hidden>{cat.icon}</span> : null}
-                {cat.label}
-                <span className={chipCountCls(active === cat.id)}>{cat.entries.length}</span>
-              </button>
+        <div className="grid items-start gap-3 lg:grid-cols-2">
+          <div className="min-w-0 space-y-3">
+            {left.map(cat => (
+              <SectionTable key={cat.id} cat={cat} me={me} align />
             ))}
           </div>
-
-          {filtered.length === 0 ? (
-            <div className={portalEmptyState}>검색 결과가 없습니다.</div>
-          ) : (
-            <div className="space-y-5">
-              {filtered.map(cat => (
-                <section key={cat.id}>
-                  <h2 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                    {cat.icon ? <span aria-hidden>{cat.icon}</span> : null}
-                    {cat.label}
-                    <span className="font-medium normal-case text-slate-400">{cat.entries.length}건</span>
-                  </h2>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {cat.entries.map(entry => (
-                      <EntryCard key={entry.id} entry={entry} me={me} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </>
+          <div className="min-w-0 space-y-3">
+            {right.map(cat => (
+              <SectionTable key={cat.id} cat={cat} me={me} />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function entryMatches(e: YouthIdEntry, q: string): boolean {
-  if (e.title.toLowerCase().includes(q)) return true;
-  if (e.note?.toLowerCase().includes(q)) return true;
-  if (e.owner?.toLowerCase().includes(q)) return true;
-  return e.fields.some(f => f.label.toLowerCase().includes(q) || f.value.toLowerCase().includes(q));
-}
+// 구분 열 고정 폭 → 모든 표에서 그다음 열(시작점)이 동일하게 정렬
+const LABEL_W = '9rem';
+// 왼쪽(우선순위) 표에서 ID/이메일 열 고정 폭 → 플랫폼 세무사회 ID 위치에 통일
+// (드물게 더 긴 이메일은 이 칸 안에서 줄바꿈)
+const ID_W = '10rem';
 
-function EntryCard({ entry, me }: { entry: YouthIdEntry; me: string }) {
-  const mine = entry.owner === me;
+function SectionTable({ cat, me, align = false }: { cat: YouthIdCategory; me: string; align?: boolean }) {
+  const cols = columnsOf(cat);
+  const idStyle = (c: string): CSSProperties | undefined =>
+    align && (c === 'ID' || c === '이메일') ? { width: ID_W, minWidth: ID_W } : undefined;
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5">
-      <div className="flex items-start justify-between gap-1.5">
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold leading-snug text-slate-900" title={entry.title}>
-            {entry.title}
-          </p>
-          {entry.url ? (
-            <a
-              href={entry.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block truncate text-[11px] text-blue-600 hover:underline"
-            >
-              {entry.url.replace(/^https?:\/\//, '')}
-            </a>
-          ) : null}
-        </div>
-        {entry.owner ? (
-          <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-              mine ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            {mine ? '내 계정' : entry.owner}
-          </span>
-        ) : (
-          <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-            공용
-          </span>
-        )}
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 py-1.5">
+        {cat.icon ? <span aria-hidden>{cat.icon}</span> : null}
+        <h3 className="text-[13px] font-bold text-slate-700">{cat.label}</h3>
+        <span className="ml-auto text-[10px] font-medium tabular-nums text-slate-400">{cat.entries.length}</span>
       </div>
-
-      <dl className="space-y-0.5">
-        {entry.fields.map((f, i) => (
-          <FieldRow key={`${f.label}-${i}`} field={f} />
-        ))}
-      </dl>
-
-      {entry.note ? (
-        <p className="border-t border-slate-100 pt-1 text-[11px] leading-relaxed text-slate-500">{entry.note}</p>
-      ) : null}
-    </div>
+      {/* 묶음(카드)마다 독립 가로 스크롤 — 구분 열은 좌측 고정 */}
+      {/* w-max(내용 폭) → '구분' 열이 모든 카드에서 9rem 고정 → 첫 값 열 시작점 통일 */}
+      <div className="overflow-x-auto">
+        <table className="w-max text-[12px]">
+          <thead>
+            <tr className="bg-slate-50/60 text-[10px] uppercase tracking-wide text-slate-400">
+              <th
+                className="sticky left-0 z-10 whitespace-nowrap bg-slate-50 px-2 py-1 text-left font-semibold"
+                style={{ width: LABEL_W, minWidth: LABEL_W }}
+              >
+                구분
+              </th>
+              {cols.map(c => (
+                <th
+                  key={c}
+                  style={idStyle(c)}
+                  className="whitespace-nowrap px-2 py-1 text-left font-semibold"
+                >
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cat.entries.map(e => {
+              const mine = e.owner === me;
+              return (
+                <tr key={e.id} className="border-t border-slate-100">
+                  <td
+                    className="sticky left-0 z-10 break-words bg-white px-2 py-1 align-top"
+                    style={{ width: LABEL_W, minWidth: LABEL_W }}
+                  >
+                    <span className="font-semibold text-slate-800">{e.title}</span>
+                    {e.owner ? (
+                      <span
+                        className={`ml-1 rounded px-1 py-px text-[9px] font-bold ${
+                          mine ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {mine ? '나' : e.owner}
+                      </span>
+                    ) : null}
+                  </td>
+                  {cols.map(col => {
+                    const f = e.fields.find(x => x.label === col);
+                    // 값은 항상 한 줄(줄바꿈 없음). idStyle은 최소폭(시작점 정렬)만 담당하고
+                    // 내용이 길면 열이 늘어나 한 줄로 표시된다.
+                    const s = idStyle(col);
+                    return <ValueCell key={col} value={f?.value ?? ''} style={s} />;
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
-function FieldRow({ field }: { field: YouthIdField }) {
+function ValueCell({ value, style, wrap = false }: { value: string; style?: CSSProperties; wrap?: boolean }) {
   const [copied, setCopied] = useState(false);
-
   const copy = async () => {
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(field.value);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1000);
+      setTimeout(() => setCopied(false), 900);
     } catch {
       /* clipboard unavailable */
     }
   };
-
   return (
-    <div className="group flex items-center gap-1.5 text-[12px]">
-      <dt className="w-12 shrink-0 text-[11px] font-medium text-slate-400">{field.label}</dt>
-      <dd
-        className="min-w-0 flex-1 cursor-pointer truncate font-mono text-slate-800"
-        title={field.value}
-        onClick={copy}
-      >
-        {field.value}
-      </dd>
-      <button
-        type="button"
-        onClick={copy}
-        className="shrink-0 text-[10px] text-slate-300 hover:text-blue-600 group-hover:text-slate-400"
-        aria-label="복사"
-      >
-        {copied ? '복사됨' : '복사'}
-      </button>
-    </div>
+    <td
+      style={style}
+      className={`cursor-pointer px-2 py-1 font-mono leading-tight transition-colors ${
+        wrap ? 'break-all align-top' : 'whitespace-nowrap'
+      } ${copied ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+      title={value ? `${value} (클릭 복사)` : ''}
+      onClick={copy}
+    >
+      {value || <span className="text-slate-300">-</span>}
+    </td>
   );
 }

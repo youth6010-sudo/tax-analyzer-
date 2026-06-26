@@ -9,7 +9,6 @@ import {
   portalBtnSecondary,
   portalCard,
   portalInput,
-  portalSelect,
 } from '../components/portal/uiClasses';
 import type { ClientRecord } from '../types/client';
 import {
@@ -384,14 +383,22 @@ function ClientsPageContent() {
           placeholder="업체·대표·번호·담당자 검색"
           className={`${portalInput} !py-1.5 flex-1 min-w-[10rem] max-w-sm text-sm`}
         />
-        <select
-          value={state.sort}
-          onChange={e => updateState({ sort: e.target.value as 'name' | 'code' })}
-          className={`${portalSelect} !py-1.5 text-sm`}
-        >
-          <option value="name">이름순</option>
-          <option value="code">코드순</option>
-        </select>
+        <div className="inline-flex items-center gap-0.5 rounded-xl bg-slate-100 p-0.5 ring-1 ring-slate-200">
+          {(['name', 'code'] as const).map(key => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => updateState({ sort: key })}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                state.sort === key
+                  ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-200'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {key === 'name' ? '상호순' : '코드순'}
+            </button>
+          ))}
+        </div>
         <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
           <input
             type="checkbox"

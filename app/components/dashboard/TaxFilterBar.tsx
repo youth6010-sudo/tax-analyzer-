@@ -3,8 +3,9 @@
 import { setDashboardTaxFilter, useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { FILING_TAXES } from '@/app/utils/filingCheck';
 
-// 신고대상확인과 동일한 세목 구성(원천세·부가세·사업장현황·종소세·법인세)
-const ITEMS = FILING_TAXES;
+// 대시보드 세목별 보기 — 연말정산은 원천세 신고이력 판정이 필요하므로
+// 신고대상확인 화면에서만 다루고, 여기서는 제외한다.
+const ITEMS = FILING_TAXES.filter(t => t.id !== 'yearEnd');
 
 export default function TaxFilterBar() {
   const selected = useDashboardTaxFilter();
