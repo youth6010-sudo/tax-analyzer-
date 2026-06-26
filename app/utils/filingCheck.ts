@@ -4,10 +4,14 @@ import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 
 export type FilingCycle = 'month' | 'vat' | 'year';
 
-// 신고대상확인 대상 세목 (요청 순서: 원천세·부가세·종소세·법인세)
-export const FILING_TAXES: { id: TaxTypeId; label: string; cycle: FilingCycle; icon: string }[] = [
+// 신고대상확인/대시보드에서 쓰는 세목 id (세목 4종 + 사업장현황신고)
+export type FilingTaxId = TaxTypeId | 'businessStatus';
+
+// 신고대상확인 대상 세목 (원천세·부가세·사업장현황·종소세·법인세)
+export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle; icon: string }[] = [
   { id: 'withholding', label: '원천세', cycle: 'month', icon: '💸' },
   { id: 'vat', label: '부가세', cycle: 'vat', icon: '🧾' },
+  { id: 'businessStatus', label: '사업장현황', cycle: 'year', icon: '🏪' },
   { id: 'comprehensive', label: '종소세', cycle: 'year', icon: '🧮' },
   { id: 'corporate', label: '법인세', cycle: 'year', icon: '🏢' },
 ];
@@ -21,7 +25,7 @@ export type FilingPeriod = {
   vatPhase: VatPhase; // 부가세
 };
 
-export function getCycle(taxId: TaxTypeId): FilingCycle {
+export function getCycle(taxId: FilingTaxId): FilingCycle {
   return FILING_TAXES.find(t => t.id === taxId)?.cycle ?? 'year';
 }
 
@@ -36,16 +40,16 @@ export function normalizeBizNo(v: string | undefined | null): string {
 }
 
 // 기간 라벨 (요약·표시용)
-export function periodLabel(taxId: TaxTypeId, p: FilingPeriod): string {
+export function periodLabel(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
   if (cycle === 'month') return `${p.year}년 ${p.month}월`;
   if (cycle === 'vat') return `${p.year}년 ${p.vatPhase}`;
-  if (taxId === 'comprehensive') return `${p.year}년 귀속`;
-  return `${p.year}년 사업연도`;
+  if (taxId === 'corporate') return `${p.year}년 사업연도`;
+  return `${p.year}년 귀속`; // 종소세·사업장현황
 }
 
 // 저장/조회용 기간 키
-export function periodKey(taxId: TaxTypeId, p: FilingPeriod): string {
+export function periodKey(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
   if (cycle === 'month') return `${p.year}-${String(p.month).padStart(2, '0')}`;
   if (cycle === 'vat') return `${p.year}-${p.vatPhase}`;
@@ -53,7 +57,7 @@ export function periodKey(taxId: TaxTypeId, p: FilingPeriod): string {
 }
 
 // 기간 키 문자열 → FilingPeriod 복원 (지난 신고 라벨 표시용)
-export function parsePeriodKey(taxId: TaxTypeId, key: string): FilingPeriod {
+export function parsePeriodKey(taxId: FilingTaxId, key: string): FilingPeriod {
   const base = defaultPeriod();
   const cycle = getCycle(taxId);
   if (cycle === 'month') {
@@ -78,14 +82,46 @@ export function isCorporateClient(c: ClientRecord): boolean {
   return c.businessEntityType === 'corporate' || getClientCategory(c) === '법인';
 }
 
+// 비사업자 — 사업자유형(비사업자) 또는 대분류(비사업자)
+export function isNonBusinessClient(c: ClientRecord): boolean {
+  return c.businessEntityType === 'nonBusiness' || getClientCategory(c) === '비사업자';
+}
+
+// 사업자번호가 없거나 000으로 시작(미발급/임시) 여부 → 종소세에만 노출
+export function hasPlaceholderBizNo(c: ClientRecord): boolean {
+  const b = normalizeBizNo(c.businessNo);
+  return b === '' || b.startsWith('000');
+}
+
+// 면세사업자 여부 — 과세유형(taxKind)에 '면세' 포함하고 '과세'(겸영 등)는 아님
+export function isTaxExemptClient(c: ClientRecord): boolean {
+  const k = String(c.intakeData?.taxKind ?? '').replace(/\s/g, '');
+  return k.includes('면세') && !k.includes('과세');
+}
+
 // 세목별 최초 신고대상 산출
-// 원천세: 신고대리 제외한 모든 업체 / 부가세: 모든 업체
-// 법인세: 법인 / 종소세: 개인(법인 아님)
-export function filingTargets(clients: ClientRecord[], taxId: TaxTypeId): ClientRecord[] {
-  if (taxId === 'withholding') return clients.filter(c => getClientCategory(c) !== SINGO_DAERI);
-  if (taxId === 'vat') return clients;
-  if (taxId === 'corporate') return clients.filter(isCorporateClient);
-  return clients.filter(c => !isCorporateClient(c));
+// 공통: 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
+// 원천세: 신고대리 제외한 모든 업체
+// 부가세: 비사업자·면세 제외
+// 사업장현황: 면세사업자
+// 법인세: 법인 / 종소세: 개인(법인 아님) — 사업자번호 없는 건도 포함
+export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): ClientRecord[] {
+  if (taxId === 'comprehensive') return clients.filter(c => !isCorporateClient(c));
+
+  // 종소세 외에는 사업자번호 없는/000 시작 업체 제외
+  const withBizNo = clients.filter(c => !hasPlaceholderBizNo(c));
+
+  if (taxId === 'withholding') {
+    return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);
+  }
+  if (taxId === 'vat') {
+    return withBizNo.filter(c => !isNonBusinessClient(c) && !isTaxExemptClient(c));
+  }
+  if (taxId === 'businessStatus') {
+    return withBizNo.filter(isTaxExemptClient);
+  }
+  // corporate
+  return withBizNo.filter(isCorporateClient);
 }
 
 // 홈택스 접수목록 한 행

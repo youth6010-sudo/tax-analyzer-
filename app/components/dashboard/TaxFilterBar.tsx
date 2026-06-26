@@ -1,15 +1,10 @@
 'use client';
 
-import type { TaxTypeId } from '@/app/config/taxTypes';
 import { setDashboardTaxFilter, useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
+import { FILING_TAXES } from '@/app/utils/filingCheck';
 
-// 요청 순서: 원천세 · 부가세 · 종소세 · 법인세
-const ITEMS: { id: TaxTypeId; label: string; icon: string }[] = [
-  { id: 'withholding', label: '원천세', icon: '💸' },
-  { id: 'vat', label: '부가세', icon: '🧾' },
-  { id: 'comprehensive', label: '종소세', icon: '🧮' },
-  { id: 'corporate', label: '법인세', icon: '🏢' },
-];
+// 신고대상확인과 동일한 세목 구성(원천세·부가세·사업장현황·종소세·법인세)
+const ITEMS = FILING_TAXES;
 
 export default function TaxFilterBar() {
   const selected = useDashboardTaxFilter();

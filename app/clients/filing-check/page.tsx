@@ -8,7 +8,6 @@ import {
   portalBtnSecondary,
   portalCard,
 } from '../../components/portal/uiClasses';
-import type { TaxTypeId } from '../../config/taxTypes';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import {
   FILING_TAXES,
@@ -24,6 +23,7 @@ import {
   periodLabel,
   specialFilingKey,
   type FilingPeriod,
+  type FilingTaxId,
   type SpecialFiling,
   type VatPhase,
 } from '@/app/utils/filingCheck';
@@ -77,7 +77,7 @@ function writeRecord(keyId: string, record: CheckRecord): void {
 
 // 같은 세목의 직전(가장 최근 이전 기간) 신고 기록 찾기 — 자동 불러오기용
 function findPreviousFiling(
-  taxId: TaxTypeId,
+  taxId: FilingTaxId,
   currentPk: string,
 ): { record: CheckRecord; key: string } | null {
   if (typeof window === 'undefined') return null;
@@ -115,7 +115,7 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 
 export default function FilingCheckPage() {
   const clients = usePortalClients();
-  const [tax, setTax] = useState<TaxTypeId>('withholding');
+  const [tax, setTax] = useState<FilingTaxId>('withholding');
   const [period, setPeriod] = useState<FilingPeriod>(() => defaultPeriod());
   const [record, setRecord] = useState<CheckRecord>(EMPTY_RECORD);
   const [parsing, setParsing] = useState(false);
@@ -174,7 +174,7 @@ export default function FilingCheckPage() {
     });
   };
 
-  const handleTaxChange = (next: TaxTypeId) => {
+  const handleTaxChange = (next: FilingTaxId) => {
     if (next === tax) return;
     setTax(next);
   };
