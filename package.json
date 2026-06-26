@@ -14,6 +14,7 @@
     "stable": "npm run build && npm run start",
     "host:office": "powershell -ExecutionPolicy Bypass -File scripts/office-host-run.ps1",
     "host:office:setup": "powershell -ExecutionPolicy Bypass -File scripts/office-host-setup.ps1",
+    "relay:bluehole": "node scripts/bluehole-relay.mjs",
     "lint": "eslint",
     "import:contacts": "node scripts/import-contacts.mjs",
     "delete:damdang-excel": "node scripts/delete-damdang-excel.mjs",

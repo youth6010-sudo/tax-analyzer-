@@ -9,6 +9,7 @@ import {
   clearUserBlueholeSession,
   isBlueholeConfiguredForUser,
 } from '../blueholeAuthDb';
+import { getBlueholeRelay } from '../appConfigDb';
 
 const TTL_MS = 45 * 60 * 1000; // 45분
 
@@ -16,7 +17,25 @@ export async function blueholeConfiguredForUser(userId: string): Promise<boolean
   return isBlueholeConfiguredForUser(userId);
 }
 
+// 호출 직전에 중계기 설정을 반영한다.
+//   BLUEHOLE_USE_RELAY=1 (Vercel 등 IP 비허용 환경): DB에 등록된 사무실 중계기를 경유.
+//   미설정(사무실 자체호스팅): 블루홀에 직접 접속(사무실 IP).
+async function applyRelay(): Promise<void> {
+  if (process.env.BLUEHOLE_USE_RELAY === '1') {
+    const relay = await getBlueholeRelay();
+    if (!relay) {
+      throw new Error(
+        '블루홀 중계기(사무실 PC)가 연결되어 있지 않습니다. 사무실 중계기(npm run relay:bluehole)를 켜주세요.',
+      );
+    }
+    bh.configureBlueholeRelay({ baseUrl: relay.url, secret: relay.secret });
+  } else {
+    bh.configureBlueholeRelay({});
+  }
+}
+
 async function getCookie(userId: string, force = false): Promise<string> {
+  await applyRelay();
   if (!force) {
     const sess = await getUserBlueholeSession(userId);
     if (sess && Date.now() - sess.at < TTL_MS) return sess.cookie;
@@ -47,6 +66,7 @@ export async function verifyBlueholeLogin(
   loginId: string,
   password: string,
 ): Promise<{ ok: true; name: string }> {
+  await applyRelay();
   const { user } = await bh.login({ loginId, password });
   const name = (user && (user.name || user.nickname || user.login_id)) || loginId;
   return { ok: true, name };

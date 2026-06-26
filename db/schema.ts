@@ -11,6 +11,12 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+export const appConfig = pgTable('app_config', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull().$type<Record<string, unknown>>().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const userRoleEnum = pgEnum('user_role', ['staff', 'admin']);
 export const clientStatusEnum = pgEnum('client_status', ['intake', 'active', 'churned']);
 export const clientSourceEnum = pgEnum('client_source', ['tp_import', 'manual_intake', 'youth_excel', 'douzone_export']);
