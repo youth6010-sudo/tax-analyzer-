@@ -1,8 +1,10 @@
 import { TAX_TYPES, VAT_PERIODS, INCOME_FILING_TYPES } from './taxTypes';
 import {
+  addDays,
   adjustToNextBusinessDay,
   lastDayOfMonth,
   formatKoreanDate,
+  toISODate,
 } from './dateUtils';
 import type { DeadlineParams, DeadlineResult, TaxTypeKey } from './types';
 
@@ -98,6 +100,26 @@ function calcIncome({ year, filingTypeId }: DeadlineParams): DeadlineResult {
     coverageEnd: new Date(year, 11, 31),
     statutory: dueDate,
   });
+}
+
+// 세목별 "자료 제출 마감" 최초 기본값 (신고 기한일 기준)
+//  · 원천세: 신고 마감 3일 전
+//  · 부가세: 신고 마감 2주 전
+//  · 종소세: 신고 마감 3주 전
+//  · 법인세: 신고 마감월 직전 달 15일(= 12월 결산 기준 2월 중순)
+export function defaultMaterialDate(taxType: TaxTypeKey, finalDate: Date): string {
+  switch (taxType) {
+    case TAX_TYPES.WITHHOLDING:
+      return toISODate(addDays(finalDate, -3));
+    case TAX_TYPES.VAT:
+      return toISODate(addDays(finalDate, -14));
+    case TAX_TYPES.INCOME:
+      return toISODate(addDays(finalDate, -21));
+    case TAX_TYPES.CORPORATE:
+      return toISODate(new Date(finalDate.getFullYear(), finalDate.getMonth() - 1, 15));
+    default:
+      return toISODate(finalDate);
+  }
 }
 
 export function calculateDeadline(

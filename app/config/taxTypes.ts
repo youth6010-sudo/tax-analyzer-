@@ -32,6 +32,11 @@ export const TAX_MENU = [
     ],
   },
   {
+    id: 'youth-id',
+    label: '청년들 ID',
+    items: [{ label: '계정 · 계좌 · 자료', href: '/youth-ids' }],
+  },
+  {
     id: 'fun',
     label: '뽑기',
     items: [

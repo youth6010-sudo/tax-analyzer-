@@ -1,0 +1,67 @@
+{
+  "_README": "이 파일은 형식 예시입니다(실제 비밀값 아님). 이 JSON을 한 줄로 만들어 Vercel 환경변수 YOUTH_IDS_JSON 에 넣고, 로컬은 .env.local 에 동일 키로 넣으세요. owner 가 없으면 공용(전원 표시), owner 닉네임(블루/다야/리아/윈터/페리/인디/찰리)이 있으면 해당 사용자에게만 보입니다. secret:true 인 필드는 기본 가림 + '보기' 토글.",
+  "categories": [
+    {
+      "id": "accounts",
+      "label": "계좌",
+      "icon": "🏦",
+      "entries": [
+        {
+          "id": "acc-revenue",
+          "title": "수익 (부산은행)",
+          "fields": [
+            { "label": "은행", "value": "부산은행" },
+            { "label": "계좌", "value": "000-0000-0000-00", "secret": true },
+            { "label": "예금주", "value": "세무법인청년들" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phones",
+      "label": "전화번호",
+      "icon": "☎️",
+      "entries": [
+        {
+          "id": "tel-office",
+          "title": "세무법인 전화",
+          "fields": [{ "label": "번호", "value": "000-0000-0000" }]
+        }
+      ]
+    },
+    {
+      "id": "hometax",
+      "label": "홈택스",
+      "icon": "🧾",
+      "entries": [
+        {
+          "id": "hometax-blue",
+          "title": "홈택스 (블루)",
+          "owner": "블루",
+          "url": "https://hometax.go.kr",
+          "fields": [
+            { "label": "ID", "value": "youthxxxx", "secret": true },
+            { "label": "PW", "value": "********", "secret": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "institutions",
+      "label": "기관 · 기타",
+      "icon": "🏢",
+      "entries": [
+        {
+          "id": "inst-sample",
+          "title": "기타 프로그램 (공용)",
+          "url": "https://example.com",
+          "fields": [
+            { "label": "ID", "value": "shared-id", "secret": true },
+            { "label": "PW", "value": "********", "secret": true }
+          ],
+          "note": "담당 없음 · 전원 공용"
+        }
+      ]
+    }
+  ]
+}

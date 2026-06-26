@@ -98,7 +98,7 @@ export default function MaterialDeadlineField({ value, onChange }: Props) {
         </div>
       </div>
       <p className="mt-2 text-[11px] text-slate-400">
-        안내문에 &quot;자료 제출 마감&quot; 줄로 표시됩니다. (기본값: 신고 기한일 13:00)
+        안내문에 &quot;자료 제출 마감&quot; 줄로 표시됩니다. (기본값: 세목별 자동 · 13:00 — 원천세 3일 전 / 부가세 2주 전 / 종소세 3주 전 / 법인세 2월 중순)
       </p>
     </section>
   );

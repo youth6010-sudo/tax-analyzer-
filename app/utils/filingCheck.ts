@@ -11,8 +11,8 @@ export type FilingTaxId = TaxTypeId | 'businessStatus';
 export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle; icon: string }[] = [
   { id: 'withholding', label: '원천세', cycle: 'month', icon: '💸' },
   { id: 'vat', label: '부가세', cycle: 'vat', icon: '🧾' },
-  { id: 'businessStatus', label: '사업장현황', cycle: 'year', icon: '🏪' },
-  { id: 'comprehensive', label: '종소세', cycle: 'year', icon: '🧮' },
+  { id: 'businessStatus', label: '면세', cycle: 'year', icon: '🆓' },
+  { id: 'comprehensive', label: '종소세', cycle: 'year', icon: '💰' },
   { id: 'corporate', label: '법인세', cycle: 'year', icon: '🏢' },
 ];
 
@@ -99,11 +99,16 @@ export function isTaxExemptClient(c: ClientRecord): boolean {
   return k.includes('면세') && !k.includes('과세');
 }
 
+// 법인 면세 — 부가세 기간에 계산서합계표만 제출(부가세 목록에 '합계표제출'로 표시)
+export function isVatSummaryOnlyClient(c: ClientRecord): boolean {
+  return isCorporateClient(c) && isTaxExemptClient(c);
+}
+
 // 세목별 최초 신고대상 산출
 // 공통: 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
 // 원천세: 신고대리 제외한 모든 업체
-// 부가세: 비사업자·면세 제외
-// 사업장현황: 면세사업자
+// 부가세: 비사업자·(개인)면세 제외 — 단 법인 면세는 합계표 제출 위해 포함
+// 면세(사업장현황): 개인 면세사업자
 // 법인세: 법인 / 종소세: 개인(법인 아님) — 사업자번호 없는 건도 포함
 export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): ClientRecord[] {
   if (taxId === 'comprehensive') return clients.filter(c => !isCorporateClient(c));
@@ -115,10 +120,13 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
     return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);
   }
   if (taxId === 'vat') {
-    return withBizNo.filter(c => !isNonBusinessClient(c) && !isTaxExemptClient(c));
+    // 과세 + 법인면세(합계표) 포함, 비사업자·개인면세 제외
+    return withBizNo.filter(
+      c => !isNonBusinessClient(c) && (!isTaxExemptClient(c) || isCorporateClient(c)),
+    );
   }
   if (taxId === 'businessStatus') {
-    return withBizNo.filter(isTaxExemptClient);
+    return withBizNo.filter(c => isTaxExemptClient(c) && !isCorporateClient(c));
   }
   // corporate
   return withBizNo.filter(isCorporateClient);

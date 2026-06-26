@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
-import { filingTargets } from '@/app/utils/filingCheck';
+import { filingTargets, isVatSummaryOnlyClient } from '@/app/utils/filingCheck';
 import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 
 type SortKey = 'name' | 'code';
@@ -30,9 +30,11 @@ function compareByCode(a: ClientRecord, b: ClientRecord): number {
 function ClientList({
   clients,
   excludedIds,
+  summaryIds,
 }: {
   clients: ClientRecord[];
   excludedIds: Set<string>;
+  summaryIds: Set<string>;
 }) {
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
@@ -41,6 +43,7 @@ function ClientList({
     <ol className="divide-y divide-slate-100">
       {clients.map((c, i) => {
         const excluded = excludedIds.has(c.id);
+        const summary = summaryIds.has(c.id);
         return (
           <li key={c.id}>
             <Link
@@ -66,6 +69,11 @@ function ClientList({
                   </span>
                 )}
               </span>
+              {summary && (
+                <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                  합계표제출
+                </span>
+              )}
               {excluded && (
                 <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
                   제외
@@ -85,6 +93,7 @@ function SectionCard({
   countClass,
   clients,
   excludedIds,
+  summaryIds,
   ready,
 }: {
   label: string;
@@ -92,6 +101,7 @@ function SectionCard({
   countClass: string;
   clients: ClientRecord[];
   excludedIds: Set<string>;
+  summaryIds: Set<string>;
   ready: boolean;
 }) {
   const total = clients.length;
@@ -108,7 +118,7 @@ function SectionCard({
       </div>
       <div className="p-2">
         {ready ? (
-          <ClientList clients={clients} excludedIds={excludedIds} />
+          <ClientList clients={clients} excludedIds={excludedIds} summaryIds={summaryIds} />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
         )}
@@ -154,6 +164,15 @@ export default function MyClientsBoard() {
     if (taxFilter) {
       const targetIds = new Set(filingTargets(clients, taxFilter).map(c => c.id));
       for (const c of clients) if (!targetIds.has(c.id)) s.add(c.id);
+    }
+    return s;
+  }, [clients, taxFilter]);
+
+  // 부가세 보기일 때, 법인 면세(합계표만 제출) 표시
+  const summaryIds = useMemo(() => {
+    const s = new Set<string>();
+    if (taxFilter === 'vat') {
+      for (const c of clients) if (isVatSummaryOnlyClient(c)) s.add(c.id);
     }
     return s;
   }, [clients, taxFilter]);
@@ -225,6 +244,7 @@ export default function MyClientsBoard() {
           countClass="text-blue-700"
           clients={corporate}
           excludedIds={excludedIds}
+          summaryIds={summaryIds}
           ready={ready}
         />
 
@@ -236,6 +256,7 @@ export default function MyClientsBoard() {
             countClass="text-sky-700"
             clients={personal}
             excludedIds={excludedIds}
+            summaryIds={summaryIds}
             ready={ready}
           />
           {showSingo && (
@@ -245,6 +266,7 @@ export default function MyClientsBoard() {
               countClass="text-indigo-700"
               clients={singoDaeri}
               excludedIds={excludedIds}
+              summaryIds={summaryIds}
               ready={ready}
             />
           )}

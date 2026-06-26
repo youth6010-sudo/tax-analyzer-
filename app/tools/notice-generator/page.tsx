@@ -21,7 +21,7 @@ import {
   type TemplateScenario,
 } from './_lib/template';
 import { useLocalStorage } from './_lib/useLocalStorage';
-import { calculateDeadline } from './_lib/deadline';
+import { calculateDeadline, defaultMaterialDate } from './_lib/deadline';
 import { toISODate } from './_lib/dateUtils';
 import {
   renderTemplate,
@@ -287,20 +287,32 @@ export default function NoticeGeneratorPage() {
     }, 800);
   };
 
-  // 자료 제출 마감은 항시 ON — 날짜가 비어 있으면 신고 기한일로 자동 채움
+  // 자료 제출 마감은 항시 ON.
+  // 세목/기간이 바뀌면 세목별 기본값(원천세 -3일, 부가세 -2주, 종소세 -3주, 법인세 2월 중순)으로
+  // 다시 채운다. 단 사용자가 직접 바꿔둔 값은 그대로 둔다.
+  const lastAutoMaterialDate = useRef<string | null>(null);
   useEffect(() => {
     if (!deadline) return;
-    setMaterialDeadline(prev =>
-      prev.enabled && prev.date
-        ? prev
-        : { ...prev, enabled: true, date: prev.date || toISODate(deadline.final) },
-    );
+    const finalISO = toISODate(deadline.final);
+    const def = defaultMaterialDate(taxType, deadline.final);
+    const prevAuto = lastAutoMaterialDate.current;
+    lastAutoMaterialDate.current = def;
+    setMaterialDeadline(prev => {
+      // 비어 있거나, 직전 자동값과 동일하거나, (최초 1회) 과거 기본값(신고기한일)과 같으면 자동 갱신
+      const isAuto =
+        !prev.date ||
+        prev.date === prevAuto ||
+        (prevAuto === null && prev.date === finalISO);
+      return isAuto
+        ? { ...prev, enabled: true, date: def }
+        : { ...prev, enabled: true };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deadline]);
 
   const handleMaterialDeadlineChange = (next: MaterialDeadline) => {
     if (!next.date && deadline) {
-      next = { ...next, date: toISODate(deadline.final) };
+      next = { ...next, date: defaultMaterialDate(taxType, deadline.final) };
     }
     setMaterialDeadline({ ...next, enabled: true });
   };

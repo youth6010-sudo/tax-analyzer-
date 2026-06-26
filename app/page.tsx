@@ -65,14 +65,10 @@ export default async function HomePage() {
 
             {/* 상단 밴드: 인사(좌) + 도구(우, 같은 높이 박스 안에 배치) */}
             <section className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div className="rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm shadow-blue-100/40 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-                  <div className="min-w-0 flex-1">
-                    <HomeWelcomeSection userName={user.name} />
-                  </div>
-                  <div className="shrink-0">
-                    <TaxFilterBar />
-                  </div>
+              <div className="flex flex-col rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm shadow-blue-100/40 sm:p-6">
+                <HomeWelcomeSection userName={user.name} />
+                <div className="mt-5 border-t border-blue-100 pt-4">
+                  <TaxFilterBar />
                 </div>
               </div>
 

@@ -11,8 +11,19 @@ export default function TaxFilterBar() {
 
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold text-slate-500">세목별 보기</p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mb-2 flex items-center gap-2">
+        <p className="text-xs font-semibold text-slate-500">세목별 보기</p>
+        {selected && (
+          <button
+            type="button"
+            onClick={() => setDashboardTaxFilter(null)}
+            className="text-[11px] font-medium text-blue-600 hover:underline"
+          >
+            전체 보기로 초기화
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
         {ITEMS.map(item => {
           const active = selected === item.id;
           return (
@@ -21,13 +32,13 @@ export default function TaxFilterBar() {
               type="button"
               aria-pressed={active}
               onClick={() => setDashboardTaxFilter(active ? null : item.id)}
-              className={`flex w-[4.5rem] flex-col items-center gap-1 rounded-2xl border px-2 py-2.5 text-xs font-bold transition-all ${
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-bold transition-all ${
                 active
                   ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm shadow-blue-200/60'
                   : 'border-blue-100 bg-white/70 text-slate-600 hover:border-blue-300 hover:bg-blue-50/60'
               }`}
             >
-              <span className="text-xl leading-none" aria-hidden>
+              <span className="text-base leading-none" aria-hidden>
                 {item.icon}
               </span>
               {item.label}
@@ -35,15 +46,6 @@ export default function TaxFilterBar() {
           );
         })}
       </div>
-      {selected && (
-        <button
-          type="button"
-          onClick={() => setDashboardTaxFilter(null)}
-          className="mt-2 text-[11px] font-medium text-blue-600 hover:underline"
-        >
-          전체 보기로 초기화
-        </button>
-      )}
     </div>
   );
 }
