@@ -11,12 +11,7 @@ export const TAX_MENU = [
   {
     id: 'home',
     label: '홈',
-    items: [
-      { label: '대시보드', href: '/' },
-      { label: '안내문 생성기', href: '/tools/notice-generator' },
-      { label: '가챠머신', href: '/gacha' },
-      { label: '담당자 뽑기', href: '/gacha?tab=manager' },
-    ],
+    items: [{ label: '대시보드', href: '/' }],
   },
   {
     id: 'clients',
@@ -28,6 +23,23 @@ export const TAX_MENU = [
     ],
   },
   {
+    id: 'filing-help',
+    label: '신고도움',
+    items: [
+      { label: '신고대상확인', href: '/clients/filing-check' },
+      { label: '안내문 생성기', href: '/tools/notice-generator' },
+      { label: '종합소득세 분석', href: '/tax/comprehensive' },
+    ],
+  },
+  {
+    id: 'fun',
+    label: '뽑기',
+    items: [
+      { label: '가챠머신', href: '/gacha' },
+      { label: '담당자 뽑기', href: '/gacha?tab=manager' },
+    ],
+  },
+  {
     id: 'admin',
     label: '관리',
     adminOnly: true,
@@ -35,11 +47,6 @@ export const TAX_MENU = [
       { label: '데이터 백업', href: '/admin/backup' },
       { label: '수임료·연결', href: '/admin/fee-link' },
     ],
-  },
-  {
-    id: 'comprehensive',
-    label: '종소세',
-    items: [{ label: '종합소득세 분석', href: '/tax/comprehensive' }],
   },
 ] as const;
 

@@ -2,11 +2,29 @@ import Link from 'next/link';
 import HomeTasksSidebar from './components/dashboard/HomeTasksSidebar';
 import HomeWelcomeSection from './components/dashboard/HomeWelcomeSection';
 import MyClientsBoard from './components/dashboard/MyClientsBoard';
+import TaxFilterBar from './components/dashboard/TaxFilterBar';
 import PortalPageShell from './components/portal/PortalPageShell';
 import { portalMain } from './components/portal/uiClasses';
+import { TAX_MENU } from './config/taxTypes';
 import { requireUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+// 대시보드 도구 = '신고도움' 메뉴 그룹 (메뉴와 동기화)
+const TOOL_META: Record<string, { emoji: string; description: string }> = {
+  '/clients/filing-check': {
+    emoji: '✅',
+    description: '세목·기간별 신고대상 대비 홈택스 접수현황 대조',
+  },
+  '/tools/notice-generator': {
+    emoji: '🧾',
+    description: '세목·기간 선택 → 마감일 자동 계산 + 안내문 생성',
+  },
+  '/tax/comprehensive': {
+    emoji: '📊',
+    description: '단순경비율·실제 소득율 비교, 시뮬레이션',
+  },
+};
 
 const TOOLS: {
   href: string;
@@ -14,26 +32,12 @@ const TOOLS: {
   description: string;
   emoji: string;
   disabled?: boolean;
-}[] = [
-  {
-    href: '/tax/comprehensive',
-    title: '종합소득세 분석',
-    description: '단순경비율·실제 소득율 비교, 시뮬레이션',
-    emoji: '📊',
-  },
-  {
-    href: '/tools/notice-generator',
-    title: '세무 신고 안내 문구 생성기',
-    description: '세목·기간 선택 → 마감일 자동 계산 + 안내문 생성',
-    emoji: '🧾',
-  },
-  {
-    href: '/gacha',
-    title: '가챠머신',
-    description: '점심 맛집 뽑기 · 담당자 뽑기 — 3D 캡슐 가챠',
-    emoji: '🎰',
-  },
-];
+}[] = (TAX_MENU.find(g => g.id === 'filing-help')?.items ?? []).map(it => ({
+  href: it.href,
+  title: it.label,
+  emoji: TOOL_META[it.href]?.emoji ?? '🔧',
+  description: TOOL_META[it.href]?.description ?? '',
+}));
 
 export default async function HomePage() {
   const user = await requireUser();
@@ -62,7 +66,14 @@ export default async function HomePage() {
             {/* 상단 밴드: 인사(좌) + 도구(우, 같은 높이 박스 안에 배치) */}
             <section className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
               <div className="rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm shadow-blue-100/40 sm:p-6">
-                <HomeWelcomeSection userName={user.name} />
+                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+                  <div className="min-w-0 flex-1">
+                    <HomeWelcomeSection userName={user.name} />
+                  </div>
+                  <div className="shrink-0">
+                    <TaxFilterBar />
+                  </div>
+                </div>
               </div>
 
               <div className="flex max-h-[20rem] min-h-[14rem] flex-col rounded-2xl border border-blue-100 bg-white/80 p-4 shadow-sm shadow-blue-100/40">

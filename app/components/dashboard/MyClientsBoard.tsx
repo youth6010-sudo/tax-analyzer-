@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
+import { filingTargets } from '@/app/utils/filingCheck';
 import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 
 type SortKey = 'name' | 'code';
@@ -25,34 +27,54 @@ function compareByCode(a: ClientRecord, b: ClientRecord): number {
   return ca.localeCompare(cb, 'ko', { numeric: true });
 }
 
-function ClientList({ clients }: { clients: ClientRecord[] }) {
+function ClientList({
+  clients,
+  excludedIds,
+}: {
+  clients: ClientRecord[];
+  excludedIds: Set<string>;
+}) {
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
   }
   return (
     <ol className="divide-y divide-slate-100">
-      {clients.map((c, i) => (
-        <li key={c.id}>
-          <Link
-            href={`/clients/${c.id}`}
-            className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70"
-          >
-            <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
-              {i + 1}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-slate-800">
-                {c.companyName || '(이름 없음)'}
+      {clients.map((c, i) => {
+        const excluded = excludedIds.has(c.id);
+        return (
+          <li key={c.id}>
+            <Link
+              href={`/clients/${c.id}`}
+              className={`flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70 ${
+                excluded ? 'opacity-60' : ''
+              }`}
+            >
+              <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
+                {i + 1}
               </span>
-              {(c.representative || c.businessNo) && (
-                <span className="block truncate text-xs text-slate-400">
-                  {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
+              <span className="min-w-0 flex-1">
+                <span
+                  className={`block truncate text-sm font-semibold ${
+                    excluded ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'
+                  }`}
+                >
+                  {c.companyName || '(이름 없음)'}
+                </span>
+                {(c.representative || c.businessNo) && (
+                  <span className="block truncate text-xs text-slate-400">
+                    {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </span>
+              {excluded && (
+                <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  제외
                 </span>
               )}
-            </span>
-          </Link>
-        </li>
-      ))}
+            </Link>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -62,26 +84,31 @@ function SectionCard({
   dotClass,
   countClass,
   clients,
+  excludedIds,
   ready,
 }: {
   label: string;
   dotClass: string;
   countClass: string;
   clients: ClientRecord[];
+  excludedIds: Set<string>;
   ready: boolean;
 }) {
+  const total = clients.length;
+  const excl = clients.reduce((n, c) => n + (excludedIds.has(c.id) ? 1 : 0), 0);
+  const countText = excl > 0 ? `${total - excl}/${total}곳` : `${total}곳`;
   return (
     <div className="flex flex-col rounded-2xl border border-blue-100 bg-white/80 shadow-sm shadow-blue-100/40">
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
         <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} aria-hidden />
         <span className="text-sm font-bold text-slate-800">{label}</span>
         <span className={`ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold ${countClass}`}>
-          {ready ? `${clients.length}곳` : '…'}
+          {ready ? countText : '…'}
         </span>
       </div>
       <div className="p-2">
         {ready ? (
-          <ClientList clients={clients} />
+          <ClientList clients={clients} excludedIds={excludedIds} />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
         )}
@@ -97,6 +124,7 @@ export default function MyClientsBoard() {
   const [ready, setReady] = useState(false);
   const [sort, setSort] = useState<SortKey>('code');
   const [showSingo, setShowSingo] = useState(true);
+  const taxFilter = useDashboardTaxFilter();
 
   useEffect(() => {
     hydratePortal();
@@ -119,6 +147,17 @@ export default function MyClientsBoard() {
     }
   };
 
+  // 세목 아이콘을 선택하면 '신고대상확인'과 동일한 대상 규칙(filingTargets)으로
+  // 신고대상이 아닌 업체는 '제외'로 표시(숨기지 않음)
+  const excludedIds = useMemo(() => {
+    const s = new Set<string>();
+    if (taxFilter) {
+      const targetIds = new Set(filingTargets(clients, taxFilter).map(c => c.id));
+      for (const c of clients) if (!targetIds.has(c.id)) s.add(c.id);
+    }
+    return s;
+  }, [clients, taxFilter]);
+
   const { corporate, personal, singoDaeri } = useMemo(() => {
     const cmp = sort === 'name' ? compareByName : compareByCode;
     const corp: ClientRecord[] = [];
@@ -130,11 +169,18 @@ export default function MyClientsBoard() {
       else if (cat === SINGO_DAERI) singo.push(c);
       else pers.push(c); // 개인 + 비사업자 + 미분류 등
     }
-    corp.sort(cmp);
-    pers.sort(cmp);
-    singo.sort(cmp);
+    // 제외 업체는 아래로 내려 정렬(대상 먼저 보기 쉽게), 그 안에서 선택 정렬 기준 적용
+    const order = (a: ClientRecord, b: ClientRecord) => {
+      const ea = excludedIds.has(a.id) ? 1 : 0;
+      const eb = excludedIds.has(b.id) ? 1 : 0;
+      if (ea !== eb) return ea - eb;
+      return cmp(a, b);
+    };
+    corp.sort(order);
+    pers.sort(order);
+    singo.sort(order);
     return { corporate: corp, personal: pers, singoDaeri: singo };
-  }, [clients, sort]);
+  }, [clients, sort, excludedIds]);
 
   const toggleBtn = (key: SortKey, text: string) => (
     <button
@@ -178,6 +224,7 @@ export default function MyClientsBoard() {
           dotClass="bg-blue-500"
           countClass="text-blue-700"
           clients={corporate}
+          excludedIds={excludedIds}
           ready={ready}
         />
 
@@ -188,6 +235,7 @@ export default function MyClientsBoard() {
             dotClass="bg-sky-500"
             countClass="text-sky-700"
             clients={personal}
+            excludedIds={excludedIds}
             ready={ready}
           />
           {showSingo && (
@@ -196,6 +244,7 @@ export default function MyClientsBoard() {
               dotClass="bg-indigo-500"
               countClass="text-indigo-700"
               clients={singoDaeri}
+              excludedIds={excludedIds}
               ready={ready}
             />
           )}
