@@ -103,8 +103,11 @@ export function getPortalBootstrap(): PortalBootstrap | null {
   return memory;
 }
 
+const EMPTY_CLIENTS: ClientRecord[] = [];
+const EMPTY_TASKS: DashboardTask[] = [];
+
 export function getPortalTasks(): DashboardTask[] {
-  return memory?.tasks ?? [];
+  return memory?.tasks ?? EMPTY_TASKS;
 }
 
 export function getPortalHomeStats(): PortalHomeStats | null {
@@ -112,15 +115,13 @@ export function getPortalHomeStats(): PortalHomeStats | null {
 }
 
 export function getPortalClients(): ClientRecord[] {
-  return memory?.clients ?? [];
+  return memory?.clients ?? EMPTY_CLIENTS;
 }
 
 /** SSR·hydration 시 빈 배열, 마운트 후 localStorage 캐시 반영 */
 export function usePortalClients(): ClientRecord[] {
-  return useSyncExternalStore(subscribePortal, getPortalClients, () => []);
+  return useSyncExternalStore(subscribePortal, getPortalClients, () => EMPTY_CLIENTS);
 }
-
-const EMPTY_TASKS: DashboardTask[] = [];
 
 /** SSR·hydration 시 빈 배열, 마운트 후 localStorage 캐시 반영 */
 export function usePortalTasks(): DashboardTask[] {
