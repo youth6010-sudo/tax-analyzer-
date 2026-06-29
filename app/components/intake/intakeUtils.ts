@@ -221,6 +221,15 @@ export function normalizeCompanyKey(name: string): string {
   return name.trim().normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
 
+/** 지점 수 표기(인화칼국수 *2 / 2곳 / 2개) 등 매장 개수 주석 제거 */
+export function stripBranchCount(name: string): string {
+  return name
+    .replace(/\s*[*xX×]\s*\d+\s*$/, '')
+    .replace(/\s*\d+\s*(곳|개소|개점|개)\s*$/, '')
+    .replace(/\s*외\s*\d+\s*(곳|개소|개점|개)?\s*$/, '')
+    .trim();
+}
+
 /** (주)·㈜·주식회사 등 법인 접두어 제거 후 핵심 상호 */
 export function coreCompanyKey(name: string): string {
   let s = name.trim().normalize('NFKC').replace(/\s+/g, '');
@@ -301,6 +310,8 @@ function collectCompanyKeys(name: string): string[] {
   add(trimmed.split(',')[0] ?? '');
   const noParen = trimmed.replace(/\([^)]*\)/g, '');
   add(noParen);
+  const noBranch = stripBranchCount(trimmed);
+  if (noBranch && noBranch !== trimmed) add(noBranch);
   for (const variant of parentheticalVariants(trimmed)) add(variant);
 
   return [...keys];
