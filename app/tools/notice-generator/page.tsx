@@ -451,7 +451,7 @@ export default function NoticeGeneratorPage() {
             {isVat && (
               <>
                 <VatReportField value={vatReport} onChange={setVatReport} />
-                <ResultBox messageHtml={vatReportHtml} title="신고 결과 보고 및 검토 안내 문구" />
+                <ResultBox messageHtml={vatReportHtml} title="신고 결과 보고 및 검토 안내 문구" editable />
               </>
             )}
             <PaymentNoticeField
@@ -462,7 +462,7 @@ export default function NoticeGeneratorPage() {
               isWithholding={taxType === TAX_TYPES.WITHHOLDING}
               showInstallments={isVat}
             />
-            <ResultBox messageHtml={paymentHtml} title="신고 결과 안내 문구 (납부세액)" />
+            <ResultBox messageHtml={paymentHtml} title="신고 결과 안내 문구 (납부세액)" editable />
           </div>
         </div>
 
