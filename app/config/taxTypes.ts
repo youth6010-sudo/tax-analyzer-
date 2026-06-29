@@ -29,11 +29,7 @@ export const TAX_MENU = [
   {
     id: 'bluehole',
     label: '블루홀',
-    items: [
-      { label: '거래처', href: '/bluehole?tab=clients' },
-      { label: '케이스', href: '/bluehole?tab=cases' },
-      { label: '계정 연결', href: '/bluehole?tab=account' },
-    ],
+    href: '/bluehole',
   },
   {
     id: 'filing-help',

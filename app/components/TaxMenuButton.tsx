@@ -62,9 +62,9 @@ export default function TaxMenuButton() {
           className="absolute left-0 top-full mt-2 w-56 z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden py-1"
         >
           {TAX_MENU.filter(group => !('adminOnly' in group && group.adminOnly) || isAdmin).map(group => {
-            const groupHref = 'href' in group ? (group.href as string) : undefined;
-            // href만 있는 그룹(예: 청년들 ID)은 라벨 자체를 클릭 가능한 단일 메뉴로 렌더
-            if (groupHref) {
+            // href만 있는 그룹(예: 블루홀)은 라벨 자체를 클릭 가능한 단일 메뉴로 렌더
+            if ('href' in group) {
+              const groupHref = group.href as string;
               const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
               return (
                 <div key={group.id} role="none" className="px-2 py-1.5">
