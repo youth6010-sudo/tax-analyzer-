@@ -190,7 +190,7 @@ function BlueholeHub() {
       ) : tab === 'clients' ? (
         <ClientsTab branchId={branchId} notify={notify} />
       ) : tab === 'cases' ? (
-        <CasesTab team={team} myId={me?.id || ''} notify={notify} />
+        <CasesTab team={team} myId={me?.id || ''} branchName={me?.branch_name || ''} notify={notify} />
       ) : (
         <AccountTab account={account} onChanged={loadAccount} notify={notify} />
       )}
@@ -664,7 +664,17 @@ function ClientCreateModal({
 
 /* ───────────────────────── 케이스 ───────────────────────── */
 
-function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; notify: (m: string, e?: boolean) => void }) {
+function CasesTab({
+  team,
+  myId,
+  branchName,
+  notify,
+}: {
+  team: TeamMember[];
+  myId: string;
+  branchName: string;
+  notify: (m: string, e?: boolean) => void;
+}) {
   const [q, setQ] = useState('');
   const [assignedBy, setAssignedBy] = useState('');
   const [rows, setRows] = useState<CaseRow[]>([]);
@@ -673,7 +683,9 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
   const [creating, setCreating] = useState(false);
   const [includeOther, setIncludeOther] = useState(false);
 
-  // 내 지점(우림) 팀원 id 집합 — 케이스를 팀 수행자 기준으로 한정한다.
+  const branchLabel = branchName || '내 지점';
+
+  // 내 지점 팀원 id 집합 — 케이스를 팀 수행자 기준으로 한정한다.
   const teamIds = useMemo(() => new Set(team.map((m) => m.id)), [team]);
 
   // 기본: 내 지점 팀원이 수행자인 케이스만 노출. '타 지점 포함' 체크 시 전체.
@@ -723,7 +735,7 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
             className={`${portalInput} min-w-[8rem] flex-1`}
           />
           <select value={assignedBy} onChange={(e) => setAssignedBy(e.target.value)} className={`${portalSelect} py-2`}>
-            <option value="">팀 전체</option>
+            <option value="">{branchLabel} 전체</option>
             {team.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -768,7 +780,7 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
           ))}
           {!loading && visibleRows.length === 0 && (
             <div className="px-3 py-10 text-center text-sm text-slate-500">
-              {rows.length > 0 ? '내 지점(우림) 케이스가 없습니다. ‘타 지점 포함’을 켜보세요.' : '케이스가 없습니다.'}
+              {rows.length > 0 ? `${branchLabel} 케이스가 없습니다. ‘타 지점 포함’을 켜보세요.` : '케이스가 없습니다.'}
             </div>
           )}
         </div>
