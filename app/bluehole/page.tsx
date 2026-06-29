@@ -681,19 +681,12 @@ function CasesTab({
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [creating, setCreating] = useState(false);
-  const [includeOther, setIncludeOther] = useState(false);
 
   const branchLabel = branchName || '내 지점';
 
-  // 내 지점 팀원 id 집합 — 케이스를 팀 수행자 기준으로 한정한다.
-  const teamIds = useMemo(() => new Set(team.map((m) => m.id)), [team]);
-
-  // 기본: 내 지점 팀원이 수행자인 케이스만 노출. '타 지점 포함' 체크 시 전체.
-  const visibleRows = useMemo(() => {
-    if (includeOther || teamIds.size === 0) return rows;
-    if (assignedBy) return rows.filter((r) => r.assigned_id === assignedBy);
-    return rows.filter((r) => teamIds.has(r.assigned_id));
-  }, [rows, includeOther, teamIds, assignedBy]);
+  // 블루홀 case/list는 로그인 계정 권한 기준으로 이미 "우리 팀이 만들거나·수행자거나·태그된"
+  // 케이스만 내려준다. 별도 클라이언트 필터 없이 서버 결과를 그대로 노출한다.
+  const visibleRows = rows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -748,16 +741,10 @@ function CasesTab({
           </button>
         </form>
         <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-slate-500">
-          <span>{visibleRows.length}건{!includeOther && rows.length !== visibleRows.length ? ` (전체 ${rows.length})` : ''}</span>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input type="checkbox" checked={includeOther} onChange={(e) => setIncludeOther(e.target.checked)} className="rounded border-slate-300" />
-              타 지점 포함
-            </label>
-            <button type="button" onClick={() => setCreating(true)} className="font-semibold text-indigo-600 hover:underline">
-              + 신규 케이스
-            </button>
-          </div>
+          <span>{visibleRows.length}건</span>
+          <button type="button" onClick={() => setCreating(true)} className="font-semibold text-indigo-600 hover:underline">
+            + 신규 케이스
+          </button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto">
           {visibleRows.map((c) => (
@@ -779,9 +766,7 @@ function CasesTab({
             </button>
           ))}
           {!loading && visibleRows.length === 0 && (
-            <div className="px-3 py-10 text-center text-sm text-slate-500">
-              {rows.length > 0 ? `${branchLabel} 케이스가 없습니다. ‘타 지점 포함’을 켜보세요.` : '케이스가 없습니다.'}
-            </div>
+            <div className="px-3 py-10 text-center text-sm text-slate-500">케이스가 없습니다.</div>
           )}
         </div>
       </div>
