@@ -5,7 +5,7 @@ import ClientDouzoneSection from '../../components/ClientDouzoneSection';
 import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
 import ClientBlueholePanel from '../../components/clients/ClientBlueholePanel';
 import PortalPageShell from '../../components/portal/PortalPageShell';
-import { requireUser } from '@/lib/auth';
+import { requireUser, isPortalAdmin } from '@/lib/auth';
 import { canEditClient } from '@/lib/clientAccess';
 import { getClientById } from '@/lib/clientsDb';
 import { getClientRelatedCounts } from '@/lib/workbookDb';
@@ -45,6 +45,7 @@ export default async function ClientDetailPage({
           companyName={client.companyName}
           businessNumber={client.businessNo}
           canEdit={canEdit}
+          isAdmin={isPortalAdmin(user)}
           ours={{
             companyName: client.companyName,
             businessNo: client.businessNo,

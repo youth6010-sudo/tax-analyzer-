@@ -54,6 +54,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await insertBlueholeSyncLog({
       clientId: id,
       blueholeClientId,
+      action: 'update',
       userId: user.id,
       userName: user.name || '',
       changes,

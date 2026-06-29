@@ -70,6 +70,20 @@ export async function getClientById(id: string) {
   return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
+/** 여러 수임처 id → 상호 맵 (감사 로그 등 표시용) */
+export async function getClientNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return map;
+  const db = getDb();
+  const rows = await db
+    .select({ id: clients.id, companyName: clients.companyName })
+    .from(clients)
+    .where(inArray(clients.id, unique));
+  for (const r of rows) map.set(r.id, r.companyName);
+  return map;
+}
+
 /** 수임처에 연결된 블루홀 거래처 ID. 수임처가 없으면 null, 미연결이면 '' 반환. */
 export async function getClientBlueholeId(id: string): Promise<string | null> {
   const db = getDb();

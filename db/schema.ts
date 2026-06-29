@@ -22,13 +22,18 @@ export const blueholeSyncLog = pgTable('bluehole_sync_log', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: text('client_id').notNull(),
   blueholeClientId: text('bluehole_client_id').notNull().default(''),
+  // 작업 유형: create(생성) | update(수정) | link(연결) | unlink(해제)
+  action: text('action').notNull().default('update'),
   userId: uuid('user_id'),
   userName: text('user_name').notNull().default(''),
   changes: jsonb('changes').notNull().$type<Record<string, string>>().default({}),
   successCols: jsonb('success_cols').notNull().$type<string[]>().default([]),
   warnings: jsonb('warnings').notNull().$type<string[]>().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => [index('bluehole_sync_log_client_id_idx').on(t.clientId)]);
+}, t => [
+  index('bluehole_sync_log_client_id_idx').on(t.clientId),
+  index('bluehole_sync_log_created_at_idx').on(t.createdAt),
+]);
 
 export const userRoleEnum = pgEnum('user_role', ['staff', 'admin']);
 export const clientStatusEnum = pgEnum('client_status', ['intake', 'active', 'churned']);

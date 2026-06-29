@@ -11,6 +11,7 @@ import {
   portalAlertInfo,
 } from '../portal/uiClasses';
 import { CLIENT_SYNC_FIELDS, buildBlueholeCreateValues } from '@/lib/bluehole/clientFieldMap';
+import { actionLabel, actionBadge, columnLabel } from './blueholeLogLabels';
 
 export interface ClientOursForSync {
   companyName: string;
@@ -75,12 +76,14 @@ export default function ClientBlueholePanel({
   companyName,
   businessNumber,
   canEdit,
+  isAdmin = false,
   ours,
 }: {
   clientId: string;
   companyName: string;
   businessNumber?: string;
   canEdit: boolean;
+  isAdmin?: boolean;
   ours: ClientOursForSync;
 }) {
   const [loading, setLoading] = useState(true);
@@ -195,6 +198,7 @@ export default function ClientBlueholePanel({
           clientId={clientId}
           state={state}
           canEdit={canEdit}
+          isAdmin={isAdmin}
           unlinking={unlinking}
           ours={ours}
           onUnlink={unlink}
@@ -234,6 +238,7 @@ function LinkedView({
   clientId,
   state,
   canEdit,
+  isAdmin,
   unlinking,
   ours,
   onUnlink,
@@ -242,6 +247,7 @@ function LinkedView({
   clientId: string;
   state: LinkState;
   canEdit: boolean;
+  isAdmin: boolean;
   unlinking: boolean;
   ours: ClientOursForSync;
   onUnlink: () => void;
@@ -282,6 +288,8 @@ function LinkedView({
       )}
 
       <CasesSection clientId={clientId} />
+
+      <LogsSection clientId={clientId} isAdmin={isAdmin} />
 
       {canEdit && info?.values && (
         <SyncSection
@@ -381,6 +389,98 @@ function CasesSection({ clientId }: { clientId: string }) {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BhLogEntry {
+  id: string;
+  at: string;
+  action: string;
+  userName: string;
+  changes: Record<string, string>;
+  successCols: string[];
+  warnings: string[];
+}
+
+function LogsSection({ clientId, isAdmin }: { clientId: string; isAdmin: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState<BhLogEntry[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/clients/${clientId}/bluehole/logs`, { cache: 'no-store' });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error((data.error as string) || '로그 조회 실패');
+      setLogs((data.logs as BhLogEntry[]) || []);
+      setLoaded(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '로그 조회 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !loaded && !loading) void load();
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <button type="button" onClick={toggle} className="flex w-full items-center justify-between text-left">
+        <span className="text-xs font-bold text-slate-600">변경 로그</span>
+        <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2">
+          {loading ? (
+            <p className="py-2 text-xs text-slate-400">불러오는 중…</p>
+          ) : error ? (
+            <div className={portalAlertError}>{error}</div>
+          ) : logs.length === 0 ? (
+            <p className="py-2 text-xs text-slate-400">변경 기록이 없습니다.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {logs.map((l) => {
+                const cols = (l.successCols.length ? l.successCols : Object.keys(l.changes))
+                  .map(columnLabel)
+                  .join(', ');
+                return (
+                  <li key={l.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold ${actionBadge(l.action)}`}>
+                        {actionLabel(l.action)}
+                      </span>
+                      <span className="text-xs text-slate-500">{new Date(l.at).toLocaleString('ko-KR')}</span>
+                      {l.userName && <span className="text-xs font-medium text-slate-600">· {l.userName}</span>}
+                    </div>
+                    {cols && <p className="mt-1 text-xs text-slate-600">{cols}</p>}
+                    {l.warnings.length > 0 && (
+                      <p className="mt-0.5 text-xs text-amber-700">{l.warnings.join(' / ')}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/bluehole-logs"
+              className="mt-2 inline-block text-xs font-semibold text-blue-700 hover:text-blue-800"
+            >
+              전체 감사 로그 보기 →
+            </Link>
           )}
         </div>
       )}

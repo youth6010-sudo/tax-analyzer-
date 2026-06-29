@@ -8,7 +8,7 @@ import { assertCanAccessClient, assertClientExists } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
 import { getClientById, getClientBlueholeId, setClientBlueholeId } from '@/lib/clientsDb';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
-import { getLastSyncForClient } from '@/lib/blueholeSyncDb';
+import { getLastSyncForClient, insertBlueholeSyncLog } from '@/lib/blueholeSyncDb';
 import * as bh from '@/lib/bluehole/core.js';
 
 export const runtime = 'nodejs';
@@ -80,6 +80,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     await setClientBlueholeId(id, bhId);
+    await insertBlueholeSyncLog({
+      clientId: id,
+      blueholeClientId: bhId,
+      action: 'link',
+      userId: user.id,
+      userName: user.name || '',
+      changes: { name: (info && info.name) || '' },
+      successCols: [],
+      warnings: [],
+    });
     return NextResponse.json(
       { blueholeClientId: bhId, linked: true, configured: true, info, deeplink: deeplinkOf(bhId) },
       NO_STORE,
@@ -95,7 +105,20 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const { id } = await params;
     const existing = await getClientById(id);
     assertCanAccessClient(user, existing);
+    const prevBhId = (await getClientBlueholeId(id)) || '';
     await setClientBlueholeId(id, '');
+    if (prevBhId) {
+      await insertBlueholeSyncLog({
+        clientId: id,
+        blueholeClientId: prevBhId,
+        action: 'unlink',
+        userId: user.id,
+        userName: user.name || '',
+        changes: {},
+        successCols: [],
+        warnings: [],
+      });
+    }
     return NextResponse.json({ blueholeClientId: '', linked: false }, NO_STORE);
   } catch (e) {
     return handleApiError(e);

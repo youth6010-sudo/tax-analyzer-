@@ -88,6 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await insertBlueholeSyncLog({
       clientId: id,
       blueholeClientId: newId,
+      action: 'create',
       userId: user.id,
       userName: user.name || '',
       changes: values,
