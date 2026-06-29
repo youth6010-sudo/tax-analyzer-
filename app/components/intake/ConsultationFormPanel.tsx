@@ -51,14 +51,17 @@ function StepProgress({
   config,
   steps,
   current,
+  onJump,
 }: {
   config: ConsultationFormConfig;
   steps: ConsultationStep[];
   current: number;
+  onJump: (idx: number) => void;
 }) {
   const cur = steps[current];
   const phaseOrder = config.phases.map(p => p.id);
   const curPhaseIdx = phaseOrder.indexOf(cur?.phase ?? '');
+  const firstStepOfPhase = (pid: string) => steps.findIndex(s => s.phase === pid);
 
   return (
     <div className="mb-5">
@@ -67,19 +70,51 @@ function StepProgress({
           const active = cur?.phase === p.id;
           const done = curPhaseIdx > i;
           return (
-            <span
+            <button
               key={p.id}
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                active ? 'bg-blue-600 text-white' : done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+              type="button"
+              onClick={() => {
+                const idx = firstStepOfPhase(p.id);
+                if (idx >= 0) onJump(idx);
+              }}
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                active
+                  ? 'bg-blue-600 text-white'
+                  : done
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
               }`}
             >
               {p.label}
-            </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+        {steps.map((s, i) => {
+          const active = i === current;
+          const done = i < current;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onJump(i)}
+              title={s.title}
+              className={`w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center transition-colors ${
+                active
+                  ? 'bg-blue-600 text-white'
+                  : done
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {s.order}
+            </button>
           );
         })}
       </div>
       <div className="flex items-center gap-2 text-xs text-gray-500">
-        <span className="font-bold text-blue-600">단계 {cur?.order ?? 0}/11</span>
+        <span className="font-bold text-blue-600">단계 {cur?.order ?? 0}/{steps.length}</span>
         <span>· {cur?.title}</span>
       </div>
       <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -251,12 +286,17 @@ export default function ConsultationFormPanel({
     router.replace('/clients/intake?tab=consultation', { scroll: false });
   };
 
+  const goTo = (idx: number) => {
+    setError(null);
+    setStepIdx(Math.max(0, Math.min(steps.length - 1, idx)));
+  };
+
   const goNext = () => {
     const err = validateStep();
     if (err) { setError(err); return; }
     setError(null);
     if (stepIdx < steps.length - 1) setStepIdx(stepIdx + 1);
-    else void submit();
+    else void registerNow();
   };
 
   const goPrev = () => {
@@ -264,9 +304,7 @@ export default function ConsultationFormPanel({
     if (stepIdx > 0) setStepIdx(stepIdx - 1);
   };
 
-  const submit = async () => {
-    const err = validateStep();
-    if (err) { setError(err); return; }
+  const doSubmit = async () => {
     setSaving(true);
     setError(null);
     try {
@@ -287,6 +325,17 @@ export default function ConsultationFormPanel({
     } finally {
       setSaving(false);
     }
+  };
+
+  // 전화 상담만으로도 즉시 등록 — 서버 필수값(상호명)만 검증. 나머지는 이후 단계/프로세스에서 보완.
+  const registerNow = async () => {
+    if (!form.companyName?.trim()) {
+      const idx = steps.findIndex(s => s.fields.some(f => f.key === 'companyName'));
+      if (idx >= 0) setStepIdx(idx);
+      setError('상호명만 입력하면 바로 등록할 수 있어요. (전화 상담 1단계)');
+      return;
+    }
+    await doSubmit();
   };
 
   if (!config || !currentStep || !ready) {
@@ -354,7 +403,7 @@ export default function ConsultationFormPanel({
         </section>
       )}
 
-      <StepProgress config={config} steps={steps} current={stepIdx} />
+      <StepProgress config={config} steps={steps} current={stepIdx} onJump={goTo} />
 
       <article className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
         <header className="px-5 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
@@ -414,18 +463,29 @@ export default function ConsultationFormPanel({
         >
           {draftSaving ? '저장 중…' : '중간 저장'}
         </button>
+        {!isLast && (
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={busy}
+            className="px-4 py-2.5 text-sm font-semibold border border-blue-200 rounded-xl bg-blue-50 text-blue-800 hover:bg-blue-100 disabled:opacity-50"
+          >
+            다음 단계 →
+          </button>
+        )}
         <button
           type="button"
-          onClick={goNext}
-          disabled={busy}
-          className="flex-1 min-w-[8rem] py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50"
+          onClick={() => void registerNow()}
+          disabled={busy || !form.companyName?.trim()}
+          title={!form.companyName?.trim() ? '상호명을 입력하면 등록할 수 있어요' : undefined}
+          className="flex-1 min-w-[8rem] py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50"
         >
-          {saving ? '저장 중…' : isLast ? '상담 등록 완료' : '다음 단계 →'}
+          {saving ? '등록 중…' : '✓ 상담 등록'}
         </button>
       </div>
 
       <p className="mt-2 text-center text-[10px] text-gray-400">
-        중간 저장하면 나중에 이어서 작성할 수 있습니다 · 필수 항목 없이도 저장됩니다
+        단계 번호를 눌러 자유롭게 이동할 수 있어요 · 상호명만 있으면 언제든 「상담 등록」 가능 · 나머지는 등록 후 보완
       </p>
     </div>
   );
