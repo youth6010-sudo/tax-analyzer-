@@ -28,6 +28,7 @@
     "import:all": "node scripts/import-all.mjs",
     "import:verify-clients": "node scripts/verify-client-import.mjs",
     "db:ensure-bluehole-log-action": "node scripts/ensure-bluehole-sync-log-action.mjs",
+    "db:ensure-nts-columns": "node scripts/ensure-nts-columns.mjs",
     "db:push": "drizzle-kit push",
     "db:seed": "node scripts/seed-users.mjs",
     "db:wipe-clients": "node scripts/wipe-all-client-data.mjs --confirm",

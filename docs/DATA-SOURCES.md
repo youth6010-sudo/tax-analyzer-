@@ -116,3 +116,23 @@ node scripts/verify-client-import.mjs
 
 상세 필드 매핑: [`docs/EXCEL-PORTAL-MAP.md`](./EXCEL-PORTAL-MAP.md)
 
+
+
+## 국세청 사업자등록 상태/진위확인 API
+
+
+
+출처: 공공데이터포털 [15081808](https://www.data.go.kr/data/15081808/openapi.do) (REST·JSON·무료, 1회 100건). 엔드포인트는 `api.odcloud.kr/api/nts-businessman/v1` — 상태조회 `/status`, 진위확인 `/validate`. IP 화이트리스트가 없어 Vercel 서버 라우트에서 직접 호출(릴레이 불필요).
+
+
+
+- **키 발급**: data.go.kr 활용신청 → 일반 인증키(**Decoding**) 발급 → `NTS_SERVICE_KEY` 로 등록.
+
+- **환경변수**: `.env.local`(로컬) + Vercel 프로젝트 환경변수(Production/Preview)에 `NTS_SERVICE_KEY` 추가.
+
+- **마이그레이션**: `npm run db:ensure-nts-columns` (clients에 `nts_status*` 컬럼 추가).
+
+- **코드**: 클라이언트 [`lib/nts.ts`](../lib/nts.ts), 라우트 `app/api/clients/[id]/nts` · `app/api/clients/nts/batch` · `app/api/clients/[id]/nts/validate`, 패널 [`app/components/clients/ClientNtsPanel.tsx`](../app/components/clients/ClientNtsPanel.tsx).
+
+- **운용**: 상태는 30분 주기 갱신·신규개업 1~2일 지연(국세청 안내) → 캐시 표시 + 수동/일괄 갱신. 휴/폐업 감지는 **자동 유출등록하지 않고** 배지·경고 + `/clients/churn` 딥링크로 사람이 확인 후 등록. 진위확인은 개업일자(`intakeData.openDate`, 더존 출처 자동 프리필) 필요.
+

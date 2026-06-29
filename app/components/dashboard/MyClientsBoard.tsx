@@ -32,10 +32,12 @@ function ClientList({
   clients,
   excludedIds,
   summaryIds,
+  ntsClosedIds,
 }: {
   clients: ClientRecord[];
   excludedIds: Set<string>;
   summaryIds: Set<string>;
+  ntsClosedIds: Set<string>;
 }) {
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
@@ -45,6 +47,7 @@ function ClientList({
       {clients.map((c, i) => {
         const excluded = excludedIds.has(c.id);
         const summary = summaryIds.has(c.id);
+        const ntsClosed = ntsClosedIds.has(c.id);
         return (
           <li key={c.id}>
             <Link
@@ -70,6 +73,11 @@ function ClientList({
                   </span>
                 )}
               </span>
+              {ntsClosed && (
+                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                  폐업/휴업
+                </span>
+              )}
               {summary && (
                 <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                   합계표제출
@@ -95,6 +103,7 @@ function SectionCard({
   clients,
   excludedIds,
   summaryIds,
+  ntsClosedIds,
   ready,
 }: {
   label: string;
@@ -103,6 +112,7 @@ function SectionCard({
   clients: ClientRecord[];
   excludedIds: Set<string>;
   summaryIds: Set<string>;
+  ntsClosedIds: Set<string>;
   ready: boolean;
 }) {
   const total = clients.length;
@@ -119,7 +129,7 @@ function SectionCard({
       </div>
       <div className="p-2">
         {ready ? (
-          <ClientList clients={clients} excludedIds={excludedIds} summaryIds={summaryIds} />
+          <ClientList clients={clients} excludedIds={excludedIds} summaryIds={summaryIds} ntsClosedIds={ntsClosedIds} />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
         )}
@@ -135,6 +145,9 @@ export default function MyClientsBoard() {
   const [ready, setReady] = useState(false);
   const [sort, setSort] = useState<SortKey>('code');
   const [showSingo, setShowSingo] = useState(true);
+  const [ntsOverride, setNtsOverride] = useState<Record<string, string>>({});
+  const [ntsChecking, setNtsChecking] = useState(false);
+  const [ntsError, setNtsError] = useState('');
   const taxFilter = useDashboardTaxFilter();
 
   useEffect(() => {
@@ -182,6 +195,44 @@ export default function MyClientsBoard() {
     return s;
   }, [clients, taxFilter]);
 
+  // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합
+  const ntsClosedIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of clients) {
+      const code = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
+      if (code === '02' || code === '03') s.add(c.id);
+    }
+    return s;
+  }, [clients, ntsOverride]);
+
+  const runNtsCheck = async () => {
+    setNtsChecking(true);
+    setNtsError('');
+    try {
+      const res = await fetch('/api/clients/nts/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mine: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        configured?: boolean;
+        results?: Record<string, { statusCode?: string }>;
+      };
+      if (!res.ok) throw new Error('점검 실패');
+      if (!data.configured) {
+        setNtsError('국세청 API 키(NTS_SERVICE_KEY)가 설정되어 있지 않습니다.');
+        return;
+      }
+      const next: Record<string, string> = {};
+      for (const [id, r] of Object.entries(data.results ?? {})) next[id] = r.statusCode || '';
+      setNtsOverride(prev => ({ ...prev, ...next }));
+    } catch (e) {
+      setNtsError(e instanceof Error ? e.message : '점검 실패');
+    } finally {
+      setNtsChecking(false);
+    }
+  };
+
   const { corporate, personal, singoDaeri } = useMemo(() => {
     const cmp = sort === 'name' ? compareByName : compareByCode;
     const corp: ClientRecord[] = [];
@@ -225,6 +276,14 @@ export default function MyClientsBoard() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold tracking-tight text-slate-800">내 수임처</h2>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={runNtsCheck}
+            disabled={ntsChecking || !ready}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800 disabled:opacity-50"
+          >
+            {ntsChecking ? '점검 중…' : '국세청 일괄 점검'}
+          </button>
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
             <input
               type="checkbox"
@@ -241,6 +300,10 @@ export default function MyClientsBoard() {
         </div>
       </div>
 
+      {ntsError && (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{ntsError}</p>
+      )}
+
       <div className="grid items-start gap-4 sm:grid-cols-2">
         {/* 왼쪽: 법인(파랑) */}
         <SectionCard
@@ -250,6 +313,7 @@ export default function MyClientsBoard() {
           clients={corporate}
           excludedIds={excludedIds}
           summaryIds={summaryIds}
+          ntsClosedIds={ntsClosedIds}
           ready={ready}
         />
 
@@ -262,6 +326,7 @@ export default function MyClientsBoard() {
             clients={personal}
             excludedIds={excludedIds}
             summaryIds={summaryIds}
+            ntsClosedIds={ntsClosedIds}
             ready={ready}
           />
           {showSingo && (
@@ -272,6 +337,7 @@ export default function MyClientsBoard() {
               clients={singoDaeri}
               excludedIds={excludedIds}
               summaryIds={summaryIds}
+              ntsClosedIds={ntsClosedIds}
               ready={ready}
             />
           )}

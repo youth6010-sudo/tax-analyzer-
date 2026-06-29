@@ -1,9 +1,11 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import ContactDetailView from '../../components/ContactDetailView';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
 import ClientDouzoneSection from '../../components/ClientDouzoneSection';
 import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
 import ClientBlueholePanel from '../../components/clients/ClientBlueholePanel';
+import ClientNtsPanel from '../../components/clients/ClientNtsPanel';
 import PortalPageShell from '../../components/portal/PortalPageShell';
 import { requireUser, isPortalAdmin } from '@/lib/auth';
 import { canEditClient } from '@/lib/clientAccess';
@@ -12,6 +14,12 @@ import { getClientRelatedCounts } from '@/lib/workbookDb';
 import { clientRecordToContact } from '@/lib/clientMapper';
 
 export const dynamic = 'force-dynamic';
+
+/** 연관 메뉴(유입/유출 존재 여부)는 장식용 — 본문 렌더를 막지 않도록 Suspense로 분리 스트리밍 */
+async function RelatedLinksAsync({ clientId, companyName }: { clientId: string; companyName: string }) {
+  const related = await getClientRelatedCounts(clientId, companyName);
+  return <ClientRelatedLinks clientId={clientId} initial={related} />;
+}
 
 export default async function ClientDetailPage({
   params,
@@ -23,7 +31,6 @@ export default async function ClientDetailPage({
   const client = await getClientById(id);
   if (!client) notFound();
 
-  const related = await getClientRelatedCounts(id, client.companyName);
   const canEdit = canEditClient(user, client);
 
   return (
@@ -56,6 +63,14 @@ export default async function ClientDetailPage({
             businessEntityType: client.businessEntityType,
           }}
         />
+        <ClientNtsPanel
+          clientId={client.id}
+          businessNumber={client.businessNo}
+          representative={client.representative}
+          canEdit={canEdit}
+          openDatePrefill={String(client.intakeData?.openDate || '')}
+          initialNts={client.nts ?? null}
+        />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection
             clientId={client.id}
@@ -65,7 +80,9 @@ export default async function ClientDetailPage({
             canEdit={canEdit}
           />
         )}
-        <ClientRelatedLinks clientId={client.id} initial={related} />
+        <Suspense fallback={null}>
+          <RelatedLinksAsync clientId={client.id} companyName={client.companyName} />
+        </Suspense>
       </div>
     </PortalPageShell>
   );

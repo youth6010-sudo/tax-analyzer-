@@ -7,10 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/apiError';
 import { assertCanAccessClient } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
-import { getClientById, getClientBlueholeId, setClientBlueholeId } from '@/lib/clientsDb';
+import { getClientById, getClientBlueholeId, setClientBlueholeId, setClientNtsStatus } from '@/lib/clientsDb';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
 import { buildBlueholeCreateValues } from '@/lib/bluehole/clientFieldMap';
 import { insertBlueholeSyncLog } from '@/lib/blueholeSyncDb';
+import { checkStatus, digits10, isNtsConfigured } from '@/lib/nts';
 import * as bh from '@/lib/bluehole/core.js';
 
 export const runtime = 'nodejs';
@@ -72,6 +73,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           },
           { status: 409 },
         );
+      }
+    }
+
+    // 국세청 상태 사전 점검 — 휴/폐업이면 경고(force로 진행 허용). 신규개업 지연 고려해 미등록은 통과.
+    if (!force && myBiz.length >= 10 && isNtsConfigured()) {
+      try {
+        const map = await checkStatus([myBiz]);
+        const status = map.get(digits10(myBiz));
+        if (status) {
+          await setClientNtsStatus(id, status);
+          if (status.statusCode === '02' || status.statusCode === '03') {
+            return NextResponse.json(
+              {
+                ntsWarning: true,
+                ntsStatus: {
+                  status: status.status,
+                  statusCode: status.statusCode,
+                  taxType: status.taxType,
+                  closedDate: status.closedDate,
+                },
+              },
+              { status: 409 },
+            );
+          }
+        }
+      } catch {
+        // 국세청 조회 실패는 생성 차단 사유가 아니다 — 무시하고 진행
       }
     }
 

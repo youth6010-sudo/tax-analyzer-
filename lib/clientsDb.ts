@@ -1,11 +1,11 @@
-import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
 import type { ChurnSummary, ClientFeeChange, ClientStatus } from '@/app/types/client';
 import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
 import { computeFeeSummary, readFeeBreakdown } from '@/app/utils/feeBreakdown';
-import { getPrimaryContactNamesByClientIds, getPrimaryContactPhonesByClientIds } from '@/lib/clientContactsDb';
+import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 
 export type ClientPatch = ContactUpdatePayload & {
@@ -59,14 +59,30 @@ export async function listClients(filters: ClientListFilters = {}) {
 
 export async function getClientById(id: string) {
   const db = getDb();
-  const [row] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
-  if (!row) return null;
-  const [primaryNames, primaryPhones] = await Promise.all([
-    getPrimaryContactNamesByClientIds([id]),
-    getPrimaryContactPhonesByClientIds([id]),
+  // 클라이언트 행과 연락처를 한 번의 병렬 라운드트립으로 — DB가 원거리(고지연)일 때 순차 쿼리 비용을 줄인다.
+  const [clientRows, contactRows] = await Promise.all([
+    db.select().from(clients).where(eq(clients.id, id)).limit(1),
+    db
+      .select({
+        name: clientContacts.name,
+        mobilePhone: clientContacts.mobilePhone,
+        phone: clientContacts.phone,
+        isPrimary: clientContacts.isPrimary,
+      })
+      .from(clientContacts)
+      .where(eq(clientContacts.clientId, id))
+      .orderBy(desc(clientContacts.isPrimary), asc(clientContacts.name)),
   ]);
-  const record = clientToRecord(row, { primaryContactMobile: primaryPhones.get(id) });
-  const primaryContactName = primaryNames.get(id);
+
+  const row = clientRows[0];
+  if (!row) return null;
+
+  // is_primary 우선, 없으면 첫 연락처
+  const primary = contactRows.find(c => c.isPrimary) ?? contactRows[0];
+  const primaryContactName = primary?.name?.trim() || undefined;
+  const primaryContactMobile = (primary?.mobilePhone?.trim() || primary?.phone?.trim()) || undefined;
+
+  const record = clientToRecord(row, { primaryContactMobile });
   return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
@@ -102,6 +118,42 @@ export async function setClientBlueholeId(id: string, blueholeClientId: string):
     .update(clients)
     .set({ blueholeClientId: blueholeClientId.trim(), updatedAt: new Date() })
     .where(eq(clients.id, id));
+}
+
+export interface NtsStatusInput {
+  status: string;
+  statusCode: string;
+  taxType: string;
+  closedDate: string;
+}
+
+/** 국세청 상태조회 결과 캐시 저장. (updatedAt은 건드리지 않는다 — 상태조회는 정보 수정이 아님) */
+export async function setClientNtsStatus(id: string, status: NtsStatusInput): Promise<void> {
+  const db = getDb();
+  await db
+    .update(clients)
+    .set({
+      ntsStatus: status.status || '',
+      ntsStatusCode: status.statusCode || '',
+      ntsTaxType: status.taxType || '',
+      ntsClosedDate: status.closedDate || '',
+      ntsCheckedAt: new Date(),
+    })
+    .where(eq(clients.id, id));
+}
+
+/** 여러 수임처의 사업자번호(상태조회 대상). { id: businessNo } 맵. */
+export async function getClientBusinessNos(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return map;
+  const db = getDb();
+  const rows = await db
+    .select({ id: clients.id, businessNo: clients.businessNo })
+    .from(clients)
+    .where(inArray(clients.id, unique));
+  for (const r of rows) map.set(r.id, r.businessNo || '');
+  return map;
 }
 
 export async function searchClients(

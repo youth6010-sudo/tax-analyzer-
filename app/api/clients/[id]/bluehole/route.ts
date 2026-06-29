@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
 const deeplinkOf = (bhId: string) => (bhId ? `https://bluehole.world/client/info/${bhId}` : '');
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
     const { id } = await params;
@@ -29,6 +29,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     if (!blueholeClientId) {
       return NextResponse.json({ blueholeClientId: '', linked: false, configured }, NO_STORE);
+    }
+
+    // 기본 응답은 블루홀 릴레이를 호출하지 않는다(릴레이가 느려 상세 진입이 지연됨).
+    // 실시간 정보(info)는 ?live=1 일 때만 조회 — 패널이 연결 상태를 먼저 그린 뒤 백그라운드로 가져온다.
+    const wantLive = request.nextUrl.searchParams.get('live') === '1';
+    if (!wantLive) {
+      return NextResponse.json(
+        { blueholeClientId, linked: true, configured, deeplink: deeplinkOf(blueholeClientId) },
+        NO_STORE,
+      );
     }
 
     let info: unknown = null;

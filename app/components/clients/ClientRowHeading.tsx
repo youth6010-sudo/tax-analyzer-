@@ -6,6 +6,7 @@ type Props = {
   expanded: boolean;
   isChurned?: boolean;
   entityBadge?: string;
+  ntsClosed?: boolean;
   onNameClick: (e: React.MouseEvent) => void;
   onPrefetch?: () => void;
   nameButtonClass: string;
@@ -17,6 +18,7 @@ export default function ClientRowHeading({
   expanded,
   isChurned,
   entityBadge,
+  ntsClosed,
   onNameClick,
   onPrefetch,
   nameButtonClass,
@@ -34,6 +36,11 @@ export default function ClientRowHeading({
       title={expanded ? `${companyTitle} — 클릭하면 접기` : `${companyTitle} — 클릭하면 정보 표시`}
     >
       <span className="min-w-0 truncate">{companyName}</span>
+      {ntsClosed && (
+        <span className="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold text-red-700 bg-red-100 ring-1 ring-red-200/80">
+          폐업/휴업
+        </span>
+      )}
       {entityBadge && (
         <span className="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold text-amber-800 bg-amber-100 ring-1 ring-amber-200/80">
           {entityBadge}

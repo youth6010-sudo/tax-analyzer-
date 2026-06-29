@@ -42,6 +42,15 @@ export function clientToRecord(row: Client, opts?: { primaryContactMobile?: stri
     intakeStep: row.intakeStep,
     intakeData: intakeData,
     source: row.source,
+    nts: row.ntsCheckedAt
+      ? {
+          status: row.ntsStatus ?? '',
+          statusCode: row.ntsStatusCode ?? '',
+          taxType: row.ntsTaxType ?? '',
+          closedDate: row.ntsClosedDate ?? '',
+          checkedAt: row.ntsCheckedAt.toISOString(),
+        }
+      : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

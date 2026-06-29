@@ -89,6 +89,7 @@ export default function ClientBlueholePanel({
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<LinkState | null>(null);
   const [error, setError] = useState('');
+  const [infoLoading, setInfoLoading] = useState(false);
 
   const [query, setQuery] = useState(companyName || '');
   const [searching, setSearching] = useState(false);
@@ -97,20 +98,39 @@ export default function ClientBlueholePanel({
   const [busyId, setBusyId] = useState('');
   const [unlinking, setUnlinking] = useState(false);
 
+  // 실시간 블루홀 정보(릴레이 경유, 느림)를 백그라운드로 채운다.
+  const loadLive = useCallback(async () => {
+    setInfoLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/bluehole?live=1`, { cache: 'no-store' });
+      const data = await readJson(res);
+      if (!res.ok) return;
+      setState((prev) => (prev ? ({ ...prev, ...(data as object) } as LinkState) : (data as unknown as LinkState)));
+    } catch {
+      /* 실시간 정보 실패는 연결 상태 표시를 막지 않는다 */
+    } finally {
+      setInfoLoading(false);
+    }
+  }, [clientId]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
+      // 1단계: 릴레이 없이 연결 상태만 즉시 — 상세 진입이 빨라진다.
       const res = await fetch(`/api/clients/${clientId}/bluehole`, { cache: 'no-store' });
       const data = await readJson(res);
       if (!res.ok) throw new Error((data.error as string) || '상태를 불러오지 못했습니다.');
-      setState(data as unknown as LinkState);
+      const next = data as unknown as LinkState;
+      setState(next);
+      setLoading(false);
+      // 2단계: 연결+설정된 경우에만 실시간 정보를 백그라운드로 채운다.
+      if (next.linked && next.configured) void loadLive();
     } catch (e) {
       setError(e instanceof Error ? e.message : '상태를 불러오지 못했습니다.');
-    } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, loadLive]);
 
   useEffect(() => {
     void load();
@@ -200,6 +220,7 @@ export default function ClientBlueholePanel({
           canEdit={canEdit}
           isAdmin={isAdmin}
           unlinking={unlinking}
+          infoLoading={infoLoading}
           ours={ours}
           onUnlink={unlink}
           onSynced={load}
@@ -240,6 +261,7 @@ function LinkedView({
   canEdit,
   isAdmin,
   unlinking,
+  infoLoading,
   ours,
   onUnlink,
   onSynced,
@@ -249,6 +271,7 @@ function LinkedView({
   canEdit: boolean;
   isAdmin: boolean;
   unlinking: boolean;
+  infoLoading: boolean;
   ours: ClientOursForSync;
   onUnlink: () => void;
   onSynced: () => void;
@@ -283,6 +306,8 @@ function LinkedView({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
           연결됨 (ID {state.blueholeClientId}). 정보 조회 실패: {state.infoError}
         </div>
+      ) : infoLoading ? (
+        <p className="text-sm text-gray-400">연결됨 (ID {state.blueholeClientId}) · 블루홀 정보 불러오는 중…</p>
       ) : (
         <p className="text-sm text-gray-600">연결됨 (ID {state.blueholeClientId})</p>
       )}
@@ -625,6 +650,7 @@ function CreateSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [duplicates, setDuplicates] = useState<BhCandidate[] | null>(null);
+  const [ntsWarning, setNtsWarning] = useState<{ status: string; statusCode: string } | null>(null);
 
   const preview = buildBlueholeCreateValues(ours);
   const previewRows = CLIENT_SYNC_FIELDS.filter((f) => preview[f.col]).map((f) => ({
@@ -654,6 +680,11 @@ function CreateSection({
         const data = await readJson(res);
         if (res.status === 409 && data.duplicate) {
           setDuplicates((data.candidates as BhCandidate[]) || []);
+          return;
+        }
+        if (res.status === 409 && data.ntsWarning) {
+          const s = (data.ntsStatus as { status?: string; statusCode?: string }) || {};
+          setNtsWarning({ status: s.status || '', statusCode: s.statusCode || '' });
           return;
         }
         if (!res.ok) throw new Error((data.error as string) || '생성 실패');
@@ -697,7 +728,22 @@ function CreateSection({
             ))}
           </dl>
 
-          {duplicates && duplicates.length > 0 ? (
+          {ntsWarning ? (
+            <div className="space-y-2">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-relaxed text-red-900">
+                국세청 조회 결과 <b>{ntsWarning.statusCode === '03' ? '폐업' : ntsWarning.statusCode === '02' ? '휴업' : ntsWarning.status}</b> 상태입니다.
+                정말 블루홀에 신규 등록하시겠어요? (휴/폐업 거래처는 등록 전 확인을 권장합니다)
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => submit(true)} disabled={busy} className={portalBtnDanger}>
+                  {busy ? '생성 중…' : '상태 경고 무시하고 등록'}
+                </button>
+                <button type="button" onClick={() => setNtsWarning(null)} disabled={busy} className={portalBtnSecondary}>
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : duplicates && duplicates.length > 0 ? (
             <div className="space-y-2">
               <div className={portalAlertError}>
                 같은 사업자번호의 블루홀 거래처가 이미 있습니다. 새로 만들지 말고 연결을 권장합니다.

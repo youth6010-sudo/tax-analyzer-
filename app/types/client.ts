@@ -25,6 +25,16 @@ export interface ClientRecord extends ContactRecord {
   updatedAt: string;
   /** 주 연락처(is_primary) 이름 */
   primaryContactName?: string;
+  /** 국세청 사업자상태 캐시 */
+  nts?: NtsStatusCache | null;
+}
+
+export interface NtsStatusCache {
+  status: string;
+  statusCode: string;
+  taxType: string;
+  closedDate: string;
+  checkedAt: string | null;
 }
 
 export interface ChurnRecordView {

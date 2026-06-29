@@ -175,6 +175,7 @@ function ClientRosterRow({
   const idLabel = panelIdLabel(variant);
   const entityBadge =
     panelCategory === SINGO_DAERI && c.businessEntityType === 'nonBusiness' ? '비사업자' : undefined;
+  const ntsClosed = c.nts?.statusCode === '02' || c.nts?.statusCode === '03';
   const rowGrid = showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE;
   const { expanded, onNameClick, goToDetail, prefetchDetail, nameButtonClass } = useClientRowExpand(
     c.id,
@@ -199,6 +200,7 @@ function ClientRosterRow({
           expanded={expanded}
           isChurned={isChurned}
           entityBadge={entityBadge}
+          ntsClosed={ntsClosed}
           onNameClick={onNameClick}
           onPrefetch={prefetchDetail}
           nameButtonClass={nameButtonClass}

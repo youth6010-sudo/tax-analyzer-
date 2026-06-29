@@ -77,6 +77,11 @@ export const clients = pgTable('clients', {
   intakeData: jsonb('intake_data').notNull().$type<Record<string, unknown>>().default({}),
   source: clientSourceEnum('source').notNull().default('tp_import'),
   blueholeClientId: text('bluehole_client_id').notNull().default(''),
+  ntsStatus: text('nts_status').notNull().default(''),
+  ntsStatusCode: text('nts_status_code').notNull().default(''),
+  ntsTaxType: text('nts_tax_type').notNull().default(''),
+  ntsClosedDate: text('nts_closed_date').notNull().default(''),
+  ntsCheckedAt: timestamp('nts_checked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
