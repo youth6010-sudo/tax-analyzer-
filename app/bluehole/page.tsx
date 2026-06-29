@@ -669,6 +669,7 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
   const [rows, setRows] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -722,7 +723,12 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
             {loading ? '…' : '검색'}
           </button>
         </form>
-        <div className="px-3 py-2 text-xs text-slate-500">{rows.length}건</div>
+        <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-500">
+          <span>{rows.length}건</span>
+          <button type="button" onClick={() => setCreating(true)} className="font-semibold text-indigo-600 hover:underline">
+            + 신규 케이스
+          </button>
+        </div>
         <div className="max-h-[70vh] overflow-y-auto">
           {rows.map((c) => (
             <button
@@ -748,11 +754,25 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
 
       <div>
         {selectedId ? (
-          <CaseDetailView key={selectedId} id={selectedId} notify={notify} />
+          <CaseDetailView key={selectedId} id={selectedId} team={team} myId={myId} notify={notify} onSaved={load} />
         ) : (
           <div className={portalEmptyState}>왼쪽에서 케이스를 선택하세요.</div>
         )}
       </div>
+
+      {creating && (
+        <CaseCreateModal
+          team={team}
+          myId={myId}
+          notify={notify}
+          onClose={() => setCreating(false)}
+          onCreated={(id) => {
+            setCreating(false);
+            if (id) setSelectedId(id);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -775,29 +795,154 @@ const CASE_FIELD_ORDER: string[] = [
   '상위케이스',
 ];
 
-function CaseDetailView({ id, notify }: { id: string; notify: (m: string, e?: boolean) => void }) {
+type MetaOpt = { id: string; name: string };
+type CaseType = { id: string; name: string; code: string; parent_code: string };
+type CaseMeta = { statuses: MetaOpt[]; priorities: MetaOpt[]; requestRoutes: MetaOpt[]; caseTypes: CaseType[] };
+
+let _metaCache: CaseMeta | null = null;
+async function loadCaseMeta(): Promise<CaseMeta> {
+  if (_metaCache) return _metaCache;
+  const res = await fetch('/api/bluehole/meta', { cache: 'no-store' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '메타 조회 실패');
+  _metaCache = data;
+  return data;
+}
+
+function level1Types(meta: CaseMeta): CaseType[] {
+  return meta.caseTypes.filter((t) => !t.parent_code);
+}
+function level2Types(meta: CaseMeta, parentId: string): CaseType[] {
+  const parent = meta.caseTypes.find((t) => t.id === parentId);
+  if (!parent) return [];
+  return meta.caseTypes.filter((t) => t.parent_code && t.parent_code === parent.code);
+}
+
+function CaseTypeSelect({
+  meta,
+  type1,
+  type2,
+  onChange,
+}: {
+  meta: CaseMeta;
+  type1: string;
+  type2: string;
+  onChange: (t1: string, t2: string) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <select
+        value={type1}
+        onChange={(e) => onChange(e.target.value, '')}
+        className={`${portalSelect} flex-1 py-1.5`}
+      >
+        <option value="">업무분류1</option>
+        {level1Types(meta).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <select
+        value={type2}
+        onChange={(e) => onChange(type1, e.target.value)}
+        className={`${portalSelect} flex-1 py-1.5`}
+        disabled={!type1}
+      >
+        <option value="">업무분류2</option>
+        {type1 &&
+          level2Types(meta, type1).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+      </select>
+    </div>
+  );
+}
+
+function CaseDetailView({
+  id,
+  team,
+  myId,
+  notify,
+  onSaved,
+}: {
+  id: string;
+  team: TeamMember[];
+  myId: string;
+  notify: (m: string, e?: boolean) => void;
+  onSaved: () => void;
+}) {
+  void myId;
   const [detail, setDetail] = useState<CaseDetail | null>(null);
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [meta, setMeta] = useState<CaseMeta | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/bluehole/cases/${id}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '조회 실패');
+      setDetail(data.case);
+      setCodes(data.codes || {});
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '조회 실패', true);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, notify]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/bluehole/cases/${id}`, { cache: 'no-store' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '조회 실패');
-        if (!cancelled) setDetail(data.case);
-      } catch (e) {
-        if (!cancelled) notify(e instanceof Error ? e.message : '조회 실패', true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, notify]);
+    void load();
+  }, [load]);
+
+  const startEdit = useCallback(async () => {
+    try {
+      const m = meta || (await loadCaseMeta());
+      setMeta(m);
+      setDraft({ ...codes });
+      setEditing(true);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '메타 조회 실패', true);
+    }
+  }, [meta, codes, notify]);
+
+  const save = useCallback(async () => {
+    const changes: Record<string, string> = {};
+    for (const k of Object.keys(draft)) {
+      if ((draft[k] ?? '') !== (codes[k] ?? '')) changes[k] = draft[k] ?? '';
+    }
+    if (Object.keys(changes).length === 0) {
+      setEditing(false);
+      return;
+    }
+    if (!confirm(`케이스에 ${Object.keys(changes).length}개 항목을 반영합니다. 진행할까요?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/bluehole/cases/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '수정 실패');
+      const warn = (data.warnings || []).length ? ` (경고: ${data.warnings.join(', ')})` : '';
+      notify(`반영 완료: ${(data.successCols || []).length}개 항목${warn}`);
+      setEditing(false);
+      await load();
+      onSaved();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '수정 실패', true);
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, codes, id, notify, load, onSaved]);
 
   const fields = useMemo(() => (detail ? CASE_FIELD_ORDER.filter((k) => detail[k]) : []), [detail]);
 
@@ -808,26 +953,303 @@ function CaseDetailView({ id, notify }: { id: string; notify: (m: string, e?: bo
     <div className={`${portalCard} p-5`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <h2 className="text-lg font-semibold text-slate-900">{detail.title || '(제목 없음)'}</h2>
-        <a href={`${BLUEHOLE_HOST}/case/info/${detail.id}`} target="_blank" rel="noreferrer" className={portalBtnSecondary}>
-          열기 ↗
-        </a>
+        <div className="flex items-center gap-2">
+          <a href={`${BLUEHOLE_HOST}/case/info/${detail.id}`} target="_blank" rel="noreferrer" className={portalBtnSecondary}>
+            열기 ↗
+          </a>
+          {editing ? (
+            <>
+              <button type="button" onClick={() => setEditing(false)} className={portalBtnSecondary} disabled={saving}>
+                취소
+              </button>
+              <button type="button" onClick={save} className={portalBtnPrimary} disabled={saving}>
+                {saving ? '저장 중…' : '저장'}
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={startEdit} className={portalBtnPrimary}>
+              수정
+            </button>
+          )}
+        </div>
       </div>
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {fields.map((k) => (
-          <div key={k} className="flex flex-col gap-0.5">
-            <dt className="text-xs text-slate-500">{k}</dt>
-            <dd className="text-sm text-slate-900">{detail[k]}</dd>
+      {editing && meta ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-slate-500">제목</span>
+            <input
+              value={draft.subject ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+              className={portalInput}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">진행상태</span>
+            <select value={draft.status ?? ''} onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))} className={portalSelect}>
+              <option value="">(미지정)</option>
+              {meta.statuses.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">우선순위</span>
+            <select value={draft.priority ?? ''} onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))} className={portalSelect}>
+              <option value="">(미지정)</option>
+              {meta.priorities.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">수행자</span>
+            <select value={draft.assigned_by ?? ''} onChange={(e) => setDraft((d) => ({ ...d, assigned_by: e.target.value }))} className={portalSelect}>
+              <option value="">(미지정)</option>
+              {team.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">업무의뢰경로</span>
+            <select value={draft.request_route ?? ''} onChange={(e) => setDraft((d) => ({ ...d, request_route: e.target.value }))} className={portalSelect}>
+              <option value="">(미지정)</option>
+              {meta.requestRoutes.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">시작일</span>
+            <input type="date" value={draft.start_date ?? ''} onChange={(e) => setDraft((d) => ({ ...d, start_date: e.target.value }))} className={portalInput} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-500">마감일</span>
+            <input type="date" value={draft.due_date ?? ''} onChange={(e) => setDraft((d) => ({ ...d, due_date: e.target.value }))} className={portalInput} />
+          </label>
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-slate-500">업무분류</span>
+            <CaseTypeSelect
+              meta={meta}
+              type1={draft.case_type1 ?? ''}
+              type2={draft.case_type2 ?? ''}
+              onChange={(t1, t2) => setDraft((d) => ({ ...d, case_type1: t1, case_type2: t2 }))}
+            />
           </div>
-        ))}
-      </dl>
-
-      {detail.body && (
-        <div className="mt-5">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">내용</h3>
-          <p className="whitespace-pre-wrap text-sm text-slate-800">{detail.body}</p>
         </div>
+      ) : (
+        <>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+            {fields.map((k) => (
+              <div key={k} className="flex flex-col gap-0.5">
+                <dt className="text-xs text-slate-500">{k}</dt>
+                <dd className="text-sm text-slate-900">{detail[k]}</dd>
+              </div>
+            ))}
+          </dl>
+          {detail.body && (
+            <div className="mt-5">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">내용</h3>
+              <p className="whitespace-pre-wrap text-sm text-slate-800">{detail.body}</p>
+            </div>
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+function CaseCreateModal({
+  team,
+  myId,
+  notify,
+  onClose,
+  onCreated,
+}: {
+  team: TeamMember[];
+  myId: string;
+  notify: (m: string, e?: boolean) => void;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [meta, setMeta] = useState<CaseMeta | null>(null);
+  const [form, setForm] = useState<Record<string, string>>({ subject: '', assigned_by: myId, status: '', priority: '', start_date: '', due_date: '', request_route: '', case_type1: '', case_type2: '', description: '' });
+  const [clientQuery, setClientQuery] = useState('');
+  const [clientResults, setClientResults] = useState<ClientRow[]>([]);
+  const [clientName, setClientName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void loadCaseMeta()
+      .then(setMeta)
+      .catch((e) => notify(e instanceof Error ? e.message : '메타 조회 실패', true));
+  }, [notify]);
+
+  const searchClient = useCallback(async () => {
+    if (!clientQuery.trim()) return;
+    try {
+      const res = await fetch(`/api/bluehole/clients?q=${encodeURIComponent(clientQuery.trim())}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) setClientResults(data.clients || []);
+    } catch {
+      /* 무시 */
+    }
+  }, [clientQuery]);
+
+  const submit = useCallback(async () => {
+    if (!form.subject.trim()) {
+      notify('케이스 제목은 필수입니다.', true);
+      return;
+    }
+    if (!confirm('블루홀에 케이스를 새로 생성합니다. 블루홀은 삭제 기능이 없어 영구 생성됩니다. 진행할까요?')) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/bluehole/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: form }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '생성 실패');
+      notify(`케이스 생성 완료 · #${data.newId}`);
+      onCreated(data.newId);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '생성 실패', true);
+    } finally {
+      setSaving(false);
+    }
+  }, [form, notify, onCreated]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className={`${portalCard} max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5`} onClick={(e) => e.stopPropagation()}>
+        <h2 className="mb-1 text-base font-semibold text-slate-900">신규 케이스 생성</h2>
+        <p className="mb-4 text-xs text-red-600">블루홀은 삭제 기능이 없어 생성 시 영구 반영됩니다.</p>
+
+        {!meta ? (
+          <div className={portalEmptyState}>메타 불러오는 중…</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs text-slate-500">제목 *</span>
+              <input value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} className={portalInput} />
+            </label>
+
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs text-slate-500">거래처 {clientName && <span className="text-blue-600">· {clientName}</span>}</span>
+              <div className="flex gap-2">
+                <input
+                  value={clientQuery}
+                  onChange={(e) => setClientQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void searchClient();
+                    }
+                  }}
+                  placeholder="거래처명 검색 후 선택"
+                  className={`${portalInput} flex-1`}
+                />
+                <button type="button" onClick={searchClient} className={portalBtnSecondary}>
+                  검색
+                </button>
+              </div>
+              {clientResults.length > 0 && (
+                <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-200">
+                  {clientResults.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, client_id: c.id }));
+                        setClientName(c.name);
+                        setClientResults([]);
+                        setClientQuery('');
+                      }}
+                      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                    >
+                      {c.name} <span className="text-xs text-slate-400">{c.business_number}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">수행자</span>
+              <select value={form.assigned_by} onChange={(e) => setForm((f) => ({ ...f, assigned_by: e.target.value }))} className={portalSelect}>
+                <option value="">(미지정)</option>
+                {team.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}{m.id === myId ? ' (나)' : ''}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">진행상태</span>
+              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={portalSelect}>
+                <option value="">(미지정)</option>
+                {meta.statuses.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">우선순위</span>
+              <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className={portalSelect}>
+                <option value="">(미지정)</option>
+                {meta.priorities.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">업무의뢰경로</span>
+              <select value={form.request_route} onChange={(e) => setForm((f) => ({ ...f, request_route: e.target.value }))} className={portalSelect}>
+                <option value="">(미지정)</option>
+                {meta.requestRoutes.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">시작일</span>
+              <input type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className={portalInput} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">마감일</span>
+              <input type="date" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} className={portalInput} />
+            </label>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs text-slate-500">업무분류</span>
+              <CaseTypeSelect
+                meta={meta}
+                type1={form.case_type1}
+                type2={form.case_type2}
+                onChange={(t1, t2) => setForm((f) => ({ ...f, case_type1: t1, case_type2: t2 }))}
+              />
+            </div>
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs text-slate-500">내용</span>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                rows={4}
+                className={`${portalInput} resize-y`}
+              />
+            </label>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={portalBtnSecondary} disabled={saving}>
+            취소
+          </button>
+          <button type="button" onClick={submit} className={portalBtnPrimary} disabled={saving || !meta}>
+            {saving ? '생성 중…' : '생성'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

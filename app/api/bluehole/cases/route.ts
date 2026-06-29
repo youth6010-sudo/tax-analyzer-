@@ -3,12 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
+import { insertBlueholeSyncLog } from '@/lib/blueholeSyncDb';
 import * as bh from '@/lib/bluehole/core.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
+
+const CREATABLE_COLUMNS: ReadonlySet<string> = new Set(bh.CASE_COLUMNS as string[]);
 
 export async function GET(request: NextRequest) {
   let user;
@@ -42,5 +45,49 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ rows: data.rows || [], total: data.total || 0 }, NO_STORE);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : '블루홀 호출 오류' }, { status: 500 });
+  }
+}
+
+// 케이스 신규 생성 (영구 · 삭제불가). subject 필수.
+export async function POST(request: NextRequest) {
+  let user;
+  try {
+    user = await requireUser();
+  } catch {
+    return NextResponse.json({ error: '포털 로그인이 필요합니다.' }, { status: 401 });
+  }
+  if (!(await blueholeConfiguredForUser(user.id))) {
+    return NextResponse.json({ error: '블루홀 계정이 등록되어 있지 않습니다.', code: 'no_account' }, { status: 400 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as { values?: Record<string, unknown> };
+  const values: Record<string, string> = {};
+  for (const [col, val] of Object.entries(body.values || {})) {
+    if (CREATABLE_COLUMNS.has(col) && val != null && String(val).trim() !== '') values[col] = String(val).trim();
+  }
+  if (!values.subject) {
+    return NextResponse.json({ error: '케이스 제목(subject)은 필수입니다.' }, { status: 400 });
+  }
+
+  try {
+    const result = (await withBluehole(user.id, (cookie) => bh.createCase(cookie, values))) as {
+      newId?: string;
+      caseUrl?: string;
+    };
+
+    await insertBlueholeSyncLog({
+      clientId: '',
+      blueholeClientId: result.newId ? `case:${result.newId}` : 'case:new',
+      action: 'create',
+      userId: user.id,
+      userName: user.name || '',
+      changes: values,
+      successCols: Object.keys(values),
+      warnings: [],
+    }).catch(() => {});
+
+    return NextResponse.json({ newId: result.newId || '', caseUrl: result.caseUrl || '' }, NO_STORE);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : '케이스 생성 오류' }, { status: 500 });
   }
 }
