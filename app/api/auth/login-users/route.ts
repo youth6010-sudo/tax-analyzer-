@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { asc, and, ne } from 'drizzle-orm';
+import { asc, ne } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { users } from '@/db/schema';
 
 export async function GET() {
   try {
     const db = getDb();
+    // 숨김용 'admin' 로그인 계정만 제외 — 관리자 역할(예: 찰리)도 로그인 목록에 표시한다.
     const rows = await db
       .select({ loginId: users.loginId, name: users.name, role: users.role })
       .from(users)
-      .where(and(ne(users.role, 'admin'), ne(users.loginId, 'admin')))
+      .where(ne(users.loginId, 'admin'))
       .orderBy(asc(users.name));
 
     return NextResponse.json({ users: rows });
