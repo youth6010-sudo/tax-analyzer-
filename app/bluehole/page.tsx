@@ -61,6 +61,7 @@ type CaseRow = {
   status_code: string;
   priority: string;
   due_date: string;
+  assigned_id: string;
   assigned_name: string;
   url: string;
 };
@@ -670,6 +671,17 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [includeOther, setIncludeOther] = useState(false);
+
+  // 내 지점(우림) 팀원 id 집합 — 케이스를 팀 수행자 기준으로 한정한다.
+  const teamIds = useMemo(() => new Set(team.map((m) => m.id)), [team]);
+
+  // 기본: 내 지점 팀원이 수행자인 케이스만 노출. '타 지점 포함' 체크 시 전체.
+  const visibleRows = useMemo(() => {
+    if (includeOther || teamIds.size === 0) return rows;
+    if (assignedBy) return rows.filter((r) => r.assigned_id === assignedBy);
+    return rows.filter((r) => teamIds.has(r.assigned_id));
+  }, [rows, includeOther, teamIds, assignedBy]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -723,14 +735,20 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
             {loading ? '…' : '검색'}
           </button>
         </form>
-        <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-500">
-          <span>{rows.length}건</span>
-          <button type="button" onClick={() => setCreating(true)} className="font-semibold text-indigo-600 hover:underline">
-            + 신규 케이스
-          </button>
+        <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-slate-500">
+          <span>{visibleRows.length}건{!includeOther && rows.length !== visibleRows.length ? ` (전체 ${rows.length})` : ''}</span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={includeOther} onChange={(e) => setIncludeOther(e.target.checked)} className="rounded border-slate-300" />
+              타 지점 포함
+            </label>
+            <button type="button" onClick={() => setCreating(true)} className="font-semibold text-indigo-600 hover:underline">
+              + 신규 케이스
+            </button>
+          </div>
         </div>
         <div className="max-h-[70vh] overflow-y-auto">
-          {rows.map((c) => (
+          {visibleRows.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -748,7 +766,11 @@ function CasesTab({ team, myId, notify }: { team: TeamMember[]; myId: string; no
               </div>
             </button>
           ))}
-          {!loading && rows.length === 0 && <div className="px-3 py-10 text-center text-sm text-slate-500">케이스가 없습니다.</div>}
+          {!loading && visibleRows.length === 0 && (
+            <div className="px-3 py-10 text-center text-sm text-slate-500">
+              {rows.length > 0 ? '내 지점(우림) 케이스가 없습니다. ‘타 지점 포함’을 켜보세요.' : '케이스가 없습니다.'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1037,6 +1059,15 @@ function CaseDetailView({
               onChange={(t1, t2) => setDraft((d) => ({ ...d, case_type1: t1, case_type2: t2 }))}
             />
           </div>
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-slate-500">본문 내용</span>
+            <textarea
+              value={draft.description ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              rows={6}
+              className={`${portalInput} resize-y`}
+            />
+          </label>
         </div>
       ) : (
         <>
