@@ -6,13 +6,14 @@ import { requireUser } from '@/lib/auth';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
 import { insertBlueholeSyncLog } from '@/lib/blueholeSyncDb';
 import * as bh from '@/lib/bluehole/core.js';
+import { CASE_COLUMNS } from '@/lib/bluehole/case-api.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
 
-const EDITABLE_COLUMNS: ReadonlySet<string> = new Set(bh.CASE_COLUMNS as string[]);
+const EDITABLE_COLUMNS: ReadonlySet<string> = new Set(CASE_COLUMNS as string[]);
 
 async function ensure() {
   const user = await requireUser();
