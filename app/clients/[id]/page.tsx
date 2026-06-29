@@ -45,6 +45,14 @@ export default async function ClientDetailPage({
           companyName={client.companyName}
           businessNumber={client.businessNo}
           canEdit={canEdit}
+          ours={{
+            companyName: client.companyName,
+            businessNo: client.businessNo,
+            corporateNo: client.corporateNo,
+            representative: client.representative,
+            residentNo: client.residentNo,
+            fax: client.fax,
+          }}
         />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection

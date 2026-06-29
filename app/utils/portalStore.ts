@@ -120,6 +120,13 @@ export function usePortalClients(): ClientRecord[] {
   return useSyncExternalStore(subscribePortal, getPortalClients, () => []);
 }
 
+const EMPTY_TASKS: DashboardTask[] = [];
+
+/** SSR·hydration 시 빈 배열, 마운트 후 localStorage 캐시 반영 */
+export function usePortalTasks(): DashboardTask[] {
+  return useSyncExternalStore(subscribePortal, getPortalTasks, () => EMPTY_TASKS);
+}
+
 export function getPortalSearchIndex(): ClientSearchResult[] {
   return searchIndexMemory ?? memory?.searchIndex ?? [];
 }

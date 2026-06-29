@@ -10,6 +10,16 @@ import {
   portalAlertError,
   portalAlertInfo,
 } from '../portal/uiClasses';
+import { CLIENT_SYNC_FIELDS } from '@/lib/bluehole/clientFieldMap';
+
+export interface ClientOursForSync {
+  companyName: string;
+  businessNo: string;
+  corporateNo: string;
+  representative: string;
+  residentNo: string;
+  fax: string;
+}
 
 interface BhSearchItem {
   id: string;
@@ -27,6 +37,14 @@ interface BhInfo {
   manager?: string;
   branch?: string;
   updated_at?: string;
+  values?: Record<string, string>;
+}
+
+interface LastSync {
+  at: string;
+  userName: string;
+  successCols: string[];
+  warnings: string[];
 }
 
 interface LinkState {
@@ -35,6 +53,7 @@ interface LinkState {
   configured: boolean;
   info?: BhInfo | null;
   infoError?: string;
+  lastSync?: LastSync | null;
   deeplink?: string;
 }
 
@@ -49,11 +68,13 @@ export default function ClientBlueholePanel({
   companyName,
   businessNumber,
   canEdit,
+  ours,
 }: {
   clientId: string;
   companyName: string;
   businessNumber?: string;
   canEdit: boolean;
+  ours: ClientOursForSync;
 }) {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<LinkState | null>(null);
@@ -164,10 +185,13 @@ export default function ClientBlueholePanel({
         <div className={portalAlertError}>{error}</div>
       ) : state?.linked ? (
         <LinkedView
+          clientId={clientId}
           state={state}
           canEdit={canEdit}
           unlinking={unlinking}
+          ours={ours}
           onUnlink={unlink}
+          onSynced={load}
         />
       ) : !canEdit ? (
         <p className="py-1 text-sm text-gray-400">블루홀 미연결</p>
@@ -197,15 +221,21 @@ export default function ClientBlueholePanel({
 }
 
 function LinkedView({
+  clientId,
   state,
   canEdit,
   unlinking,
+  ours,
   onUnlink,
+  onSynced,
 }: {
+  clientId: string;
   state: LinkState;
   canEdit: boolean;
   unlinking: boolean;
+  ours: ClientOursForSync;
   onUnlink: () => void;
+  onSynced: () => void;
 }) {
   const info = state.info;
   return (
@@ -241,12 +271,141 @@ function LinkedView({
         <p className="text-sm text-gray-600">연결됨 (ID {state.blueholeClientId})</p>
       )}
 
+      {canEdit && info?.values && (
+        <SyncSection
+          clientId={clientId}
+          bhValues={info.values}
+          ours={ours}
+          lastSync={state.lastSync}
+          onSynced={onSynced}
+        />
+      )}
+
       {canEdit && (
         <div className="pt-1">
           <button type="button" onClick={onUnlink} disabled={unlinking} className={portalBtnDanger}>
             {unlinking ? '해제 중…' : '연결 해제'}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function SyncSection({
+  clientId,
+  bhValues,
+  ours,
+  lastSync,
+  onSynced,
+}: {
+  clientId: string;
+  bhValues: Record<string, string>;
+  ours: ClientOursForSync;
+  lastSync?: LastSync | null;
+  onSynced: () => void;
+}) {
+  // 우리 값이 있고 블루홀 값과 다른 항목만 후보
+  const candidates = CLIENT_SYNC_FIELDS.map((f) => {
+    const ourVal = (ours[f.ours] || '').trim();
+    const bhVal = (bhValues[f.col] || '').trim();
+    return { ...f, ourVal, bhVal, diff: !!ourVal && ourVal !== bhVal };
+  }).filter((c) => c.diff);
+
+  const [selected, setSelected] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(candidates.map((c) => [c.col, true])),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ successCols: string[]; warnings: string[] } | null>(null);
+
+  const toggle = (col: string) => setSelected((s) => ({ ...s, [col]: !s[col] }));
+
+  const pushSelected = useCallback(async () => {
+    const changes: Record<string, string> = {};
+    for (const c of candidates) if (selected[c.col]) changes[c.col] = c.ourVal;
+    const cols = Object.keys(changes);
+    if (cols.length === 0) {
+      setError('반영할 항목을 선택하세요.');
+      return;
+    }
+    const labels = candidates.filter((c) => selected[c.col]).map((c) => c.label).join(', ');
+    if (!confirm(`다음 항목을 블루홀에 반영할까요?\n\n${labels}\n\n(블루홀 실데이터가 수정됩니다)`)) return;
+    setBusy(true);
+    setError('');
+    setResult(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/bluehole/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes }),
+      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error((data.error as string) || '반영 실패');
+      setResult({
+        successCols: (data.successCols as string[]) || [],
+        warnings: (data.warnings as string[]) || [],
+      });
+      onSynced();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '반영 실패');
+    } finally {
+      setBusy(false);
+    }
+  }, [candidates, selected, clientId, onSynced]);
+
+  return (
+    <div className="mt-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <p className="text-xs font-bold text-slate-600">블루홀로 수정 반영</p>
+
+      {candidates.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-400">우리 정보와 블루홀 정보가 일치합니다. 반영할 변경이 없습니다.</p>
+      ) : (
+        <>
+          <ul className="mt-2 space-y-1.5">
+            {candidates.map((c) => (
+              <li key={c.col} className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!selected[c.col]}
+                  onChange={() => toggle(c.col)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-blue-600"
+                />
+                <div className="min-w-0 text-xs leading-relaxed">
+                  <span className="font-semibold text-slate-700">{c.label}</span>{' '}
+                  <span className={c.mono ? 'tabular-nums text-slate-400 line-through' : 'text-slate-400 line-through'}>
+                    {c.bhVal || '(빈값)'}
+                  </span>{' '}
+                  <span className="text-slate-400">→</span>{' '}
+                  <span className={c.mono ? 'tabular-nums font-semibold text-emerald-700' : 'font-semibold text-emerald-700'}>
+                    {c.ourVal}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={pushSelected} disabled={busy} className={`${portalBtnPrimary} mt-2.5`}>
+            {busy ? '반영 중…' : '선택 항목 블루홀에 반영'}
+          </button>
+        </>
+      )}
+
+      {error && <div className={`${portalAlertError} mt-2`}>{error}</div>}
+
+      {result && (
+        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+          {result.successCols.length > 0 && <p>반영 완료: {result.successCols.join(', ')}</p>}
+          {result.warnings.length > 0 && <p className="text-amber-800">{result.warnings.join(' / ')}</p>}
+          {result.successCols.length === 0 && result.warnings.length === 0 && <p>처리되었습니다.</p>}
+        </div>
+      )}
+
+      {lastSync && !result && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          최근 반영: {new Date(lastSync.at).toLocaleString('ko-KR')}
+          {lastSync.userName ? ` · ${lastSync.userName}` : ''}
+          {lastSync.successCols.length ? ` · ${lastSync.successCols.length}개 컬럼` : ''}
+        </p>
       )}
     </div>
   );

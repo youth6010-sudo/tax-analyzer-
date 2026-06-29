@@ -1,13 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import type { DashboardTask } from '@/lib/dashboardTasks';
-import {
-  getPortalTasks,
-  prefetchPortal,
-  subscribePortal,
-} from '@/app/utils/portalStore';
+import { prefetchPortal, usePortalTasks } from '@/app/utils/portalStore';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -15,11 +11,10 @@ const TYPE_LABEL: Record<DashboardTask['type'], string> = {
 };
 
 export default function HomeTasksPanel() {
-  const [tasks, setTasks] = useState<DashboardTask[]>(() => getPortalTasks());
+  const tasks = usePortalTasks();
 
   useEffect(() => {
     void prefetchPortal();
-    return subscribePortal(() => setTasks(getPortalTasks()));
   }, []);
 
   return (

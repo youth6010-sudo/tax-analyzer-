@@ -17,6 +17,19 @@ export const appConfig = pgTable('app_config', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** 블루홀 거래처 수정 반영 로그 (Phase 2) */
+export const blueholeSyncLog = pgTable('bluehole_sync_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').notNull(),
+  blueholeClientId: text('bluehole_client_id').notNull().default(''),
+  userId: uuid('user_id'),
+  userName: text('user_name').notNull().default(''),
+  changes: jsonb('changes').notNull().$type<Record<string, string>>().default({}),
+  successCols: jsonb('success_cols').notNull().$type<string[]>().default([]),
+  warnings: jsonb('warnings').notNull().$type<string[]>().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('bluehole_sync_log_client_id_idx').on(t.clientId)]);
+
 export const userRoleEnum = pgEnum('user_role', ['staff', 'admin']);
 export const clientStatusEnum = pgEnum('client_status', ['intake', 'active', 'churned']);
 export const clientSourceEnum = pgEnum('client_source', ['tp_import', 'manual_intake', 'youth_excel', 'douzone_export']);

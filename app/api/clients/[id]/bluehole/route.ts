@@ -8,6 +8,7 @@ import { assertCanAccessClient, assertClientExists } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
 import { getClientById, getClientBlueholeId, setClientBlueholeId } from '@/lib/clientsDb';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
+import { getLastSyncForClient } from '@/lib/blueholeSyncDb';
 import * as bh from '@/lib/bluehole/core.js';
 
 export const runtime = 'nodejs';
@@ -40,8 +41,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       }
     }
 
+    const lastSync = await getLastSyncForClient(id);
+
     return NextResponse.json(
-      { blueholeClientId, linked: true, configured, info, infoError, deeplink: deeplinkOf(blueholeClientId) },
+      { blueholeClientId, linked: true, configured, info, infoError, lastSync, deeplink: deeplinkOf(blueholeClientId) },
       NO_STORE,
     );
   } catch (e) {
