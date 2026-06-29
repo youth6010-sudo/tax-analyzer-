@@ -19,7 +19,17 @@ const OUTPUT_PATH = path.join(root, 'public', 'data', 'lunch-spots.json');
 
 const LUNCH_CATEGORIES = ['한식', '중식', '일식', '양식', '분식', '카페', '기타'];
 const WALK_LIMIT_MIN = parseInt(process.env.LUNCH_WALK_LIMIT || '10', 10); // 도보 분 한도
-const WALK_SPEED_M_PER_MIN = 4500 / 60; // 기존 스크립트와 동일 (75 m/min)
+
+// ── 현실적인 도보 시간 모델 ──
+// 직선거리(haversine)만으로는 실제 걷는 시간이 과소평가된다.
+//  - 실보행 속도: 약 4km/h = 67 m/min (기존 75는 빠른 편)
+//  - 도로 우회 보정(circuity): 직선 → 실제 경로는 보통 1.3~1.5배
+//  - 고정 시간: 사무실(15층) 엘리베이터·로비·횡단보도 등 출입 오버헤드
+const WALK_SPEED_M_PER_MIN = parseFloat(process.env.LUNCH_WALK_SPEED || '67');
+const WALK_DETOUR = parseFloat(process.env.LUNCH_WALK_DETOUR || '1.4');
+const WALK_BASE_MIN = parseFloat(process.env.LUNCH_WALK_BASE || '2');
+// 수집 반경 산정용 속도(기존과 동일하게 두어 수집되는 식당 범위는 유지)
+const COLLECT_SPEED_M_PER_MIN = 75;
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -65,8 +75,9 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function walkMinutesFromMeters(m) {
-  if (!m || m <= 0) return 1;
-  return Math.max(1, Math.round(m / WALK_SPEED_M_PER_MIN));
+  const meters = Math.max(0, Number(m) || 0);
+  const minutes = WALK_BASE_MIN + (meters * WALK_DETOUR) / WALK_SPEED_M_PER_MIN;
+  return Math.max(1, Math.round(minutes));
 }
 
 function mapCategory(categoryName) {
@@ -144,7 +155,7 @@ async function fetchPlaceMeta(placeId) {
 
 /** 사무실 주변을 격자로 나눠 카테고리 검색(45건 캡 회피), place id 기준 dedupe */
 async function collectNearbyDocs() {
-  const limitMeters = WALK_LIMIT_MIN * WALK_SPEED_M_PER_MIN; // 10분 ≈ 750m
+  const limitMeters = WALK_LIMIT_MIN * COLLECT_SPEED_M_PER_MIN; // 10분 ≈ 750m (수집 반경)
   const span = Math.ceil(limitMeters) + 100; // 약간 여유
   const step = 300; // 격자 간격(m)
   const cellRadius = 280; // 셀 검색 반경(m), 인접 셀과 겹치게
@@ -242,10 +253,23 @@ async function main() {
   // 1) 주변 식당 수집
   console.log(`사무실: ${OFFICE_LABEL} · 도보 ${WALK_LIMIT_MIN}분 이내 음식점 수집…`);
   const rawDocs = await collectNearbyDocs();
+  const collectRadiusM = WALK_LIMIT_MIN * COLLECT_SPEED_M_PER_MIN; // 표시 분과 무관하게 물리 반경으로 필터
   const nearbySpots = rawDocs
     .map(d => docToSpot(d, false))
-    .filter(s => s.walkMinutes <= WALK_LIMIT_MIN);
-  console.log(`  도보 ${WALK_LIMIT_MIN}분 이내 ${nearbySpots.length}곳`);
+    .filter(s => s._meters <= collectRadiusM);
+  console.log(`  반경 ${Math.round(collectRadiusM)}m 이내 ${nearbySpots.length}곳`);
+
+  // 기존 식당 walkMinutes 재계산용: 수집 문서의 좌표/거리 인덱스
+  const metersByPid = new Map();
+  const metersByName = new Map();
+  for (const d of rawDocs) {
+    const lat = parseFloat(d.y);
+    const lng = parseFloat(d.x);
+    const meters = haversineMeters(OFFICE_LAT, OFFICE_LNG, lat, lng);
+    metersByPid.set(String(d.id), meters);
+    const nm = normName(d.place_name);
+    if (!metersByName.has(nm)) metersByName.set(nm, meters);
+  }
 
   // 2) 인자로 받은 카카오 place 추가 (퇴근길숯불막창 등)
   const placeArgs = process.argv.slice(2).map(placeIdFromUrl).filter(Boolean);
@@ -287,15 +311,25 @@ async function main() {
   const seenPid = new Set();
   const seenName = new Set();
 
-  // 3-1) 기존 식당은 그대로(활성화) 유지
+  // 3-1) 기존 식당은 활성화 유지 + 좌표 매칭되면 walkMinutes 재계산(수동 필드는 보존)
+  let recomputed = 0;
   for (const s of existingSpots) {
     const { active, ...rest } = s;
     void active;
-    result.push({ ...rest, active: true });
     const pid = placeIdFromUrl(s.kakaoMapUrl);
+    const meters = (pid && metersByPid.get(pid)) ?? metersByName.get(normName(s.name));
+    let walkMinutes = rest.walkMinutes;
+    if (Number.isFinite(meters)) {
+      walkMinutes = walkMinutesFromMeters(meters);
+      recomputed++;
+    } else if (!Number.isFinite(walkMinutes) || walkMinutes <= 0) {
+      walkMinutes = WALK_BASE_MIN; // 좌표 못 찾고 기존값도 0 이면 최소 출입시간
+    }
+    result.push({ ...rest, walkMinutes, active: true });
     if (pid) seenPid.add(pid);
     seenName.add(normName(s.name));
   }
+  console.log(`  기존 ${existingSpots.length}곳 중 ${recomputed}곳 도보시간 재계산`);
 
   // 3-2) 신규 후보(지정 + 주변) 추가 — 기존과 중복 제외
   const candidates = [...explicitSpots, ...nearbySpots];
