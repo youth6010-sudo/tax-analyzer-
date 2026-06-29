@@ -9,6 +9,8 @@ const PUBLIC_API = ['/api/auth/login', '/api/auth/login-users'];
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`))) return true;
   if (PUBLIC_API.some(p => pathname === p)) return true;
+  // Vercel Cron 호출은 세션이 없다. 크론 라우트는 CRON_SECRET(Bearer)으로 자체 인증한다.
+  if (pathname.startsWith('/api/cron/')) return true;
   if (pathname.startsWith('/_next')) return true;
   if (pathname.startsWith('/favicon')) return true;
   if (/\.(ico|png|jpg|jpeg|svg|webp|json|woff2?)$/.test(pathname)) return true;

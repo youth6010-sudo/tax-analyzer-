@@ -142,6 +142,18 @@ export async function setClientNtsStatus(id: string, status: NtsStatusInput): Pr
     .where(eq(clients.id, id));
 }
 
+/** 휴/폐업 제외 전체 활성 수임처의 사업자번호 (정기 점검용). [{ id, businessNo }] */
+export async function listActiveClientBusinessNos(): Promise<Array<{ id: string; businessNo: string }>> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: clients.id, businessNo: clients.businessNo })
+    .from(clients)
+    .where(ne(clients.status, 'churned'));
+  return rows
+    .map(r => ({ id: r.id, businessNo: r.businessNo || '' }))
+    .filter(r => r.businessNo.replace(/\D/g, '').length === 10);
+}
+
 /** 여러 수임처의 사업자번호(상태조회 대상). { id: businessNo } 맵. */
 export async function getClientBusinessNos(ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
