@@ -70,6 +70,26 @@ export async function getClientById(id: string) {
   return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
+/** 수임처에 연결된 블루홀 거래처 ID. 수임처가 없으면 null, 미연결이면 '' 반환. */
+export async function getClientBlueholeId(id: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ blueholeClientId: clients.blueholeClientId })
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+  return row ? row.blueholeClientId || '' : null;
+}
+
+/** 수임처에 블루홀 거래처 ID를 연결(빈 문자열이면 해제). */
+export async function setClientBlueholeId(id: string, blueholeClientId: string): Promise<void> {
+  const db = getDb();
+  await db
+    .update(clients)
+    .set({ blueholeClientId: blueholeClientId.trim(), updatedAt: new Date() })
+    .where(eq(clients.id, id));
+}
+
 export async function searchClients(
   query: string,
   options?: {

@@ -3,6 +3,7 @@ import ContactDetailView from '../../components/ContactDetailView';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
 import ClientDouzoneSection from '../../components/ClientDouzoneSection';
 import ClientContactsPanel from '../../components/clients/ClientContactsPanel';
+import ClientBlueholePanel from '../../components/clients/ClientBlueholePanel';
 import PortalPageShell from '../../components/portal/PortalPageShell';
 import { requireUser } from '@/lib/auth';
 import { canEditClient } from '@/lib/clientAccess';
@@ -39,6 +40,12 @@ export default async function ClientDetailPage({
       />
       <div className="space-y-4 -mt-2">
         <ClientContactsPanel clientId={client.id} canEdit={canEdit} />
+        <ClientBlueholePanel
+          clientId={client.id}
+          companyName={client.companyName}
+          businessNumber={client.businessNo}
+          canEdit={canEdit}
+        />
         {client.source === 'douzone_export' && (
           <ClientDouzoneSection
             clientId={client.id}
