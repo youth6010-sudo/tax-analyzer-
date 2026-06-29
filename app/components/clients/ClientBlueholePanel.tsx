@@ -281,6 +281,8 @@ function LinkedView({
         <p className="text-sm text-gray-600">연결됨 (ID {state.blueholeClientId})</p>
       )}
 
+      <CasesSection clientId={clientId} />
+
       {canEdit && info?.values && (
         <SyncSection
           clientId={clientId}
@@ -296,6 +298,90 @@ function LinkedView({
           <button type="button" onClick={onUnlink} disabled={unlinking} className={portalBtnDanger}>
             {unlinking ? '해제 중…' : '연결 해제'}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BhCaseRow {
+  id: string;
+  subject: string;
+  status?: string;
+  status_code?: string;
+  priority?: string;
+  due_date?: string;
+  start_date?: string;
+  assigned_name?: string;
+  url?: string;
+}
+
+function CasesSection({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cases, setCases] = useState<BhCaseRow[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/clients/${clientId}/bluehole/cases`, { cache: 'no-store' });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error((data.error as string) || '케이스 조회 실패');
+      if (data.error) setError(data.error as string);
+      setCases((data.cases as BhCaseRow[]) || []);
+      setLoaded(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '케이스 조회 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !loaded && !loading) void load();
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <button type="button" onClick={toggle} className="flex w-full items-center justify-between text-left">
+        <span className="text-xs font-bold text-slate-600">블루홀 케이스(업무)</span>
+        <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2">
+          {loading ? (
+            <p className="py-2 text-xs text-slate-400">불러오는 중…</p>
+          ) : error ? (
+            <div className={portalAlertError}>{error}</div>
+          ) : cases.length === 0 ? (
+            <p className="py-2 text-xs text-slate-400">연결된 케이스가 없습니다.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {cases.map((c) => (
+                <li key={c.id}>
+                  <a
+                    href={c.url || `https://bluehole.world/case/info/${c.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-slate-100 bg-white px-3 py-2 hover:border-blue-300 hover:shadow-sm transition-shadow"
+                  >
+                    <p className="truncate text-sm font-semibold text-slate-800">{c.subject || '(제목 없음)'}</p>
+                    <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
+                      {(c.status || c.status_code) && <span>{c.status || c.status_code}</span>}
+                      {c.due_date && <span>· 마감 {c.due_date}</span>}
+                      {c.assigned_name && <span>· {c.assigned_name}</span>}
+                    </p>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
