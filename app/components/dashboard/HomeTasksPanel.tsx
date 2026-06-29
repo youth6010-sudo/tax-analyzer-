@@ -8,6 +8,7 @@ import { prefetchPortal, usePortalTasks } from '@/app/utils/portalStore';
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
   onboarding_incomplete: '프로세스',
+  nts_alert: '국세청',
 };
 
 export default function HomeTasksPanel() {
@@ -31,7 +32,13 @@ export default function HomeTasksPanel() {
                 href={t.href}
                 className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-100 bg-white px-3 py-2.5 text-sm hover:border-amber-300 hover:shadow-sm transition-shadow"
               >
-                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 shrink-0">
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                    t.type === 'nts_alert'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-amber-100 text-amber-900'
+                  }`}
+                >
                   {TYPE_LABEL[t.type]}
                 </span>
                 <span className="font-semibold text-gray-800 flex-1 min-w-[8rem] leading-snug">{t.title}</span>

@@ -14,16 +14,15 @@ export const CHECKLIST_LABEL: Record<string, string> = {
   tpClient: 'TP 거래처 등록',
   semoReport: '위멤버스 및 세모리포트 등록',
   bizAccount: '사업용계좌 등록',
-  kakaoRoom: '거래처 카톡방 생성',
 };
 
 export const CHECKLIST_LABEL_FULL: Record<string, string> = CHECKLIST_LABEL;
 
-export function checklistDone(checklist: Record<string, boolean | string | Record<string, unknown>> | undefined) {
+export function checklistDone(checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined) {
   return CHECKLIST_KEYS.filter(k => Boolean(checklist?.[k])).length;
 }
 
-export function progressPct(checklist: Record<string, boolean | string | Record<string, unknown>> | undefined) {
+export function progressPct(checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined) {
   return Math.round((checklistDone(checklist) / CHECKLIST_KEYS.length) * 100);
 }
 
@@ -54,7 +53,7 @@ export type ProcessRow = {
   feeStartDate: string;
   monthlyFee: number | null;
   channel: string;
-  checklist: Record<string, boolean | string | Record<string, unknown>>;
+  checklist: Record<string, boolean | string | string[] | Record<string, unknown>>;
   excelKey?: string;
   updatedAt: string;
 };

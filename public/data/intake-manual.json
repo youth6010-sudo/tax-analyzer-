@@ -45,8 +45,7 @@
         { "key": "blueholeClient", "label": "블루홀 거래처 등록", "type": "checklist" },
         { "key": "tpClient", "label": "TP 거래처 등록", "type": "checklist" },
         { "key": "semoReport", "label": "위멤버스 및 세모리포트 등록", "type": "checklist" },
-        { "key": "bizAccount", "label": "사업용계좌 등록", "type": "checklist" },
-        { "key": "kakaoRoom", "label": "거래처 카톡방 생성", "type": "checklist" }
+        { "key": "bizAccount", "label": "사업용계좌 등록", "type": "checklist" }
       ]
     },
     {

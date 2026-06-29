@@ -15,6 +15,8 @@ export default function IntakeSplitView({
   onProcessCreated,
   onToggleCheck,
   onSyncBlueholeCheck,
+  onHideChecklistItem,
+  onRestoreChecklist,
   onRegisterClient,
   onDeleteInquiry,
   deletingId,
@@ -30,6 +32,8 @@ export default function IntakeSplitView({
   onProcessCreated: (row: ProcessRow) => void;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
   onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
+  onHideChecklistItem?: (process: ProcessRow, key: string) => void | Promise<void>;
+  onRestoreChecklist?: (process: ProcessRow) => void | Promise<void>;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
   onDeleteInquiry: (inquiry: InquiryRow, process: ProcessRow | null) => void | Promise<void>;
   deletingId: string | null;
@@ -54,6 +58,8 @@ export default function IntakeSplitView({
         onProcessCreated={onProcessCreated}
         onToggleCheck={onToggleCheck}
         onSyncBlueholeCheck={onSyncBlueholeCheck}
+        onHideChecklistItem={onHideChecklistItem}
+        onRestoreChecklist={onRestoreChecklist}
         onRegisterClient={onRegisterClient}
         onDeleteInquiry={onDeleteInquiry}
         deletingId={deletingId}

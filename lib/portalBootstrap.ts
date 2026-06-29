@@ -29,7 +29,7 @@ export async function getPortalBootstrap() {
     : {};
 
   const [tasks, activeClients, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
-    listDashboardTasks(user.name),
+    listDashboardTasks({ name: user.name, isAdmin: isPortalAdmin(user) }),
     listClients({
       status: 'active',
       mineOnly,

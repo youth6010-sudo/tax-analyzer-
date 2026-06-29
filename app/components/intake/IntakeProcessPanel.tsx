@@ -62,6 +62,8 @@ export default function IntakeProcessPanel({
   onRegisterClient,
   onToggleCheck,
   onSyncBlueholeCheck,
+  onHideChecklistItem,
+  onRestoreChecklist,
   allowRegister = true,
 }: {
   inquiry: InquiryRow;
@@ -71,6 +73,8 @@ export default function IntakeProcessPanel({
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
   onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
+  onHideChecklistItem?: (process: ProcessRow, key: string) => void | Promise<void>;
+  onRestoreChecklist?: (process: ProcessRow) => void | Promise<void>;
   allowRegister?: boolean;
 }) {
   const [form, setForm] = useState(() => formFrom(inquiry, process));
@@ -219,6 +223,8 @@ export default function IntakeProcessPanel({
         onToggleCheck={onToggleCheck}
         onSyncBlueholeCheck={onSyncBlueholeCheck}
         onEnsureProcess={ensureProcess}
+        onHideItem={onHideChecklistItem}
+        onRestoreHidden={onRestoreChecklist}
       />
 
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-200/60">

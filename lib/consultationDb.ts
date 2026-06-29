@@ -323,7 +323,7 @@ export async function createIntakeProcess(data: {
 
 export async function updateProcessChecklist(
   id: string,
-  checklist: Record<string, boolean | string>,
+  checklist: Record<string, boolean | string | string[]>,
   options?: { toggledKey?: ChecklistKey; actorName?: string; blueholeCode?: string },
 ) {
   const db = getDb();

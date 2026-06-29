@@ -11,7 +11,7 @@ export async function PATCH(
     const user = await requireUser();
     const { id } = await params;
     const body = (await request.json()) as {
-      checklist?: Record<string, boolean | string>;
+      checklist?: Record<string, boolean | string | string[]>;
       toggledKey?: ChecklistKey;
       blueholeCode?: string;
       monthlyFee?: number | null;

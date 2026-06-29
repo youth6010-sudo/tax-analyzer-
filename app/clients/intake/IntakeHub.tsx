@@ -287,6 +287,48 @@ export default function IntakeHub() {
     }
   }, [onProcessUpdated]);
 
+  const hideChecklistItem = useCallback(async (process: ProcessRow, key: string) => {
+    const prevChecklist = { ...process.checklist };
+    const prevHidden = Array.isArray(process.checklist?._hidden)
+      ? (process.checklist._hidden as string[])
+      : [];
+    const hidden = [...new Set([...prevHidden, key])];
+    const next = { ...process.checklist, _hidden: hidden };
+    onProcessUpdated({ ...process, checklist: next });
+
+    try {
+      const res = await fetch(`/api/processes/${process.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checklist: { _hidden: hidden } }),
+      });
+      if (!res.ok) throw new Error('저장 실패');
+      const data = await res.json();
+      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+    } catch {
+      onProcessUpdated({ ...process, checklist: prevChecklist });
+    }
+  }, [onProcessUpdated]);
+
+  const restoreChecklist = useCallback(async (process: ProcessRow) => {
+    const prevChecklist = { ...process.checklist };
+    const next = { ...process.checklist, _hidden: [] };
+    onProcessUpdated({ ...process, checklist: next });
+
+    try {
+      const res = await fetch(`/api/processes/${process.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checklist: { _hidden: [] } }),
+      });
+      if (!res.ok) throw new Error('저장 실패');
+      const data = await res.json();
+      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+    } catch {
+      onProcessUpdated({ ...process, checklist: prevChecklist });
+    }
+  }, [onProcessUpdated]);
+
   const syncBlueholeCheck = useCallback(async (process: ProcessRow) => {
     if (process.checklist?.blueholeClient) return;
     const prevChecklist = { ...process.checklist };
@@ -409,6 +451,8 @@ export default function IntakeHub() {
           onProcessCreated={onProcessCreated}
           onToggleCheck={toggleCheck}
           onSyncBlueholeCheck={syncBlueholeCheck}
+          onHideChecklistItem={hideChecklistItem}
+          onRestoreChecklist={restoreChecklist}
           onRegisterClient={registerClient}
           onDeleteInquiry={deleteInquiry}
           deletingId={deletingId}

@@ -1,10 +1,11 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { intakeInquiries, intakeProcesses, clients } from '@/db/schema';
 import { CHECKLIST_KEYS } from '@/app/types/intake';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
+  resolveClientIdByName,
   type ClientNameRef,
   type InquiryRow,
   type ProcessRow,
@@ -12,16 +13,37 @@ import {
 
 export type DashboardTask = {
   id: string;
-  type: 'consultation_draft' | 'onboarding_incomplete';
+  type: 'consultation_draft' | 'onboarding_incomplete' | 'nts_alert';
   title: string;
   subtitle?: string;
   href: string;
   priority: number;
 };
 
+export type DashboardTaskUser = {
+  name: string;
+  isAdmin: boolean;
+};
+
+/**
+ * 담당자 기준 노출 규칙:
+ *  - 담당자가 지정된 업체 → 그 담당자에게만
+ *  - 담당자가 없는 업체 → 관리자에게만
+ */
+function visibleToUser(manager: string, user: DashboardTaskUser): boolean {
+  const mgr = (manager || '').trim();
+  if (mgr) return mgr === user.name.trim();
+  return user.isAdmin;
+}
+
+function checklistVisibleKeys(checklist: Record<string, unknown> | null | undefined): string[] {
+  const hidden = Array.isArray(checklist?._hidden) ? (checklist._hidden as string[]) : [];
+  return CHECKLIST_KEYS.filter(k => !hidden.includes(k));
+}
+
 function checklistDoneCount(checklist: Record<string, boolean> | null | undefined): number {
   const c = checklist ?? {};
-  return CHECKLIST_KEYS.filter(k => Boolean(c[k])).length;
+  return checklistVisibleKeys(c).filter(k => Boolean(c[k])).length;
 }
 
 function toInquiryRow(row: {
@@ -89,10 +111,13 @@ function toProcessRow(row: {
   };
 }
 
-export async function listDashboardTasks(userName: string, limit = 20): Promise<DashboardTask[]> {
+export async function listDashboardTasks(
+  user: DashboardTaskUser,
+  limit = 20,
+): Promise<DashboardTask[]> {
   const db = getDb();
   const tasks: DashboardTask[] = [];
-  const total = CHECKLIST_KEYS.length;
+  const userName = user.name;
 
   const drafts = await db.select().from(intakeInquiries)
     .where(and(
@@ -139,12 +164,14 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
   const inquiries = inquiryRows.map(toInquiryRow);
 
   const clientRows = await db
-    .select({ id: clients.id, companyName: clients.companyName })
+    .select({ id: clients.id, companyName: clients.companyName, manager: clients.manager })
     .from(clients);
   const clientRefs: ClientNameRef[] = clientRows.map(c => ({
     id: c.id,
     companyName: c.companyName,
   }));
+  const managerByClientId = new Map<string, string>();
+  for (const c of clientRows) managerByClientId.set(c.id, c.manager || '');
 
   const processRows = await db
     .select({
@@ -158,6 +185,7 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
       excelKey: intakeProcesses.excelKey,
       updatedAt: intakeProcesses.updatedAt,
       clientCompanyName: clients.companyName,
+      clientManager: clients.manager,
     })
     .from(intakeProcesses)
     .leftJoin(clients, eq(clients.id, intakeProcesses.clientId))
@@ -166,8 +194,15 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
 
   for (const raw of processRows) {
     const process = toProcessRow(raw);
+    const visibleTotal = checklistVisibleKeys(process.checklist as Record<string, boolean>).length;
     const done = checklistDoneCount(process.checklist as Record<string, boolean>);
-    if (done >= total) continue;
+    if (visibleTotal === 0 || done >= visibleTotal) continue;
+
+    // 담당자: 연결된 수임처(clientId) → 없으면 상호로 매칭한 수임처
+    const resolvedClientId =
+      raw.clientId ?? resolveClientIdByName(raw.companyName, clientRefs, raw.excelKey ?? undefined);
+    const manager = (raw.clientManager ?? (resolvedClientId ? managerByClientId.get(resolvedClientId) : '') ?? '').trim();
+    if (!visibleToUser(manager, user)) continue;
 
     const company = (raw.clientCompanyName?.trim() || raw.companyName.trim() || '업체명 미정');
     const altNames = [raw.clientCompanyName, raw.companyName].filter(
@@ -178,13 +213,43 @@ export async function listDashboardTasks(userName: string, limit = 20): Promise<
     tasks.push({
       id: `onboard-${process.id}`,
       type: 'onboarding_incomplete',
-      title: `${company} - 프로세스 (${done}/${total})`,
+      title: `${company} - 프로세스 (${done}/${visibleTotal})`,
+      subtitle: manager ? undefined : '담당 미지정',
       href: buildIntakeDeepLink({
         inquiryId: inquiry?.id,
         processId: process.id,
         companyName: company,
       }),
       priority: 2,
+    });
+  }
+
+  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일
+  const ntsRows = await db
+    .select({
+      id: clients.id,
+      companyName: clients.companyName,
+      manager: clients.manager,
+      ntsStatus: clients.ntsStatus,
+      ntsStatusCode: clients.ntsStatusCode,
+    })
+    .from(clients)
+    .where(and(
+      ne(clients.status, 'churned'),
+      inArray(clients.ntsStatusCode, ['02', '03']),
+    ));
+
+  for (const c of ntsRows) {
+    const manager = (c.manager || '').trim();
+    if (!visibleToUser(manager, user)) continue;
+    const label = c.ntsStatusCode === '03' ? '폐업' : '휴업';
+    tasks.push({
+      id: `nts-${c.id}`,
+      type: 'nts_alert',
+      title: `${c.companyName || '업체명 미정'} - ${label} 확인`,
+      subtitle: manager ? '국세청 상태' : '담당 미지정 · 국세청',
+      href: `/clients/${c.id}`,
+      priority: 0,
     });
   }
 

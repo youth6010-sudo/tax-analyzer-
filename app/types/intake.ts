@@ -28,7 +28,6 @@ export const CHECKLIST_KEYS = [
   'tpClient',
   'semoReport',
   'bizAccount',
-  'kakaoRoom',
 ] as const;
 
 /** checklist JSON 내부 — 블루홀 업체/케이스 번호 */
