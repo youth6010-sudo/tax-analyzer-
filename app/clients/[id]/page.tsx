@@ -52,6 +52,7 @@ export default async function ClientDetailPage({
             representative: client.representative,
             residentNo: client.residentNo,
             fax: client.fax,
+            businessEntityType: client.businessEntityType,
           }}
         />
         {client.source === 'douzone_export' && (

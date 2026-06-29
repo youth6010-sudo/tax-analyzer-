@@ -10,7 +10,7 @@ import {
   portalAlertError,
   portalAlertInfo,
 } from '../portal/uiClasses';
-import { CLIENT_SYNC_FIELDS } from '@/lib/bluehole/clientFieldMap';
+import { CLIENT_SYNC_FIELDS, buildBlueholeCreateValues } from '@/lib/bluehole/clientFieldMap';
 
 export interface ClientOursForSync {
   companyName: string;
@@ -19,6 +19,13 @@ export interface ClientOursForSync {
   representative: string;
   residentNo: string;
   fax: string;
+  businessEntityType?: string;
+}
+
+interface BhCandidate {
+  id: string;
+  name: string;
+  business_number?: string;
 }
 
 interface BhSearchItem {
@@ -204,17 +211,20 @@ export default function ClientBlueholePanel({
           에서 먼저 계정을 등록하세요.
         </div>
       ) : (
-        <UnlinkedSearch
-          query={query}
-          setQuery={setQuery}
-          searching={searching}
-          results={results}
-          searchError={searchError}
-          businessNumber={businessNumber}
-          busyId={busyId}
-          onSearch={runSearch}
-          onLink={link}
-        />
+        <div className="space-y-3">
+          <UnlinkedSearch
+            query={query}
+            setQuery={setQuery}
+            searching={searching}
+            results={results}
+            searchError={searchError}
+            businessNumber={businessNumber}
+            busyId={busyId}
+            onSearch={runSearch}
+            onLink={link}
+          />
+          <CreateSection clientId={clientId} ours={ours} busyId={busyId} onLink={link} onCreated={load} />
+        </div>
       )}
     </div>
   );
@@ -406,6 +416,152 @@ function SyncSection({
           {lastSync.userName ? ` · ${lastSync.userName}` : ''}
           {lastSync.successCols.length ? ` · ${lastSync.successCols.length}개 컬럼` : ''}
         </p>
+      )}
+    </div>
+  );
+}
+
+function CreateSection({
+  clientId,
+  ours,
+  busyId,
+  onLink,
+  onCreated,
+}: {
+  clientId: string;
+  ours: ClientOursForSync;
+  busyId: string;
+  onLink: (bhId: string) => void;
+  onCreated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [duplicates, setDuplicates] = useState<BhCandidate[] | null>(null);
+
+  const preview = buildBlueholeCreateValues(ours);
+  const previewRows = CLIENT_SYNC_FIELDS.filter((f) => preview[f.col]).map((f) => ({
+    label: f.label,
+    value: preview[f.col],
+    mono: f.mono,
+  }));
+
+  const submit = useCallback(
+    async (force: boolean) => {
+      if (
+        !confirm(
+          force
+            ? '중복 가능성이 있는데도 블루홀에 새 거래처를 생성할까요?\n(블루홀은 삭제가 불가능하여 영구 생성됩니다)'
+            : '블루홀에 새 거래처를 생성할까요?\n(블루홀은 삭제가 불가능하여 영구 생성됩니다)',
+        )
+      )
+        return;
+      setBusy(true);
+      setError('');
+      try {
+        const res = await fetch(`/api/clients/${clientId}/bluehole/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
+        const data = await readJson(res);
+        if (res.status === 409 && data.duplicate) {
+          setDuplicates((data.candidates as BhCandidate[]) || []);
+          return;
+        }
+        if (!res.ok) throw new Error((data.error as string) || '생성 실패');
+        onCreated();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '생성 실패');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [clientId, onCreated],
+  );
+
+  if (!preview.name) {
+    return (
+      <p className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-400">
+        상호(거래처명)가 있어야 블루홀에 신규 등록할 수 있습니다.
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className={portalBtnSecondary}>
+          블루홀에 새 거래처로 등록
+        </button>
+      ) : (
+        <div className="space-y-2.5">
+          <p className="text-xs font-bold text-slate-600">블루홀 신규 등록</p>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            ⚠ 블루홀은 <b>거래처 삭제 기능이 없어</b> 한번 생성하면 되돌릴 수 없습니다. 기존 거래처가 있으면 신규 등록 대신 <b>연결</b>을 사용하세요.
+          </div>
+
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-slate-100 bg-white px-3 py-2 text-xs">
+            {previewRows.map((r) => (
+              <div key={r.label} className="contents">
+                <dt className="text-slate-500">{r.label}</dt>
+                <dd className={r.mono ? 'tabular-nums text-slate-800' : 'text-slate-800'}>{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {duplicates && duplicates.length > 0 ? (
+            <div className="space-y-2">
+              <div className={portalAlertError}>
+                같은 사업자번호의 블루홀 거래처가 이미 있습니다. 새로 만들지 말고 연결을 권장합니다.
+              </div>
+              <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-white">
+                {duplicates.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-gray-500">{c.business_number || '—'}</p>
+                    </div>
+                    <button type="button" onClick={() => onLink(c.id)} disabled={!!busyId} className={portalBtnPrimary}>
+                      {busyId === c.id ? '연결 중…' : '연결'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={() => submit(true)} disabled={busy} className={portalBtnDanger}>
+                {busy ? '생성 중…' : '중복 무시하고 새로 등록'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <label className="flex items-start gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={agree}
+                  onChange={(e) => setAgree(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+                />
+                <span>위 정보로 블루홀에 <b>영구 생성</b>됨을 이해했습니다.</span>
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => submit(false)}
+                  disabled={busy || !agree}
+                  className={portalBtnPrimary}
+                >
+                  {busy ? '등록 중…' : '중복 확인 후 등록'}
+                </button>
+                <button type="button" onClick={() => setOpen(false)} disabled={busy} className={portalBtnSecondary}>
+                  취소
+                </button>
+              </div>
+            </>
+          )}
+
+          {error && <div className={portalAlertError}>{error}</div>}
+        </div>
       )}
     </div>
   );

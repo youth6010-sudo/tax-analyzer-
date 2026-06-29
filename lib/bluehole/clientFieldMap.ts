@@ -22,3 +22,29 @@ export const CLIENT_SYNC_FIELDS: BlueholeFieldMap[] = [
 
 /** 동기화로 블루홀에 쓸 수 있는 컬럼 화이트리스트 (임의 컬럼 쓰기 차단) */
 export const SYNCABLE_COLUMNS: ReadonlySet<string> = new Set(CLIENT_SYNC_FIELDS.map((f) => f.col));
+
+export interface ClientCreateSource {
+  companyName: string;
+  businessNo: string;
+  corporateNo: string;
+  representative: string;
+  residentNo: string;
+  fax: string;
+  businessEntityType?: string;
+}
+
+/** 우리 수임처 → 블루홀 거래처 신규 생성용 값(빈값 제거). 기업구분은 corp_type 코드로 변환. */
+export function buildBlueholeCreateValues(src: ClientCreateSource): Record<string, string> {
+  const v: Record<string, string> = {
+    name: src.companyName || '',
+    business_number: src.businessNo || '',
+    corp_no: src.corporateNo || '',
+    ceo_name: src.representative || '',
+    ceo_ssn: src.residentNo || '',
+    acc_fax: src.fax || '',
+  };
+  const corpMap: Record<string, string> = { individual: '1', corporate: '2', nonBusiness: '3' };
+  if (src.businessEntityType && corpMap[src.businessEntityType]) v.corp_type = corpMap[src.businessEntityType];
+  for (const k of Object.keys(v)) if (!v[k]) delete v[k];
+  return v;
+}
