@@ -11,7 +11,17 @@ export type PileSlot = {
   s: number;
 };
 
-export const BALL_PALETTE = [
+export type BallPaletteEntry = {
+  color: string;
+  dark: string;
+  hi: string;
+  /** 공 번호 글자색. 미지정 시 기본 흰색. (파스텔 공은 가독성 위해 진한 색) */
+  text?: string;
+};
+
+export type GachaBallVariant = 'arcade' | 'pastel';
+
+export const BALL_PALETTE: BallPaletteEntry[] = [
   { color: '#ef4444', dark: '#b91c1c', hi: '#fca5a5' },
   { color: '#eab308', dark: '#a16207', hi: '#fde047' },
   { color: '#22c55e', dark: '#15803d', hi: '#86efac' },
@@ -28,12 +38,33 @@ export const BALL_PALETTE = [
   { color: '#eab308', dark: '#854d0e', hi: '#fde047' },
   { color: '#10b981', dark: '#047857', hi: '#6ee7b7' },
   { color: '#6366f1', dark: '#4338ca', hi: '#a5b4fc' },
-] as const;
+];
 
-export type BallStyle = (typeof BALL_PALETTE)[number] & { num: string };
+/** 파스텔(분홍/민트/크림/라벤더/피치) — 점심 가챠 전용. 글자는 진한 색으로 가독성 확보. */
+export const PASTEL_BALL_PALETTE: BallPaletteEntry[] = [
+  { color: '#fbbcd4', dark: '#f48fb6', hi: '#ffe1ee', text: '#a81e5d' },
+  { color: '#a9e7d8', dark: '#6fd0bd', hi: '#d7f7ef', text: '#0f766e' },
+  { color: '#ffe1a0', dark: '#fbcf6b', hi: '#fff4d2', text: '#9a6700' },
+  { color: '#c9bcfb', dark: '#a890f6', hi: '#e8e1ff', text: '#6b21a8' },
+  { color: '#ffc4a3', dark: '#fda47c', hi: '#ffe3d2', text: '#9a3412' },
+  { color: '#b4ddf7', dark: '#85c5ef', hi: '#dceffb', text: '#0b5e8a' },
+  { color: '#f7b8c8', dark: '#ef93ab', hi: '#ffdde6', text: '#9d174d' },
+  { color: '#c7ecb0', dark: '#a3da86', hi: '#e6f8d8', text: '#3f6212' },
+  { color: '#ffd1e3', dark: '#fba8ca', hi: '#ffe7f1', text: '#a3155f' },
+  { color: '#b8e3e0', dark: '#86ccc8', hi: '#dcf4f2', text: '#115e59' },
+  { color: '#e3c9f5', dark: '#cba6ee', hi: '#f1e3fb', text: '#7e22ce' },
+  { color: '#ffe7a8', dark: '#fbd778', hi: '#fff6da', text: '#92600a' },
+];
 
-export function ballFromPalette(colorIndex: number, num: string): BallStyle {
-  const base = BALL_PALETTE[colorIndex % BALL_PALETTE.length];
+export type BallStyle = BallPaletteEntry & { num: string };
+
+export function ballFromPalette(
+  colorIndex: number,
+  num: string,
+  variant: GachaBallVariant = 'arcade',
+): BallStyle {
+  const palette = variant === 'pastel' ? PASTEL_BALL_PALETTE : BALL_PALETTE;
+  const base = palette[colorIndex % palette.length];
   return { ...base, num };
 }
 

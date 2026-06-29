@@ -64,6 +64,7 @@ function ballStyle(ball: BallStyle): CSSProperties {
     '--ball-color': ball.color,
     '--ball-dark': ball.dark,
     '--ball-hi': ball.hi,
+    ...(ball.text ? { '--ball-num-color': ball.text } : {}),
   } as CSSProperties;
 }
 
@@ -129,12 +130,14 @@ function BallPile({
   mode,
   mixPower,
   hideBallIndex,
+  variant,
 }: {
   balls: GachaBall[];
   pileLayout: ReturnType<typeof buildPileLayout>;
   mode: 'idle' | 'chaos' | 'settled';
   mixPower: number;
   hideBallIndex?: number;
+  variant: 'arcade' | 'pastel';
 }) {
   return (
     <div
@@ -145,7 +148,7 @@ function BallPile({
         if (i === hideBallIndex) return null;
         const slot = pileLayout[i];
         if (!slot) return null;
-        const ball = ballFromPalette(entry.colorIndex, entry.num);
+        const ball = ballFromPalette(entry.colorIndex, entry.num, variant);
         return (
           <div
             key={entry.spotId}
@@ -178,6 +181,7 @@ export default function LunchGachaMachine({
   disabled = false,
   theme = LUNCH_GACHA_THEME,
 }: LunchGachaMachineProps) {
+  const variant = theme.variant ?? 'arcade';
   const pileLayout = buildPileLayout(balls.length);
   const leverRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, startPull: 0 });
@@ -197,7 +201,7 @@ export default function LunchGachaMachine({
   const showWinBall = (phase === 'drop' || phase === 'reveal') && !!resultName && !!winSpotId;
   const hideBallIndex = winSpotId ? balls.findIndex(b => b.spotId === winSpotId) : -1;
   const winEntry = hideBallIndex >= 0 ? balls[hideBallIndex] : null;
-  const winBall = winEntry ? ballFromPalette(winEntry.colorIndex, winEntry.num) : null;
+  const winBall = winEntry ? ballFromPalette(winEntry.colorIndex, winEntry.num, variant) : null;
   const winBallSize = hideBallIndex >= 0 ? (pileLayout[hideBallIndex]?.s ?? 28) : 28;
 
   const mixPower = leverHeld ? Math.max(pull, 0.85) : pull;
@@ -247,7 +251,7 @@ export default function LunchGachaMachine({
   };
 
   return (
-    <div className="gc-wrap mt-6 mx-auto w-full max-w-2xl px-2" aria-label={theme.ariaLabel}>
+    <div className={`gc-wrap gc-theme-${variant} mt-6 mx-auto w-full max-w-2xl px-2`} aria-label={theme.ariaLabel}>
       <div className="gc-arena">
         <div className="gc-arena-bg" aria-hidden />
         <div className="gc-arena-spotlight" aria-hidden />
@@ -287,6 +291,7 @@ export default function LunchGachaMachine({
                             mode={pileMode}
                             mixPower={mixPower}
                             hideBallIndex={hideBallIndex >= 0 ? hideBallIndex : undefined}
+                            variant={variant}
                           />
                         </div>
                         <div className="gc-bowl-glass" aria-hidden />

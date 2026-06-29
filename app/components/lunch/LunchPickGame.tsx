@@ -354,11 +354,11 @@ export default function LunchPickGame({
   const showGachaCapsule = mode === 'gacha' && (gachaPhase === 'drop' || gachaPhase === 'reveal');
 
   return (
-    <section className="rounded-2xl border border-violet-300/40 bg-gradient-to-br from-slate-900 via-violet-950/30 to-fuchsia-950/15 p-5 sm:p-8 shadow-xl shadow-violet-900/10 ring-1 ring-white/5">
+    <section className="rounded-3xl border border-teal-200/70 bg-gradient-to-br from-teal-50 via-emerald-50/50 to-rose-50/50 p-5 sm:p-8 shadow-xl shadow-teal-200/40 ring-1 ring-white/60">
       <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-400">LUCKY LUNCH</p>
-        <h2 className="mt-1 text-2xl sm:text-3xl font-bold text-white tracking-tight">점심 뽑기</h2>
-        <p className="mt-2 text-sm text-violet-100/90 leading-relaxed">
+        <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-400">LUCKY LUNCH</p>
+        <h2 className="mt-1 text-2xl sm:text-3xl font-black text-teal-900 tracking-tight">점심 뽑기</h2>
+        <p className="mt-2 text-sm text-teal-700/80 leading-relaxed">
           {mode === 'gacha' ? '가챠머신으로 한 방에!' : '승부차기로 운명을 가르자!'}
         </p>
       </div>
@@ -370,8 +370,8 @@ export default function LunchPickGame({
           onClick={() => switchMode('gacha')}
           className={`px-5 py-2.5 text-sm font-black rounded-xl border transition-all disabled:opacity-50 ${
             mode === 'gacha'
-              ? 'bg-violet-500 text-white border-violet-400 shadow-lg shadow-violet-500/30'
-              : 'bg-white/10 text-violet-100 border-violet-400/30 hover:bg-white/15'
+              ? 'bg-pink-400 text-white border-pink-300 shadow-lg shadow-pink-300/40'
+              : 'bg-white/70 text-pink-600 border-pink-200 hover:bg-white'
           }`}
         >
           🎰 가챠
@@ -382,8 +382,8 @@ export default function LunchPickGame({
           onClick={() => switchMode('penalty')}
           className={`px-5 py-2.5 text-sm font-black rounded-xl border transition-all disabled:opacity-50 ${
             mode === 'penalty'
-              ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-500/30'
-              : 'bg-white/10 text-emerald-100 border-emerald-400/30 hover:bg-white/15'
+              ? 'bg-teal-400 text-white border-teal-300 shadow-lg shadow-teal-300/40'
+              : 'bg-white/70 text-teal-600 border-teal-200 hover:bg-white'
           }`}
         >
           ⚽ 승부차기
@@ -397,8 +397,8 @@ export default function LunchPickGame({
           onClick={() => { setDistanceBand('all'); resetAll(); }}
           className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors disabled:opacity-50 ${
             distanceBand === 'all'
-              ? 'bg-violet-500 text-white border-violet-400'
-              : 'bg-white/10 text-violet-100 border-violet-400/30 hover:bg-white/15'
+              ? 'bg-teal-400 text-white border-teal-300'
+              : 'bg-white/70 text-teal-600 border-teal-200 hover:bg-white'
           }`}
         >
           전체
@@ -411,8 +411,8 @@ export default function LunchPickGame({
             onClick={() => { setDistanceBand(band.id); resetAll(); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors disabled:opacity-50 ${
               distanceBand === band.id
-                ? 'bg-violet-500 text-white border-violet-400'
-                : 'bg-white/10 text-violet-100 border-violet-400/30 hover:bg-white/15'
+                ? 'bg-teal-400 text-white border-teal-300'
+                : 'bg-white/70 text-teal-600 border-teal-200 hover:bg-white'
             }`}
             title={band.label}
           >
@@ -421,7 +421,7 @@ export default function LunchPickGame({
         ))}
       </div>
 
-      <p className="mt-3 text-center text-sm text-violet-200/80">
+      <p className="mt-3 text-center text-sm text-teal-700/70">
         {distanceBand === 'all'
           ? `전체 ${pool.length}곳 · 공 ${pool.length}개 · 내가 오늘·어제 먹은 곳 제외`
           : `${bands.find(b => b.id === distanceBand)?.label ?? ''} · 추첨 ${pool.length}곳 · 공 ${pool.length}개`}
@@ -441,7 +441,7 @@ export default function LunchPickGame({
             disabled={pool.length === 0 || gachaStep === 'done'}
           />
           {gachaStep === 'idle' && gachaPhase === 'idle' && !leverHeld && pool.length > 0 && (
-            <p className="mt-4 text-center text-sm font-bold text-amber-300/90 animate-pulse">
+            <p className="mt-4 text-center text-sm font-bold text-teal-600 animate-pulse">
               👉 옆 레버를 당기면 공이 섞이고, 놓으면 당첨!
             </p>
           )}
@@ -458,7 +458,7 @@ export default function LunchPickGame({
           >
             ⚽ 승부차기 시작
           </button>
-          <p className="text-xs text-emerald-200/60">가게 2곳 직접 선택 · 골/막힘 지정 · 50% 확률</p>
+          <p className="text-xs text-teal-600/70">가게 2곳 직접 선택 · 골/막힘 지정 · 50% 확률</p>
         </div>
       )}
 
@@ -492,7 +492,7 @@ export default function LunchPickGame({
           <button
             type="button"
             onClick={resetAll}
-            className="text-xs font-semibold text-violet-300 hover:text-white underline"
+            className="text-xs font-semibold text-teal-600 hover:text-teal-800 underline"
           >
             다시 뽑기
           </button>
@@ -501,7 +501,7 @@ export default function LunchPickGame({
 
       {showCard && picked && (
         <div className="mt-8 lunch-reveal-slide">
-          <p className="mb-3 text-center text-base font-black text-violet-700">🎉 오늘의 점심</p>
+          <p className="mb-3 text-center text-base font-black text-pink-600">🎉 오늘의 점심</p>
           <LunchSpotCard
             spot={picked}
             journal={journal[picked.id] ?? null}
@@ -517,7 +517,7 @@ export default function LunchPickGame({
       )}
 
       {pool.length === 0 && (
-        <p className="mt-4 text-center text-sm text-red-400">
+        <p className="mt-4 text-center text-sm text-rose-500">
           뽑을 맛집이 없습니다. (내가 오늘·어제 다 먹었거나 필터 결과 없음)
         </p>
       )}

@@ -682,7 +682,7 @@
   position: relative;
   z-index: 1;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.97);
+  color: var(--ball-num-color, rgba(255, 255, 255, 0.97));
   letter-spacing: -0.02em;
   line-height: 1;
   text-shadow:
@@ -1000,6 +1000,279 @@
 .gc-status-spin,
 .gc-status-crank,
 .gc-status-drop { color: #a5b4fc; }
+
+/* ═══════════════════════════════════════════════════════════════
+   파스텔 스킨 (.gc-theme-pastel) — 점심 가챠 전용.
+   기본(arcade) 규칙은 그대로 두고, 더 높은 특이성으로 색상만 덮어쓴다.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 색: 크림 화이트 + 민트 위주, 핑크/피치는 포인트만.
+   형태: 모서리를 크게 둥글려 캡슐 토이 같은 룩으로 바꾼다. */
+
+.gc-theme-pastel .gc-arena {
+  border-radius: 160px 160px 44px 44px;
+  border: 7px solid #ffffff;
+  box-shadow:
+    0 0 0 5px rgba(143, 214, 196, 0.65),
+    0 0 0 12px rgba(255, 224, 233, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
+    0 22px 48px rgba(120, 190, 175, 0.28),
+    0 0 70px rgba(167, 231, 216, 0.4);
+}
+
+.gc-theme-pastel .gc-arena-bg {
+  background:
+    radial-gradient(ellipse 82% 60% at 50% 0%, rgba(190, 238, 222, 0.6) 0%, transparent 55%),
+    radial-gradient(ellipse 52% 42% at 84% 92%, rgba(255, 218, 233, 0.4) 0%, transparent 52%),
+    linear-gradient(165deg, #fffdf7 0%, #f4fbf6 40%, #edf9f3 72%, #fff8fb 100%);
+}
+
+.gc-theme-pastel .gc-arena-bg::before {
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(110, 208, 189, 0.12) 1.5px, transparent 1.5px),
+    radial-gradient(circle at 70% 60%, rgba(244, 143, 182, 0.08) 1.5px, transparent 1.5px);
+  background-size: 42px 42px, 58px 58px;
+  opacity: 0.7;
+}
+
+.gc-theme-pastel .gc-arena-spotlight {
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.75) 0%, rgba(190, 238, 222, 0.35) 38%, transparent 72%);
+}
+
+.gc-theme-pastel .gc-shadow {
+  background: radial-gradient(ellipse, rgba(120, 190, 175, 0.3) 0%, rgba(167, 231, 216, 0.18) 42%, transparent 72%);
+}
+
+/* 캐비닛 — 크림/민트 본체, 슬림 캡슐머신: 위는 둥근 어깨, 아래는 좁은 받침 */
+.gc-theme-pastel .gc-cabinet {
+  border-radius: 64px 64px 26px 26px;
+  background:
+    linear-gradient(90deg, rgba(149, 220, 200, 0.16) 0%, transparent 10%, transparent 90%, rgba(149, 220, 200, 0.12) 100%),
+    linear-gradient(175deg, #fffaf3 0%, #fff3f9 28%, #eafaf4 68%, #f3fbf7 100%);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.95),
+    0 0 0 6px rgba(149, 220, 200, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -12px 28px rgba(149, 220, 200, 0.16),
+    0 18px 38px rgba(120, 190, 175, 0.28);
+}
+
+.gc-theme-pastel .gc-cabinet::before {
+  border-radius: 61px 61px 23px 23px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, transparent 42%, transparent 60%, rgba(255, 255, 255, 0.35) 100%);
+}
+
+.gc-theme-pastel .gc-cabinet-edge {
+  background: linear-gradient(180deg, #d9f2ea, #bfe6da);
+  box-shadow: inset 0 0 8px rgba(120, 190, 175, 0.4);
+}
+
+.gc-theme-pastel .gc-cabinet-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(149, 220, 200, 0.55) 0%, rgba(255, 240, 247, 0.4) 100%);
+  border-bottom: 2px solid rgba(149, 220, 200, 0.5);
+  box-shadow: inset 0 -6px 12px rgba(120, 190, 175, 0.1);
+}
+
+.gc-theme-pastel .gc-cabinet-emoji {
+  filter: drop-shadow(0 2px 3px rgba(149, 220, 200, 0.45));
+}
+
+.gc-theme-pastel .gc-cabinet-title {
+  color: #1f9e89;
+  text-shadow:
+    0 0 10px rgba(149, 220, 200, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.gc-theme-pastel .gc-led {
+  background: radial-gradient(circle at 35% 28%, #fff, #ffd8b0 45%, #ffb37a 85%);
+  box-shadow:
+    0 0 8px rgba(255, 179, 122, 0.85),
+    0 0 14px rgba(167, 231, 216, 0.5),
+    inset 0 -3px 4px rgba(214, 122, 60, 0.25),
+    inset 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.gc-theme-pastel .gc-led:nth-child(even) {
+  background: radial-gradient(circle at 35% 28%, #fff, #b8efe0 45%, #6fd0bd 85%);
+}
+
+.gc-theme-pastel .gc-led::before {
+  background: linear-gradient(180deg, #bfe6da, #9fd2c4);
+}
+
+.gc-theme-pastel .gc-cabinet-footer {
+  border-radius: 0 0 26px 26px;
+  background: linear-gradient(180deg, #d9f2ea 0%, #c2e8dc 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+/* ── 본체 비율 자체를 변경: 넓고 납작 → 글로브가 꽉 차는 슬림 캡슐머신 ── */
+.gc-theme-pastel .gc-lotto {
+  width: min(356px, 100%);
+}
+
+.gc-theme-pastel .gc-cabinet-body {
+  padding: 6px 10px 14px;
+}
+
+.gc-theme-pastel .gc-vessel {
+  height: 238px;
+}
+
+/* 구형 통 — 민트 베zel + 약간의 로즈 포인트 */
+.gc-theme-pastel .gc-bowl-ring {
+  background: conic-gradient(from 200deg, #8fd6c4, #e9fbf4, #fff, #cdeee4, #8fd6c4, #ffdbe9, #8fd6c4);
+  box-shadow:
+    0 6px 16px rgba(120, 190, 175, 0.4),
+    0 2px 0 rgba(255, 255, 255, 0.85),
+    inset 0 3px 6px rgba(255, 255, 255, 0.7),
+    inset 0 -4px 8px rgba(120, 190, 175, 0.3);
+}
+
+.gc-theme-pastel .gc-bowl-stand {
+  background: linear-gradient(180deg, #ffffff 0%, #e8f7f1 25%, #9fe0cf 70%, #6fcab6 100%);
+}
+
+.gc-theme-pastel .gc-bowl-inner {
+  background:
+    radial-gradient(circle at 50% 92%, rgba(120, 190, 175, 0.16) 0%, transparent 35%),
+    radial-gradient(circle at 50% 85%, rgba(167, 231, 216, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.75) 0%, rgba(240, 251, 246, 0.5) 30%, rgba(182, 219, 206, 0.45) 100%);
+}
+
+.gc-theme-pastel .gc-bowl-glass {
+  background:
+    radial-gradient(circle at 72% 78%, rgba(120, 190, 175, 0.1) 0%, transparent 35%),
+    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.72) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, rgba(167, 231, 216, 0.14) 100%);
+  border-color:
+    rgba(255, 255, 255, 0.82)
+    rgba(255, 255, 255, 0.3)
+    rgba(120, 190, 175, 0.32)
+    rgba(255, 255, 255, 0.4);
+}
+
+/* 레버 — 민트 하우징 + 모서리 둥글림, 손잡이만 딸기우유 포인트 */
+.gc-theme-pastel .gc-lever-slot-frame {
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, rgba(120, 190, 175, 0.2) 0%, transparent 15%, transparent 85%, rgba(120, 190, 175, 0.15) 100%),
+    linear-gradient(180deg, #e7f7f0 0%, #cdeee3 30%, #b6e6d6 65%, #a3ddca 100%);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 8px 16px rgba(120, 190, 175, 0.25),
+    inset 0 -2px 0 rgba(255, 255, 255, 0.7),
+    0 8px 0 #8fd0bd,
+    0 10px 18px rgba(120, 190, 175, 0.3);
+}
+
+.gc-theme-pastel .gc-lever-slot-frame::before {
+  background: linear-gradient(90deg, #bfe6da, #e7f7f0 45%, #fff 50%, #e7f7f0 55%, #bfe6da);
+}
+
+.gc-theme-pastel .gc-lever-mount {
+  background: linear-gradient(180deg, #b6e6d6, #93cdbd);
+}
+
+.gc-theme-pastel .gc-lever-rod {
+  background: linear-gradient(90deg, #9fd2c4 0%, #e7f7f0 42%, #fff 50%, #e7f7f0 58%, #9fd2c4 100%);
+}
+
+.gc-theme-pastel .gc-lever-knob {
+  background: radial-gradient(circle at 35% 28%, #fff 0%, #ffc1da 30%, #fb8db5 65%, #e86a98 100%);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 8px 0 #d65b8a,
+    0 10px 18px rgba(232, 106, 152, 0.45),
+    inset 0 -5px 10px rgba(214, 91, 138, 0.3),
+    inset 0 3px 6px rgba(255, 255, 255, 0.6);
+}
+
+.gc-theme-pastel .gc-lever-hint {
+  color: #1f9e89;
+  text-shadow: 0 0 8px rgba(149, 220, 200, 0.6);
+}
+
+/* 공 */
+.gc-theme-pastel .gc-ball {
+  box-shadow:
+    inset -5px -7px 14px rgba(0, 0, 0, 0.12),
+    inset 4px 4px 8px rgba(255, 255, 255, 0.6),
+    0 5px 12px rgba(120, 190, 175, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.gc-theme-pastel .gc-ball-num {
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* 상태 문구 */
+.gc-theme-pastel .gc-status {
+  color: #5b9f90;
+}
+
+.gc-theme-pastel .gc-status-reveal {
+  color: #db2777;
+  text-shadow: 0 0 10px rgba(249, 168, 212, 0.5);
+}
+
+.gc-theme-pastel .gc-status-spin,
+.gc-theme-pastel .gc-status-crank,
+.gc-theme-pastel .gc-status-drop {
+  color: #34b9a0;
+}
+
+/* 결과 메모지 — 크림 종이 + 민트 점선, 텍스트만 로즈 포인트 */
+.gc-theme-pastel .gc-memo-overlay {
+  background: rgba(244, 251, 247, 0.74);
+  border-radius: 153px 153px 37px 37px;
+}
+
+.gc-theme-pastel .gc-memo-paper {
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fffdf7 0%, #f4fbf6 55%, #e8f7f1 100%);
+  border: 3px dashed #8fd6c4;
+  box-shadow:
+    0 24px 60px rgba(120, 190, 175, 0.4),
+    0 0 36px rgba(167, 231, 216, 0.4);
+}
+
+.gc-theme-pastel .gc-memo-tag {
+  color: #1f9e89;
+}
+
+.gc-theme-pastel .gc-memo-name {
+  color: #be3d76;
+}
+
+.gc-theme-pastel .gc-memo-sub {
+  color: #34b9a0;
+}
+
+.gc-theme-pastel .gc-win-memo {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fffdf7, #e8f7f1);
+  border: 1px solid rgba(143, 214, 196, 0.6);
+}
+
+.gc-theme-pastel .gc-win-memo-tag {
+  color: #1f9e89;
+}
+
+.gc-theme-pastel .gc-win-memo-name {
+  color: #be3d76;
+}
+
+.gc-theme-pastel .gc-win-rays {
+  background: conic-gradient(from 0deg, transparent, rgba(167, 231, 216, 0.45), transparent, rgba(249, 168, 212, 0.35), transparent);
+}
+
+.gc-theme-pastel .gc-win-ring {
+  border-color: rgba(143, 214, 196, 0.75);
+}
 
 @media (max-width: 440px) {
   .gc-bowl-wrap {

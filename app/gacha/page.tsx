@@ -9,6 +9,7 @@ import LunchPickGame from '@/app/components/lunch/LunchPickGame';
 import LunchSpotList from '@/app/components/lunch/LunchSpotList';
 import LunchSpotRequestForm from '@/app/components/lunch/LunchSpotRequestForm';
 import { useLunchJournal } from '@/app/components/lunch/useLunchJournal';
+import { useLunchActiveOverrides } from '@/app/components/lunch/useLunchActiveOverrides';
 import ManagerGachaGame from '@/app/components/gacha/ManagerGachaGame';
 import {
   PortalLoading,
@@ -34,6 +35,7 @@ function GachaPageContent() {
     removeVisit,
     cancelToday,
   } = useLunchJournal();
+  const { setActive, applyOverrides } = useLunchActiveOverrides();
 
   useEffect(() => {
     if (tab !== 'lunch') return;
@@ -42,14 +44,25 @@ function GachaPageContent() {
       .catch(e => setError(String(e)));
   }, [tab]);
 
+  const effectiveSpots = useMemo(
+    () => (db ? applyOverrides(db.spots) : []),
+    [db, applyOverrides],
+  );
+  const activeSpots = useMemo(
+    () => effectiveSpots.filter(s => s.active),
+    [effectiveSpots],
+  );
+
   const switchTab = (next: GachaTab) => {
     router.replace(next === 'lunch' ? '/gacha' : '/gacha?tab=manager', { scroll: false });
   };
 
-  const subtitle = useMemo(() => {
-    if (tab === 'manager') return '담당자 후보를 넣고 가챠로 한 명 뽑기';
-    return db?.officeLabel ? `${db.officeLabel} · 캡슐 뽑기 = 오늘 점심` : '캡슐 뽑기 = 오늘 점심';
-  }, [tab, db?.officeLabel]);
+  const subtitle =
+    tab === 'manager'
+      ? '담당자 후보를 넣고 가챠로 한 명 뽑기'
+      : db?.officeLabel
+        ? `${db.officeLabel} · 캡슐 뽑기 = 오늘 점심`
+        : '캡슐 뽑기 = 오늘 점심';
 
   return (
     <>
@@ -83,7 +96,7 @@ function GachaPageContent() {
           {db && (
             <>
               <LunchPickGame
-                spots={db.spots}
+                spots={activeSpots}
                 journal={store}
                 authorName={authorName}
                 onRecordVisit={recordVisit}
@@ -92,13 +105,14 @@ function GachaPageContent() {
                 onCancelToday={cancelToday}
               />
               <LunchSpotList
-                spots={db.spots}
+                spots={effectiveSpots}
                 journal={store}
                 authorName={authorName}
                 onRecordVisit={recordVisit}
                 onEditVisit={editVisit}
                 onDeleteVisit={removeVisit}
                 onCancelToday={cancelToday}
+                onToggleActive={setActive}
               />
               <LunchSpotRequestForm />
               <p className={portalFooterMeta}>
