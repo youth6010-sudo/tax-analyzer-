@@ -139,12 +139,14 @@ function SectionCard({
 }
 
 const SHOW_SINGO_KEY = 'dashboard.showSingoDaeri';
+const SHOW_JISUTAEK_KEY = 'dashboard.showJisutaek';
 
 export default function MyClientsBoard() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [ready, setReady] = useState(false);
   const [sort, setSort] = useState<SortKey>('code');
   const [showSingo, setShowSingo] = useState(true);
+  const [showJisutaek, setShowJisutaek] = useState(false);
   const [ntsOverride, setNtsOverride] = useState<Record<string, string>>({});
   const [ntsChecking, setNtsChecking] = useState(false);
   const [ntsError, setNtsError] = useState('');
@@ -154,6 +156,7 @@ export default function MyClientsBoard() {
     hydratePortal();
     try {
       if (localStorage.getItem(SHOW_SINGO_KEY) === '0') setShowSingo(false);
+      if (localStorage.getItem(SHOW_JISUTAEK_KEY) === '1') setShowJisutaek(true);
     } catch {
       /* ignore */
     }
@@ -170,6 +173,15 @@ export default function MyClientsBoard() {
     setShowSingo(next);
     try {
       localStorage.setItem(SHOW_SINGO_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleJisutaek = (next: boolean) => {
+    setShowJisutaek(next);
+    try {
+      localStorage.setItem(SHOW_JISUTAEK_KEY, next ? '1' : '0');
     } catch {
       /* ignore */
     }
@@ -296,6 +308,15 @@ export default function MyClientsBoard() {
             />
             신고대리 표시
           </label>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
+            <input
+              type="checkbox"
+              checked={showJisutaek}
+              onChange={e => toggleJisutaek(e.target.checked)}
+              className="h-4 w-4 accent-amber-500"
+            />
+            지주택 표시
+          </label>
           <div className="inline-flex items-center gap-0.5 rounded-xl bg-slate-100 p-0.5 ring-1 ring-slate-200">
             {toggleBtn('name', '상호순')}
             {toggleBtn('code', '코드순')}
@@ -332,7 +353,7 @@ export default function MyClientsBoard() {
             ntsClosedIds={ntsClosedIds}
             ready={ready}
           />
-          {jisutaek.length > 0 && (
+          {showJisutaek && jisutaek.length > 0 && (
             <SectionCard
               label="지주택"
               dotClass={CATEGORY_COLORS.지주택.dot}
