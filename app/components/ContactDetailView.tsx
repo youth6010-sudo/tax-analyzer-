@@ -19,6 +19,7 @@ import { TAX_TYPES } from '../config/taxTypes';
 import type { TaxTypeId } from '../config/taxTypes';
 import BackButton from './BackButton';
 import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
+import { formatIdField } from '@/app/utils/idFormat';
 import {
   portalAlertError,
   portalBtnDanger,
@@ -369,7 +370,9 @@ export default function ContactDetailView({ contact: initial, primaryContactName
                   <p className={`text-sm font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''}`}>
                     {key === 'phone'
                       ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
-                      : displayValue(contact[key] as string)}
+                      : key === 'businessNo' || key === 'corporateNo' || key === 'residentNo'
+                        ? displayValue(formatIdField(key, contact[key] as string))
+                        : displayValue(contact[key] as string)}
                   </p>
                 )}
               </div>

@@ -9,7 +9,7 @@ import { assertCanAccessClient } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
 import { getClientById, getClientBlueholeId, setClientBlueholeId, setClientNtsStatus } from '@/lib/clientsDb';
 import { withBluehole, blueholeConfiguredForUser } from '@/lib/bluehole/server';
-import { buildBlueholeCreateValues } from '@/lib/bluehole/clientFieldMap';
+import { buildBlueholeCreateValues, BLUEHOLE_CREATE_COLUMNS } from '@/lib/bluehole/clientFieldMap';
 import { insertBlueholeSyncLog } from '@/lib/blueholeSyncDb';
 import { checkStatus, digits10, isNtsConfigured } from '@/lib/nts';
 import * as bh from '@/lib/bluehole/core.js';
@@ -42,7 +42,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    const values = buildBlueholeCreateValues({
+    const body = (await request.json().catch(() => ({}))) as {
+      force?: boolean;
+      values?: Record<string, unknown>;
+    };
+    const force = body.force === true;
+
+    // 서버 기본값(기업구분 corp_type 포함) 위에 사용자가 폼에서 채운 값을 덮어쓴다.
+    const base = buildBlueholeCreateValues({
       companyName: client!.companyName,
       businessNo: client!.businessNo,
       corporateNo: client!.corporateNo,
@@ -51,18 +58,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       fax: client!.fax,
       businessEntityType: client!.businessEntityType,
     });
+    const overrides: Record<string, string> = {};
+    if (body.values && typeof body.values === 'object') {
+      for (const [k, v] of Object.entries(body.values)) {
+        if (BLUEHOLE_CREATE_COLUMNS.has(k) && v != null) overrides[k] = String(v).trim();
+      }
+    }
+    const values: Record<string, string> = { ...base, ...overrides };
+    for (const k of Object.keys(values)) if (!values[k].trim()) delete values[k];
     if (!values.name) {
       return NextResponse.json({ error: '거래처명(상호)이 비어 있어 생성할 수 없습니다.' }, { status: 400 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { force?: boolean };
-    const force = body.force === true;
-
     // 사업자번호 중복검사 (상호로 검색 후 사업자번호 일치 확인)
-    const myBiz = digits(client!.businessNo);
+    const myBiz = digits(values.business_number || client!.businessNo);
     if (!force && myBiz) {
       const found = (await withBluehole(user.id, (cookie) =>
-        bh.searchClients(cookie, client!.companyName),
+        bh.searchClients(cookie, values.name),
       )) as { id: string; name: string; business_number?: string }[];
       const dups = (found || []).filter((c) => digits(c.business_number || '') === myBiz);
       if (dups.length > 0) {

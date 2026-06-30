@@ -242,7 +242,7 @@ export default function IntakeProcessPanel({
             onClick={() => void handleRegister()}
             className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
           >
-            {registering ? '…' : '포털 수임처 등록'}
+            {registering ? '…' : '수임처 등록'}
           </button>
         ) : process?.clientId ? (
           <Link

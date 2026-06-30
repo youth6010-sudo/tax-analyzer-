@@ -10,7 +10,11 @@ import {
   portalAlertError,
   portalAlertInfo,
 } from '../portal/uiClasses';
-import { CLIENT_SYNC_FIELDS, buildBlueholeCreateValues } from '@/lib/bluehole/clientFieldMap';
+import {
+  CLIENT_SYNC_FIELDS,
+  BLUEHOLE_CREATE_FIELDS,
+  buildBlueholeCreatePrefill,
+} from '@/lib/bluehole/clientFieldMap';
 import { actionLabel, actionBadge, columnLabel } from './blueholeLogLabels';
 
 export interface ClientOursForSync {
@@ -21,6 +25,17 @@ export interface ClientOursForSync {
   residentNo: string;
   fax: string;
   businessEntityType?: string;
+  // 블루홀 신규 등록 폼 프리필용(선택)
+  phone?: string;
+  mobilePhone?: string;
+  email?: string;
+  address?: string;
+  zipCode?: string;
+  industry?: string;
+  item?: string;
+  openDate?: string;
+  program?: string;
+  fee?: string;
 }
 
 interface BhCandidate {
@@ -651,13 +666,24 @@ function CreateSection({
   const [error, setError] = useState('');
   const [duplicates, setDuplicates] = useState<BhCandidate[] | null>(null);
   const [ntsWarning, setNtsWarning] = useState<{ status: string; statusCode: string } | null>(null);
+  const [values, setValues] = useState<Record<string, string>>(() => buildBlueholeCreatePrefill(ours));
 
-  const preview = buildBlueholeCreateValues(ours);
-  const previewRows = CLIENT_SYNC_FIELDS.filter((f) => preview[f.col]).map((f) => ({
-    label: f.label,
-    value: preview[f.col],
-    mono: f.mono,
-  }));
+  useEffect(() => {
+    setValues(buildBlueholeCreatePrefill(ours));
+  }, [ours]);
+
+  const setField = (col: string, v: string) => setValues((prev) => ({ ...prev, [col]: v }));
+
+  // 그룹 순서 유지하며 필드 묶기
+  const groups: { group: string; fields: typeof BLUEHOLE_CREATE_FIELDS }[] = [];
+  for (const f of BLUEHOLE_CREATE_FIELDS) {
+    let g = groups.find((x) => x.group === f.group);
+    if (!g) {
+      g = { group: f.group, fields: [] };
+      groups.push(g);
+    }
+    g.fields.push(f);
+  }
 
   const submit = useCallback(
     async (force: boolean) => {
@@ -675,7 +701,7 @@ function CreateSection({
         const res = await fetch(`/api/clients/${clientId}/bluehole/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force }),
+          body: JSON.stringify({ force, values }),
         });
         const data = await readJson(res);
         if (res.status === 409 && data.duplicate) {
@@ -695,16 +721,10 @@ function CreateSection({
         setBusy(false);
       }
     },
-    [clientId, onCreated],
+    [clientId, onCreated, values],
   );
 
-  if (!preview.name) {
-    return (
-      <p className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-400">
-        상호(거래처명)가 있어야 블루홀에 신규 등록할 수 있습니다.
-      </p>
-    );
-  }
+  const nameEmpty = !(values.name || '').trim();
 
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
@@ -719,14 +739,34 @@ function CreateSection({
             ⚠ 블루홀은 <b>거래처 삭제 기능이 없어</b> 한번 생성하면 되돌릴 수 없습니다. 기존 거래처가 있으면 신규 등록 대신 <b>연결</b>을 사용하세요.
           </div>
 
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-slate-100 bg-white px-3 py-2 text-xs">
-            {previewRows.map((r) => (
-              <div key={r.label} className="contents">
-                <dt className="text-slate-500">{r.label}</dt>
-                <dd className={r.mono ? 'tabular-nums text-slate-800' : 'text-slate-800'}>{r.value}</dd>
-              </div>
-            ))}
-          </dl>
+          {!duplicates && !ntsWarning && (
+            <div className="space-y-2.5 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+              <p className="text-[11px] text-slate-400">수임처 정보로 채워졌습니다. 필요한 항목을 직접 수정·추가하세요.</p>
+              {groups.map((g) => (
+                <fieldset key={g.group} className="space-y-1.5">
+                  <legend className="text-[11px] font-bold text-slate-500">{g.group}</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {g.fields.map((f) => (
+                      <label key={f.col} className="block text-[11px]">
+                        <span className="text-slate-500">
+                          {f.label}
+                          {f.col === 'name' && <span className="text-red-500"> *</span>}
+                        </span>
+                        <input
+                          type={f.type === 'date' ? 'date' : 'text'}
+                          value={values[f.col] ?? ''}
+                          onChange={(e) => setField(f.col, e.target.value)}
+                          className={`mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 ${
+                            f.mono ? 'tabular-nums' : ''
+                          }`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          )}
 
           {ntsWarning ? (
             <div className="space-y-2">
@@ -776,11 +816,12 @@ function CreateSection({
                 />
                 <span>위 정보로 블루홀에 <b>영구 생성</b>됨을 이해했습니다.</span>
               </label>
+              {nameEmpty && <p className="text-xs text-red-600">거래처명을 입력하세요.</p>}
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => submit(false)}
-                  disabled={busy || !agree}
+                  disabled={busy || !agree || nameEmpty}
                   className={portalBtnPrimary}
                 >
                   {busy ? '등록 중…' : '중복 확인 후 등록'}

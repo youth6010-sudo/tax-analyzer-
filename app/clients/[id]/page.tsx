@@ -61,6 +61,16 @@ export default async function ClientDetailPage({
             residentNo: client.residentNo,
             fax: client.fax,
             businessEntityType: client.businessEntityType,
+            phone: client.phone,
+            mobilePhone: client.mobilePhone,
+            email: String(client.intakeData?.email || ''),
+            address: String(client.intakeData?.address || ''),
+            zipCode: String(client.intakeData?.zipCode || ''),
+            industry: String(client.intakeData?.industry || ''),
+            item: String(client.intakeData?.item || ''),
+            openDate: String(client.intakeData?.openDate || ''),
+            program: client.program || '',
+            fee: client.feeSummary != null ? String(client.feeSummary) : '',
           }}
         />
         <ClientNtsPanel
