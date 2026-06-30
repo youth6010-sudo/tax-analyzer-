@@ -15,6 +15,7 @@ export type PortalHomeStats = {
 
 export type PortalBootstrap = {
   fetchedAt: number;
+  userId?: string;
   tasks: DashboardTask[];
   homeStats: PortalHomeStats;
   clients: ClientRecord[];
@@ -25,7 +26,7 @@ export type PortalBootstrap = {
   churnMissingClients: ClientRecord[];
 };
 
-const STORAGE_KEY = 'portalBootstrap:v6';
+const STORAGE_KEY = 'portalBootstrap:v7';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
@@ -192,6 +193,40 @@ export function markPortalClientsFresh(): void {
 export function subscribePortal(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/**
+ * 현재 로그인 사용자와 캐시 소유자가 다르면 캐시를 비운다.
+ * 로그인/로그아웃 버튼 경로를 타지 않은 사용자 전환(예: 세션 만료 후 재로그인,
+ * 다른 탭 로그인)에도 이전 사용자의 할 일이 남지 않도록 보장한다.
+ */
+export function reconcilePortalUser(currentUserId: string | null | undefined): void {
+  if (!currentUserId) return;
+  if (memory && memory.userId && memory.userId !== currentUserId) {
+    clearPortal();
+  }
+}
+
+/**
+ * 사용자 전환(로그인·로그아웃) 시 호출.
+ * 이전 사용자의 할 일·수임처 캐시가 다음 사용자에게 노출되지 않도록 비운다.
+ */
+export function clearPortal(): void {
+  memory = null;
+  searchIndexMemory = null;
+  searchIndexFetchedAt = 0;
+  inflight = null;
+  searchInflight = null;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SEARCH_INDEX_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+  notify();
 }
 
 export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {

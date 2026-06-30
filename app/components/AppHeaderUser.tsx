@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PinChangeModal from './PinChangeModal';
+import { clearPortal } from '@/app/utils/portalStore';
 
 interface MeUser {
   id: string;
@@ -28,6 +29,7 @@ export default function AppHeaderUser() {
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
+    clearPortal();
     router.push('/login');
     router.refresh();
   };

@@ -27,7 +27,7 @@ export function getSessionOptions(): SessionOptions {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 14,
+      maxAge: 60 * 60 * 24,
     },
   };
 }

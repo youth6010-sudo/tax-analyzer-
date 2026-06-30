@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { clearPortal } from '@/app/utils/portalStore';
 
 const STORAGE_KEY = 'busan-login-id';
 
@@ -82,6 +83,7 @@ function LoginForm() {
         return;
       }
       localStorage.setItem(STORAGE_KEY, loginId);
+      clearPortal();
       router.replace(next);
       router.refresh();
     } catch {

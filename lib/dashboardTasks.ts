@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { intakeInquiries, intakeProcesses, clients } from '@/db/schema';
 import { CHECKLIST_KEYS } from '@/app/types/intake';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
@@ -32,7 +33,7 @@ export type DashboardTaskUser = {
  */
 function visibleToUser(manager: string, user: DashboardTaskUser): boolean {
   const mgr = (manager || '').trim();
-  if (mgr) return mgr === user.name.trim();
+  if (mgr) return getManagerMatchNames(user.name).includes(mgr);
   return user.isAdmin;
 }
 

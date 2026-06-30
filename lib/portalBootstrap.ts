@@ -44,6 +44,7 @@ export async function getPortalBootstrap() {
 
   return {
     fetchedAt: Date.now(),
+    userId: user.id,
     tasks,
     homeStats: statsFromClients(activeClients),
     clients: activeClients,
