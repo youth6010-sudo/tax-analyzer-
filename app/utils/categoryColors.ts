@@ -6,7 +6,7 @@
  *
  * Tailwind는 정적 클래스 문자열만 인식하므로 조합하지 말고 완성형으로 둔다.
  */
-export type CategoryColorKey = '법인' | '개인' | '신고대리';
+export type CategoryColorKey = '법인' | '개인' | '신고대리' | '지주택';
 
 export type CategoryColor = {
   /** 점(●) 배경 */
@@ -57,5 +57,15 @@ export const CATEGORY_COLORS: Record<CategoryColorKey, CategoryColor> = {
     badge: 'bg-violet-100/90 text-violet-800',
     footer: 'bg-violet-50/70 border-violet-100/80 text-violet-900',
     chip: 'bg-violet-50 text-violet-800 ring-1 ring-violet-100',
+  },
+  지주택: {
+    dot: 'bg-amber-500',
+    text: 'text-amber-700',
+    accent: 'border-l-amber-400',
+    headerBg: 'bg-amber-50/80',
+    headerText: 'text-amber-800',
+    badge: 'bg-amber-100/90 text-amber-800',
+    footer: 'bg-amber-50/70 border-amber-100/80 text-amber-900',
+    chip: 'bg-amber-50 text-amber-800 ring-1 ring-amber-100',
   },
 };

@@ -233,15 +233,17 @@ export default function MyClientsBoard() {
     }
   };
 
-  const { corporate, personal, singoDaeri } = useMemo(() => {
+  const { corporate, personal, singoDaeri, jisutaek } = useMemo(() => {
     const cmp = sort === 'name' ? compareByName : compareByCode;
     const corp: ClientRecord[] = [];
     const pers: ClientRecord[] = [];
     const singo: ClientRecord[] = [];
+    const jisu: ClientRecord[] = [];
     for (const c of clients) {
       const cat = getClientCategory(c);
       if (cat === '법인') corp.push(c);
       else if (cat === SINGO_DAERI) singo.push(c);
+      else if (cat === '지주택') jisu.push(c);
       else pers.push(c); // 개인 + 비사업자 + 미분류 등
     }
     // 제외 업체는 아래로 내려 정렬(대상 먼저 보기 쉽게), 그 안에서 선택 정렬 기준 적용
@@ -254,7 +256,8 @@ export default function MyClientsBoard() {
     corp.sort(order);
     pers.sort(order);
     singo.sort(order);
-    return { corporate: corp, personal: pers, singoDaeri: singo };
+    jisu.sort(order);
+    return { corporate: corp, personal: pers, singoDaeri: singo, jisutaek: jisu };
   }, [clients, sort, excludedIds]);
 
   const toggleBtn = (key: SortKey, text: string) => (
@@ -329,6 +332,18 @@ export default function MyClientsBoard() {
             ntsClosedIds={ntsClosedIds}
             ready={ready}
           />
+          {jisutaek.length > 0 && (
+            <SectionCard
+              label="지주택"
+              dotClass={CATEGORY_COLORS.지주택.dot}
+              countClass={CATEGORY_COLORS.지주택.text}
+              clients={jisutaek}
+              excludedIds={excludedIds}
+              summaryIds={summaryIds}
+              ntsClosedIds={ntsClosedIds}
+              ready={ready}
+            />
+          )}
           {showSingo && (
             <SectionCard
               label="신고대리"
