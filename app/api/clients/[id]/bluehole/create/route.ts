@@ -115,7 +115,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    const created = (await withBluehole(user.id, (cookie) => bh.createClient(cookie, values))) as {
+    const created = (await withBluehole(user.id, async (cookie) => {
+      // 블루홀은 소속(지점)이 필수 — 로그인 사용자의 프로필에서 채운다.
+      if (!values.branch_id || !values.manager_user_id) {
+        try {
+          const profile = (await bh.getMyProfile(cookie)) as { id?: string; branch_id?: string };
+          if (!values.branch_id && profile.branch_id) values.branch_id = profile.branch_id;
+          if (!values.manager_user_id && profile.id) values.manager_user_id = profile.id;
+        } catch {
+          /* 프로필 조회 실패는 생성 시도 자체를 막지 않는다(서버가 소속 누락 에러를 반환할 수 있음) */
+        }
+      }
+      return bh.createClient(cookie, values);
+    })) as {
       newId?: string;
       clientUrl?: string;
     };
