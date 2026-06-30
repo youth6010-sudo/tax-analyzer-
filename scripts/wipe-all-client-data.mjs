@@ -58,28 +58,36 @@ async function wipeIfExists(table) {
   return wipe(table, sql.unsafe(`DELETE FROM ${table} RETURNING id`));
 }
 
-console.log('업체 관련 데이터 전량 삭제 중…');
+console.log('업체 관련 데이터 전량 삭제 중… (상담 초안은 보존)');
 
 await wipe('tax_filing_checks', sql`DELETE FROM tax_filing_checks RETURNING id`);
 await wipeIfExists('client_fee_changes');
+await wipeIfExists('client_fee_import_pending');
 await wipe('churn_records', sql`DELETE FROM churn_records RETURNING id`);
-await wipe('intake_inquiries', sql`DELETE FROM intake_inquiries RETURNING id`);
 await wipe('intake_processes', sql`DELETE FROM intake_processes RETURNING id`);
+// 상담 초안(extra.draft = true)은 보존하고 나머지 유입관리 행만 삭제
+await wipe(
+  'intake_inquiries (초안 제외)',
+  sql`DELETE FROM intake_inquiries WHERE coalesce(extra->>'draft', '') <> 'true' RETURNING id`,
+);
 await wipe('client_meetings', sql`DELETE FROM client_meetings RETURNING id`);
 await wipe('report_deliveries', sql`DELETE FROM report_deliveries RETURNING id`);
 await wipe('settlement_visits', sql`DELETE FROM settlement_visits RETURNING id`);
 await wipe('client_contacts', sql`DELETE FROM client_contacts RETURNING id`);
+// 보존된 초안이 삭제 예정 clients를 참조하면 FK 위반 → 참조 해제
+await sql`UPDATE intake_inquiries SET client_id = NULL WHERE client_id IS NOT NULL`;
 await wipe('clients', sql`DELETE FROM clients RETURNING id`);
 
 const verify = await sql`
   SELECT
     (SELECT count(*)::int FROM clients) AS clients,
-    (SELECT count(*)::int FROM intake_inquiries) AS inquiries,
+    (SELECT count(*)::int FROM intake_inquiries WHERE coalesce(extra->>'draft', '') <> 'true') AS inquiries,
+    (SELECT count(*)::int FROM intake_inquiries WHERE coalesce(extra->>'draft', '') = 'true') AS kept_drafts,
     (SELECT count(*)::int FROM intake_processes) AS processes,
     (SELECT count(*)::int FROM churn_records) AS churn,
     (SELECT count(*)::int FROM client_contacts) AS contacts
 `;
 
-console.log('\n검증 (모두 0이어야 함):', verify[0]);
+console.log('\n검증 (kept_drafts 외 모두 0이어야 함):', verify[0]);
 await sql.end();
 console.log('완료.');

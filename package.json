@@ -31,6 +31,7 @@
     "db:ensure-nts-columns": "node scripts/ensure-nts-columns.mjs",
     "db:push": "drizzle-kit push",
     "db:seed": "node scripts/seed-users.mjs",
+    "db:backup": "node scripts/backup-db.mjs",
     "db:wipe-clients": "node scripts/wipe-all-client-data.mjs --confirm",
     "db:migrate-contacts": "node scripts/migrate-contacts-to-db.mjs",
     "import:lunch": "node scripts/import-lunch.mjs",
@@ -52,7 +53,8 @@
     "pdfjs-dist": "^5.7.284",
     "postgres": "^3.4.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -65,7 +67,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "xlsx": "^0.18.5"
+    "typescript": "^5"
   }
 }

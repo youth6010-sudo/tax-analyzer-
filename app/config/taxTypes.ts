@@ -30,6 +30,7 @@ export const TAX_MENU = [
     id: 'bluehole',
     label: '블루홀',
     href: '/bluehole',
+    adminOnly: true,
   },
   {
     id: 'filing-help',
@@ -54,7 +55,9 @@ export const TAX_MENU = [
     adminOnly: true,
     items: [
       { label: '데이터 백업', href: '/admin/backup' },
-      { label: '수임료·연결', href: '/admin/fee-link' },
+      { label: '블루홀 미연결', href: '/admin/bluehole-unlinked' },
+      { label: '유입·유출 업로드', href: '/admin/data-import' },
+      { label: '수임처 데이터 초기화', href: '/admin/data-reset' },
     ],
   },
 ] as const;
