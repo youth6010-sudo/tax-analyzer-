@@ -12,6 +12,7 @@ import {
   SINGO_DAERI,
 } from '@/app/utils/clientsGrouping';
 import { resolveClientRecordFee, readFeeBreakdown, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
 import { useClientRowExpand } from '@/app/components/clients/useClientRowExpand';
 import ClientRowHeading from '@/app/components/clients/ClientRowHeading';
@@ -152,6 +153,7 @@ function ClientRosterRow({
   variant,
   panelCategory,
   showFee,
+  feeEditable = true,
   query,
   returnTo,
   onFeeChange,
@@ -162,6 +164,7 @@ function ClientRosterRow({
   variant: 'personal' | 'corporate';
   panelCategory?: string;
   showFee: boolean;
+  feeEditable?: boolean;
   query: string;
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
@@ -213,6 +216,7 @@ function ClientRosterRow({
           value={resolveClientRecordFee(c)}
           intakeData={c.intakeData}
           onSave={onFeeChange}
+          readOnly={!feeEditable}
           className="pt-0.5"
         />
       )}
@@ -259,6 +263,7 @@ function EntityPanel({
   returnTo,
   onFeeChange,
   feeRefreshKeys,
+  feeEditable = true,
   showFooter = false,
 }: {
   title: string;
@@ -268,6 +273,7 @@ function EntityPanel({
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  feeEditable?: boolean;
   showFooter?: boolean;
 }) {
   const feeSum = sumClientFees(clients);
@@ -319,6 +325,7 @@ function EntityPanel({
                   variant={variant === 'other' ? rowVariant(c) : variant}
                   panelCategory={variant === 'other' ? title : undefined}
                   showFee={showFee}
+                  feeEditable={feeEditable}
                   query={query}
                   returnTo={returnTo}
                   onFeeChange={onFeeChange}
@@ -380,6 +387,7 @@ function ManagerSection({
   query,
   returnTo,
   isSelf,
+  feeEditable = true,
   visibleOptionalCategories,
   onFeeChange,
   feeRefreshKeys,
@@ -389,6 +397,7 @@ function ManagerSection({
   query: string;
   returnTo: string;
   isSelf?: boolean;
+  feeEditable?: boolean;
   visibleOptionalCategories: string[];
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
@@ -449,6 +458,7 @@ function ManagerSection({
           returnTo={returnTo}
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          feeEditable={feeEditable}
         />
         <EntityPanel
           title="개인"
@@ -458,6 +468,7 @@ function ManagerSection({
           returnTo={returnTo}
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          feeEditable={feeEditable}
         />
         <MainCategorySummary personal={personal} corporate={corporate} />
         {visibleOptional.map(({ category, clients: catClients }) => (
@@ -470,6 +481,7 @@ function ManagerSection({
             returnTo={returnTo}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
+            feeEditable={feeEditable}
           />
         ))}
       </div>
@@ -664,6 +676,7 @@ export default function ManagerRosterGrid({
   visibleManagers,
   visibleOptionalCategories,
   currentUserName,
+  isAdmin = false,
   onFeeChange,
   feeRefreshKeys,
 }: {
@@ -674,6 +687,7 @@ export default function ManagerRosterGrid({
   visibleManagers: string[];
   visibleOptionalCategories: string[];
   currentUserName?: string | null;
+  isAdmin?: boolean;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
 }) {
@@ -687,6 +701,12 @@ export default function ManagerRosterGrid({
       clients: byManager.get(manager) ?? [],
     }));
   }, [clients, sort, visibleManagers]);
+
+  // 수수료 수정 권한: 관리자는 전체, 그 외는 본인 담당만
+  const myManagerNames = useMemo(
+    () => new Set(currentUserName ? getManagerMatchNames(currentUserName) : []),
+    [currentUserName],
+  );
 
   if (visibleManagers.length === 0) {
     return (
@@ -713,6 +733,7 @@ export default function ManagerRosterGrid({
             query={query}
             returnTo={returnTo}
             isSelf={Boolean(currentUserName && mgr.manager === currentUserName)}
+            feeEditable={isAdmin || myManagerNames.has(mgr.manager)}
             visibleOptionalCategories={visibleOptionalCategories}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}

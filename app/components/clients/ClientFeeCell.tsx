@@ -24,12 +24,14 @@ export default function ClientFeeCell({
   intakeData,
   onSave,
   className = '',
+  readOnly = false,
 }: {
   clientId: string;
   value: number | null;
   intakeData?: Record<string, unknown>;
   onSave?: (id: string, payload: FeeBreakdownSave) => void;
   className?: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [bookkeepingDraft, setBookkeepingDraft] = useState('');
@@ -153,6 +155,17 @@ export default function ClientFeeCell({
       </div>,
       document.body,
     );
+
+  if (readOnly) {
+    return (
+      <span
+        title={`${CLIENT_FIELD_LABELS.fee} (본인 담당만 수정 가능)`}
+        className={`block w-full min-w-[5rem] text-right text-base font-semibold tabular-nums whitespace-nowrap text-gray-500 px-1.5 py-1 ${className}`}
+      >
+        {display}
+      </span>
+    );
+  }
 
   return (
     <>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PinChangeModal from './PinChangeModal';
+import BlueholeAccountModal from './BlueholeAccountModal';
 import { clearPortal } from '@/app/utils/portalStore';
 
 interface MeUser {
@@ -17,6 +18,7 @@ export default function AppHeaderUser() {
   const router = useRouter();
   const [user, setUser] = useState<MeUser | null>(null);
   const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [bhModalOpen, setBhModalOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -47,6 +49,13 @@ export default function AppHeaderUser() {
         >
           PIN 변경
         </button>
+        <button
+          type="button"
+          onClick={() => setBhModalOpen(true)}
+          className="text-xs font-semibold text-gray-500 hover:text-gray-800 px-2 py-1 rounded-lg hover:bg-gray-50"
+        >
+          블루홀 계정
+        </button>
         <Link
           href="/"
           className="shrink-0 border-l border-gray-100 pl-3 ml-1 rounded-lg hover:opacity-80 transition-opacity"
@@ -68,6 +77,7 @@ export default function AppHeaderUser() {
         </button>
       </div>
       <PinChangeModal open={pinModalOpen} onClose={() => setPinModalOpen(false)} />
+      <BlueholeAccountModal open={bhModalOpen} onClose={() => setBhModalOpen(false)} />
     </>
   );
 }

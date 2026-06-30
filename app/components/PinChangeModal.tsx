@@ -1,137 +1,80 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-
-type Step = 'current' | 'new' | 'confirm';
-
-const STEP_LABEL: Record<Step, string> = {
-  current: '현재 PIN',
-  new: '새 PIN',
-  confirm: '새 PIN 확인',
-};
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface PinChangeModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+const onlyDigits = (v: string) => v.replace(/\D/g, '').slice(0, 4);
+
+const pinInputCls =
+  'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-center text-lg font-bold tracking-[0.5em] text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200';
+
 export default function PinChangeModal({ open, onClose }: PinChangeModalProps) {
-  const [step, setStep] = useState<Step>('current');
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
-  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const firstRef = useRef<HTMLInputElement>(null);
 
-  const reset = useCallback(() => {
-    setStep('current');
-    setCurrentPin('');
-    setNewPin('');
-    setPin('');
-    setError(null);
-    setSaving(false);
-    setDone(false);
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!open) reset();
-  }, [open, reset]);
+    if (open) {
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      setError(null);
+      setSaving(false);
+      setDone(false);
+      setTimeout(() => firstRef.current?.focus(), 50);
+    }
+  }, [open]);
 
-  const activeValue = pin;
-
-  const appendPin = (digit: string) => {
-    setPin(p => (p.length < 4 ? p + digit : p));
+  const submit = async () => {
+    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(newPin) || !/^\d{4}$/.test(confirmPin)) {
+      setError('PIN 4자리를 모두 입력해 주세요.');
+      return;
+    }
+    if (newPin === currentPin) {
+      setError('새 PIN은 현재 PIN과 달라야 합니다.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setError('새 PIN 확인이 일치하지 않습니다.');
+      return;
+    }
+    setSaving(true);
     setError(null);
+    try {
+      const res = await fetch('/api/auth/change-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPin, newPin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? 'PIN을 변경하지 못했습니다.');
+      }
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'PIN을 변경하지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const backspace = () => setPin(p => p.slice(0, -1));
+  if (!open || !mounted) return null;
 
-  const advanceStep = useCallback(() => {
-    if (pin.length !== 4) {
-      setError('PIN 4자리를 입력해 주세요.');
-      return;
-    }
-
-    if (step === 'current') {
-      setCurrentPin(pin);
-      setPin('');
-      setStep('new');
-      return;
-    }
-
-    if (step === 'new') {
-      if (pin === currentPin) {
-        setError('새 PIN은 현재 PIN과 달라야 합니다.');
-        setPin('');
-        return;
-      }
-      setNewPin(pin);
-      setPin('');
-      setStep('confirm');
-      return;
-    }
-
-    if (pin !== newPin) {
-      setError('새 PIN 확인이 일치하지 않습니다.');
-      setPin('');
-      return;
-    }
-  }, [pin, step, currentPin, newPin]);
-
-  useEffect(() => {
-    if (pin.length !== 4) return;
-
-    if (step === 'confirm') {
-      void (async () => {
-        if (pin !== newPin) {
-          setError('새 PIN 확인이 일치하지 않습니다.');
-          setPin('');
-          return;
-        }
-        setSaving(true);
-        setError(null);
-        try {
-          const res = await fetch('/api/auth/change-pin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currentPin, newPin }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            if (res.status === 401) {
-              setError(data.error ?? '현재 PIN이 올바르지 않습니다.');
-              reset();
-              setStep('current');
-              return;
-            }
-            throw new Error(data.error ?? '변경 실패');
-          }
-          setDone(true);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : 'PIN을 변경하지 못했습니다.');
-          setPin('');
-        } finally {
-          setSaving(false);
-        }
-      })();
-      return;
-    }
-
-    const t = setTimeout(advanceStep, 150);
-    return () => clearTimeout(t);
-  }, [pin, step, newPin, currentPin, advanceStep, reset]);
-
-  if (!open) return null;
-
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        aria-label="닫기"
-        onClick={onClose}
-      />
+      <button type="button" className="absolute inset-0 bg-black/40" aria-label="닫기" onClick={onClose} />
       <div className="relative w-full max-w-xs rounded-2xl bg-white shadow-xl border border-gray-100 p-6">
         <h2 className="text-lg font-bold text-gray-900">PIN 변경</h2>
 
@@ -147,61 +90,81 @@ export default function PinChangeModal({ open, onClose }: PinChangeModalProps) {
             </button>
           </div>
         ) : (
-          <>
-            <p className="mt-1 text-sm text-gray-500">{STEP_LABEL[step]}</p>
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={e => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <label className="block">
+              <span className="text-xs font-semibold text-gray-500">현재 PIN</span>
+              <input
+                ref={firstRef}
+                type="password"
+                inputMode="numeric"
+                autoComplete="current-password"
+                value={currentPin}
+                onChange={e => {
+                  setCurrentPin(onlyDigits(e.target.value));
+                  setError(null);
+                }}
+                placeholder="••••"
+                className={`mt-1 ${pinInputCls}`}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-gray-500">새 PIN</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                value={newPin}
+                onChange={e => {
+                  setNewPin(onlyDigits(e.target.value));
+                  setError(null);
+                }}
+                placeholder="••••"
+                className={`mt-1 ${pinInputCls}`}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-gray-500">새 PIN 확인</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                value={confirmPin}
+                onChange={e => {
+                  setConfirmPin(onlyDigits(e.target.value));
+                  setError(null);
+                }}
+                placeholder="••••"
+                className={`mt-1 ${pinInputCls}`}
+              />
+            </label>
 
-            <div className="mt-4 flex justify-center gap-3">
-              {[0, 1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className={`w-3.5 h-3.5 rounded-full border-2 ${
-                    activeValue.length > i ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
-                  }`}
-                />
-              ))}
-            </div>
+            {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '←', '0', '⌫'].map(key => (
-                <button
-                  key={key}
-                  type="button"
-                  disabled={saving}
-                  onClick={() => {
-                    if (key === '←') {
-                      if (step === 'new') {
-                        setStep('current');
-                        setPin(currentPin);
-                        setCurrentPin('');
-                      } else if (step === 'confirm') {
-                        setStep('new');
-                        setPin(newPin);
-                        setNewPin('');
-                      } else backspace();
-                    } else if (key === '⌫') backspace();
-                    else appendPin(key);
-                  }}
-                  className="rounded-xl py-2.5 text-base font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 active:scale-95 transition disabled:opacity-50"
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-
-            {error && <p className="mt-3 text-sm text-red-600 text-center">{error}</p>}
-            {saving && <p className="mt-2 text-sm text-gray-500 text-center">변경 중…</p>}
-
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? '변경 중…' : 'PIN 변경'}
+            </button>
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="mt-4 w-full py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-50"
+              className="w-full py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-50"
             >
               취소
             </button>
-          </>
+          </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
