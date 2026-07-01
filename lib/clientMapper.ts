@@ -3,7 +3,7 @@ import type { ContactRecord } from '@/app/types/contact';
 import type { Client } from '@/db/schema';
 import { mobilePhoneFrom } from '@/app/utils/clientPhone';
 
-const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel', 'bookkeepingFee', 'adjustmentFee', 'taxKind'] as const;
+const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel', 'closedDate', 'bookkeepingFee', 'adjustmentFee', 'taxKind'] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 */
 export function slimIntakeDataForList(intakeData: Record<string, unknown> | undefined): Record<string, unknown> {

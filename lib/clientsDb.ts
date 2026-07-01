@@ -54,7 +54,35 @@ export async function listClients(filters: ClientListFilters = {}) {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(clients.companyName);
 
-  return rows.map(clientToListRecord);
+  const records = rows.map(clientToListRecord);
+  const churnedIds = records.filter(r => r.status === 'churned').map(r => r.id);
+  if (churnedIds.length === 0) return records;
+
+  const churnRows = await db
+    .select()
+    .from(churnRecords)
+    .where(inArray(churnRecords.clientId, churnedIds))
+    .orderBy(desc(churnRecords.churnedAt));
+
+  const churnByClient = new Map<string, ChurnSummary>();
+  for (const c of churnRows) {
+    if (c.clientId && !churnByClient.has(c.clientId)) {
+      churnByClient.set(c.clientId, {
+        id: c.id,
+        churnedAt: c.churnedAt.toISOString(),
+        reason: c.reason,
+        detail: c.detail,
+        churnType: c.churnType,
+        dataCleanup: c.dataCleanup,
+        earlySign: c.earlySign,
+        feeAmount: c.feeAmount,
+      });
+    }
+  }
+
+  return records.map(r =>
+    r.status === 'churned' ? { ...r, churn: churnByClient.get(r.id) ?? null } : r,
+  );
 }
 
 export async function getClientById(id: string) {

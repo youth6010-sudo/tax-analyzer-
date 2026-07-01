@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import {
+  formatClientClosureDate,
+  getClientClosureKind,
+  groupClientsByClosureYear,
+  isClosureReviewClient,
+  type ClientWithChurn,
+} from '@/app/utils/clientClosure';
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient } from '@/app/utils/filingCheck';
@@ -33,11 +40,15 @@ function ClientList({
   excludedIds,
   summaryIds,
   ntsClosedIds,
+  ntsOverride,
+  showClosureMeta = false,
 }: {
-  clients: ClientRecord[];
+  clients: ClientWithChurn[];
   excludedIds: Set<string>;
   summaryIds: Set<string>;
   ntsClosedIds: Set<string>;
+  ntsOverride: Record<string, string>;
+  showClosureMeta?: boolean;
 }) {
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
@@ -48,12 +59,16 @@ function ClientList({
         const excluded = excludedIds.has(c.id);
         const summary = summaryIds.has(c.id);
         const ntsClosed = ntsClosedIds.has(c.id);
+        const isChurned = c.status === 'churned';
+        const ntsCode = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
+        const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
+        const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
         return (
           <li key={c.id}>
             <Link
               href={`/clients/${c.id}`}
               className={`flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70 ${
-                excluded ? 'opacity-60' : ''
+                excluded || isChurned ? 'opacity-60' : ''
               }`}
             >
               <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
@@ -62,17 +77,37 @@ function ClientList({
               <span className="min-w-0 flex-1">
                 <span
                   className={`block truncate text-sm font-semibold ${
-                    excluded ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'
+                    excluded || isChurned
+                      ? 'text-slate-400 line-through decoration-slate-400'
+                      : 'text-slate-800'
                   }`}
                 >
                   {c.companyName || '(이름 없음)'}
                 </span>
-                {(c.representative || c.businessNo) && (
+                {(c.representative || c.businessNo || closureDate) && (
                   <span className="block truncate text-xs text-slate-400">
-                    {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
+                    {[c.representative, c.businessNo, closureDate].filter(Boolean).join(' · ')}
                   </span>
                 )}
               </span>
+              {showClosureMeta && closureKind && (
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                    closureKind === '해임'
+                      ? 'bg-slate-200 text-slate-600'
+                      : closureKind === '휴업'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {closureKind}
+                </span>
+              )}
+              {!showClosureMeta && isChurned && (
+                <span className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                  해임
+                </span>
+              )}
               {ntsClosed && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
                   폐업/휴업
@@ -104,16 +139,20 @@ function SectionCard({
   excludedIds,
   summaryIds,
   ntsClosedIds,
+  ntsOverride,
   ready,
+  showClosureMeta = false,
 }: {
   label: string;
   dotClass: string;
   countClass: string;
-  clients: ClientRecord[];
+  clients: ClientWithChurn[];
   excludedIds: Set<string>;
   summaryIds: Set<string>;
   ntsClosedIds: Set<string>;
+  ntsOverride: Record<string, string>;
   ready: boolean;
+  showClosureMeta?: boolean;
 }) {
   const total = clients.length;
   const excl = clients.reduce((n, c) => n + (excludedIds.has(c.id) ? 1 : 0), 0);
@@ -129,7 +168,14 @@ function SectionCard({
       </div>
       <div className="p-2">
         {ready ? (
-          <ClientList clients={clients} excludedIds={excludedIds} summaryIds={summaryIds} ntsClosedIds={ntsClosedIds} />
+          <ClientList
+            clients={clients}
+            excludedIds={excludedIds}
+            summaryIds={summaryIds}
+            ntsClosedIds={ntsClosedIds}
+            ntsOverride={ntsOverride}
+            showClosureMeta={showClosureMeta}
+          />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
         )}
@@ -140,13 +186,15 @@ function SectionCard({
 
 const SHOW_SINGO_KEY = 'dashboard.showSingoDaeri';
 const SHOW_JISUTAEK_KEY = 'dashboard.showJisutaek';
+const INCLUDE_CHURNED_KEY = 'dashboard.includeChurned';
 
 export default function MyClientsBoard() {
-  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [clients, setClients] = useState<ClientWithChurn[]>([]);
   const [ready, setReady] = useState(false);
   const [sort, setSort] = useState<SortKey>('code');
   const [showSingo, setShowSingo] = useState(true);
   const [showJisutaek, setShowJisutaek] = useState(false);
+  const [includeChurned, setIncludeChurned] = useState(false);
   const [ntsOverride, setNtsOverride] = useState<Record<string, string>>({});
   const [ntsChecking, setNtsChecking] = useState(false);
   const [ntsError, setNtsError] = useState('');
@@ -157,17 +205,21 @@ export default function MyClientsBoard() {
     try {
       if (localStorage.getItem(SHOW_SINGO_KEY) === '0') setShowSingo(false);
       if (localStorage.getItem(SHOW_JISUTAEK_KEY) === '1') setShowJisutaek(true);
+      if (localStorage.getItem(INCLUDE_CHURNED_KEY) === '1') setIncludeChurned(true);
     } catch {
       /* ignore */
     }
-    // 로그인 직후 본인 담당 수임처를 바로 표시 — 서버에서 '내 담당'만(담당자명·배정 모두 매칭),
-    // 포털 부트스트랩 타이밍/관리자 전체노출과 무관하게 항상 본인 것만 뜬다.
-    fetch('/api/clients?mine=1', { cache: 'no-store' })
+  }, []);
+
+  useEffect(() => {
+    setReady(false);
+    const url = includeChurned ? '/api/clients?mine=1&includeChurned=1' : '/api/clients?mine=1';
+    fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setClients((d?.clients as ClientRecord[]) ?? getPortalClients()))
+      .then(d => setClients((d?.clients as ClientWithChurn[]) ?? getPortalClients()))
       .catch(() => setClients(getPortalClients()))
       .finally(() => setReady(true));
-  }, []);
+  }, [includeChurned]);
 
   const toggleSingo = (next: boolean) => {
     setShowSingo(next);
@@ -182,6 +234,15 @@ export default function MyClientsBoard() {
     setShowJisutaek(next);
     try {
       localStorage.setItem(SHOW_JISUTAEK_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleIncludeChurned = (next: boolean) => {
+    setIncludeChurned(next);
+    try {
+      localStorage.setItem(INCLUDE_CHURNED_KEY, next ? '1' : '0');
     } catch {
       /* ignore */
     }
@@ -224,7 +285,9 @@ export default function MyClientsBoard() {
       const res = await fetch('/api/clients/nts/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mine: true }),
+        body: JSON.stringify(
+          clients.length > 0 ? { ids: clients.map(c => c.id) } : { mine: true },
+        ),
       });
       const data = (await res.json().catch(() => ({}))) as {
         configured?: boolean;
@@ -245,32 +308,54 @@ export default function MyClientsBoard() {
     }
   };
 
-  const { corporate, personal, singoDaeri, jisutaek } = useMemo(() => {
+  const { corporate, personal, singoDaeri, jisutaek, closureByYear } = useMemo(() => {
     const cmp = sort === 'name' ? compareByName : compareByCode;
-    const corp: ClientRecord[] = [];
-    const pers: ClientRecord[] = [];
-    const singo: ClientRecord[] = [];
-    const jisu: ClientRecord[] = [];
+    const corp: ClientWithChurn[] = [];
+    const pers: ClientWithChurn[] = [];
+    const singo: ClientWithChurn[] = [];
+    const jisu: ClientWithChurn[] = [];
+    const closure: ClientWithChurn[] = [];
+    const ntsCode = (c: ClientWithChurn) => ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
+
     for (const c of clients) {
+      if (includeChurned && isClosureReviewClient(c, ntsCode(c))) {
+        closure.push(c);
+        continue;
+      }
       const cat = getClientCategory(c);
       if (cat === '법인') corp.push(c);
       else if (cat === SINGO_DAERI) singo.push(c);
       else if (cat === '지주택') jisu.push(c);
-      else pers.push(c); // 개인 + 비사업자 + 미분류 등
+      else pers.push(c);
     }
-    // 제외 업체는 아래로 내려 정렬(대상 먼저 보기 쉽게), 그 안에서 선택 정렬 기준 적용
+    // 해임·제외 업체는 아래로 내려 정렬(대상 먼저 보기 쉽게), 그 안에서 선택 정렬 기준 적용
     const order = (a: ClientRecord, b: ClientRecord) => {
-      const ea = excludedIds.has(a.id) ? 1 : 0;
-      const eb = excludedIds.has(b.id) ? 1 : 0;
-      if (ea !== eb) return ea - eb;
+      const rank = (c: ClientRecord) => {
+        if (excludedIds.has(c.id)) return 2;
+        if (c.status === 'churned') return 1;
+        return 0;
+      };
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
       return cmp(a, b);
     };
     corp.sort(order);
     pers.sort(order);
     singo.sort(order);
     jisu.sort(order);
-    return { corporate: corp, personal: pers, singoDaeri: singo, jisutaek: jisu };
-  }, [clients, sort, excludedIds]);
+    closure.sort((a, b) => cmp(a, b));
+    return {
+      corporate: corp,
+      personal: pers,
+      singoDaeri: singo,
+      jisutaek: jisu,
+      closureByYear: groupClientsByClosureYear(closure).map(g => ({
+        ...g,
+        clients: [...g.clients].sort(cmp),
+      })),
+    };
+  }, [clients, sort, excludedIds, includeChurned, ntsOverride]);
 
   const toggleBtn = (key: SortKey, text: string) => (
     <button
@@ -302,6 +387,15 @@ export default function MyClientsBoard() {
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
             <input
               type="checkbox"
+              checked={includeChurned}
+              onChange={e => toggleIncludeChurned(e.target.checked)}
+              className="h-4 w-4 accent-slate-500"
+            />
+            폐업·해임
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
+            <input
+              type="checkbox"
               checked={showSingo}
               onChange={e => toggleSingo(e.target.checked)}
               className="h-4 w-4 accent-violet-500"
@@ -329,19 +423,33 @@ export default function MyClientsBoard() {
       )}
 
       <div className="grid items-start gap-4 sm:grid-cols-2">
-        {/* 왼쪽: 법인(파랑) */}
-        <SectionCard
-          label="법인"
-          dotClass={CATEGORY_COLORS.법인.dot}
-          countClass={CATEGORY_COLORS.법인.text}
-          clients={corporate}
-          excludedIds={excludedIds}
-          summaryIds={summaryIds}
-          ntsClosedIds={ntsClosedIds}
-          ready={ready}
-        />
+        <div className="space-y-4">
+          <SectionCard
+            label="법인"
+            dotClass={CATEGORY_COLORS.법인.dot}
+            countClass={CATEGORY_COLORS.법인.text}
+            clients={corporate}
+            excludedIds={excludedIds}
+            summaryIds={summaryIds}
+            ntsClosedIds={ntsClosedIds}
+            ntsOverride={ntsOverride}
+            ready={ready}
+          />
+          {showSingo && (
+            <SectionCard
+              label="신고대리"
+              dotClass={CATEGORY_COLORS.신고대리.dot}
+              countClass={CATEGORY_COLORS.신고대리.text}
+              clients={singoDaeri}
+              excludedIds={excludedIds}
+              summaryIds={summaryIds}
+              ntsClosedIds={ntsClosedIds}
+              ntsOverride={ntsOverride}
+              ready={ready}
+            />
+          )}
+        </div>
 
-        {/* 오른쪽: 개인(초록) → 그 아래 신고대리(보라, 표시 체크 시) */}
         <div className="space-y-4">
           <SectionCard
             label="개인"
@@ -351,6 +459,7 @@ export default function MyClientsBoard() {
             excludedIds={excludedIds}
             summaryIds={summaryIds}
             ntsClosedIds={ntsClosedIds}
+            ntsOverride={ntsOverride}
             ready={ready}
           />
           {showJisutaek && jisutaek.length > 0 && (
@@ -362,23 +471,38 @@ export default function MyClientsBoard() {
               excludedIds={excludedIds}
               summaryIds={summaryIds}
               ntsClosedIds={ntsClosedIds}
-              ready={ready}
-            />
-          )}
-          {showSingo && (
-            <SectionCard
-              label="신고대리"
-              dotClass={CATEGORY_COLORS.신고대리.dot}
-              countClass={CATEGORY_COLORS.신고대리.text}
-              clients={singoDaeri}
-              excludedIds={excludedIds}
-              summaryIds={summaryIds}
-              ntsClosedIds={ntsClosedIds}
+              ntsOverride={ntsOverride}
               ready={ready}
             />
           )}
         </div>
       </div>
+
+      {includeChurned && closureByYear.length > 0 && (
+        <div className="mt-6 space-y-4">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h3 className="text-base font-extrabold tracking-tight text-slate-800">폐업·해임 확인</h3>
+            <p className="text-xs text-slate-500">종료 연도별로 신고·정리 여부를 확인하세요.</p>
+          </div>
+          <div className="grid items-start gap-4 sm:grid-cols-2">
+            {closureByYear.map(group => (
+              <SectionCard
+                key={String(group.year)}
+                label={group.label}
+                dotClass="bg-slate-400"
+                countClass="text-slate-600"
+                clients={group.clients}
+                excludedIds={excludedIds}
+                summaryIds={summaryIds}
+                ntsClosedIds={ntsClosedIds}
+                ntsOverride={ntsOverride}
+                ready={ready}
+                showClosureMeta
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
