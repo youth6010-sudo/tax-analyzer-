@@ -648,8 +648,6 @@ export default function Home() {
             <span className="print-header-title font-black text-gray-900">종합소득세 분석</span>
             <span className="print-header-date font-normal text-gray-400 ml-2">{today}</span>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="세무법인청년들" className="print-header-logo object-contain shrink-0 self-center" />
         </div>
       </div>
 
@@ -728,8 +726,6 @@ export default function Home() {
                   초기화
                 </button>
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="세무법인청년들" className="h-9 w-auto object-contain ml-1 border-l border-slate-200 pl-3 shrink-0 hidden sm:block" />
             </div>
           </div>
 

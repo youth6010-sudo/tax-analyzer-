@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CONTACT_ROLES, type ClientContactRecord } from '@/app/types/clientContact';
 
-type Props = { clientId: string; canEdit?: boolean };
+type Props = {
+  clientId: string;
+  canEdit?: boolean;
+  embedded?: boolean;
+  /** 상호 옆 인라인 표시 */
+  inline?: boolean;
+};
 
 const emptyForm = {
   name: '',
@@ -91,7 +97,7 @@ function ContactAddForm({
   );
 }
 
-export default function ClientContactsPanel({ clientId, canEdit = true }: Props) {
+export default function ClientContactsPanel({ clientId, canEdit = true, embedded = false, inline = false }: Props) {
   const [contacts, setContacts] = useState<ClientContactRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -161,9 +167,71 @@ export default function ClientContactsPanel({ clientId, canEdit = true }: Props)
     await load();
   };
 
+  const isInline = inline;
+
+  if (isInline) {
+    return (
+      <>
+        <div className="min-w-0">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">연락처</p>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                + 추가
+              </button>
+            )}
+          </div>
+          {loading ? (
+            <p className="text-xs text-slate-400">불러오는 중…</p>
+          ) : contacts.length === 0 ? (
+            <p className="text-xs text-slate-400">등록된 연락처가 없습니다.</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+              {contacts.map(c => (
+                <li key={c.id}>
+                  <ContactRow
+                    contact={c}
+                    canEdit={canEdit}
+                    editing={editingId === c.id}
+                    saving={saving}
+                    inline
+                    onEdit={() => setEditingId(c.id)}
+                    onCancel={() => setEditingId(null)}
+                    onSave={patch => void saveEdit(c.id, patch)}
+                    onDelete={() => void remove(c.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {showAddForm && (
+          <ContactAddModal
+            form={form}
+            setForm={setForm}
+            saving={saving}
+            onSave={() => void saveNew()}
+            onClose={closeAddForm}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
-      <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+      <div
+        className={
+          embedded
+            ? ''
+            : 'rounded-2xl border border-gray-100 bg-white overflow-hidden'
+        }
+      >
+        {!embedded && (
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-black text-gray-900">연락처 목록</h2>
@@ -179,12 +247,24 @@ export default function ClientContactsPanel({ clientId, canEdit = true }: Props)
             </button>
           )}
         </div>
+        )}
 
-        <div className="p-4 space-y-3">
+        <div className={embedded ? 'space-y-2' : 'p-4 space-y-3'}>
+          {embedded && canEdit && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                className="px-2 py-1 text-[10px] font-bold text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50"
+              >
+                + 연락처 추가
+              </button>
+            </div>
+          )}
           {loading ? (
             <p className="text-xs text-gray-400">불러오는 중…</p>
           ) : contacts.length === 0 ? (
-            <p className="text-xs text-gray-400">등록된 연락처가 없습니다.</p>
+            <p className="text-xs text-gray-500">등록된 연락처가 없습니다.</p>
           ) : (
             contacts.map(c => (
               <ContactRow
@@ -204,36 +284,60 @@ export default function ClientContactsPanel({ clientId, canEdit = true }: Props)
       </div>
 
       {showAddForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="contact-add-title"
-          onClick={closeAddForm}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-              <h3 id="contact-add-title" className="text-base font-black text-gray-900">
-                연락처 추가
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">이름·역할·전화번호를 입력하세요.</p>
-            </div>
-            <div className="p-5">
-              <ContactAddForm
-                form={form}
-                setForm={setForm}
-                saving={saving}
-                onSave={() => void saveNew()}
-                onCancel={closeAddForm}
-              />
-            </div>
-          </div>
-        </div>
+        <ContactAddModal
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          onSave={() => void saveNew()}
+          onClose={closeAddForm}
+        />
       )}
     </>
+  );
+}
+
+function ContactAddModal({
+  form,
+  setForm,
+  saving,
+  onSave,
+  onClose,
+}: {
+  form: typeof emptyForm;
+  setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
+  saving: boolean;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contact-add-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <h3 id="contact-add-title" className="text-base font-black text-gray-900">
+            연락처 추가
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">이름·역할·전화번호를 입력하세요.</p>
+        </div>
+        <div className="p-5">
+          <ContactAddForm
+            form={form}
+            setForm={setForm}
+            saving={saving}
+            onSave={onSave}
+            onCancel={onClose}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -242,6 +346,7 @@ function ContactRow({
   canEdit = true,
   editing,
   saving,
+  inline = false,
   onEdit,
   onCancel,
   onSave,
@@ -251,6 +356,7 @@ function ContactRow({
   canEdit?: boolean;
   editing: boolean;
   saving: boolean;
+  inline?: boolean;
   onEdit: () => void;
   onCancel: () => void;
   onSave: (patch: Partial<typeof emptyForm>) => void;
@@ -273,6 +379,44 @@ function ContactRow({
       isPrimary: contact.isPrimary,
     });
   }, [contact]);
+
+  if (!editing && inline) {
+    const roleLabel = contact.role?.replace('_', ' ');
+    const phoneLine = [contact.mobilePhone, contact.phone].filter(Boolean).join(' · ') || '—';
+    return (
+      <div className="group min-w-0">
+        <p className="truncate text-xs font-medium text-slate-800 leading-tight">
+          {contact.name}
+          {roleLabel && (
+            <span className="ml-1 font-normal text-slate-500">({roleLabel})</span>
+          )}
+          {contact.isPrimary && (
+            <span className="ml-0.5 text-[9px] font-bold text-blue-600">주</span>
+          )}
+        </p>
+        {phoneLine !== '—' ? (
+          <a
+            href={`tel:${(contact.mobilePhone || contact.phone).replace(/\s/g, '')}`}
+            className="block truncate text-[11px] text-blue-700 hover:underline leading-tight"
+          >
+            {phoneLine}
+          </a>
+        ) : (
+          <p className="text-[11px] text-slate-400 leading-tight">—</p>
+        )}
+        {canEdit && (
+          <div className="mt-0.5 hidden gap-2 group-hover:flex">
+            <button type="button" onClick={onEdit} className="text-[10px] font-semibold text-slate-500 hover:text-blue-600">
+              수정
+            </button>
+            <button type="button" onClick={onDelete} className="text-[10px] font-semibold text-red-500 hover:text-red-700">
+              삭제
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (!editing) {
     return (

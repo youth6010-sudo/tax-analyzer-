@@ -10,6 +10,7 @@ export const MANAGER_DISPLAY_ORDER = Object.keys(STAFF_REAL_NAMES);
 
 export const UNCategorized = '미분류';
 export const SINGO_DAERI = '신고대리';
+export const NON_BUSINESS_CATEGORY = '비사업자';
 
 /** 구분·대분류 공통 표시 순서 */
 export const GROUP_DISPLAY_ORDER = ['개인', '법인', SINGO_DAERI, '미사용', '비사업자'] as const;
@@ -134,6 +135,40 @@ export type CategoryGroup = {
 export function getClientDouzoneCode(client: ClientRecord): string {
   const raw = client.intakeData?.douzoneCode;
   return raw != null ? String(raw).trim() : '';
+}
+
+export function hasClientDouzoneCode(client: ClientRecord): boolean {
+  return getClientDouzoneCode(client).length > 0;
+}
+
+/** 신고대리 — 개인·비사업자 사업자유형 */
+export function isSingoDaeriPersonEntity(client: ClientRecord): boolean {
+  const ent = client.businessEntityType;
+  return ent === 'individual' || ent === 'nonBusiness' || ent === '';
+}
+
+/** 신고대리·비사업자 대분류 — 개인·비사업자 유형은 세무사랑 코드 있을 때 노출 */
+function shouldShowPersonalCategoryRow(client: ClientRecord): boolean {
+  if (!isSingoDaeriPersonEntity(client)) return true;
+  return hasClientDouzoneCode(client);
+}
+
+export function shouldShowSingoDaeriClient(client: ClientRecord): boolean {
+  if (getClientCategory(client) !== SINGO_DAERI) return false;
+  return shouldShowPersonalCategoryRow(client);
+}
+
+export function shouldShowNonBusinessCategoryClient(client: ClientRecord): boolean {
+  if (getClientCategory(client) !== NON_BUSINESS_CATEGORY) return false;
+  return shouldShowPersonalCategoryRow(client);
+}
+
+/** 종소세·수임처 — 신고대리·비사업자 대분류 공통 노출 기준 */
+export function shouldShowComprehensiveOptionalClient(client: ClientRecord): boolean {
+  const cat = getClientCategory(client);
+  if (cat === SINGO_DAERI) return shouldShowSingoDaeriClient(client);
+  if (cat === NON_BUSINESS_CATEGORY) return shouldShowNonBusinessCategoryClient(client);
+  return true;
 }
 
 function compareClientsByDouzoneCode(a: ClientRecord, b: ClientRecord): number {

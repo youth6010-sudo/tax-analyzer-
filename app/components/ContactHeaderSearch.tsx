@@ -13,7 +13,7 @@ import {
 } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 
-export default function ContactHeaderSearch() {
+export default function ContactHeaderSearch({ expanded = false }: { expanded?: boolean }) {
   const router = useRouter();
   const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [query, setQuery] = useState('');
@@ -89,8 +89,14 @@ export default function ContactHeaderSearch() {
   }, [router]);
 
   return (
-    <div ref={rootRef} className="relative flex items-center gap-1.5 w-full sm:w-auto shrink-0">
-      <div className="relative flex-1 sm:w-80 lg:w-96">
+    <div
+      ref={rootRef}
+      className={[
+        'relative flex items-center gap-1.5 shrink-0',
+        expanded ? 'w-full max-w-3xl' : 'w-full sm:w-auto',
+      ].join(' ')}
+    >
+      <div className={expanded ? 'relative w-full' : 'relative flex-1 sm:w-80 lg:w-96'}>
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
           fill="none"

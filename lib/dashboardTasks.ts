@@ -202,10 +202,11 @@ export async function listDashboardTasks(
     // 담당자: 연결된 수임처(clientId) → 없으면 상호로 매칭한 수임처
     const resolvedClientId =
       raw.clientId ?? resolveClientIdByName(raw.companyName, clientRefs, raw.excelKey ?? undefined);
-    const manager = (raw.clientManager ?? (resolvedClientId ? managerByClientId.get(resolvedClientId) : '') ?? '').trim();
-    if (!visibleToUser(manager, user)) continue;
+    // 유입 프로세스 할 일 — 찰리(관리자)에게만
+    if (!user.isAdmin) continue;
 
     const company = (raw.clientCompanyName?.trim() || raw.companyName.trim() || '업체명 미정');
+    const manager = (raw.clientManager ?? (resolvedClientId ? managerByClientId.get(resolvedClientId) : '') ?? '').trim();
     const altNames = [raw.clientCompanyName, raw.companyName].filter(
       (n): n is string => Boolean(n?.trim()),
     );

@@ -124,7 +124,7 @@ function buildVatInstallmentHtml({
   const total = installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
 
   const parts: string[] = [];
-  parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부했습니다. 분할 납부 일정은 아래와 같습니다.`));
+  parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`));
   parts.push(blank);
   parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`));
   installments.forEach((it, i) => {
@@ -207,7 +207,7 @@ export function buildPaymentNoticeHtml({
   } else {
     // 전액 납부 (기본). 입력 전(0원) 상태 포함.
     const listForBreakdown = payItems.length > 0 ? payItems : items;
-    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부했습니다. 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`));
+    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`));
     parts.push(blank);
     parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`));
     parts.push(breakdown(listForBreakdown));
@@ -426,9 +426,18 @@ export function renderTemplate({
     ['{휴일안내}', escapeHtml(adjustmentSentence(deadline))],
   ];
 
-  const tpl = template || '';
+  const tpl = (template || '').trim();
+  const notesTrimmed = (notes || '').trim();
 
-  let out = tpl;
+  // {특이사항} 데이터 없으면 해당 블록·인접 줄바꿈 없이 제거
+  let prepared = tpl;
+  if (!notesTrimmed) {
+    prepared = prepared
+      .replace(/<div[^>]*>\s*\{특이사항\}\s*<\/div>\s*/gi, '')
+      .replace(/\{특이사항\}\s*/g, '');
+  }
+
+  let out = prepared;
   for (const [token, value] of map) {
     out = out.split(token).join(value);
   }

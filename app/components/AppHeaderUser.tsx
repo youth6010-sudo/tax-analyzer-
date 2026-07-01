@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PinChangeModal from './PinChangeModal';
@@ -56,18 +55,6 @@ export default function AppHeaderUser() {
         >
           블루홀 계정
         </button>
-        <Link
-          href="/"
-          className="shrink-0 border-l border-gray-100 pl-3 ml-1 rounded-lg hover:opacity-80 transition-opacity"
-          aria-label="홈으로"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="세무법인청년들"
-            className="h-12 sm:h-14 w-auto max-h-14 object-contain"
-          />
-        </Link>
         <button
           type="button"
           onClick={() => void logout()}

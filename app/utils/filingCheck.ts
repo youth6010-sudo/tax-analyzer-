@@ -1,15 +1,21 @@
 import type { TaxTypeId } from '@/app/config/taxTypes';
 import type { ClientRecord } from '@/app/types/client';
-import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import {
+  getClientCategory,
+  SINGO_DAERI,
+  NON_BUSINESS_CATEGORY,
+  shouldShowComprehensiveOptionalClient,
+} from '@/app/utils/clientsGrouping';
+import { shouldShowInWithholdingPeriod, simplePayrollMonthlyPeriodKey, type SimplePayrollHalf } from '@/lib/periodUtils';
 
-export type FilingCycle = 'month' | 'vat' | 'year';
+export type FilingCycle = 'month' | 'vat' | 'year' | 'half';
 
-// 신고대상확인/대시보드에서 쓰는 세목 id (세목 4종 + 사업장현황신고 + 연말정산)
-export type FilingTaxId = TaxTypeId | 'businessStatus' | 'yearEnd';
+// 신고대상확인/대시보드에서 쓰는 세목 id
+export type FilingTaxId = TaxTypeId | 'businessStatus' | 'yearEnd' | 'simplePayroll';
 
-// 신고대상확인 대상 세목 (원천세·연말정산·부가세·사업장현황·종소세·법인세)
 export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle; icon: string }[] = [
   { id: 'withholding', label: '원천세', cycle: 'month', icon: '💸' },
+  { id: 'simplePayroll', label: '간이지급', cycle: 'month', icon: '📋' },
   { id: 'yearEnd', label: '연말정산', cycle: 'year', icon: '🧮' },
   { id: 'vat', label: '부가세', cycle: 'vat', icon: '🧾' },
   { id: 'businessStatus', label: '면세', cycle: 'year', icon: '🆓' },
@@ -20,10 +26,13 @@ export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle;
 export const VAT_PHASES = ['1기 예정', '1기 확정', '2기 예정', '2기 확정'] as const;
 export type VatPhase = (typeof VAT_PHASES)[number];
 
+import { defaultSimplePayrollHalf } from '@/lib/periodUtils';
+
 export type FilingPeriod = {
   year: number;
   month: number; // 원천세
   vatPhase: VatPhase; // 부가세
+  half: SimplePayrollHalf; // 간이지급
 };
 
 export function getCycle(taxId: FilingTaxId): FilingCycle {
@@ -32,7 +41,13 @@ export function getCycle(taxId: FilingTaxId): FilingCycle {
 
 export function defaultPeriod(): FilingPeriod {
   const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1, vatPhase: '1기 확정' };
+  const month = now.getMonth() + 1;
+  return {
+    year: now.getFullYear(),
+    month,
+    vatPhase: '1기 확정',
+    half: defaultSimplePayrollHalf(month),
+  };
 }
 
 // 사업자등록번호 → 숫자만 (10자리)
@@ -45,15 +60,16 @@ export function periodLabel(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
   if (cycle === 'month') return `${p.year}년 ${p.month}월`;
   if (cycle === 'vat') return `${p.year}년 ${p.vatPhase}`;
+  if (taxId === 'simplePayroll') return `${p.year}년 ${p.month}월`;
   if (taxId === 'corporate') return `${p.year}년 사업연도`;
-  return `${p.year}년 귀속`; // 종소세·사업장현황
+  return `${p.year}년 귀속`;
 }
 
-// 저장/조회용 기간 키
 export function periodKey(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
   if (cycle === 'month') return `${p.year}-${String(p.month).padStart(2, '0')}`;
   if (cycle === 'vat') return `${p.year}-${p.vatPhase}`;
+  if (taxId === 'simplePayroll') return simplePayrollMonthlyPeriodKey(p.year, p.month);
   return `${p.year}`;
 }
 
@@ -75,7 +91,37 @@ export function parsePeriodKey(taxId: FilingTaxId, key: string): FilingPeriod {
       vatPhase: (VAT_PHASES as readonly string[]).includes(phase) ? phase : base.vatPhase,
     };
   }
+  if (taxId === 'simplePayroll') {
+    const [y, h] = key.split('-');
+    if (h === 'H1' || h === 'H2') {
+      return { ...base, year: Number(y) || base.year, month: h === 'H1' ? 7 : 1, half: h };
+    }
+    const month = Number(h);
+    return { ...base, year: Number(y) || base.year, month: month || base.month };
+  }
   return { ...base, year: Number(key) || base.year };
+}
+
+/** 직전 기간 키 (완료 신고분 승계용) */
+export function previousPeriodKey(taxId: FilingTaxId, currentKey: string): string | null {
+  const p = parsePeriodKey(taxId, currentKey);
+  const cycle = getCycle(taxId);
+  if (cycle === 'month') {
+    if (p.month <= 1) return `${p.year - 1}-12`;
+    return `${p.year}-${String(p.month - 1).padStart(2, '0')}`;
+  }
+  if (cycle === 'vat') {
+    const idx = VAT_PHASES.indexOf(p.vatPhase);
+    if (idx <= 0) return `${p.year - 1}-${VAT_PHASES[VAT_PHASES.length - 1]}`;
+    return `${p.year}-${VAT_PHASES[idx - 1]}`;
+  }
+  if (taxId === 'simplePayroll') {
+    if (p.month <= 1) return `${p.year - 1}-12`;
+    return `${p.year}-${String(p.month - 1).padStart(2, '0')}`;
+  }
+  const y = Number(currentKey);
+  if (!Number.isFinite(y)) return null;
+  return String(y - 1);
 }
 
 // 법인 여부 — 사업자유형(법인) 또는 수임처관리 대분류(법인)
@@ -110,16 +156,23 @@ export function isVatSummaryOnlyClient(c: ClientRecord): boolean {
 // 원천세: 신고대리 제외한 모든 업체
 // 부가세: 비사업자·(개인)면세 제외 — 단 법인 면세는 합계표 제출 위해 포함
 // 면세(사업장현황): 개인 면세사업자
-// 법인세: 법인 / 종소세: 개인(법인 아님) — 사업자번호 없는 건도 포함
+// 법인세: 법인 / 종소세: 개인(법인 아님) — 신고대리·비사업자 개인형은 코드 있을 때 포함
 export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): ClientRecord[] {
-  if (taxId === 'comprehensive') return clients.filter(c => !isCorporateClient(c));
+  if (taxId === 'comprehensive') {
+    return clients.filter(c => {
+      if (isCorporateClient(c)) return false;
+      const cat = getClientCategory(c);
+      if (cat === SINGO_DAERI || cat === NON_BUSINESS_CATEGORY) {
+        return shouldShowComprehensiveOptionalClient(c);
+      }
+      return true;
+    });
+  }
 
   // 종소세 외에는 사업자번호 없는/000 시작 업체 제외
   const withBizNo = clients.filter(c => !hasPlaceholderBizNo(c));
 
   if (taxId === 'withholding' || taxId === 'yearEnd') {
-    // 연말정산은 원천세와 동일한 모집단(신고대리 제외) — 실제 대상 여부는
-    // 해당 연도 원천세 신고이력으로 신고대상확인 화면에서 가린다.
     return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);
   }
   if (taxId === 'vat') {
@@ -133,6 +186,21 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
   }
   // corporate
   return withBizNo.filter(isCorporateClient);
+}
+
+/** 원천세·간이지급 — 전월 대비 / 그 외 — 직전 신고분 대비 */
+export function usesMonthOverMonthCompare(taxId: FilingTaxId): boolean {
+  return taxId === 'withholding' || taxId === 'simplePayroll';
+}
+
+/** 원천세 — 특정 월 기준 (반기·소득유형 필터 포함) */
+export function withholdingTargetsForPeriod(
+  clients: ClientRecord[],
+  month: number,
+): ClientRecord[] {
+  return filingTargets(clients, 'withholding').filter(c =>
+    shouldShowInWithholdingPeriod(c.intakeData ?? {}, month),
+  );
 }
 
 // 홈택스 접수목록 한 행

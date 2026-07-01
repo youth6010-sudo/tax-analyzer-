@@ -3,15 +3,34 @@ import type { ContactRecord } from '@/app/types/contact';
 import type { Client } from '@/db/schema';
 import { mobilePhoneFrom } from '@/app/utils/clientPhone';
 
-const LIST_INTAKE_KEYS = ['category', 'douzoneCode', 'mobilePhone', 'statusLabel', 'closedDate', 'bookkeepingFee', 'adjustmentFee', 'taxKind'] as const;
+const LIST_INTAKE_KEYS = [
+  'category',
+  'douzoneCode',
+  'mobilePhone',
+  'statusLabel',
+  'closedDate',
+  'bookkeepingFee',
+  'adjustmentFee',
+  'taxKind',
+  /** 간이지급·연말정산 그리드 활성화 */
+  'incomeTypes',
+  'taxFlags',
+  'withholdingSettings',
+  'filingType',
+] as const;
 
-/** 목록 API·bootstrap용 — 큰 intake JSON 제외 */
+/** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */
 export function slimIntakeDataForList(intakeData: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!intakeData) return {};
   const out: Record<string, unknown> = {};
   for (const k of LIST_INTAKE_KEYS) {
     const v = intakeData[k];
-    if (v != null && v !== '') out[k] = v;
+    if (v == null) continue;
+    if (typeof v === 'object') {
+      out[k] = v;
+    } else if (v !== '') {
+      out[k] = v;
+    }
   }
   return out;
 }

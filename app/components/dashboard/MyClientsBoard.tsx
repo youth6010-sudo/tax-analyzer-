@@ -13,7 +13,7 @@ import {
 } from '@/app/utils/clientClosure';
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
-import { filingTargets, isVatSummaryOnlyClient } from '@/app/utils/filingCheck';
+import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
 import { getPortalClients, hydratePortal } from '@/app/utils/portalStore';
 
 type SortKey = 'name' | 'code';
@@ -75,19 +75,29 @@ function ClientList({
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1">
-                <span
-                  className={`block truncate text-sm font-semibold ${
-                    excluded || isChurned
-                      ? 'text-slate-400 line-through decoration-slate-400'
-                      : 'text-slate-800'
-                  }`}
-                >
-                  {c.companyName || '(이름 없음)'}
-                </span>
-                {(c.representative || c.businessNo || closureDate) && (
-                  <span className="block truncate text-xs text-slate-400">
-                    {[c.representative, c.businessNo, closureDate].filter(Boolean).join(' · ')}
+                <span className="block truncate text-sm">
+                  <span
+                    className={`font-semibold ${
+                      excluded || isChurned
+                        ? 'text-slate-400 line-through decoration-slate-400'
+                        : 'text-slate-800'
+                    }`}
+                  >
+                    {c.companyName || '(이름 없음)'}
                   </span>
+                  {(c.representative || c.businessNo) && (
+                    <span
+                      className={`text-xs font-normal ${
+                        excluded || isChurned ? 'text-slate-300' : 'text-slate-400'
+                      }`}
+                    >
+                      {' · '}
+                      {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </span>
+                {closureDate && (
+                  <span className="block truncate text-xs text-slate-400">{closureDate}</span>
                 )}
               </span>
               {showClosureMeta && closureKind && (
@@ -196,6 +206,7 @@ export default function MyClientsBoard() {
   const [showJisutaek, setShowJisutaek] = useState(false);
   const [includeChurned, setIncludeChurned] = useState(false);
   const [ntsOverride, setNtsOverride] = useState<Record<string, string>>({});
+  const [filingExcluded, setFilingExcluded] = useState<Record<string, string>>({});
   const [ntsChecking, setNtsChecking] = useState(false);
   const [ntsError, setNtsError] = useState('');
   const taxFilter = useDashboardTaxFilter();
@@ -220,6 +231,19 @@ export default function MyClientsBoard() {
       .catch(() => setClients(getPortalClients()))
       .finally(() => setReady(true));
   }, [includeChurned]);
+
+  useEffect(() => {
+    if (!taxFilter) {
+      setFilingExcluded({});
+      return;
+    }
+    const p = defaultPeriod();
+    const pk = periodKey(taxFilter, p);
+    fetch(`/api/filing-check/excluded?taxType=${taxFilter}&periodKey=${pk}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setFilingExcluded((d?.excluded as Record<string, string>) ?? {}))
+      .catch(() => setFilingExcluded({}));
+  }, [taxFilter]);
 
   const toggleSingo = (next: boolean) => {
     setShowSingo(next);
@@ -255,9 +279,10 @@ export default function MyClientsBoard() {
     if (taxFilter) {
       const targetIds = new Set(filingTargets(clients, taxFilter).map(c => c.id));
       for (const c of clients) if (!targetIds.has(c.id)) s.add(c.id);
+      for (const id of Object.keys(filingExcluded)) s.add(id);
     }
     return s;
-  }, [clients, taxFilter]);
+  }, [clients, taxFilter, filingExcluded]);
 
   // 부가세 보기일 때, 법인 면세(합계표만 제출) 표시
   const summaryIds = useMemo(() => {
@@ -373,8 +398,8 @@ export default function MyClientsBoard() {
 
   return (
     <section>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-extrabold tracking-tight text-slate-800">내 수임처</h2>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-700">내 수임처</h2>
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -435,19 +460,6 @@ export default function MyClientsBoard() {
             ntsOverride={ntsOverride}
             ready={ready}
           />
-          {showSingo && (
-            <SectionCard
-              label="신고대리"
-              dotClass={CATEGORY_COLORS.신고대리.dot}
-              countClass={CATEGORY_COLORS.신고대리.text}
-              clients={singoDaeri}
-              excludedIds={excludedIds}
-              summaryIds={summaryIds}
-              ntsClosedIds={ntsClosedIds}
-              ntsOverride={ntsOverride}
-              ready={ready}
-            />
-          )}
         </div>
 
         <div className="space-y-4">
@@ -462,6 +474,19 @@ export default function MyClientsBoard() {
             ntsOverride={ntsOverride}
             ready={ready}
           />
+          {showSingo && (
+            <SectionCard
+              label="신고대리"
+              dotClass={CATEGORY_COLORS.신고대리.dot}
+              countClass={CATEGORY_COLORS.신고대리.text}
+              clients={singoDaeri}
+              excludedIds={excludedIds}
+              summaryIds={summaryIds}
+              ntsClosedIds={ntsClosedIds}
+              ntsOverride={ntsOverride}
+              ready={ready}
+            />
+          )}
           {showJisutaek && jisutaek.length > 0 && (
             <SectionCard
               label="지주택"

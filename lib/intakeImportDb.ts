@@ -68,6 +68,9 @@ function mergeChecklist(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...prev };
   for (const [k, v] of Object.entries(next)) {
+    if (k.startsWith('_')) continue;
+    // 포털에서 이미 저장된 체크값은 엑셀 재업로드로 덮지 않음
+    if (k in prev && typeof prev[k] === 'boolean') continue;
     if (v === true) out[k] = true;
     else if (out[k] === undefined) out[k] = v;
   }

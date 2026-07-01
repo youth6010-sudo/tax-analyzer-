@@ -1,0 +1,149 @@
+import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
+
+export type CheckRecord = FilingCheckSessionData;
+
+export const EMPTY_CHECK_RECORD: CheckRecord = {
+  overrides: {},
+  excelBizNos: [],
+  fileName: '',
+  diffReason: '',
+  done: false,
+  specialFilings: [],
+  specialReasons: {},
+  excluded: {},
+  rowNotes: {},
+  extraClients: [],
+};
+
+/** 제외사유·특이사항 등 실질 데이터가 있는지 */
+export function hasFilingCarryData(rec: Partial<CheckRecord> | null | undefined): boolean {
+  if (!rec) return false;
+  if (rec.done) return true;
+  if (rec.fileName?.trim()) return true;
+  if ((rec.excelBizNos?.length ?? 0) > 0) return true;
+  if (rec.diffReason?.trim()) return true;
+  if (Object.keys(rec.excluded ?? {}).length > 0) return true;
+  if (Object.keys(rec.rowNotes ?? {}).length > 0) return true;
+  if (Object.keys(rec.specialReasons ?? {}).length > 0) return true;
+  if ((rec.extraClients?.length ?? 0) > 0) return true;
+  if ((rec.specialFilings?.length ?? 0) > 0) return true;
+  return false;
+}
+
+/** localStorage·서버 기록 병합 — 제외사유·특이사항 우선 보존 */
+export function mergeFilingRecords(
+  local: CheckRecord | null,
+  server: CheckRecord | null,
+): CheckRecord | null {
+  if (!local && !server) return null;
+  if (!local) return server;
+  if (!server || !hasFilingCarryData(server)) return local;
+  if (!hasFilingCarryData(local)) return server;
+
+  return {
+    ...server,
+    diffReason: server.diffReason?.trim() ? server.diffReason : local.diffReason,
+    excluded: { ...local.excluded, ...server.excluded },
+    rowNotes: { ...local.rowNotes, ...server.rowNotes },
+    specialReasons: { ...local.specialReasons, ...server.specialReasons },
+    extraClients: server.extraClients?.length ? server.extraClients : local.extraClients,
+    excelBizNos: server.excelBizNos?.length ? server.excelBizNos : local.excelBizNos,
+    fileName: server.fileName?.trim() ? server.fileName : local.fileName,
+    overrides: { ...local.overrides, ...server.overrides },
+    specialFilings: server.specialFilings?.length ? server.specialFilings : local.specialFilings,
+    done: server.done || local.done,
+  };
+}
+
+export function carryFieldsFromRecord(
+  rec: CheckRecord,
+): Pick<CheckRecord, 'diffReason' | 'specialReasons' | 'excluded' | 'rowNotes' | 'extraClients'> {
+  return {
+    diffReason: rec.diffReason ?? '',
+    specialReasons: { ...(rec.specialReasons ?? {}) },
+    excluded: { ...(rec.excluded ?? {}) },
+    rowNotes: { ...(rec.rowNotes ?? {}) },
+    extraClients: [...(rec.extraClients ?? [])],
+  };
+}
+
+/** 직전 완료(done) 신고분 — localStorage 스캔 (readRecord/writeRecord와 동일 키 규칙) */
+export function findPreviousCompletedLocal(
+  storagePrefix: string,
+  manager: string,
+  taxType: string,
+  currentPeriodKey: string,
+): { record: CheckRecord; key: string } | null {
+  if (typeof window === 'undefined') return null;
+  const keyIdPrefix = `${storagePrefix}${manager}:${taxType}:`;
+  const fullPrefix = `${storagePrefix}${keyIdPrefix}`;
+  let bestKey = '';
+  let bestRec: CheckRecord | null = null;
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(fullPrefix)) continue;
+    const pk = k.slice(fullPrefix.length);
+    if (pk >= currentPeriodKey) continue;
+    try {
+      const rec = { ...EMPTY_CHECK_RECORD, ...(JSON.parse(localStorage.getItem(k) || 'null') as Partial<CheckRecord>) };
+      if (!rec.done) continue;
+      if (pk > bestKey) {
+        bestKey = pk;
+        bestRec = rec;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return bestRec ? { record: bestRec, key: bestKey } : null;
+}
+
+/** 같은 담당자·세목의 localStorage 키에서 제외·특이사항 회수 */
+export function restoreCarryFromLocalStorage(
+  storagePrefix: string,
+  manager: string,
+  taxType: string,
+  currentPeriodKey: string,
+): Pick<CheckRecord, 'excluded' | 'rowNotes' | 'diffReason' | 'specialReasons'> {
+  if (typeof window === 'undefined') {
+    return { excluded: {}, rowNotes: {}, diffReason: '', specialReasons: {} };
+  }
+
+  const prefix = `${storagePrefix}${manager}:${taxType}:`;
+  const excluded: Record<string, string> = {};
+  const rowNotes: Record<string, string> = {};
+  const specialReasons: Record<string, string> = {};
+  let diffReason = '';
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(prefix)) continue;
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const rec = { ...EMPTY_CHECK_RECORD, ...(JSON.parse(raw) as Partial<CheckRecord>) };
+      if (rec.diffReason?.trim() && !diffReason) diffReason = rec.diffReason;
+      Object.assign(excluded, rec.excluded);
+      Object.assign(rowNotes, rec.rowNotes);
+      Object.assign(specialReasons, rec.specialReasons);
+    } catch {
+      /* skip */
+    }
+  }
+
+  // 현재 기간 키 데이터가 있으면 최우선
+  try {
+    const cur = localStorage.getItem(`${prefix}${currentPeriodKey}`);
+    if (cur) {
+      const rec = { ...EMPTY_CHECK_RECORD, ...(JSON.parse(cur) as Partial<CheckRecord>) };
+      if (rec.diffReason?.trim()) diffReason = rec.diffReason;
+      Object.assign(excluded, rec.excluded);
+      Object.assign(rowNotes, rec.rowNotes);
+      Object.assign(specialReasons, rec.specialReasons);
+    }
+  } catch {
+    /* skip */
+  }
+
+  return { excluded, rowNotes, diffReason, specialReasons };
+}

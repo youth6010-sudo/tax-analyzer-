@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
 import {
   portalAlertInfo,
@@ -28,14 +28,36 @@ import {
   parsePeriodKey,
   periodKey,
   periodLabel,
+  previousPeriodKey,
   specialFilingKey,
+  usesMonthOverMonthCompare,
+  withholdingTargetsForPeriod,
   type FilingPeriod,
   type FilingTaxId,
   type SpecialFiling,
   type VatPhase,
 } from '@/app/utils/filingCheck';
-import { hydratePortal, usePortalClients } from '@/app/utils/portalStore';
+import { hydratePortal, patchPortalClient, usePortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
+import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
+import {
+  formatResidentNoDisplay,
+  groupComprehensiveFilingTargets,
+  compareComprehensiveGroups,
+  type ComprehensiveFilingGroup,
+} from '@/lib/comprehensiveFilingGroups';
+import { prevWithholdingPeriodKey } from '@/lib/periodUtils';
+import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
+import {
+  hasFilingCarryData,
+  carryFieldsFromRecord,
+} from '@/app/utils/filingCheckStorage';
+import FilingCheckSessionPanel from '@/app/components/clients/FilingCheckSessionPanel';
+import ClientFilingSettingsModal from '@/app/components/clients/ClientFilingSettingsModal';
+import IncomeTypeFilingSection, {
+  type IncomeFilingStats,
+  type IncomeTypeFilingHandle,
+} from '@/app/components/clients/IncomeTypeFilingSection';
 
 // 신고대상확인에서 직접 추가한 업체(수임처 DB에 없는 임시 대상)
 type ManualClient = {
@@ -76,6 +98,13 @@ function manualToClient(m: ManualClient): ClientRecord {
 
 const isManualId = (id: string) => id.startsWith('manual:');
 
+/** 신고유형 — 당월 / 전월 (레거시 차월 → 전월) */
+function readFilingType(intakeData: Record<string, unknown> | undefined): '당월' | '전월' {
+  const raw = String(intakeData?.filingType ?? '').trim();
+  if (raw === '전월' || raw === '차월') return '전월';
+  return '당월';
+}
+
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20';
 
@@ -91,6 +120,7 @@ type CheckRecord = {
   excluded: Record<string, string>; // 신고목록 제외 (clientId → 제외사유)
   rowNotes: Record<string, string>; // 업체별 신고 특이사항 (clientId → 메모)
   extraClients: ManualClient[]; // 직접 추가한 업체 (다음 신고 때 자동 승계)
+  siteDone?: Record<string, boolean>; // 종소세 사업장별 작업 완료
 };
 
 const EMPTY_RECORD: CheckRecord = {
@@ -106,63 +136,79 @@ const EMPTY_RECORD: CheckRecord = {
   extraClients: [],
 };
 
-// v2: 담당자별로 분리 저장 → filingCheck:v2:{담당자}:{세목}:{기간}
+// localStorage — 연말정산 원천세 이력 스캔용 prefix만 유지
 const STORAGE_PREFIX = 'filingCheck:v2:';
 const ALL_MANAGERS = '전체';
 
-// 담당자 기록 prefix (담당자별 신고리스트 분리)
 function managerPrefix(manager: string): string {
   return `${STORAGE_PREFIX}${manager}:`;
 }
 
-function readRecord(keyId: string): CheckRecord | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + keyId);
-    if (!raw) return null;
-    return { ...EMPTY_RECORD, ...(JSON.parse(raw) as Partial<CheckRecord>) };
-  } catch {
-    return null;
-  }
-}
-
-function writeRecord(keyId: string, record: CheckRecord): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_PREFIX + keyId, JSON.stringify(record));
-  } catch {
-    /* quota */
-  }
-}
-
-// 같은 담당자·세목의 직전(가장 최근 이전 기간) 신고 기록 찾기 — 자동 불러오기용
-function findPreviousFiling(
+async function fetchPreviousCompletedSession(
   manager: string,
   taxId: FilingTaxId,
   currentPk: string,
-): { record: CheckRecord; key: string } | null {
-  if (typeof window === 'undefined') return null;
-  const prefix = `${managerPrefix(manager)}${taxId}:`;
-  let bestKey = '';
-  let bestRec: CheckRecord | null = null;
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const k = localStorage.key(i);
-    if (!k || !k.startsWith(prefix)) continue;
-    const pk = k.slice(prefix.length);
-    if (pk >= currentPk) continue; // 현재보다 이전 기간만
-    if (pk > bestKey) {
-      try {
-        const rec = JSON.parse(localStorage.getItem(k) || 'null') as CheckRecord | null;
-        if (rec) {
-          bestKey = pk;
-          bestRec = rec;
-        }
-      } catch {
-        /* skip */
+): Promise<{ record: CheckRecord; key: string } | null> {
+  let pk: string | null = previousPeriodKey(taxId, currentPk);
+  for (let step = 0; pk && step < 48; step += 1) {
+    try {
+      const res = await fetch(
+        `/api/filing-check/session?manager=${encodeURIComponent(manager)}&taxType=${taxId}&periodKey=${pk}`,
+        { cache: 'no-store' },
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { data?: CheckRecord };
+        if (json.data?.done) return { record: json.data, key: pk };
       }
+    } catch {
+      /* try older period */
     }
+    pk = previousPeriodKey(taxId, pk);
   }
-  return bestRec ? { record: bestRec, key: bestKey } : null;
+  return null;
+}
+
+function TruncateWithTooltip({
+  text,
+  title,
+  className,
+}: {
+  text: string;
+  title?: string;
+  className?: string;
+}) {
+  return (
+    <span className={`min-w-0 truncate ${className ?? ''}`} title={title ?? text}>
+      {text}
+    </span>
+  );
+}
+
+function ComprehensiveGroupReceiveCheckbox({
+  checked,
+  indeterminate,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={e => onChange(e.target.checked)}
+      className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
+    />
+  );
 }
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
@@ -175,16 +221,29 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 }
 
 export default function FilingCheckPage() {
+  const searchParams = useSearchParams();
   const cachedClients = usePortalClients();
   // 신고대상확인은 로그인한 사람과 무관하게 담당자별로 셋팅 → 전체 수임처를 받아 담당자로 가른다.
   const [allClients, setAllClients] = useState<ClientRecord[] | null>(null);
   const clients = allClients ?? cachedClients;
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
-  // 선택 담당자(브라우저 저장). 비어 있으면 현재 로그인 담당자, 그것도 없으면 전체.
+  const [isMaster, setIsMaster] = useState(false);
+  const [incomePanelClient, setIncomePanelClient] = useState<ClientRecord | null>(null);
+  const [prevSession, setPrevSession] = useState<FilingCheckSessionData | null>(null);
+  // 찰리(관리자)만 담당자 선택 — 일반 담당자는 본인 세션만
   const [storedManager, setStoredManager] = useLocalStorage<string>('filingCheck.manager.v1', '');
-  const selManager = storedManager || currentUserName || ALL_MANAGERS;
+  const selManager = useMemo(() => {
+    if (isMaster) return storedManager || currentUserName || ALL_MANAGERS;
+    return currentUserName?.trim() || '';
+  }, [isMaster, storedManager, currentUserName]);
 
   const [tax, setTax] = useState<FilingTaxId>('withholding');
+  const taxFromUrl = searchParams.get('tax');
+  useEffect(() => {
+    if (!taxFromUrl) return;
+    const valid = FILING_TAXES.some(t => t.id === taxFromUrl);
+    if (valid) setTax(taxFromUrl as FilingTaxId);
+  }, [taxFromUrl]);
   const [period, setPeriod] = useState<FilingPeriod>(() => defaultPeriod());
   const [record, setRecord] = useState<CheckRecord>(EMPTY_RECORD);
   const [parsing, setParsing] = useState(false);
@@ -193,70 +252,182 @@ export default function FilingCheckPage() {
   const [savedTick, setSavedTick] = useState(false);
   const [carriedFrom, setCarriedFrom] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const incomeFileRef = useRef<HTMLInputElement>(null);
+  const incomeSectionRef = useRef<IncomeTypeFilingHandle>(null);
+  const [incomeStats, setIncomeStats] = useState<IncomeFilingStats>({
+    target: 0,
+    received: 0,
+    diff: 0,
+  });
+  const [incomeParsing, setIncomeParsing] = useState(false);
+  const [incomeNotice, setIncomeNotice] = useState('');
+  const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
+  const [incomeSavedTick, setIncomeSavedTick] = useState(false);
+  const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
 
   const cycle = getCycle(tax);
+  const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
 
   useEffect(() => {
     hydratePortal();
-    fetch('/api/clients', { cache: 'no-store' })
+    fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.user?.name) setCurrentUserName(String(d.user.name).trim());
+        if (d?.user?.loginId === 'charlie' || d?.user?.role === 'admin') setIsMaster(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+    fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (d?.clients) setAllClients(d.clients as ClientRecord[]);
       })
       .catch(() => {});
-    fetch('/api/auth/me')
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (d?.user?.name) setCurrentUserName(String(d.user.name).trim());
-      })
-      .catch(() => {});
-  }, []);
+  }, [isMaster]);
 
   // 세목·기간이 바뀌면 저장된 기록을 불러오고,
   // 저장된 게 없으면 직전 신고 기준으로 무조건 불러온다(특이사항·사유 승계).
   // 단, 접수 자체(엑셀/체크)는 신고분마다 새로 받으므로 가져오지 않는다.
   useEffect(() => {
-    const saved = readRecord(keyId);
-    if (saved) {
-      setRecord(saved);
-      setCarriedFrom(null);
-    } else {
-      const prev = findPreviousFiling(selManager, tax, periodKey(tax, period));
-      if (prev) {
-        setRecord({
-          ...EMPTY_RECORD,
-          diffReason: prev.record.diffReason,
-          specialReasons: prev.record.specialReasons ?? {},
-          excluded: prev.record.excluded ?? {},
-          rowNotes: prev.record.rowNotes ?? {},
-          extraClients: prev.record.extraClients ?? [],
-        });
-        setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, prev.key)));
+    if (!selManager) return;
+    let cancelled = false;
+    const pk = periodKey(tax, period);
+
+    const loadFromServer = async () => {
+      try {
+        const res = await fetch(
+          `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=${tax}&periodKey=${pk}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) return null;
+        const json = (await res.json()) as { data?: CheckRecord };
+        return json.data ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    void (async () => {
+      const serverRec = await loadFromServer();
+      if (cancelled) return;
+
+      let merged: CheckRecord =
+        serverRec && hasFilingCarryData(serverRec)
+          ? { ...EMPTY_RECORD, ...serverRec }
+          : { ...EMPTY_RECORD };
+
+      if (!serverRec || !hasFilingCarryData(serverRec)) {
+        const serverPrev = await fetchPreviousCompletedSession(selManager, tax, pk);
+        if (cancelled) return;
+        if (serverPrev) {
+          merged = {
+            ...EMPTY_RECORD,
+            ...carryFieldsFromRecord(serverPrev.record),
+          };
+          setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, serverPrev.key)));
+        } else {
+          setCarriedFrom(null);
+        }
       } else {
-        setRecord(EMPTY_RECORD);
         setCarriedFrom(null);
       }
-    }
+
+      setRecord(merged);
+      void fetch('/api/filing-check/session', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manager: selManager,
+          taxType: tax,
+          periodKey: pk,
+          data: merged,
+        }),
+      }).catch(() => {});
+    })();
+
     loadedKeyRef.current = keyId;
     setParseError('');
     setCopied(false);
     if (fileRef.current) fileRef.current.value = '';
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyId]);
 
-  // 기록 변경 시 즉시 저장(매번 신고분 저장). 로드 직후 stale 저장 방지를 위해 keyId를 넘겨 직접 기록.
+  // 기록 변경 시 즉시 저장. 완료(done) 상태에서는 완료 취소만 허용.
   const patchRecord = (patch: Partial<CheckRecord>) => {
     setRecord(prev => {
+      const unlocking = prev.done && patch.done === false;
+      if (prev.done && !unlocking) return prev;
       const next = { ...prev, ...patch };
-      writeRecord(keyId, next);
+      void fetch('/api/filing-check/session', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manager: selManager,
+          taxType: tax,
+          periodKey: periodKey(tax, period),
+          data: next,
+        }),
+      }).catch(() => {});
       setSavedTick(true);
       window.setTimeout(() => setSavedTick(false), 1200);
       return next;
     });
   };
+
+  // 직전 기간 세션 (전월·직전 신고분 대비)
+  useEffect(() => {
+    if (!selManager) {
+      setPrevSession(null);
+      return;
+    }
+    const pk = periodKey(tax, period);
+    const prevPk =
+      tax === 'withholding' ? prevWithholdingPeriodKey(pk) : previousPeriodKey(tax, pk);
+    if (!prevPk) {
+      setPrevSession(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch(
+      `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=${tax}&periodKey=${prevPk}`,
+      { cache: 'no-store' },
+    )
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!cancelled) setPrevSession((d?.data as FilingCheckSessionData) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPrevSession(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tax, period, selManager]);
+
+  const scopeByManager = useCallback(
+    (list: ClientRecord[]) =>
+      selManager === ALL_MANAGERS
+        ? list
+        : list.filter(c => (c.manager?.trim() || UNCategorized) === selManager),
+    [selManager],
+  );
+
+  const locked = record.done;
+
+  useEffect(() => {
+    setIncomeNotice('');
+    setEmployedFilingMonth(false);
+  }, [tax, period.year, period.month, selManager]);
 
   const handleTaxChange = (next: FilingTaxId) => {
     if (next === tax) return;
@@ -264,17 +435,83 @@ export default function FilingCheckPage() {
   };
 
   // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
-  const taxTargetsAll = useMemo(() => filingTargets(clients, tax), [clients, tax]);
+  const taxTargetsAll = useMemo(() => {
+    if (tax === 'withholding') return withholdingTargetsForPeriod(clients, period.month);
+    if (tax === 'simplePayroll') return filingTargets(clients, 'withholding');
+    return filingTargets(clients, tax);
+  }, [clients, tax, period.month]);
+
+  const periodCompare = useMemo(() => {
+    if (!prevSession) return null;
+    const pk = periodKey(tax, period);
+    const prevPk =
+      tax === 'withholding' ? prevWithholdingPeriodKey(pk) : previousPeriodKey(tax, pk);
+    if (!prevPk) return null;
+    const prevP = parsePeriodKey(tax, prevPk);
+
+    if (tax === 'withholding') {
+      return compareWithholdingMonths(clients, prevSession, record, prevP.month, period.month);
+    }
+    if (tax === 'simplePayroll') {
+      const prevTargets = scopeByManager(withholdingTargetsForPeriod(clients, prevP.month));
+      const currTargets = scopeByManager(withholdingTargetsForPeriod(clients, period.month));
+      return compareSessionTargets(prevTargets, currTargets, prevSession, record);
+    }
+    if (tax === 'comprehensive') {
+      const prevGroups = groupComprehensiveFilingTargets(
+        scopeByManager(filingTargets(clients, tax)),
+      );
+      const currGroups = groupComprehensiveFilingTargets(scopeByManager(taxTargetsAll));
+      return compareComprehensiveGroups(prevGroups, currGroups, prevSession, record);
+    }
+
+    const prevAll = filingTargets(clients, tax);
+    return compareSessionTargets(scopeByManager(prevAll), scopeByManager(taxTargetsAll), prevSession, record);
+  }, [tax, period, clients, prevSession, record, scopeByManager, taxTargetsAll]);
+
+  const compareLabels = useMemo(() => {
+    if (usesMonthOverMonthCompare(tax)) {
+      return {
+        title: '전월 대비 신고대상',
+        prev: '전월',
+        curr: tax === 'simplePayroll' ? '이번 달' : '이번 달',
+      };
+    }
+    const prevPk = previousPeriodKey(tax, periodKey(tax, period));
+    const prevLabel = prevPk ? periodLabel(tax, parsePeriodKey(tax, prevPk)) : '직전';
+    return {
+      title: '직전 신고 대비',
+      prev: prevLabel,
+      curr: periodLabel(tax, period),
+    };
+  }, [tax, period]);
+
+  const comprehensiveGroups = useMemo(() => {
+    if (tax !== 'comprehensive') return [];
+    return groupComprehensiveFilingTargets(scopeByManager(taxTargetsAll));
+  }, [tax, taxTargetsAll, scopeByManager]);
+
+  const comprehensiveAllGroupsCount = useMemo(() => {
+    if (tax !== 'comprehensive') return 0;
+    return groupComprehensiveFilingTargets(taxTargetsAll).length;
+  }, [tax, taxTargetsAll]);
 
   // 담당자 칩 목록(수임처관리와 동일한 표시 순서) + 세목별 대상 수
   const managerCounts = useMemo(() => {
     const m = new Map<string, number>();
+    if (tax === 'comprehensive') {
+      for (const g of groupComprehensiveFilingTargets(taxTargetsAll)) {
+        const k = g.clients[0]?.manager?.trim() || UNCategorized;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return m;
+    }
     for (const c of taxTargetsAll) {
       const k = c.manager?.trim() || UNCategorized;
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
-  }, [taxTargetsAll]);
+  }, [tax, taxTargetsAll]);
 
   const managerOptions = useMemo(() => {
     const set = new Set<string>();
@@ -315,6 +552,43 @@ export default function FilingCheckPage() {
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const isReceived = (id: string, bizNo: string) =>
     record.overrides[id] ?? excelSet.has(normalizeBizNo(bizNo));
+
+  /** 종소세 접수 — 엑셀 대조(그룹 단위, 상호 작업체크와 무관) */
+  const isGroupFilingReceived = (g: ComprehensiveFilingGroup) => {
+    if (Object.prototype.hasOwnProperty.call(record.overrides, g.primaryClientId)) {
+      return record.overrides[g.primaryClientId];
+    }
+    const withBiz = g.clients.filter(c => normalizeBizNo(c.businessNo) !== '');
+    if (withBiz.length === 0) return false;
+    return withBiz.every(c => excelSet.has(normalizeBizNo(c.businessNo)));
+  };
+
+  const setGroupFilingReceived = (g: ComprehensiveFilingGroup, checked: boolean) => {
+    patchRecord({ overrides: { ...record.overrides, [g.primaryClientId]: checked } });
+  };
+
+  /** 종소세 사업장별 작업 완료 — 접수와 별도 */
+  const isSiteDone = (clientId: string) => record.siteDone?.[clientId] ?? false;
+
+  const setSiteDone = (clientId: string, checked: boolean) => {
+    patchRecord({ siteDone: { ...(record.siteDone ?? {}), [clientId]: checked } });
+  };
+
+  const setGroupSiteDone = (g: ComprehensiveFilingGroup, checked: boolean) => {
+    const siteDone = { ...(record.siteDone ?? {}) };
+    for (const c of g.clients) siteDone[c.id] = checked;
+    patchRecord({ siteDone });
+  };
+
+  const groupSiteDoneState = (g: ComprehensiveFilingGroup) => {
+    const done = g.clients.filter(c => isSiteDone(c.id)).length;
+    if (done === 0) return { checked: false, indeterminate: false };
+    if (done === g.clients.length) return { checked: true, indeterminate: false };
+    return { checked: false, indeterminate: true };
+  };
+
+  const comprehensiveSiteTooltip = (g: ComprehensiveFilingGroup) =>
+    g.clients.map(c => c.companyName || '(상호 없음)').join('\n');
   const isManualExcluded = (id: string) =>
     Object.prototype.hasOwnProperty.call(record.excluded, id);
 
@@ -364,10 +638,38 @@ export default function FilingCheckPage() {
     [targets, record.excluded, tax, withheld],
   );
 
-  const receivedCount = activeTargets.filter(c => isReceived(c.id, c.businessNo)).length;
-  const targetCount = activeTargets.length;
-  const diff = targetCount - receivedCount;
-  const notReceived = activeTargets.filter(c => !isReceived(c.id, c.businessNo));
+  const isGroupReceived = (g: ComprehensiveFilingGroup) => isGroupFilingReceived(g);
+
+  const activeComprehensiveGroups = useMemo(
+    () => comprehensiveGroups.filter(g => excludeReasonOf(g.clients[0]) === null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [comprehensiveGroups, record.excluded, tax, withheld],
+  );
+  const excludedComprehensiveGroups = useMemo(
+    () => comprehensiveGroups.filter(g => excludeReasonOf(g.clients[0]) !== null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [comprehensiveGroups, record.excluded, tax, withheld],
+  );
+
+  const receivedCount =
+    tax === 'comprehensive'
+      ? activeComprehensiveGroups.filter(g => isGroupReceived(g)).length
+      : activeTargets.filter(c => isReceived(c.id, c.businessNo)).length;
+  const targetCount =
+    tax === 'comprehensive' ? activeComprehensiveGroups.length : activeTargets.length;
+  const diff =
+    tax === 'comprehensive'
+      ? activeComprehensiveGroups.length -
+        activeComprehensiveGroups.filter(g => isGroupReceived(g)).length
+      : targetCount - receivedCount;
+  const notReceived =
+    tax === 'comprehensive'
+      ? activeComprehensiveGroups.filter(g => !isGroupReceived(g))
+      : activeTargets.filter(c => !isReceived(c.id, c.businessNo));
+  const excludedTargetsForSummary =
+    tax === 'comprehensive'
+      ? excludedComprehensiveGroups.map(g => g.clients[0])
+      : excludedTargets;
 
   const toggleExclude = (id: string, on: boolean) => {
     const next = { ...record.excluded };
@@ -382,6 +684,33 @@ export default function FilingCheckPage() {
 
   const setRowNote = (id: string, note: string) => {
     patchRecord({ rowNotes: { ...record.rowNotes, [id]: note } });
+  };
+
+  const setClientFilingType = async (c: ClientRecord, value: '당월' | '전월') => {
+    if (isManualId(c.id) || locked) return;
+    const prevIntake = c.intakeData ?? {};
+    const nextIntake = { ...prevIntake, filingType: value };
+    setAllClients(prev =>
+      (prev ?? clients).map(x =>
+        x.id === c.id ? { ...x, intakeData: nextIntake } : x,
+      ),
+    );
+    patchPortalClient(c.id, { intakeData: nextIntake });
+    try {
+      const res = await fetch(`/api/clients/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intakeData: nextIntake }),
+      });
+      if (!res.ok) throw new Error('저장 실패');
+    } catch {
+      setAllClients(prev =>
+        (prev ?? clients).map(x =>
+          x.id === c.id ? { ...x, intakeData: prevIntake } : x,
+        ),
+      );
+      patchPortalClient(c.id, { intakeData: prevIntake });
+    }
   };
 
   // 업체 직접 추가
@@ -462,14 +791,17 @@ export default function FilingCheckPage() {
 
   const summary = useMemo(() => {
     const mgrLabel = selManager === ALL_MANAGERS ? '전체' : selManager;
+    const statTarget = isIncomeTypeTax ? incomeStats.target : targetCount;
+    const statReceived = isIncomeTypeTax ? incomeStats.received : receivedCount;
+    const statDiff = isIncomeTypeTax ? incomeStats.diff : diff;
     const lines = [
       `[신고대상확인] ${taxLabel} · ${periodLabel(tax, period)} · ${mgrLabel}`,
-      `· 신고대상: ${targetCount}곳`,
-      `· 접수완료: ${receivedCount}곳`,
-      `· 차이: ${diff}곳`,
+      `· 신고대상: ${statTarget}곳`,
+      `· 접수완료: ${statReceived}곳`,
+      `· 차이: ${statDiff}곳`,
     ];
     const note = record.diffReason.trim();
-    if (diff !== 0) {
+    if (statDiff !== 0) {
       lines.push(`· 차이 사유: ${note || '미기재'}`);
     } else if (note) {
       lines.push(`· 특이사항: ${note}`);
@@ -481,25 +813,48 @@ export default function FilingCheckPage() {
         lines.push(`  - ${s.name || s.bizNo} ${s.type} ${s.count}건${reason ? ` (${reason})` : ''}`);
       }
     }
-    if (excludedTargets.length > 0) {
-      lines.push(`· 신고제외 ${excludedTargets.length}곳`);
-      for (const c of excludedTargets) {
-        const r = (excludeReasonOf(c) ?? '').trim();
-        lines.push(`  - ${c.companyName || '(이름없음)'}${r ? ` (${r})` : ''}`);
+    if (!isIncomeTypeTax) {
+      if (excludedTargetsForSummary.length > 0) {
+        lines.push(`· 신고제외 ${excludedTargetsForSummary.length}곳`);
+        for (const c of excludedTargetsForSummary) {
+          const r = (excludeReasonOf(c) ?? '').trim();
+          lines.push(`  - ${c.companyName || c.representative || '(이름없음)'}${r ? ` (${r})` : ''}`);
+        }
+      }
+      const noteTargets = activeTargets.filter(c => (record.rowNotes[c.id] ?? '').trim());
+      if (noteTargets.length > 0) {
+        lines.push('· 신고 특이사항');
+        for (const c of noteTargets) {
+          lines.push(`  - ${c.companyName || '(이름없음)'}: ${record.rowNotes[c.id].trim()}`);
+        }
+      }
+      if (notReceived.length > 0) {
+        if (tax === 'comprehensive') {
+          lines.push(
+            `· 미접수: ${(notReceived as ComprehensiveFilingGroup[]).map(g => g.representative).join(', ')}`,
+          );
+        } else {
+          lines.push(
+            `· 미접수: ${(notReceived as ClientRecord[]).map(c => c.companyName || '(이름없음)').join(', ')}`,
+          );
+        }
+      }
+      if (extraCount > 0) {
+        lines.push(`· 접수목록 중 비대상: ${extraCount}건`);
       }
     }
-    const noteTargets = activeTargets.filter(c => (record.rowNotes[c.id] ?? '').trim());
-    if (noteTargets.length > 0) {
-      lines.push('· 신고 특이사항');
-      for (const c of noteTargets) {
-        lines.push(`  - ${c.companyName || '(이름없음)'}: ${record.rowNotes[c.id].trim()}`);
+    if (periodCompare) {
+      lines.push(
+        `· ${compareLabels.title}: ${periodCompare.prevCount}곳 → ${periodCompare.currCount}곳 (${periodCompare.diff >= 0 ? '+' : ''}${periodCompare.diff})`,
+      );
+      if (periodCompare.changedClients.length > 0) {
+        lines.push(`· ${compareLabels.prev}과 다른 업체`);
+        for (const c of periodCompare.changedClients) {
+          lines.push(
+            `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+          );
+        }
       }
-    }
-    if (notReceived.length > 0) {
-      lines.push(`· 미접수: ${notReceived.map(c => c.companyName || '(이름없음)').join(', ')}`);
-    }
-    if (extraCount > 0) {
-      lines.push(`· 접수목록 중 비대상: ${extraCount}건`);
     }
     return lines.join('\n');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -508,6 +863,8 @@ export default function FilingCheckPage() {
     tax,
     period,
     selManager,
+    incomeStats,
+    isIncomeTypeTax,
     targetCount,
     receivedCount,
     diff,
@@ -517,10 +874,12 @@ export default function FilingCheckPage() {
     record.excluded,
     record.rowNotes,
     activeTargets,
-    excludedTargets,
+    excludedTargetsForSummary,
     notReceived,
     extraCount,
     withheld,
+    periodCompare,
+    compareLabels,
   ]);
 
   const copySummary = async () => {
@@ -532,6 +891,80 @@ export default function FilingCheckPage() {
       /* ignore */
     }
   };
+
+  const mergeHometaxSpecialFilings = async (file: File) => {
+    const { bizNos, filings } = await parseHometaxFile(file);
+    const special = extractSpecialFilings(filings);
+    const keptReasons: Record<string, string> = {};
+    for (const s of special) {
+      const k = specialFilingKey(s.bizNo, s.type);
+      if (record.specialReasons[k]) keptReasons[k] = record.specialReasons[k];
+    }
+    patchRecord({
+      excelBizNos: bizNos,
+      specialFilings: special,
+      specialReasons: keptReasons,
+      fileName: file.name,
+    });
+  };
+
+  const completionFooter = (diffValue: number) => (
+    <>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        {locked ? (
+          <>
+            <button
+              type="button"
+              onClick={() => patchRecord({ done: false })}
+              className={portalBtnSecondary}
+            >
+              완료 취소
+            </button>
+            <span className="text-xs font-medium text-emerald-700">완료됨 — 수정하려면 완료 취소하세요</span>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => patchRecord({ done: true })} className={portalBtnPrimary}>
+              완료 처리
+            </button>
+            {diffValue !== 0 && !record.diffReason.trim() && (
+              <span className="text-xs text-rose-500">차이가 있어요. 사유를 적으면 요약에 함께 들어갑니다.</span>
+            )}
+          </>
+        )}
+      </div>
+
+      {record.done && (
+        <div className={`${portalCard} mt-4 p-4`}>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800">요약 (블루홀 공유용)</h2>
+            <button type="button" onClick={() => void copySummary()} className={portalBtnSecondary}>
+              {copied ? '복사됨 ✓' : '복사'}
+            </button>
+          </div>
+          <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700">
+            {summary}
+          </pre>
+        </div>
+      )}
+    </>
+  );
+
+  const sessionPanel = (
+    <FilingCheckSessionPanel
+      tax={tax}
+      locked={locked}
+      carriedFrom={carriedFrom}
+      compareLabel={compareLabels.title}
+      periodCompare={periodCompare}
+      comparePrevLabel={compareLabels.prev}
+      compareCurrLabel={compareLabels.curr}
+      record={record}
+      parseError={parseError}
+      onPatch={patchRecord}
+      onSetSpecialReason={setSpecialReason}
+    />
+  );
 
   // 안내문구 생성기와 동일하게 2025년부터 10년치
   const years = Array.from({ length: 10 }, (_, i) => 2025 + i);
@@ -545,7 +978,7 @@ export default function FilingCheckPage() {
       />
 
       {/* 세목 탭 — 균일 너비, 한 줄 고정 */}
-      <div className="mb-4 grid grid-cols-6 gap-2">
+      <div className="mb-4 grid grid-cols-7 gap-2">
         {FILING_TAXES.map(t => {
           const active = t.id === tax;
           return (
@@ -566,7 +999,8 @@ export default function FilingCheckPage() {
         })}
       </div>
 
-      {/* 담당자 선택 — 담당자별 신고리스트(수임처관리 담당 기준, 로그인과 무관) */}
+      {/* 담당자 선택 — 관리자(찰리)만 */}
+      {isMaster && (
       <div className={`${portalCard} mb-3 p-3`}>
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-semibold text-slate-500">담당자</span>
@@ -589,7 +1023,11 @@ export default function FilingCheckPage() {
           {[ALL_MANAGERS, ...managerOptions].map(name => {
             const active = selManager === name;
             const isAll = name === ALL_MANAGERS;
-            const count = isAll ? taxTargetsAll.length : (managerCounts.get(name) ?? 0);
+            const count = isAll
+              ? tax === 'comprehensive'
+                ? comprehensiveAllGroupsCount
+                : taxTargetsAll.length
+              : (managerCounts.get(name) ?? 0);
             const self = !isAll && name === currentUserName;
             return (
               <button
@@ -617,6 +1055,7 @@ export default function FilingCheckPage() {
           })}
         </div>
       </div>
+      )}
 
       {/* 기간 + 엑셀 업로드 */}
       <div className={`${portalCard} mb-4 flex flex-wrap items-center gap-3 p-4`}>
@@ -658,32 +1097,74 @@ export default function FilingCheckPage() {
             ))}
           </select>
         )}
+        {tax === 'simplePayroll' && employedFilingMonth && (
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+            근로 반기 신고월
+          </span>
+        )}
 
-        {savedTick && <span className="text-xs font-medium text-emerald-600">저장됨 ✓</span>}
+        {isIncomeTypeTax && incomeSavedTick && (
+          <span className="text-xs font-medium text-emerald-600">저장됨 ✓</span>
+        )}
+        {!isIncomeTypeTax && savedTick && (
+          <span className="text-xs font-medium text-emerald-600">저장됨 ✓</span>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
-          {record.fileName && (
+          {isIncomeTypeTax && (
+            <button
+              type="button"
+              onClick={() => void incomeSectionRef.current?.reload()}
+              className={portalBtnSecondary}
+            >
+              새로고침
+            </button>
+          )}
+          {!isIncomeTypeTax && record.fileName && (
             <span className="max-w-[12rem] truncate text-xs text-slate-500">{record.fileName}</span>
           )}
           <input
-            ref={fileRef}
+            ref={isIncomeTypeTax ? incomeFileRef : fileRef}
             type="file"
             accept=".xlsx,.xls,.csv"
             className="hidden"
-            onChange={e => void handleUpload(e.target.files?.[0])}
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              if (isIncomeTypeTax) {
+                setIncomeParsing(true);
+                setIncomeNotice('');
+                void mergeHometaxSpecialFilings(f)
+                  .then(() =>
+                    incomeSectionRef.current?.uploadHometax(f).then(() => {
+                      setIncomeSavedTick(true);
+                      window.setTimeout(() => setIncomeSavedTick(false), 1200);
+                    }),
+                  )
+                  .catch(() => {})
+                  .finally(() => {
+                    setIncomeParsing(false);
+                    if (incomeFileRef.current) incomeFileRef.current.value = '';
+                  });
+              } else {
+                void handleUpload(f);
+              }
+            }}
           />
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={parsing}
+            onClick={() => (isIncomeTypeTax ? incomeFileRef : fileRef).current?.click()}
+            disabled={(isIncomeTypeTax ? incomeParsing : parsing) || locked}
             className={portalBtnSecondary}
           >
-            {parsing ? '읽는 중…' : '홈택스 접수목록 업로드'}
+            {(isIncomeTypeTax ? incomeParsing : parsing) ? '읽는 중…' : '홈택스 접수목록 업로드'}
           </button>
-          {(excelSet.size > 0 ||
-            Object.keys(record.overrides).length > 0 ||
-            Object.keys(record.excluded).length > 0 ||
-            record.done) && (
+          {!isIncomeTypeTax &&
+            !locked &&
+            (excelSet.size > 0 ||
+              Object.keys(record.overrides).length > 0 ||
+              Object.keys(record.excluded).length > 0 ||
+              record.done) && (
             <button
               type="button"
               onClick={() => {
@@ -698,70 +1179,52 @@ export default function FilingCheckPage() {
         </div>
       </div>
 
-      {parseError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {parseError}
-        </div>
-      )}
-
-      {/* 특이사항(차이 사유) — 항상 상단에 표시, 다음 신고 때 자동 불러오기 */}
-      <div className="mb-4">
-        <div className="mb-1 flex flex-wrap items-center gap-2">
-          <label className="text-sm font-semibold text-slate-700">특이사항 · 차이 사유</label>
-          {carriedFrom && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              지난 신고({carriedFrom}) 특이사항 불러옴
-            </span>
+      {isIncomeTypeTax ? (
+        <>
+          {incomeNotice && (
+            <p className={`${portalAlertInfo} mb-4`}>{incomeNotice}</p>
           )}
-        </div>
-        <textarea
-          value={record.diffReason}
-          onChange={e => patchRecord({ diffReason: e.target.value })}
-          placeholder="예) 폐업 신고 예정 · 무실적 · 자료 미수취 등 — 다음 신고 때 자동으로 불러옵니다"
-          rows={2}
-          className="w-full rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-300/40"
-        />
-      </div>
-
-      {/* 자동 감지: 수정·기한후 신고 → 항목별 사유 기재 */}
-      {record.specialFilings.length > 0 && (
-        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/40 p-3">
-          <p className="mb-2 text-sm font-semibold text-rose-700">
-            수정·기한후·경정청구 신고 {record.specialFilings.length}건 — 사유를 적으면 요약에 함께
-            들어갑니다.
-          </p>
-          <div className="space-y-1.5">
-            {record.specialFilings.map(s => {
-              const k = specialFilingKey(s.bizNo, s.type);
-              return (
-                <div key={k} className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex min-w-[14rem] items-center gap-1.5 text-sm text-slate-700">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        s.type === '기한후신고'
-                          ? 'bg-rose-100 text-rose-700'
-                          : s.type === '수정신고'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-sky-100 text-sky-700'
-                      }`}
-                    >
-                      {s.type}
-                    </span>
-                    <span className="font-semibold text-slate-800">{s.name || s.bizNo}</span>
-                    <span className="tabular-nums text-slate-500">{s.count}건</span>
-                  </span>
-                  <input
-                    value={record.specialReasons[k] ?? ''}
-                    onChange={e => setSpecialReason(k, e.target.value)}
-                    placeholder="사유 (예: 매출 누락 보완, 자료 지연 등)"
-                    className="min-w-0 flex-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-300/40"
-                  />
-                </div>
-              );
-            })}
+          {sessionPanel}
+          <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
+            <StatCard
+              label="신고대상"
+              value={incomeStats.target}
+              tone="border-blue-100 bg-blue-50/60 text-blue-800"
+            />
+            <StatCard
+              label="접수완료"
+              value={incomeStats.received}
+              tone="border-emerald-100 bg-emerald-50/60 text-emerald-800"
+            />
+            <StatCard
+              label="차이"
+              value={incomeStats.diff}
+              tone={
+                incomeStats.diff === 0
+                  ? 'border-slate-100 bg-slate-50 text-slate-600'
+                  : 'border-rose-100 bg-rose-50/60 text-rose-700'
+              }
+            />
           </div>
-        </div>
-      )}
+          <IncomeTypeFilingSection
+            ref={incomeSectionRef}
+            mode={tax === 'simplePayroll' ? 'simplePayroll' : 'yearEnd'}
+            manager={selManager}
+            year={period.year}
+            month={period.month}
+            onYearChange={y => setPeriod(p => ({ ...p, year: y }))}
+            onMonthChange={m => setPeriod(p => ({ ...p, month: m }))}
+            embedded
+            locked={locked}
+            onStatsChange={setIncomeStats}
+            onUploadNotice={setIncomeNotice}
+            onEmployedFilingMonth={setEmployedFilingMonth}
+          />
+          {completionFooter(incomeStats.diff)}
+        </>
+      ) : (
+        <>
+      {sessionPanel}
 
       {/* 현황 */}
       <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
@@ -781,22 +1244,8 @@ export default function FilingCheckPage() {
         </p>
       )}
 
-      {tax === 'yearEnd' && (
-        <p
-          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-            withheld.bizNos.size === 0 && withheld.ids.size === 0
-              ? 'border-amber-200 bg-amber-50 text-amber-800'
-              : 'border-slate-200 bg-slate-50 text-slate-600'
-          }`}
-        >
-          {period.year}년 중 원천세 신고이력(접수)이 있는 업체만 연말정산 대상으로 표시됩니다.
-          {withheld.bizNos.size === 0 && withheld.ids.size === 0
-            ? ' 해당 연도 원천세 신고 기록이 없어 전부 “원천세 신고내역 없음”으로 제외됩니다. 먼저 원천세 신고대상확인을 진행해 주세요.'
-            : ' 이력이 없는 업체는 “원천세 신고내역 없음”으로 제외 처리됩니다.'}
-        </p>
-      )}
-
       {/* 업체 직접 추가 */}
+      {!locked && (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -846,9 +1295,219 @@ export default function FilingCheckPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* 대상 목록 */}
       <div className={`${portalCard} overflow-hidden`}>
+        {tax === 'comprehensive' ? (
+        <table className="w-full table-fixed text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">접수</th>
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
+              <th className="w-20 whitespace-nowrap px-2 py-2 text-left font-semibold">코드</th>
+              <th className="w-28 whitespace-nowrap px-2 py-2 text-left font-semibold">대표자명</th>
+              <th className="w-32 whitespace-nowrap px-2 py-2 text-left font-semibold">주민등록번호</th>
+              <th className="w-48 whitespace-nowrap px-2 py-2 text-left font-semibold">상호</th>
+              <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">특이사항(제외사유 등)</th>
+              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">제외</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comprehensiveGroups.length === 0 && record.extraClients.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-3 py-10 text-center text-slate-400">
+                  {taxLabel} 신고대상 수임처가 없습니다.
+                </td>
+              </tr>
+            ) : (
+              <>
+                {comprehensiveGroups.map((g, i) => {
+                  const primary = g.clients[0];
+                  const manualExcluded = isManualExcluded(g.primaryClientId);
+                  const reason = excludeReasonOf(primary);
+                  const excluded = reason !== null;
+                  const received = !excluded && isGroupFilingReceived(g);
+                  const siteState = groupSiteDoneState(g);
+                  const restCount = g.clients.length - 1;
+                  const siteLabel = g.displayCompanyLabel;
+                  return (
+                    <tr
+                      key={g.groupKey}
+                      className={`border-b border-slate-50 ${
+                        excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
+                      }`}
+                    >
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={received}
+                          disabled={excluded || locked}
+                          onChange={e => setGroupFilingReceived(g, e.target.checked)}
+                          className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
+                          title="홈택스 접수목록(엑셀) 대조"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{i + 1}</td>
+                      <td className="px-2 py-2 tabular-nums text-slate-500">{g.douzoneCode || '-'}</td>
+                      <td className="px-2 py-2 font-semibold text-slate-800">{g.representative}</td>
+                      <td className="whitespace-nowrap px-2 py-2 tabular-nums text-slate-600">
+                        {formatResidentNoDisplay(g.residentNo)}
+                      </td>
+                      <td className="max-w-0 px-2 py-2">
+                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                          <ComprehensiveGroupReceiveCheckbox
+                            checked={siteState.checked}
+                            indeterminate={siteState.indeterminate}
+                            disabled={excluded || locked}
+                            onChange={checked => setGroupSiteDone(g, checked)}
+                          />
+                          <TruncateWithTooltip
+                            text={siteLabel}
+                            title={comprehensiveSiteTooltip(g)}
+                            className={
+                              excluded
+                                ? 'font-medium text-slate-400 line-through'
+                                : siteState.checked
+                                  ? 'font-medium text-emerald-700'
+                                  : 'font-medium text-slate-800'
+                            }
+                          />
+                          {restCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setComprehensiveDetail(g)}
+                              disabled={excluded}
+                              className="shrink-0 text-xs font-semibold text-blue-600 hover:underline disabled:cursor-default disabled:opacity-50"
+                              title={comprehensiveSiteTooltip(g)}
+                            >
+                              외 {restCount}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          value={
+                            manualExcluded
+                              ? (record.excluded[g.primaryClientId] ?? '')
+                              : (record.rowNotes[g.primaryClientId] ?? '')
+                          }
+                          onChange={e =>
+                            manualExcluded
+                              ? setExcludeReason(g.primaryClientId, e.target.value)
+                              : setRowNote(g.primaryClientId, e.target.value)
+                          }
+                          readOnly={locked}
+                          placeholder={manualExcluded ? '제외 사유 (예: 폐업·무실적)' : '신고 특이사항'}
+                          className={`w-full rounded-lg border bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none ${
+                            locked ? 'cursor-default opacity-80' : ''
+                          } ${
+                            manualExcluded
+                              ? 'border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40'
+                              : 'border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
+                          }`}
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={excluded}
+                          disabled={locked}
+                          onChange={e => toggleExclude(g.primaryClientId, e.target.checked)}
+                          className="h-4 w-4 accent-slate-400 disabled:opacity-40"
+                          title="신고목록에서 제외"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {record.extraClients.map((m, mi) => {
+                  const c = manualToClient(m);
+                  const manualExcluded = isManualExcluded(c.id);
+                  const reason = excludeReasonOf(c);
+                  const excluded = reason !== null;
+                  const received = !excluded && isReceived(c.id, c.businessNo);
+                  const rowNo = comprehensiveGroups.length + mi + 1;
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`border-b border-slate-50 ${
+                        excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
+                      }`}
+                    >
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={received}
+                          disabled={excluded || locked}
+                          onChange={e =>
+                            patchRecord({
+                              overrides: { ...record.overrides, [c.id]: e.target.checked },
+                            })
+                          }
+                          className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{rowNo}</td>
+                      <td className="px-2 py-2 tabular-nums text-slate-500">-</td>
+                      <td className="px-2 py-2 font-semibold text-slate-800">{c.representative || c.companyName}</td>
+                      <td className="whitespace-nowrap px-2 py-2 tabular-nums text-slate-600">
+                        {formatResidentNoDisplay(c.residentNo)}
+                      </td>
+                      <td className="max-w-0 px-2 py-2">
+                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={isSiteDone(c.id)}
+                            disabled={excluded || locked}
+                            onChange={e => setSiteDone(c.id, e.target.checked)}
+                            className="h-3.5 w-3.5 shrink-0 accent-emerald-500 disabled:opacity-30"
+                          />
+                          <TruncateWithTooltip
+                            text={c.companyName || '(이름 없음)'}
+                            className={
+                              excluded
+                                ? 'text-slate-400 line-through'
+                                : isSiteDone(c.id)
+                                  ? 'text-emerald-700'
+                                  : 'text-slate-800'
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          value={manualExcluded ? (record.excluded[c.id] ?? '') : (record.rowNotes[c.id] ?? '')}
+                          onChange={e =>
+                            manualExcluded
+                              ? setExcludeReason(c.id, e.target.value)
+                              : setRowNote(c.id, e.target.value)
+                          }
+                          readOnly={locked}
+                          placeholder={manualExcluded ? '제외 사유' : '신고 특이사항'}
+                          className={`w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none ${
+                            locked ? 'cursor-default opacity-80' : 'focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
+                          }`}
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={excluded}
+                          disabled={locked}
+                          onChange={e => toggleExclude(c.id, e.target.checked)}
+                          className="h-4 w-4 accent-slate-400"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </>
+            )}
+          </tbody>
+        </table>
+        ) : (
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
@@ -857,6 +1516,9 @@ export default function FilingCheckPage() {
               <th className="w-20 whitespace-nowrap px-2 py-2 text-left font-semibold">코드</th>
               <th className="w-64 whitespace-nowrap px-2 py-2 text-left font-semibold">업체명</th>
               <th className="w-32 whitespace-nowrap px-2 py-2 text-left font-semibold">사업자번호</th>
+              {tax === 'withholding' && (
+                <th className="w-28 whitespace-nowrap px-2 py-2 text-center font-semibold">신고유형</th>
+              )}
               <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">특이사항(제외사유 등)</th>
               <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">제외</th>
             </tr>
@@ -864,7 +1526,7 @@ export default function FilingCheckPage() {
           <tbody>
             {targets.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={tax === 'withholding' ? 8 : 7} className="px-3 py-10 text-center text-slate-400">
                   {taxLabel} 신고대상 수임처가 없습니다.
                 </td>
               </tr>
@@ -886,7 +1548,7 @@ export default function FilingCheckPage() {
                       <input
                         type="checkbox"
                         checked={received}
-                        disabled={excluded}
+                        disabled={excluded || locked}
                         onChange={e =>
                           patchRecord({
                             overrides: { ...record.overrides, [c.id]: e.target.checked },
@@ -908,16 +1570,18 @@ export default function FilingCheckPage() {
                             {c.companyName || '(이름 없음)'}
                           </span>
                         ) : (
-                          <Link
-                            href={`/clients/${c.id}`}
-                            className={`break-words font-semibold hover:underline ${
+                          <button
+                            type="button"
+                            onClick={() => setIncomePanelClient(c)}
+                            className={`break-words text-left font-semibold hover:underline ${
                               excluded
                                 ? 'text-slate-400 line-through decoration-slate-400'
                                 : 'text-slate-800 hover:text-blue-600'
                             }`}
+                            title="클릭 — 간이지급·연말정산지급명세서 신고대상 설정"
                           >
                             {c.companyName || '(이름 없음)'}
-                          </Link>
+                          </button>
                         )}
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
@@ -927,7 +1591,7 @@ export default function FilingCheckPage() {
                             합계표제출
                           </span>
                         )}
-                        {isManualId(c.id) && (
+                        {isManualId(c.id) && !locked && (
                           <>
                             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
                               직접추가
@@ -942,9 +1606,46 @@ export default function FilingCheckPage() {
                             </button>
                           </>
                         )}
+                        {isManualId(c.id) && locked && (
+                          <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                            직접추가
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-2 py-2 tabular-nums text-slate-600">{c.businessNo || '-'}</td>
+                    {tax === 'withholding' && (
+                      <td className="px-2 py-2 text-center">
+                        {isManualId(c.id) ? (
+                          <span className="text-xs text-slate-300">—</span>
+                        ) : (
+                          <div
+                            className={`inline-flex rounded-lg border p-0.5 text-[11px] font-bold ${
+                              locked ? 'opacity-60' : ''
+                            } border-slate-200 bg-slate-50`}
+                          >
+                            {(['당월', '전월'] as const).map(opt => {
+                              const active = readFilingType(c.intakeData) === opt;
+                              return (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  disabled={locked}
+                                  onClick={() => void setClientFilingType(c, opt)}
+                                  className={`rounded-md px-2 py-0.5 transition-colors ${
+                                    active
+                                      ? 'bg-blue-600 text-white shadow-sm'
+                                      : 'text-slate-500 hover:text-slate-800'
+                                  } disabled:cursor-default`}
+                                >
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                    )}
                     <td className="px-2 py-2">
                       {autoExcluded ? (
                         <span className="inline-block truncate text-xs font-medium text-slate-400">
@@ -958,8 +1659,11 @@ export default function FilingCheckPage() {
                               ? setExcludeReason(c.id, e.target.value)
                               : setRowNote(c.id, e.target.value)
                           }
+                          readOnly={locked}
                           placeholder={manualExcluded ? '제외 사유 (예: 폐업·무실적)' : '신고 특이사항'}
                           className={`w-full rounded-lg border bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none ${
+                            locked ? 'cursor-default opacity-80' : ''
+                          } ${
                             manualExcluded
                               ? 'border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40'
                               : 'border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
@@ -971,7 +1675,7 @@ export default function FilingCheckPage() {
                       <input
                         type="checkbox"
                         checked={excluded}
-                        disabled={autoExcluded}
+                        disabled={autoExcluded || locked}
                         onChange={e => toggleExclude(c.id, e.target.checked)}
                         className="h-4 w-4 accent-slate-400 disabled:opacity-40"
                         title={autoExcluded ? '원천세 신고내역이 없어 자동 제외' : '신고목록에서 제외'}
@@ -983,30 +1687,95 @@ export default function FilingCheckPage() {
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* 완료 처리 → 요약 */}
-      <div className="mt-5 flex items-center gap-3">
-        <button type="button" onClick={() => patchRecord({ done: true })} className={portalBtnPrimary}>
-          완료 처리
-        </button>
-        {diff !== 0 && !record.diffReason.trim() && (
-          <span className="text-xs text-rose-500">차이가 있어요. 사유를 적으면 요약에 함께 들어갑니다.</span>
         )}
       </div>
 
-      {record.done && (
-        <div className={`${portalCard} mt-4 p-4`}>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800">요약 (블루홀 공유용)</h2>
-            <button type="button" onClick={() => void copySummary()} className={portalBtnSecondary}>
-              {copied ? '복사됨 ✓' : '복사'}
-            </button>
+      {completionFooter(diff)}
+        </>
+      )}
+
+      {comprehensiveDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setComprehensiveDetail(null)}
+        >
+          <div
+            className={`${portalCard} max-h-[80vh] w-full max-w-md overflow-auto p-5`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">{comprehensiveDetail.representative}</h3>
+                <p className="mt-0.5 text-xs text-slate-500 tabular-nums">
+                  {formatResidentNoDisplay(comprehensiveDetail.residentNo)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setComprehensiveDetail(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">
+              소속 사업장 {comprehensiveDetail.clients.length}곳 — 사업장별 작업 완료
+            </p>
+            <ul className="space-y-2">
+              {comprehensiveDetail.clients.map(c => {
+                const done = isSiteDone(c.id);
+                const name = c.companyName || '(상호 없음)';
+                return (
+                  <li
+                    key={c.id}
+                    className={`rounded-lg border px-3 py-2 text-sm ${
+                      done
+                        ? 'border-emerald-200 bg-emerald-50/60 text-emerald-800'
+                        : 'border-slate-100 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <label className="flex min-w-0 cursor-pointer items-center gap-2 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        disabled={locked}
+                        onChange={e => setSiteDone(c.id, e.target.checked)}
+                        className="h-4 w-4 shrink-0 accent-emerald-500 disabled:opacity-30"
+                      />
+                      <TruncateWithTooltip text={name} className="min-w-0 flex-1 font-medium" />
+                      {c.businessNo && (
+                        <span className="shrink-0 text-xs text-slate-400 tabular-nums">{c.businessNo}</span>
+                      )}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            {comprehensiveDetail.clients.every(c => isSiteDone(c.id)) && (
+              <p className="mt-3 text-center text-xs font-medium text-emerald-600">
+                모든 사업장 작업 완료
+              </p>
+            )}
           </div>
-          <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700">
-            {summary}
-          </pre>
         </div>
+      )}
+
+      {incomePanelClient && (
+        <ClientFilingSettingsModal
+          clientId={incomePanelClient.id}
+          companyName={incomePanelClient.companyName || '(이름 없음)'}
+          canEdit={!locked}
+          onClose={() => setIncomePanelClient(null)}
+          onSaved={() => {
+            const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+            fetch(url, { cache: 'no-store' })
+              .then(r => (r.ok ? r.json() : null))
+              .then(d => {
+                if (d?.clients) setAllClients(d.clients as ClientRecord[]);
+              })
+              .catch(() => {});
+          }}
+        />
       )}
     </PortalPageShell>
   );

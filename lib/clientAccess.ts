@@ -3,8 +3,6 @@ import { clients } from '@/db/schema';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import type { SessionUser } from '@/lib/session';
 
-// 관리자 로그인 계정(찰리) — lib/auth의 PORTAL_ADMIN_LOGIN_ID와 동일.
-// auth.ts는 next/headers를 불러오므로 여기서는 import 대신 상수만 둔다.
 const ADMIN_LOGIN_ID = 'charlie';
 
 export type ClientAccessFields = {
@@ -12,10 +10,12 @@ export type ClientAccessFields = {
   manager?: string | null;
 };
 
+export function isMasterUser(user: SessionUser): boolean {
+  return user.role === 'admin' || user.loginId === ADMIN_LOGIN_ID;
+}
+
 export function canAccessClient(user: SessionUser, client: ClientAccessFields): boolean {
-  if (user.role === 'admin') return true;
-  // 찰리(관리자 로그인 계정)는 DB role과 무관하게 전체 수정 가능
-  if (user.loginId === ADMIN_LOGIN_ID) return true;
+  if (isMasterUser(user)) return true;
   if (client.assignedUserId === user.id) return true;
   const matchNames = getManagerMatchNames(user.name);
   return matchNames.some(name => name === (client.manager ?? ''));

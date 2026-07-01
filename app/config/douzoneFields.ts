@@ -7,6 +7,7 @@ export const DOUZONE_FIELD_LABELS: Record<string, string> = {
   address: '주소',
   industry: '업태',
   item: '종목',
+  industryCode: '업종코드',
   openAge: '개업당시만나이',
   gender: '성별',
   openDate: '개업일',
@@ -24,7 +25,6 @@ export const DOUZONE_FIELD_LABELS: Record<string, string> = {
   taxOfficeContact: '세무서담당',
   taxOfficePhone: '세무서담당연락처',
   clientContact: '수임처담당',
-  payrollHistory: '근로내역',
   relatedCompanies: '관계회사명',
   statusLabel: '상태',
 };
@@ -47,6 +47,7 @@ export const DOUZONE_TAX_FLAG_LABELS: Record<string, string> = {
   bizIncome: '사업',
   interestDividend: '이자배당',
   otherTax: '기타',
+  laborContentReport: '근로내용확인신고',
   proxyPay: '대납',
 };
 

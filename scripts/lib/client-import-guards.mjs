@@ -25,9 +25,12 @@ export function isManagerNameOnlyRow(row) {
   const companyName = String(row.companyName ?? '').trim();
   const representative = String(row.representative ?? '').trim();
   const businessNo = normBizNo(row.businessNo);
+  const douzoneCode = String(row.code ?? row.intakeData?.douzoneCode ?? '').trim();
 
   if (!companyName) return false;
   if (businessNo.length >= 10) return false;
+  // 세무사랑 코드 있으면 신고대리·개인명만 등록도 반영
+  if (douzoneCode) return false;
   if (PLACEHOLDER_NAMES.test(companyName)) return true;
 
   // 대표자 없으면 상호만으로 개인명 판별하지 않음 (구글시트 수임처관리 등)

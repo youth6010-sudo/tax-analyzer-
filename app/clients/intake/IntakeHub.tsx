@@ -27,7 +27,9 @@ import {
   getPortalInquiries,
   getPortalProcesses,
   hydratePortal,
+  patchPortalProcess,
   prefetchPortal,
+  refreshPortalBootstrap,
   subscribePortal,
 } from '@/app/utils/portalStore';
 
@@ -268,6 +270,11 @@ export default function IntakeHub() {
     setProcesses(prev => [row, ...prev]);
   }, []);
 
+  const syncChecklistToPortal = useCallback((row: ProcessRow) => {
+    patchPortalProcess(row.id, row as unknown as Record<string, unknown>);
+    void refreshPortalBootstrap();
+  }, []);
+
   const toggleCheck = useCallback(async (process: ProcessRow, key: string) => {
     const prevChecklist = { ...process.checklist };
     const next = { ...process.checklist, [key]: !process.checklist?.[key] };
@@ -281,11 +288,13 @@ export default function IntakeHub() {
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
-      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+      const saved = normalizeProcess(data.process as Record<string, unknown>);
+      onProcessUpdated(saved);
+      syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
     }
-  }, [onProcessUpdated]);
+  }, [onProcessUpdated, syncChecklistToPortal]);
 
   const hideChecklistItem = useCallback(async (process: ProcessRow, key: string) => {
     const prevChecklist = { ...process.checklist };
@@ -304,11 +313,13 @@ export default function IntakeHub() {
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
-      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+      const saved = normalizeProcess(data.process as Record<string, unknown>);
+      onProcessUpdated(saved);
+      syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
     }
-  }, [onProcessUpdated]);
+  }, [onProcessUpdated, syncChecklistToPortal]);
 
   const restoreChecklist = useCallback(async (process: ProcessRow) => {
     const prevChecklist = { ...process.checklist };
@@ -323,11 +334,13 @@ export default function IntakeHub() {
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
-      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+      const saved = normalizeProcess(data.process as Record<string, unknown>);
+      onProcessUpdated(saved);
+      syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
     }
-  }, [onProcessUpdated]);
+  }, [onProcessUpdated, syncChecklistToPortal]);
 
   const syncBlueholeCheck = useCallback(async (process: ProcessRow) => {
     if (process.checklist?.blueholeClient) return;
@@ -343,11 +356,13 @@ export default function IntakeHub() {
       });
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
-      onProcessUpdated(normalizeProcess(data.process as Record<string, unknown>));
+      const saved = normalizeProcess(data.process as Record<string, unknown>);
+      onProcessUpdated(saved);
+      syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
     }
-  }, [onProcessUpdated]);
+  }, [onProcessUpdated, syncChecklistToPortal]);
 
   const registerClient = useCallback(async (inquiryId: string, processId: string | null): Promise<string | null> => {
     const res = await fetch('/api/intake/register-client', {

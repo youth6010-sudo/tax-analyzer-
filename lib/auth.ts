@@ -5,8 +5,13 @@ import { getSessionOptions } from './session';
 
 export const PORTAL_ADMIN_LOGIN_ID = 'charlie';
 
+/** 마스터 권한 — 전체 수임처 조회·관리 (찰리 또는 admin 역할) */
+export function isMasterUser(user: { role?: 'staff' | 'admin'; loginId?: string }) {
+  return user.role === 'admin' || user.loginId === PORTAL_ADMIN_LOGIN_ID;
+}
+
 export function isPortalAdmin(user: { role?: 'staff' | 'admin'; loginId?: string }) {
-  return user.role === 'admin';
+  return isMasterUser(user);
 }
 
 export async function getServerSession() {

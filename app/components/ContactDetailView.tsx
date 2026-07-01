@@ -38,6 +38,10 @@ interface ContactDetailViewProps {
   primaryContactName?: string;
   /** 담당자/관리자만 수정 가능. false면 조회 전용 */
   canEdit?: boolean;
+  /** 상세 페이지 통합 레이아웃용 — 카드·중복 여백 제거 */
+  variant?: 'card' | 'flat';
+  /** flat 모드에서 상호 옆에 배치 (연락처 등) */
+  titleAside?: React.ReactNode;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -62,7 +66,18 @@ function displayValue(value: string): string {
   return s || '-';
 }
 
-function CategorySection({ title, children }: { title: string; children: React.ReactNode }) {
+function CategorySection({
+  title,
+  children,
+  compact,
+}: {
+  title: string;
+  children: React.ReactNode;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return <div className="mt-2">{children}</div>;
+  }
   return (
     <div className="mt-3">
       <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-2">{title}</p>
@@ -71,7 +86,13 @@ function CategorySection({ title, children }: { title: string; children: React.R
   );
 }
 
-export default function ContactDetailView({ contact: initial, primaryContactName, canEdit = true }: ContactDetailViewProps) {
+export default function ContactDetailView({
+  contact: initial,
+  primaryContactName,
+  canEdit = true,
+  variant = 'card',
+  titleAside,
+}: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -173,10 +194,28 @@ export default function ContactDetailView({ contact: initial, primaryContactName
     f => f.key !== 'companyName',
   );
 
+  const flat = variant === 'flat';
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <BackButton />
+    <div className={flat ? '' : 'space-y-4'}>
+      <div className={`flex items-center justify-between gap-3 ${flat ? 'px-4 pt-3' : ''}`}>
+        <div className="flex min-w-0 items-center gap-2">
+          <BackButton />
+          {flat && (editing ? form.businessEntityType : contact.businessEntityType) && (
+            <span
+              className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${
+                (editing ? form.businessEntityType : contact.businessEntityType) === 'corporate'
+                  ? 'bg-indigo-100 text-indigo-800'
+                  : (editing ? form.businessEntityType : contact.businessEntityType) === 'individual'
+                    ? 'bg-teal-100 text-teal-800'
+                    : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {BUSINESS_ENTITY_LABEL[(editing ? form.businessEntityType : contact.businessEntityType) as BusinessEntityType]}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
         {!canEdit ? null : !editing ? (
           <div className="flex gap-2">
             <button
@@ -216,26 +255,44 @@ export default function ContactDetailView({ contact: initial, primaryContactName
             </button>
           </div>
         )}
+        </div>
       </div>
 
-      {error && <div className={portalAlertError}>{error}</div>}
+      {error && <div className={`${portalAlertError} ${flat ? 'mx-4' : ''}`}>{error}</div>}
 
-      <article className={`${portalCard} overflow-hidden`}>
-        <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">거래처</p>
+      <article className={flat ? '' : `${portalCard} overflow-hidden`}>
+        <div className={`${flat ? 'border-b border-slate-200 px-4 py-3' : 'px-5 py-4 bg-slate-50 border-b border-slate-100'}`}>
+          {!flat && <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">거래처</p>}
+          <div className={`${flat ? 'flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5' : ''}`}>
+            <div className={flat ? 'min-w-0 shrink-0 sm:max-w-[38%]' : ''}>
           {editing ? (
             <input
               type="text"
               value={form.companyName}
               onChange={e => updateField('companyName', e.target.value)}
-              className={`${portalInput} w-full text-lg font-bold`}
+              className={`${portalInput} w-full ${flat ? 'text-lg font-bold' : 'text-lg font-bold'}`}
               placeholder="업체명(상호)"
             />
           ) : (
-            <h1 className="text-2xl font-bold text-slate-900 leading-snug">{contact.companyName}</h1>
+            <h1 className={`font-bold text-slate-900 leading-snug ${flat ? 'text-lg' : 'text-2xl'}`}>{contact.companyName}</h1>
             )}
 
-            <CategorySection title="기업구분">
+            {flat && !editing ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {contact.serviceTypes.map(t => (
+                  <span key={t} className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    {SERVICE_TYPE_LABEL[t]}
+                  </span>
+                ))}
+                {contact.taxTypes.map(t => (
+                  <span key={t} className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                    {TAX_LABEL[t] ?? t}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <>
+            <CategorySection title="기업구분" compact={flat}>
               {editing ? (
                 <div className="flex flex-wrap gap-2">
                   {BUSINESS_ENTITY_TYPES.map(t => {
@@ -274,7 +331,7 @@ export default function ContactDetailView({ contact: initial, primaryContactName
               )}
             </CategorySection>
 
-            <CategorySection title="서비스 유형">
+            <CategorySection title="서비스 유형" compact={flat}>
               {editing ? (
                 <div className="flex flex-wrap gap-2">
                   {SERVICE_TYPES.map(t => {
@@ -314,7 +371,7 @@ export default function ContactDetailView({ contact: initial, primaryContactName
               )}
             </CategorySection>
 
-            <CategorySection title="세목">
+            <CategorySection title="세목" compact={flat}>
               {editing ? (
                 <div className="flex flex-wrap gap-2">
                   {TAX_TYPES.map(t => {
@@ -353,21 +410,30 @@ export default function ContactDetailView({ contact: initial, primaryContactName
                 </div>
               )}
             </CategorySection>
+              </>
+            )}
+            </div>
+            {flat && titleAside && (
+              <div className="min-w-0 flex-1 sm:border-l sm:border-slate-100 sm:pl-5">
+                {titleAside}
+              </div>
+            )}
+          </div>
           </div>
 
-          <div className="p-5 grid gap-3 sm:grid-cols-2">
+          <div className={flat ? 'px-4 py-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3' : 'p-5 grid gap-3 sm:grid-cols-2'}>
             {viewFields.map(({ key, label, mono }) => (
-              <div key={key} className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3">
-                <p className="text-xs font-medium text-slate-400 mb-1">{label}</p>
+              <div key={key} className={flat ? 'min-w-0' : 'rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3'}>
+                <p className={`font-medium text-slate-400 ${flat ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</p>
                 {editing ? (
                   <input
                     type="text"
                     value={form[key] as string}
                     onChange={e => updateField(key, e.target.value)}
-                    className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''}`}
+                    className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''} ${flat ? '!py-1 !text-xs' : ''}`}
                   />
                 ) : (
-                  <p className={`text-sm font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''}`}>
+                  <p className={`font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''} ${flat ? 'text-xs' : 'text-sm'}`}>
                     {key === 'phone'
                       ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
                       : key === 'businessNo' || key === 'corporateNo' || key === 'residentNo'

@@ -16,11 +16,14 @@ export default function HomeTasksPanel() {
 
   useEffect(() => {
     void prefetchPortal();
+    const onFocus = () => void prefetchPortal(true);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
-      <h2 className="text-sm font-bold text-amber-950">내 할 일</h2>
+      <h2 className="text-sm font-bold text-amber-950">Tp Do List</h2>
       <p className="text-xs text-amber-900/80 mt-1">미완료 상담·유입 프로세스</p>
       {tasks.length === 0 ? (
         <p className="mt-4 text-sm text-amber-900/70 text-center py-5">할 일 없음</p>

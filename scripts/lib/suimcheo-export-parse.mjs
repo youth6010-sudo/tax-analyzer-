@@ -193,7 +193,7 @@ export function parseSuimcheoExportRows(rows) {
       phone: contact.phone,
       fax: cell(row, col.fax),
       corporateNo: entityType === 'corporate' ? idNo : '',
-      residentNo: entityType === 'individual' ? idNo : '',
+      residentNo: entityType === 'individual' || entityType === 'nonBusiness' ? idNo : '',
       taxTypes: [],
       program: cell(row, col.program),
       converted: Boolean(convertedDate),

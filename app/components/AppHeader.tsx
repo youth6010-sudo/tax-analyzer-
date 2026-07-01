@@ -12,13 +12,12 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
       ].join(' ')}
     >
       <PortalPrefetch />
-      <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div className="flex items-center gap-3">
-          <TaxMenuButton />
-          <div className="flex-1 min-w-0" aria-hidden="true" />
-          <ContactHeaderSearch />
-          <AppHeaderUser />
+      <div className="mx-auto flex max-w-[1680px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <TaxMenuButton />
+        <div className="flex min-w-0 flex-1 justify-center px-2 sm:px-6">
+          <ContactHeaderSearch expanded />
         </div>
+        <AppHeaderUser />
       </div>
     </header>
   );

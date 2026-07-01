@@ -26,7 +26,7 @@ export type PortalBootstrap = {
   churnMissingClients: ClientRecord[];
 };
 
-const STORAGE_KEY = 'portalBootstrap:v7';
+const STORAGE_KEY = 'portalBootstrap:v8';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
@@ -181,6 +181,25 @@ export function patchPortalClient(id: string, patch: Partial<ClientRecord>): voi
   memory = { ...memory, clients, fetchedAt: Date.now() };
   writeStorage(memory);
   notify();
+}
+
+/** 유입 프로세스 체크리스트 등 — bootstrap 캐시의 processes·tasks 갱신 */
+export function patchPortalProcess(id: string, process: Record<string, unknown>): void {
+  if (!memory) return;
+  const processes = memory.processes ?? [];
+  const idx = processes.findIndex(p => String(p.id) === id);
+  const next =
+    idx >= 0
+      ? processes.map((p, i) => (i === idx ? { ...p, ...process } : p))
+      : [process, ...processes];
+  memory = { ...memory, processes: next, fetchedAt: Date.now() };
+  writeStorage(memory);
+  notify();
+}
+
+/** 체크리스트·수임처 수정 후 할 일 목록을 서버와 맞춤 */
+export function refreshPortalBootstrap(): Promise<PortalBootstrap | null> {
+  return prefetchPortal(true);
 }
 
 /** bootstrap TTL 내 prefetch가 패치를 덮지 않도록 fetchedAt 갱신 */

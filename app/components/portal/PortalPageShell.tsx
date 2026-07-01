@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import AppHeader from '@/app/components/AppHeader';
+import PortalShellLayout from '@/app/components/dashboard/PortalShellLayout';
 import {
   portalH1,
   portalMain,
@@ -16,9 +16,13 @@ type Props = {
   className?: string;
   /** max-w-3xl — 수임처 상세 등 */
   narrow?: boolean;
-  /** AppHeader 아래 커스텀 레이아웃 (홈 사이드바 등) */
+  /** 좌·우 패딩 없이 본문만 (3열 셸은 유지) */
   bare?: boolean;
-  /** false면 상단 메뉴·검색이 스크롤 시 함께 올라감 */
+  /** 3열 셸 없이 전체 화면 (로그인 등) */
+  noChrome?: boolean;
+  /** @deprecated shellLayout — 기본이 3열 셸 */
+  shellLayout?: boolean;
+  /** false면 상단 메뉴·검색이 스크롤 시 함께 올라감 — 레거시 */
   staticHeader?: boolean;
 };
 
@@ -27,18 +31,23 @@ export default function PortalPageShell({
   className = '',
   narrow,
   bare,
-  staticHeader,
+  noChrome,
 }: Props) {
   const mainClass = narrow ? portalMainNarrow : portalMain;
 
+  if (noChrome) {
+    return <div className={portalPage}>{children}</div>;
+  }
+
   return (
-    <div className={portalPage}>
-      <AppHeader sticky={!staticHeader} />
-      {bare ? (
-        <div className={`flex-1 flex flex-col ${className}`.trim()}>{children}</div>
-      ) : (
-        <main className={`${mainClass} ${className}`.trim()}>{children}</main>
-      )}
+    <div className={`${portalPage} flex min-h-[100dvh] flex-col`}>
+      <PortalShellLayout>
+        {bare ? (
+          <div className={`flex min-h-0 flex-1 flex-col ${className}`.trim()}>{children}</div>
+        ) : (
+          <main className={`${mainClass} ${className}`.trim()}>{children}</main>
+        )}
+      </PortalShellLayout>
     </div>
   );
 }

@@ -255,11 +255,72 @@ export const taxFilingChecks = pgTable(
     blueholeCaseId: text('bluehole_case_id').notNull().default(''),
     acceptanceCount: integer('acceptance_count'),
     notes: text('notes').notNull().default(''),
+    excludedReason: text('excluded_reason').notNull().default(''),
+    incomeTypeFlags: jsonb('income_type_flags').notNull().$type<Record<string, boolean>>().default({}),
     checkedBy: text('checked_by').notNull().default(''),
     checkedAt: timestamp('checked_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   t => [uniqueIndex('tax_filing_checks_client_scope_period_idx').on(t.clientId, t.scope, t.taxType, t.periodKey)],
+);
+
+/** 신고대상확인 세션 — 담당자·세목·기간당 1건 (localStorage 대체) */
+export const filingCheckSessions = pgTable(
+  'filing_check_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    manager: text('manager').notNull().default(''),
+    taxType: text('tax_type').notNull(),
+    periodKey: text('period_key').notNull(),
+    data: jsonb('data').notNull().$type<Record<string, unknown>>().default({}),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [uniqueIndex('filing_check_sessions_mgr_tax_period_idx').on(t.manager, t.taxType, t.periodKey)],
+);
+
+/** 간이지급명세서 신고 체크 — 업체·기간·소득유형별 */
+export const simplePayrollFilings = pgTable(
+  'simple_payroll_filings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+    periodKey: text('period_key').notNull(),
+    incomeType: text('income_type').notNull(),
+    filed: boolean('filed').notNull().default(false),
+    acceptanceDate: text('acceptance_date').notNull().default(''),
+    acceptanceMethod: text('acceptance_method').notNull().default(''),
+    notes: text('notes').notNull().default(''),
+    updatedBy: text('updated_by').notNull().default(''),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [
+    uniqueIndex('simple_payroll_filings_client_period_type_idx').on(
+      t.clientId,
+      t.periodKey,
+      t.incomeType,
+    ),
+    index('simple_payroll_filings_period_idx').on(t.periodKey),
+  ],
+);
+
+/** 연말정산 신고 체크 — 업체·연도·소득유형별 */
+export const yearEndFilings = pgTable(
+  'year_end_filings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+    year: integer('year').notNull(),
+    incomeType: text('income_type').notNull(),
+    filed: boolean('filed').notNull().default(false),
+    notes: text('notes').notNull().default(''),
+    updatedBy: text('updated_by').notNull().default(''),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [
+    uniqueIndex('year_end_filings_client_year_type_idx').on(t.clientId, t.year, t.incomeType),
+    index('year_end_filings_year_idx').on(t.year),
+  ],
 );
 
 /** 점심 맛집 추가 요청 큐 */
@@ -280,4 +341,7 @@ export type Client = typeof clients.$inferSelect;
 export type ChurnRecord = typeof churnRecords.$inferSelect;
 export type ClientContact = typeof clientContacts.$inferSelect;
 export type TaxFilingCheck = typeof taxFilingChecks.$inferSelect;
+export type FilingCheckSession = typeof filingCheckSessions.$inferSelect;
+export type SimplePayrollFiling = typeof simplePayrollFilings.$inferSelect;
+export type YearEndFiling = typeof yearEndFilings.$inferSelect;
 export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
