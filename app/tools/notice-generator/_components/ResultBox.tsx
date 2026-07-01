@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { htmlToPlainText } from '../_lib/templates';
+import { htmlToPlainText, normalizeHtmlForClipboard } from '../_lib/templates';
 
 type Props = {
   messageHtml: string;
@@ -21,6 +21,19 @@ export default function ResultBox({
   const [edited, setEdited] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastMessageHtml = useRef(messageHtml);
+
+  useEffect(() => {
+    if (editing) return;
+    if (edited === null) {
+      lastMessageHtml.current = messageHtml;
+      return;
+    }
+    if (edited === lastMessageHtml.current) {
+      setEdited(null);
+    }
+    lastMessageHtml.current = messageHtml;
+  }, [messageHtml, edited, editing]);
 
   const effectiveHtml = edited ?? messageHtml;
   const isDirty = edited !== null && edited !== messageHtml;
@@ -71,12 +84,13 @@ export default function ResultBox({
   // 서식 유지 복사: text/html + text/plain 동시 기록
   const copyRich = async () => {
     if (!effectiveHtml) return;
-    const plain = htmlToPlainText(effectiveHtml);
+    const richHtml = normalizeHtmlForClipboard(effectiveHtml);
+    const plain = htmlToPlainText(richHtml);
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([
           new window.ClipboardItem({
-            'text/html': new Blob([effectiveHtml], { type: 'text/html' }),
+            'text/html': new Blob([richHtml], { type: 'text/html' }),
             'text/plain': new Blob([plain], { type: 'text/plain' }),
           }),
         ]);

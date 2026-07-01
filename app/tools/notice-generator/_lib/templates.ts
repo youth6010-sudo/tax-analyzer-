@@ -1,4 +1,5 @@
 import { TAX_TYPES } from './taxTypes';
+import { DEFAULT_PAYMENT_NOTICE_TEMPLATE, DEFAULT_VAT_REPORT_TEMPLATE } from './template';
 import {
   getWeekdayKo,
   formatDottedDate,
@@ -32,6 +33,84 @@ function escapeHtml(str: string): string {
 // 여러 줄 입력값을 HTML 줄바꿈으로 변환
 function multilineHtml(str: string): string {
   return escapeHtml((str || '').trim()).replace(/\n/g, '<br>');
+}
+
+/** 한글/워드 붙여넣기 시 줄이 늘어나지 않도록 단일 래퍼 + &lt;br&gt; 줄 구조 */
+function noticeLine(text: string): string {
+  return `${text}<br>`;
+}
+
+function noticeBlank(): string {
+  return '<br>';
+}
+
+function noticeDash(text: string): string {
+  return `&nbsp;- ${text}<br>`;
+}
+
+function wrapNoticeHtml(body: string): string {
+  return `<div style="line-height:1.8;">${body}</div>`;
+}
+
+function isBlankBlock(el: HTMLElement): boolean {
+  const html = el.innerHTML.replace(/\s/g, '').toLowerCase();
+  return html === '' || html === '<br>' || html === '<br/>';
+}
+
+/** div 블록 나열 → br 줄 구조로 변환 (서식 유지 복사용 · 저장된 레거시 서식 포함) */
+export function normalizeHtmlForClipboard(html: string): string {
+  if (!html?.trim() || typeof document === 'undefined') return html;
+
+  const root = document.createElement('div');
+  root.innerHTML = html.trim();
+
+  const flatten = (el: Element): string => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'table') return el.outerHTML;
+    if (tag === 'br') return '<br>';
+
+    if (tag === 'div' || tag === 'p') {
+      const block = el as HTMLElement;
+      if (isBlankBlock(block)) return '<br>';
+
+      const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table');
+      if (blockChild) {
+        return Array.from(block.children)
+          .map(child => flatten(child))
+          .join('');
+      }
+
+      const inner = block.innerHTML.trim();
+      if (!inner) return '<br>';
+      if (inner.endsWith('<br>') || inner.endsWith('<br/>')) return inner;
+      return `${inner}<br>`;
+    }
+
+    return (el as HTMLElement).outerHTML;
+  };
+
+  let target: Element = root;
+  if (
+    root.children.length === 1 &&
+    root.firstElementChild &&
+    (root.firstElementChild.tagName.toLowerCase() === 'div' ||
+      root.firstElementChild.tagName.toLowerCase() === 'p')
+  ) {
+    target = root.firstElementChild;
+  }
+
+  const body = Array.from(target.childNodes)
+    .map(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = (node.textContent ?? '').trim();
+        return t ? `${t}<br>` : '';
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) return flatten(node as Element);
+      return '';
+    })
+    .join('');
+
+  return wrapNoticeHtml(body.replace(/(<br\s*\/?>){3,}/gi, '<br><br>'));
 }
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {
@@ -106,8 +185,8 @@ function isoToDottedDate(iso: string): string {
   return formatDottedDate(new Date(y, m - 1, d));
 }
 
-// 부가세 분납 안내문구 — 납부서(회차)별 날짜·금액 나열
-function buildVatInstallmentHtml({
+// 부가세 분납 안내문구 — 납부서(회차)별 날짜·금액 나열 (본문만)
+function buildVatInstallmentBody({
   belong,
   name,
   slips,
@@ -118,14 +197,16 @@ function buildVatInstallmentHtml({
   slips: number;
   installments: { date: string; amount: number }[];
 }): string {
-  const line = (s: string) => `<div>${s}</div>`;
-  const blank = '<div><br></div>';
-  const dash = (s: string) => `<div>&nbsp;- ${s}</div>`;
+  const line = noticeLine;
+  const blank = noticeBlank;
+  const dash = noticeDash;
   const total = installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
 
   const parts: string[] = [];
-  parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`));
-  parts.push(blank);
+  parts.push(
+    line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`),
+  );
+  parts.push(blank());
   parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`));
   installments.forEach((it, i) => {
     const dateText = isoToDottedDate(it.date) || '(일자 미입력)';
@@ -133,12 +214,22 @@ function buildVatInstallmentHtml({
   });
   parts.push(line(`첨부 서류: 납부서 ${slips}장`));
   parts.push(line(OVERDUE_NOTE));
-  return `<div style="line-height:1.8;">${parts.join('')}</div>`;
+  return parts.join('');
 }
 
-// 신고 결과 안내문구(HTML) 생성. 금액이 음수면 환급으로 처리하며,
-// 납부·환급이 섞인 경우 필요한 내용만 취합한다.
-export function buildPaymentNoticeHtml({
+function buildVatInstallmentHtml(params: {
+  belong: string;
+  name: string;
+  slips: number;
+  installments: { date: string; amount: number }[];
+}): string {
+  return wrapNoticeHtml(buildVatInstallmentBody(params));
+}
+
+export type PaymentNoticeTokens = Record<string, string>;
+
+/** 신고 결과 안내 문구 치환용 토큰 값 생성 */
+export function buildPaymentNoticeTokens({
   taxType,
   deadline,
   payment,
@@ -146,7 +237,7 @@ export function buildPaymentNoticeHtml({
   taxType: TaxTypeKey;
   deadline: DeadlineResult | null;
   payment: PaymentNotice;
-}): string {
+}): PaymentNoticeTokens {
   const name = NAME[taxType] || '';
   const belong = deadline ? escapeHtml(deadline.periodLabel) : '';
   const dueDate = deadline ? escapeHtml(formatDottedDate(deadline.final)) : '';
@@ -155,9 +246,47 @@ export function buildPaymentNoticeHtml({
   const main = Math.round(payment.amount || 0);
   const local = hasLocal ? Math.round(payment.localAmount || 0) : 0;
 
-  // 부가세 분납: 납부서 2장 이상이면 회차별 날짜·금액으로 안내
+  const empty = {
+    '{귀속}': belong,
+    '{세목}': escapeHtml(name),
+    '{납부기한}': dueDate,
+    '{납부서장수}': String(slips),
+    '{최종납부세액}': '',
+    '{최종환급세액}': '',
+    '{서두}': '',
+    '{납부요약}': '',
+    '{납부내역}': '',
+    '{첨부안내}': '',
+    '{납부기한줄}': '',
+    '{환급요약}': '',
+    '{환급내역}': '',
+    '{환급시점}': '',
+    '{분납회차목록}': '',
+    '{연체안내}': '',
+    '{안내본문}': '',
+  };
+
   if (taxType === TAX_TYPES.VAT && slips >= 2 && payment.installments.length >= 2) {
-    return buildVatInstallmentHtml({ belong, name, slips, installments: payment.installments });
+    const body = buildVatInstallmentBody({ belong, name, slips, installments: payment.installments });
+    const total = payment.installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
+    const 회차 = payment.installments
+      .map((it, i) => {
+        const dateText = isoToDottedDate(it.date) || '(일자 미입력)';
+        return noticeDash(`${i + 1}차: ${escapeHtml(dateText)} · ${escapeHtml(formatWon(it.amount))}`);
+      })
+      .join('');
+    return {
+      ...empty,
+      '{최종납부세액}': escapeHtml(formatWon(total)),
+      '{서두}': noticeLine(
+        `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`,
+      ),
+      '{납부요약}': noticeLine(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`),
+      '{분납회차목록}': 회차,
+      '{첨부안내}': noticeLine(`첨부 서류: 납부서 ${slips}장`),
+      '{연체안내}': noticeLine(OVERDUE_NOTE),
+      '{안내본문}': body,
+    };
   }
 
   const items: PayItem[] = hasLocal
@@ -171,52 +300,108 @@ export function buildPaymentNoticeHtml({
   const refundItems = items.filter(i => i.amount < 0);
   const payTotal = payItems.reduce((s, i) => s + i.amount, 0);
   const refundTotal = refundItems.reduce((s, i) => s + Math.abs(i.amount), 0);
-
-  const line = (s: string) => `<div>${s}</div>`;
-  const blank = '<div><br></div>';
-  const dash = (s: string) => `<div>&nbsp;- ${s}</div>`;
-  // 지방소득세가 있는 세목(원천세·종소세·법인세)만 항목별 내역을 표기
+  const dash = noticeDash;
   const breakdown = (list: PayItem[]) =>
     hasLocal ? list.map(i => dash(`${escapeHtml(i.name)} ${escapeHtml(formatWon(i.amount))}`)).join('') : '';
-  const refundTiming = escapeHtml(refundTimingLine(taxType, payment.refundClaimed));
+  const refundTiming = noticeLine(refundTimingLine(taxType, payment.refundClaimed));
+  const overdue = noticeLine(OVERDUE_NOTE);
+  const attach = noticeLine(`첨부 서류: 납부서 ${slips}장`);
+  const dueLine = noticeLine(`납부 기한: ${dueDate}`);
 
   const anyPay = payItems.length > 0;
   const anyRefund = refundItems.length > 0;
   const parts: string[] = [];
+  const line = noticeLine;
+  const blank = noticeBlank;
+
+  let 서두 = '';
+  let 납부요약 = '';
+  let 납부내역 = '';
+  let 환급요약 = '';
+  let 환급내역 = '';
 
   if (anyRefund && !anyPay) {
-    // 전액 환급
-    parts.push(line(`${belong} ${escapeHtml(name)} 신고 결과 환급 세액이 발생하여 별도로 납부하실 금액은 없습니다.`));
-    parts.push(blank);
-    parts.push(line(`최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`));
-    parts.push(breakdown(refundItems));
-    parts.push(line(refundTiming));
+    서두 = line(`${belong} ${escapeHtml(name)} 신고 결과 환급 세액이 발생하여 별도로 납부하실 금액은 없습니다.`);
+    환급요약 = line(`최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`);
+    환급내역 = breakdown(refundItems);
+    parts.push(서두, blank(), 환급요약, 환급내역, refundTiming);
   } else if (anyPay && anyRefund) {
-    // 납부 + 환급 혼합 — 필요한 내용만 취합
-    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되었습니다. 납부·환급 내역을 함께 안내드립니다.`));
-    parts.push(blank);
-    parts.push(line(`[납부] 최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`));
-    parts.push(breakdown(payItems));
-    parts.push(line(`첨부 서류: 납부서 ${slips}장`));
-    parts.push(line(`납부 기한: ${dueDate}`));
-    parts.push(blank);
-    parts.push(line(`[환급] 최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`));
-    parts.push(breakdown(refundItems));
-    parts.push(line(refundTiming));
-    parts.push(line(OVERDUE_NOTE));
+    서두 = line(`${belong} ${escapeHtml(name)} 신고가 완료되었습니다. 납부·환급 내역을 함께 안내드립니다.`);
+    납부요약 = line(`[납부] 최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`);
+    납부내역 = breakdown(payItems);
+    환급요약 = line(`[환급] 최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`);
+    환급내역 = breakdown(refundItems);
+    parts.push(
+      서두,
+      blank(),
+      납부요약,
+      납부내역,
+      attach,
+      dueLine,
+      blank(),
+      환급요약,
+      환급내역,
+      refundTiming,
+      overdue,
+    );
   } else {
-    // 전액 납부 (기본). 입력 전(0원) 상태 포함.
     const listForBreakdown = payItems.length > 0 ? payItems : items;
-    parts.push(line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`));
-    parts.push(blank);
-    parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`));
-    parts.push(breakdown(listForBreakdown));
-    parts.push(line(`첨부 서류: 납부서 ${slips}장`));
-    parts.push(line(`납부 기한: ${dueDate}`));
-    parts.push(line(OVERDUE_NOTE));
+    서두 = line(
+      `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`,
+    );
+    납부요약 = line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`);
+    납부내역 = breakdown(listForBreakdown);
+    parts.push(서두, blank(), 납부요약, 납부내역, attach, dueLine, overdue);
   }
 
-  return `<div style="line-height:1.8;">${parts.join('')}</div>`;
+  return {
+    ...empty,
+    '{최종납부세액}': anyPay ? escapeHtml(formatWon(payTotal)) : '',
+    '{최종환급세액}': anyRefund ? escapeHtml(formatWon(refundTotal)) : '',
+    '{서두}': 서두,
+    '{납부요약}': 납부요약,
+    '{납부내역}': 납부내역,
+    '{첨부안내}': anyPay ? attach : '',
+    '{납부기한줄}': anyPay ? dueLine : '',
+    '{환급요약}': 환급요약,
+    '{환급내역}': 환급내역,
+    '{환급시점}': anyRefund ? refundTiming : '',
+    '{연체안내}': anyPay && !anyRefund ? overdue : anyPay && anyRefund ? overdue : '',
+    '{안내본문}': parts.join(''),
+  };
+}
+
+function cleanupPaymentTemplate(html: string): string {
+  return html
+    .replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>')
+    .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
+}
+
+/** 사용자 서식(토큰)으로 신고 결과 안내 문구 생성 */
+export function renderPaymentNoticeTemplate(template: string, tokens: PaymentNoticeTokens): string {
+  let out = (template || DEFAULT_PAYMENT_NOTICE_TEMPLATE).trim();
+  const entries = Object.entries(tokens).sort((a, b) => b[0].length - a[0].length);
+  for (const [token, value] of entries) {
+    out = out.split(token).join(value);
+  }
+  return cleanupPaymentTemplate(out);
+}
+
+// 신고 결과 안내문구(HTML) 생성. 금액이 음수면 환급으로 처리하며,
+// 납부·환급이 섞인 경우 필요한 내용만 취합한다.
+export function buildPaymentNoticeHtml({
+  taxType,
+  deadline,
+  payment,
+  template,
+}: {
+  taxType: TaxTypeKey;
+  deadline: DeadlineResult | null;
+  payment: PaymentNotice;
+  template?: string;
+}): string {
+  const tokens = buildPaymentNoticeTokens({ taxType, deadline, payment });
+  return renderPaymentNoticeTemplate(template?.trim() || DEFAULT_PAYMENT_NOTICE_TEMPLATE, tokens);
 }
 
 // 부가세 매입 3종 공급가/부가세 합계 + 최종세액 계산
@@ -336,12 +521,40 @@ export function installmentSchedule(final: Date): Date[] {
   return [final, monthEnd(1), monthEnd(2)];
 }
 
-// 부가세 전용: 신고 결과 보고 및 검토 안내문구(HTML). 납부서 안내문구 앞에 표시.
-export function buildVatReportHtml({
+function buildVatInstallmentBlock(
+  deadline: DeadlineResult | null,
+  isPay: boolean,
+  finalTax: number,
+): string {
+  if (!isPay || finalTax <= 0) return '';
+  const parts: string[] = [];
+  parts.push(noticeBlank());
+  parts.push(noticeLine('💳 [분납(분할 납부) 안내]'));
+  parts.push(
+    noticeLine(
+      '분할 납부를 원하시면 "확인 완료" 댓글에 희망 납부일자별 금액을 함께 적어 주시면 신청을 도와드리겠습니다.',
+    ),
+  );
+  parts.push(
+    noticeLine('다음 신고기한과 겹치지 않도록 아래 일정 내 최대 3회(약 3개월) 분납을 권장합니다.'),
+  );
+  if (deadline) {
+    const labels = ['1차 (신고·납부일)', '2차 (+1개월 말일)', '3차 (+2개월 말일)'];
+    installmentSchedule(deadline.final).forEach((d, i) => {
+      parts.push(noticeDash(`${labels[i]}: ${escapeHtml(formatDottedDate(d))}`));
+    });
+  }
+  return parts.join('');
+}
+
+// 사용자 서식(토큰)으로 부가세 신고 결과 보고 문구 생성
+export function renderVatReportTemplate({
+  template,
   taxType,
   deadline,
   report,
 }: {
+  template: string;
   taxType: TaxTypeKey;
   deadline: DeadlineResult | null;
   report: VatReport;
@@ -351,40 +564,45 @@ export function buildVatReportHtml({
   const r = calcVatReport(report);
   const isPay = r.finalTax >= 0;
   const taxLabel = isPay ? '납부' : '환급';
+  const summaryTable = vatSummaryTable(report, r, taxLabel);
+  const installmentBlock = buildVatInstallmentBlock(deadline, isPay, r.finalTax);
 
-  const line = (s: string) => `<div>${s}</div>`;
-  const blank = '<div><br></div>';
-  const dash = (s: string) => `<div>&nbsp;- ${s}</div>`;
-  const parts: string[] = [];
+  const map: [string, string][] = [
+    ['{신고결과요약표}', summaryTable],
+    ['{분납안내}', installmentBlock],
+    ['{귀속}', belong],
+    ['{세목}', escapeHtml(name)],
+  ];
 
-  parts.push(line('📋 [신고 결과 보고 및 검토 안내]'));
-  parts.push(blank);
-  parts.push(line(`안녕하세요. ${belong} ${escapeHtml(name)} 신고 결과를 안내드립니다.`));
-  parts.push(line('매입매출장과 결과 보고서를 함께 첨부했습니다.'));
-  parts.push(line('아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.'));
-  parts.push(blank);
-  parts.push(line('[신고 결과 요약]'));
-  parts.push(vatSummaryTable(report, r, taxLabel));
-  parts.push(blank);
-  parts.push(line('✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.'));
-
-  if (isPay && r.finalTax > 0) {
-    parts.push(blank);
-    parts.push(line('💳 [분납(분할 납부) 안내]'));
-    parts.push(line('분할 납부를 원하시면 "확인 완료" 댓글에 희망 납부일자별 금액을 함께 적어 주시면 신청을 도와드리겠습니다.'));
-    parts.push(line('다음 신고기한과 겹치지 않도록 아래 일정 내 최대 3회(약 3개월) 분납을 권장합니다.'));
-    if (deadline) {
-      const labels = ['1차 (신고·납부일)', '2차 (+1개월 말일)', '3차 (+2개월 말일)'];
-      installmentSchedule(deadline.final).forEach((d, i) => {
-        parts.push(dash(`${labels[i]}: ${escapeHtml(formatDottedDate(d))}`));
-      });
-    }
+  let out = (template || '').trim();
+  for (const [token, value] of map) {
+    out = out.split(token).join(value);
   }
+  if (!installmentBlock) {
+    out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+    out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
+  }
+  return out;
+}
 
-  parts.push(blank);
-  parts.push(line('감사합니다.'));
-
-  return `<div style="line-height:1.8;">${parts.join('')}</div>`;
+// 부가세 전용: 신고 결과 보고 및 검토 안내문구(HTML). 납부서 안내문구 앞에 표시.
+export function buildVatReportHtml({
+  taxType,
+  deadline,
+  report,
+  template,
+}: {
+  taxType: TaxTypeKey;
+  deadline: DeadlineResult | null;
+  report: VatReport;
+  template?: string;
+}): string {
+  return renderVatReportTemplate({
+    template: template?.trim() || DEFAULT_VAT_REPORT_TEMPLATE,
+    taxType,
+    deadline,
+    report,
+  });
 }
 
 export function renderTemplate({
@@ -434,7 +652,7 @@ export function renderTemplate({
   if (!notesTrimmed) {
     prepared = prepared
       .replace(/<div[^>]*>\s*\{특이사항\}\s*<\/div>\s*/gi, '')
-      .replace(/\{특이사항\}\s*/g, '');
+      .replace(/\{특이사항\}\s*(<br\s*\/?>)?\s*/gi, '');
   }
 
   let out = prepared;
@@ -445,8 +663,9 @@ export function renderTemplate({
   out = out.replace(/color\s*:\s*#13a89e\s*;?/gi, '');
   // 토큰이 비어 내용이 사라진 블록(<div>/<p>) 제거 — <br>만 있는 빈 줄은 유지
   out = out.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, '');
-  // 빈 특이사항 등으로 인접한 빈 줄(<div><br></div>)이 둘 이상이면 하나로 축소
-  out = out.replace(/(<(div|p)\b[^>]*>\s*<br\s*\/?>\s*<\/\2>\s*){2,}/gi, '<div><br></div>');
+  // 빈 특이사항 등으로 인접한 빈 줄이 둘 이상이면 하나로 축소
+  out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+  out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
   return out;
 }
 
@@ -454,6 +673,7 @@ export function renderTemplate({
 export function htmlToPlainText(html: string): string {
   if (!html) return '';
   let s = html
+    .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(td|th)>/gi, '\t')
     .replace(/<\/(div|p|li|h[1-6]|tr)>/gi, '\n')

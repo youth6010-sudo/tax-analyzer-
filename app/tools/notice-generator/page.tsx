@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import NoticeHeader from './_components/NoticeHeader';
 import NoticeClientPicker, { type PickedClient } from './_components/NoticeClientPicker';
 import CompanyNotesField from './_components/CompanyNotesField';
@@ -16,9 +16,15 @@ import { TAX_TYPES, TAX_TYPE_META } from './_lib/taxTypes';
 import { SELECTABLE_YEARS } from './_lib/holidays';
 import {
   DEFAULT_TEMPLATE_BY_SCENARIO,
+  DEFAULT_VAT_REPORT_TEMPLATE,
+  DEFAULT_PAYMENT_NOTICE_TEMPLATE,
   SCENARIO_LABEL,
-  type TemplateMap,
+  VAT_REPORT_TOKENS,
+  PAYMENT_NOTICE_TOKENS,
+  emptyNoticeTemplateStore,
+  type NoticeTemplateStore,
   type TemplateScenario,
+  type TemplateSource,
 } from './_lib/template';
 import { useLocalStorage } from './_lib/useLocalStorage';
 import { calculateDeadline, defaultMaterialDate } from './_lib/deadline';
@@ -29,11 +35,12 @@ import {
   formatMaterialDeadlineNote,
   buildPaymentNoticeHtml,
   buildVatReportHtml,
+  calcVatReport,
   hasLocalIncomeTax,
   defaultPaymentSlips,
   installmentSchedule,
 } from './_lib/templates';
-import { fetchNoticeTemplates, saveNoticeTemplates } from './_lib/noticeTemplateClient';
+import { fetchNoticeTemplateStore, saveNoticeTemplateStore } from './_lib/noticeTemplateClient';
 import {
   DEFAULT_MATERIALS_BY_TAX,
   NOTES_EXAMPLE_BY_TAX,
@@ -85,11 +92,17 @@ export default function NoticeGeneratorPage() {
   // 기본값은 비움 — 비었을 때는 세목별 예시를 연한 글씨(placeholder)로 안내
   const [materials, setMaterials] = useLocalStorage('tng.materials', '');
 
-  // 안내문 서식(HTML) — 담당자(로그인 계정)별 서버 저장(시나리오별) + 자동저장
-  const [templates, setTemplates] = useState<TemplateMap>({});
+  // 안내문 서식(HTML) — 담당자(로그인 계정)별 서버 저장(시나리오별) + 기본/내 서식 선택
+  const [templateStore, setTemplateStore] = useState<NoticeTemplateStore>(emptyNoticeTemplateStore);
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const [templateSaveState, setTemplateSaveState] = useState<SaveState>('idle');
+  const [vatTemplateSaveState, setVatTemplateSaveState] = useState<SaveState>('idle');
+  const [paymentTemplateSaveState, setPaymentTemplateSaveState] = useState<SaveState>('idle');
   const templateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vatTemplateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentTemplateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templateStoreRef = useRef(templateStore);
+  templateStoreRef.current = templateStore;
 
   // 원천세 급여대장 작성 여부 (수임처 미연결 시 localStorage)
   const [localPayrollByUs, setLocalPayrollByUs] = useLocalStorage('tng.payrollByUs', false);
@@ -113,6 +126,7 @@ export default function NoticeGeneratorPage() {
 
   // 부가세 신고 결과 보고 및 검토 입력값 (세션 전용)
   const [vatReport, setVatReport] = useState<VatReport>(EMPTY_VAT_REPORT);
+  const lastAutoVatPayment = useRef<number | null>(null);
 
   const [params, setParams] = useLocalStorage<DeadlineParams>('tng.params', {
     year: getDefaultYear(),
@@ -203,6 +217,7 @@ export default function NoticeGeneratorPage() {
       refundClaimed: false,
       installments: [],
     });
+    lastAutoVatPayment.current = null;
     // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경
     // (원천세 -3일 / 부가세 -2주 / 종소세 -3주 / 법인세 직전 달 15일)
     const nextDeadline = calculateDeadline(next, params);
@@ -253,9 +268,9 @@ export default function NoticeGeneratorPage() {
   // 마운트 시 서버에 저장된 담당자 시나리오별 서식 로드 (없으면 기본 서식 사용)
   useEffect(() => {
     const ac = new AbortController();
-    fetchNoticeTemplates(ac.signal)
+    fetchNoticeTemplateStore(ac.signal)
       .then(saved => {
-        setTemplates(saved);
+        setTemplateStore(saved);
         setTemplateLoaded(true);
       })
       .catch(err => {
@@ -263,6 +278,45 @@ export default function NoticeGeneratorPage() {
       });
     return () => ac.abort();
   }, []);
+
+  const persistTemplateStore = useCallback(async (next: NoticeTemplateStore) => {
+    setTemplateSaveState('saving');
+    try {
+      await saveNoticeTemplateStore(next);
+      setTemplateSaveState('saved');
+    } catch {
+      setTemplateSaveState('error');
+    }
+  }, []);
+
+  const schedulePersistStore = useCallback(
+    (next: NoticeTemplateStore, kind: 'notice' | 'vat' | 'payment' = 'notice') => {
+      setTemplateStore(next);
+      const setState =
+        kind === 'vat'
+          ? setVatTemplateSaveState
+          : kind === 'payment'
+            ? setPaymentTemplateSaveState
+            : setTemplateSaveState;
+      setState('saving');
+      const timer =
+        kind === 'vat'
+          ? vatTemplateSaveTimer
+          : kind === 'payment'
+            ? paymentTemplateSaveTimer
+            : templateSaveTimer;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(async () => {
+        try {
+          await saveNoticeTemplateStore(next);
+          setState('saved');
+        } catch {
+          setState('error');
+        }
+      }, 800);
+    },
+    [],
+  );
 
   const deadline = useMemo(() => calculateDeadline(taxType, params), [taxType, params]);
 
@@ -277,22 +331,114 @@ export default function NoticeGeneratorPage() {
       ? 'withholding_filing'
       : 'withholding_request';
 
-  const activeTemplate = templates[scenario] ?? DEFAULT_TEMPLATE_BY_SCENARIO[scenario];
+  const noticeSource: TemplateSource = templateStore.sources[scenario] ?? 'default';
+  const noticeCustomHtml = templateStore.templates[scenario] ?? '';
+  const hasNoticeCustom = Boolean(noticeCustomHtml.trim());
 
-  // 서식 편집 → 디바운스 자동저장 (담당자 계정 기준, 시나리오별)
-  const handleTemplateChange = (html: string) => {
-    const nextMap: TemplateMap = { ...templates, [scenario]: html };
-    setTemplates(nextMap);
-    setTemplateSaveState('saving');
-    if (templateSaveTimer.current) clearTimeout(templateSaveTimer.current);
-    templateSaveTimer.current = setTimeout(async () => {
-      try {
-        await saveNoticeTemplates(nextMap);
-        setTemplateSaveState('saved');
-      } catch {
-        setTemplateSaveState('error');
-      }
-    }, 800);
+  const activeTemplate =
+    noticeSource === 'custom' && hasNoticeCustom
+      ? noticeCustomHtml
+      : DEFAULT_TEMPLATE_BY_SCENARIO[scenario];
+
+  const vatReportSource: TemplateSource = templateStore.vatReportSource ?? 'default';
+  const vatReportCustomHtml = templateStore.vatReportTemplate ?? '';
+  const hasVatReportCustom = Boolean(vatReportCustomHtml.trim());
+
+  const activeVatReportTemplate =
+    vatReportSource === 'custom' && hasVatReportCustom
+      ? vatReportCustomHtml
+      : DEFAULT_VAT_REPORT_TEMPLATE;
+
+  const paymentNoticeSource: TemplateSource = templateStore.paymentNoticeSource ?? 'default';
+  const paymentNoticeCustomHtml = templateStore.paymentNoticeTemplate ?? '';
+  const hasPaymentNoticeCustom = Boolean(paymentNoticeCustomHtml.trim());
+
+  const activePaymentNoticeTemplate =
+    paymentNoticeSource === 'custom' && hasPaymentNoticeCustom
+      ? paymentNoticeCustomHtml
+      : DEFAULT_PAYMENT_NOTICE_TEMPLATE;
+
+  const handleNoticeTemplateChange = (html: string) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      templates: { ...prev.templates, [scenario]: html },
+      sources: { ...prev.sources, [scenario]: 'custom' },
+    };
+    schedulePersistStore(next, 'notice');
+  };
+
+  const handleNoticeSourceChange = (source: TemplateSource) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      sources: { ...prev.sources, [scenario]: source },
+    };
+    if (source === 'custom' && !prev.templates[scenario]?.trim()) {
+      next.templates = {
+        ...prev.templates,
+        [scenario]: DEFAULT_TEMPLATE_BY_SCENARIO[scenario],
+      };
+    }
+    schedulePersistStore(next, 'notice');
+  };
+
+  const handleNoticeTemplateSave = () => {
+    void persistTemplateStore(templateStoreRef.current);
+  };
+
+  const handleVatReportTemplateChange = (html: string) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      vatReportTemplate: html,
+      vatReportSource: 'custom',
+    };
+    schedulePersistStore(next, 'vat');
+  };
+
+  const handleVatReportSourceChange = (source: TemplateSource) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      vatReportSource: source,
+      vatReportTemplate:
+        source === 'custom' && !prev.vatReportTemplate?.trim()
+          ? DEFAULT_VAT_REPORT_TEMPLATE
+          : prev.vatReportTemplate,
+    };
+    schedulePersistStore(next, 'vat');
+  };
+
+  const handleVatReportTemplateSave = () => {
+    void persistTemplateStore(templateStoreRef.current);
+  };
+
+  const handlePaymentNoticeTemplateChange = (html: string) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      paymentNoticeTemplate: html,
+      paymentNoticeSource: 'custom',
+    };
+    schedulePersistStore(next, 'payment');
+  };
+
+  const handlePaymentNoticeSourceChange = (source: TemplateSource) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      paymentNoticeSource: source,
+      paymentNoticeTemplate:
+        source === 'custom' && !prev.paymentNoticeTemplate?.trim()
+          ? DEFAULT_PAYMENT_NOTICE_TEMPLATE
+          : prev.paymentNoticeTemplate,
+    };
+    schedulePersistStore(next, 'payment');
+  };
+
+  const handlePaymentNoticeTemplateSave = () => {
+    void persistTemplateStore(templateStoreRef.current);
   };
 
   // 자료 제출 마감은 항시 ON.
@@ -362,8 +508,14 @@ export default function NoticeGeneratorPage() {
   );
 
   const paymentHtml = useMemo(
-    () => buildPaymentNoticeHtml({ taxType, deadline, payment }),
-    [taxType, deadline, payment],
+    () =>
+      buildPaymentNoticeHtml({
+        taxType,
+        deadline,
+        payment,
+        template: activePaymentNoticeTemplate,
+      }),
+    [taxType, deadline, payment, activePaymentNoticeTemplate],
   );
 
   const isVat = taxType === TAX_TYPES.VAT;
@@ -386,9 +538,47 @@ export default function NoticeGeneratorPage() {
   }, [isVat, deadline, payment.slips]);
 
   const vatReportHtml = useMemo(
-    () => buildVatReportHtml({ taxType, deadline, report: vatReport }),
-    [taxType, deadline, vatReport],
+    () =>
+      buildVatReportHtml({
+        taxType,
+        deadline,
+        report: vatReport,
+        template: activeVatReportTemplate,
+      }),
+    [taxType, deadline, vatReport, activeVatReportTemplate],
   );
+
+  // 부가세: 신고 결과 보고 입력 → 최종세액을 신고 결과 안내(납부금액)에 자동 반영
+  useEffect(() => {
+    if (!isVat) return;
+    const { finalTax } = calcVatReport(vatReport);
+    const prevAuto = lastAutoVatPayment.current;
+    setPayment(prev => {
+      const amountIsAuto =
+        prevAuto === null || prev.amount === 0 || prev.amount === prevAuto;
+      if (!amountIsAuto) return prev;
+
+      lastAutoVatPayment.current = finalTax;
+
+      const installments = [...prev.installments];
+      if (prev.slips >= 2 && installments.length > 0) {
+        const inst0 = installments[0];
+        const inst0Auto =
+          inst0.amount === 0 || inst0.amount === prevAuto || prevAuto === null;
+        if (inst0Auto) {
+          installments[0] = { ...inst0, amount: finalTax };
+        }
+      }
+
+      const instChanged =
+        prev.slips >= 2 &&
+        installments.length > 0 &&
+        installments[0].amount !== prev.installments[0]?.amount;
+      if (prev.amount === finalTax && !instChanged) return prev;
+
+      return { ...prev, amount: finalTax, installments };
+    });
+  }, [isVat, vatReport, payment.slips]);
 
   const meta = TAX_TYPE_META[taxType];
 
@@ -435,11 +625,47 @@ export default function NoticeGeneratorPage() {
             {templateLoaded && (
               <TemplateEditor
                 key={scenario}
-                html={activeTemplate}
-                onChange={handleTemplateChange}
+                html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+                onChange={handleNoticeTemplateChange}
+                source={noticeSource}
+                onSourceChange={handleNoticeSourceChange}
+                onSave={handleNoticeTemplateSave}
+                hasCustomSaved={hasNoticeCustom}
                 saveState={templateSaveState}
                 title={SCENARIO_LABEL[scenario]}
                 defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+              />
+            )}
+            {templateLoaded && isVat && (
+              <TemplateEditor
+                key="vat-report-template"
+                html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
+                onChange={handleVatReportTemplateChange}
+                source={vatReportSource}
+                onSourceChange={handleVatReportSourceChange}
+                onSave={handleVatReportTemplateSave}
+                hasCustomSaved={hasVatReportCustom}
+                saveState={vatTemplateSaveState}
+                title="신고 결과 보고 및 검토 서식 (부가세)"
+                defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
+                tokens={VAT_REPORT_TOKENS}
+                hint="부가세 신고 결과 보고 문구 서식입니다. {신고결과요약표}·{분납안내} 토큰으로 입력값이 자동 반영됩니다."
+              />
+            )}
+            {templateLoaded && (
+              <TemplateEditor
+                key="payment-notice-template"
+                html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                onChange={handlePaymentNoticeTemplateChange}
+                source={paymentNoticeSource}
+                onSourceChange={handlePaymentNoticeSourceChange}
+                onSave={handlePaymentNoticeTemplateSave}
+                hasCustomSaved={hasPaymentNoticeCustom}
+                saveState={paymentTemplateSaveState}
+                title="신고 결과 안내 서식 (납부세액)"
+                defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                tokens={PAYMENT_NOTICE_TOKENS}
+                hint="납부·환급·분납 안내 문구 서식입니다. {안내본문} 또는 세부 토큰으로 금액·기한이 자동 반영됩니다."
               />
             )}
           </div>

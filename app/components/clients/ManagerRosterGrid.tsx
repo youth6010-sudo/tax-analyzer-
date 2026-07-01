@@ -19,8 +19,8 @@ import ClientRowHeading from '@/app/components/clients/ClientRowHeading';
 import ClientFeeCell from '@/app/components/clients/ClientFeeCell';
 import ClientRowExpandPanel from '@/app/components/clients/ClientRowExpandPanel';
 
-const COLUMN_WIDTH = 520;
-const COLUMN_GAP = 16;
+const COLUMN_WIDTH = 300;
+const COLUMN_GAP = 10;
 
 function formatFee(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -68,8 +68,8 @@ function contactDisplay(c: ClientRecord): string {
   return mobile || phone || '—';
 }
 
-const ROW_GRID_FEE = 'grid grid-cols-[1.75rem_minmax(0,1fr)_6.5rem] gap-x-2.5 items-start';
-const ROW_GRID_NO_FEE = 'grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-2.5 items-start';
+const ROW_GRID_FEE = 'grid grid-cols-[1.25rem_minmax(0,1fr)_4.25rem] gap-x-1.5 items-start';
+const ROW_GRID_NO_FEE = 'grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 items-start';
 
 function CellValue({
   value,
@@ -83,7 +83,7 @@ function CellValue({
   return (
     <span
       className={[
-        'truncate text-base leading-snug text-slate-800',
+        'truncate text-xs leading-snug text-slate-800',
         mono ? 'portal-data' : 'font-medium',
       ].join(' ')}
       title={value}
@@ -136,7 +136,7 @@ function RosterColumnHeader({ showFee }: { showFee: boolean }) {
     <div
       className={[
         showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE,
-        'sticky top-0 z-10 px-3 py-2.5 text-sm font-semibold text-slate-600',
+        'sticky top-0 z-10 px-2 py-1 text-[11px] font-semibold text-slate-600',
         'bg-slate-50/95 backdrop-blur-sm border-b border-slate-200',
       ].join(' ')}
     >
@@ -189,12 +189,12 @@ function ClientRosterRow({
     <li
       className={[
         rowGrid,
-        'px-3 py-2.5 border-b border-slate-100 last:border-b-0',
+        'px-2 py-1 border-b border-slate-100 last:border-b-0',
         expanded ? 'bg-blue-50/40' : index % 2 === 1 ? 'bg-slate-50/70' : 'bg-white',
         isChurned ? 'opacity-45' : '',
       ].join(' ')}
     >
-      <span className="text-sm font-medium text-slate-500 tabular-nums text-center pt-0.5">{index + 1}</span>
+      <span className="text-[11px] font-medium text-slate-500 tabular-nums text-center pt-px">{index + 1}</span>
 
       <div className="min-w-0">
         <ClientRowHeading
@@ -217,7 +217,7 @@ function ClientRosterRow({
           intakeData={c.intakeData}
           onSave={onFeeChange}
           readOnly={!feeEditable}
-          className="pt-0.5"
+          className="pt-px"
         />
       )}
 
@@ -284,8 +284,8 @@ function EntityPanel({
 
   const panelHeight =
     variant === 'other'
-      ? 'h-[min(280px,32vh)] min-h-[160px]'
-      : 'h-[min(380px,42vh)] min-h-[220px]';
+      ? 'h-[min(180px,22vh)] min-h-[110px]'
+      : 'h-[min(220px,26vh)] min-h-[130px]';
 
   return (
     <div
@@ -297,12 +297,12 @@ function EntityPanel({
         s.accent,
       ].join(' ')}
     >
-      <div className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-gray-100 ${s.headerBg}`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${s.dot}`} aria-hidden />
-          <h3 className={`text-base font-bold truncate ${s.headerText}`}>{title}</h3>
+      <div className={`shrink-0 flex items-center justify-between gap-1.5 px-2 py-1.5 border-b border-gray-100 ${s.headerBg}`}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={`h-2 w-2 rounded-full shrink-0 ${s.dot}`} aria-hidden />
+          <h3 className={`text-xs font-bold truncate ${s.headerText}`}>{title}</h3>
         </div>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-sm font-bold tabular-nums ${s.badge}`}>
+        <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold tabular-nums ${s.badge}`}>
           {clients.length}건
         </span>
       </div>
@@ -312,7 +312,7 @@ function EntityPanel({
         data-roster-panel-scroll
       >
         {clients.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-slate-400">수임처 없음</p>
+          <p className="px-2 py-3 text-xs text-slate-400">수임처 없음</p>
         ) : (
           <div className="w-full min-w-0">
             <RosterColumnHeader showFee={showFee} />
@@ -338,7 +338,7 @@ function EntityPanel({
       </div>
 
       {showFooter && (
-        <div className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-t text-base ${s.footer}`}>
+        <div className={`shrink-0 flex items-center justify-between gap-1.5 px-2 py-1.5 border-t text-xs ${s.footer}`}>
           <span className="font-medium opacity-80">{title} 합계</span>
           <span className="tabular-nums font-semibold whitespace-nowrap">
             {clients.length}건 · {formatFee(feeSum)}
@@ -362,16 +362,16 @@ function MainCategorySummary({
   const mainFee = personalFee + corporateFee;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
-      <div className="flex flex-wrap gap-2 text-sm">
-        <span className="rounded-md bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 shadow-sm">
+      <div className="flex flex-wrap gap-1.5 text-[11px]">
+        <span className="rounded bg-sky-50 px-1.5 py-0.5 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
           법인 {corporate.length} · {formatFee(corporateFee)}
         </span>
-        <span className="rounded-md bg-emerald-50 px-2.5 py-1 font-medium tabular-nums text-emerald-800 ring-1 ring-emerald-100">
+        <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium tabular-nums text-emerald-800 ring-1 ring-emerald-100">
           개인 {personal.length} · {formatFee(personalFee)}
         </span>
       </div>
-      <div className="mt-2.5 flex items-center justify-between gap-2 text-base text-slate-700 border-t border-slate-200/80 pt-2.5">
+      <div className="mt-1.5 flex items-center justify-between gap-1.5 text-xs text-slate-700 border-t border-slate-200/80 pt-1.5">
         <span className="font-semibold">개인·법인 합계</span>
         <span className="tabular-nums font-bold text-slate-900 whitespace-nowrap">
           {mainCount}건 · {formatFee(mainFee)}
@@ -417,39 +417,39 @@ function ManagerSection({
         isSelf ? 'ring-1 ring-blue-200' : '',
       ].join(' ')}
     >
-      <div className="px-4 py-3 border-b border-slate-100 bg-white">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="px-2.5 py-1.5 border-b border-slate-100 bg-white">
+        <div className="flex flex-wrap items-center gap-1.5">
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-base font-semibold text-slate-600"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-semibold text-slate-600"
             aria-hidden
           >
             {manager.slice(0, 1)}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="text-lg font-semibold text-slate-900">{manager}</h2>
+            <div className="flex flex-wrap items-center gap-1">
+              <h2 className="text-sm font-semibold text-slate-900">{manager}</h2>
               {isSelf && (
-                <span className="rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50">
+                <span className="rounded px-1 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50">
                   나
                 </span>
               )}
               {realName && realName !== manager && (
-                <span className="text-base text-slate-400">{realName}</span>
+                <span className="text-xs text-slate-400">{realName}</span>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5 shrink-0">
-            <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sm font-medium tabular-nums text-sky-800">
+          <div className="flex flex-wrap gap-1 shrink-0">
+            <span className="rounded bg-sky-50 px-1.5 py-px text-[10px] font-medium tabular-nums text-sky-800">
               법인 {corporate.length}
             </span>
-            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-sm font-medium tabular-nums text-emerald-800">
+            <span className="rounded bg-emerald-50 px-1.5 py-px text-[10px] font-medium tabular-nums text-emerald-800">
               개인 {personal.length}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 p-2">
+      <div className="flex flex-col gap-1 p-1.5">
         <EntityPanel
           title="법인"
           variant="corporate"
@@ -657,7 +657,7 @@ function HorizontalRosterStrip({
           ref={scrollRef}
           className="roster-h-scroll roster-scroll flex-1 min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-2 pb-2"
         >
-          <div className="flex items-start gap-4 w-max py-0.5">{children}</div>
+          <div className="flex items-start gap-2.5 w-max py-0.5">{children}</div>
         </div>
         {managers.length > 1 && (
           <ScrollButton direction="right" label="다음 담당자" onClick={() => scrollByColumn(1)} />
@@ -725,7 +725,8 @@ export default function ManagerRosterGrid({
       {managerGroups.map(mgr => (
         <div
           key={mgr.manager}
-          className="snap-start shrink-0 flex flex-col w-[min(520px,calc(100vw-3rem))]"
+          className="snap-start shrink-0 flex flex-col"
+          style={{ width: COLUMN_WIDTH }}
         >
           <ManagerSection
             manager={mgr.manager}

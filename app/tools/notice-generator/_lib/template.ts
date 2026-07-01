@@ -24,19 +24,19 @@ export const TOKENS: TemplateToken[] = [
 
 // 기본 서식(HTML). 색상·이모지 예시 포함 — 사용자가 외부 서식으로 덮어쓰면 됩니다.
 export const DEFAULT_TEMPLATE = `<div style="line-height:1.8;">
-<div>{귀속} {세목} 신고를 위해 첨부된 공문을 확인하시고, 해당 자료 업로드를 부탁드립니다.</div>
-<div><br></div>
-<div>📢 <b>[ 중요 ] 신고 일정 안내</b></div>
-<div>대상 기간: {대상기간}</div>
-<div>{자료제출마감}</div>
-<div>세금 납부 기한: {세금납부기한}</div>
-<div><br></div>
-<div>📁 <b>기존 제출 자료</b></div>
-<div>{필요자료}</div>
-<div><br></div>
-<div>{특이사항}</div>
-<div><br></div>
-<div>{자료제출안내}</div>
+{귀속} {세목} 신고를 위해 첨부된 공문을 확인하시고, 해당 자료 업로드를 부탁드립니다.<br>
+<br>
+📢 <b>[ 중요 ] 신고 일정 안내</b><br>
+대상 기간: {대상기간}<br>
+{자료제출마감}<br>
+세금 납부 기한: {세금납부기한}<br>
+<br>
+📁 <b>기존 제출 자료</b><br>
+{필요자료}<br>
+<br>
+{특이사항}<br>
+<br>
+{자료제출안내}<br>
 </div>`;
 
 // 업체별 필요자료 기본 예시. 사용자가 자유롭게 수정.
@@ -60,14 +60,14 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
     label: '자료요청',
     desc: '인건비 자료를 요청하는 안내',
     html: `<div style="line-height:1.8;">
-<div>{귀속} {세목} 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.</div>
-<div><br></div>
-<div>📢 <b>신고 일정 안내</b></div>
-<div>{자료제출마감}</div>
-<div>세금 납부 기한: {세금납부기한}</div>
-<div><br></div>
-<div>📁 <b>요청자료</b></div>
-<div>{필요자료}</div>
+{귀속} {세목} 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.<br>
+<br>
+📢 <b>신고 일정 안내</b><br>
+{자료제출마감}<br>
+세금 납부 기한: {세금납부기한}<br>
+<br>
+📁 <b>요청자료</b><br>
+{필요자료}<br>
 </div>`,
   },
   filing: {
@@ -75,9 +75,9 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
     label: '신고안내',
     desc: '신고 일정만 간단히 안내',
     html: `<div style="line-height:1.8;">
-<div>📢 <b>신고 일정 안내</b></div>
-<div>신고 대상 : {귀속} {세목} 인건비 내역</div>
-<div>세금 납부 기한: {세금납부기한}</div>
+📢 <b>신고 일정 안내</b><br>
+신고 대상 : {귀속} {세목} 인건비 내역<br>
+세금 납부 기한: {세금납부기한}<br>
 </div>`,
   },
 };
@@ -104,3 +104,70 @@ export const SCENARIO_LABEL: Record<TemplateScenario, string> = {
   withholding_request: '안내문 서식 · 원천세 자료요청',
   withholding_filing: '안내문 서식 · 원천세 신고안내(급여대장 작성)',
 };
+
+/** 기본 서식 vs 담당자 저장 서식 */
+export type TemplateSource = 'default' | 'custom';
+
+// 부가세 신고 결과 보고 및 검토 — 사용자 서식 토큰
+export const VAT_REPORT_TOKENS: TemplateToken[] = [
+  { token: '{귀속}', desc: '과세기간 표기' },
+  { token: '{세목}', desc: '세목명 (부가가치세)' },
+  { token: '{신고결과요약표}', desc: '매출·매입·최종세액 요약 표' },
+  { token: '{분납안내}', desc: '납부 세액 발생 시 분납 권장 일정 (없으면 자동 제거)' },
+];
+
+export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.8;">
+📋 [신고 결과 보고 및 검토 안내]<br>
+<br>
+안녕하세요. {귀속} {세목} 신고 결과를 안내드립니다.<br>
+매입매출장과 결과 보고서를 함께 첨부했습니다.<br>
+아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.<br>
+<br>
+[신고 결과 요약]<br>
+{신고결과요약표}
+<br>
+✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.<br>
+{분납안내}
+<br>
+감사합니다.<br>
+</div>`;
+
+// 신고 결과 안내(납부세액) — 사용자 서식 토큰
+export const PAYMENT_NOTICE_TOKENS: TemplateToken[] = [
+  { token: '{귀속}', desc: '과세/귀속 기간' },
+  { token: '{세목}', desc: '세목명' },
+  { token: '{납부기한}', desc: '납부 기한 날짜' },
+  { token: '{납부서장수}', desc: '납부서 장수' },
+  { token: '{최종납부세액}', desc: '최종 납부 세액' },
+  { token: '{최종환급세액}', desc: '최종 환급 세액' },
+  { token: '{안내본문}', desc: '납부·환급·분납 자동 본문 전체' },
+  { token: '{서두}', desc: '상단 안내 문장' },
+  { token: '{납부요약}', desc: '최종 납부 세액 줄' },
+  { token: '{납부내역}', desc: '세목별 납부 내역' },
+  { token: '{첨부안내}', desc: '납부서 첨부 안내' },
+  { token: '{납부기한줄}', desc: '납부 기한 줄' },
+  { token: '{환급요약}', desc: '최종 환급 세액 줄' },
+  { token: '{환급내역}', desc: '세목별 환급 내역' },
+  { token: '{환급시점}', desc: '환급 예정 안내' },
+  { token: '{분납회차목록}', desc: '부가세 분납 회차별 일정·금액' },
+  { token: '{연체안내}', desc: '납부지연 가산세 안내' },
+];
+
+export const DEFAULT_PAYMENT_NOTICE_TEMPLATE = `<div style="line-height:1.8;">
+{안내본문}
+</div>`;
+
+/** 담당자(로그인 계정)별 서식 저장 구조 — users.notice_template JSON */
+export type NoticeTemplateStore = {
+  version: 2;
+  templates: TemplateMap;
+  sources: Partial<Record<TemplateScenario, TemplateSource>>;
+  vatReportTemplate?: string;
+  vatReportSource?: TemplateSource;
+  paymentNoticeTemplate?: string;
+  paymentNoticeSource?: TemplateSource;
+};
+
+export function emptyNoticeTemplateStore(): NoticeTemplateStore {
+  return { version: 2, templates: {}, sources: {} };
+}

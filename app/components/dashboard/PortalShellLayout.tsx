@@ -142,9 +142,9 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
         className="fixed left-0 top-0 z-40 h-[100dvh] shrink-0 border-r border-slate-200 bg-white"
         style={{ width: leftWidth }}
       >
-        <div className="flex h-full flex-col overflow-hidden p-2">
+        <div className="flex h-full flex-col overflow-hidden px-2.5 py-2 pr-3.5">
           <PortalBrand />
-          <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1">
             <HomeSidebarNav />
           </div>
         </div>
@@ -165,8 +165,8 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
         style={{ marginLeft: leftWidth, marginRight: effectiveRightWidth }}
       >
         <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 no-print">
-          <div className="flex items-center gap-3">
-            <div className="flex min-w-0 flex-1 justify-center">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
               <ContactHeaderSearch expanded />
             </div>
             <AppHeaderUser />

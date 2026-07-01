@@ -39,7 +39,7 @@ export default function HomeSidebarNav() {
         }
         return (
           <div key={group.id}>
-            <p className="px-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{group.label}</p>
+            <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{group.label}</p>
             <ul className="mt-0.5 space-y-0.5">
               {group.items.map(item => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -49,7 +49,7 @@ export default function HomeSidebarNav() {
                       href={item.href}
                       className={`block rounded-lg px-2.5 py-1.5 transition-colors ${
                         active
-                          ? 'bg-blue-50 font-semibold text-blue-800 ring-1 ring-blue-200'
+                          ? 'bg-blue-50 font-semibold text-blue-800 ring-1 ring-inset ring-blue-200'
                           : 'text-slate-700 hover:bg-slate-50'
                       }`}
                     >

@@ -26,7 +26,7 @@ export default function HomeTopBar({ userName }: { userName: string }) {
 
   return (
     <header className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-blue-100 pb-3 [scrollbar-width:thin]">
-      <p className="shrink-0 whitespace-nowrap text-sm font-bold text-slate-800">
+      <p className="shrink-0 whitespace-nowrap text-base font-bold text-slate-800">
         {userName}님, 안녕하세요 <span aria-hidden>👋</span>
       </p>
 

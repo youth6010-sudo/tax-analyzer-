@@ -92,11 +92,11 @@ export default function ContactHeaderSearch({ expanded = false }: { expanded?: b
     <div
       ref={rootRef}
       className={[
-        'relative flex items-center gap-1.5 shrink-0',
-        expanded ? 'w-full max-w-3xl' : 'w-full sm:w-auto',
+        'relative flex min-w-0 items-center gap-1.5',
+        expanded ? 'w-full' : 'w-full shrink-0 sm:w-auto',
       ].join(' ')}
     >
-      <div className={expanded ? 'relative w-full' : 'relative flex-1 sm:w-80 lg:w-96'}>
+      <div className={expanded ? 'relative min-w-0 flex-1' : 'relative flex-1 sm:w-80 lg:w-96'}>
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
           fill="none"

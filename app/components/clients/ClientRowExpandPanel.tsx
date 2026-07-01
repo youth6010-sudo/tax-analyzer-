@@ -77,21 +77,21 @@ export default function ClientRowExpandPanel({
   }, [clientId, feeRefreshKey, showFeeHistory]);
 
   return (
-    <div className="relative mt-2 pt-2 border-t border-slate-200/80">
+    <div className="relative mt-1 pt-1 border-t border-slate-200/80">
       <button
         type="button"
         onClick={onDetailClick}
         onMouseEnter={onPrefetch}
-        className={`${portalBtnSecondary} absolute top-2 right-0 text-sm px-2.5 py-1 z-10`}
+        className={`${portalBtnSecondary} absolute top-1 right-0 text-[11px] !px-1.5 !py-0.5 z-10`}
       >
         상세보기
       </button>
 
-      <dl className="space-y-2 text-base pr-24">
-        <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 items-baseline">
+      <dl className="space-y-1 text-xs pr-14">
+        <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-1.5 gap-y-1 items-baseline">
           {fields.map(field => (
             <div key={field.label} className="contents">
-              <dt className="text-sm font-semibold text-slate-600">{field.label}</dt>
+              <dt className="text-[11px] font-semibold text-slate-600">{field.label}</dt>
               <dd
                 className={[
                   'min-w-0 truncate text-slate-800',
@@ -107,23 +107,23 @@ export default function ClientRowExpandPanel({
       </dl>
 
       {(feeBreakdown?.bookkeepingFee != null || feeBreakdown?.adjustmentFee != null) && (
-        <p className="mt-2 text-sm text-slate-500 tabular-nums">
+        <p className="mt-1.5 text-[11px] text-slate-500 tabular-nums">
           {CLIENT_FIELD_LABELS.bookkeepingFee} {formatFee(feeBreakdown.bookkeepingFee)} ×12 +{' '}
           {CLIENT_FIELD_LABELS.adjustmentFee} {formatFee(feeBreakdown.adjustmentFee)}
         </p>
       )}
 
       {showFeeHistory && (
-      <div className="mt-3 pt-2 border-t border-slate-100">
-        <h4 className="text-sm font-semibold text-slate-600 mb-1.5">{CLIENT_FIELD_LABELS.fee} 변경 이력</h4>
+      <div className="mt-2 pt-1.5 border-t border-slate-100">
+        <h4 className="text-[11px] font-semibold text-slate-600 mb-1">{CLIENT_FIELD_LABELS.fee} 변경 이력</h4>
         {loading ? (
-          <p className="text-sm text-slate-400">불러오는 중…</p>
+          <p className="text-[11px] text-slate-400">불러오는 중…</p>
         ) : changes.length === 0 ? (
-          <p className="text-sm text-slate-400">변경 이력 없음</p>
+          <p className="text-[11px] text-slate-400">변경 이력 없음</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-0.5">
             {changes.map(c => (
-              <li key={c.id} className="text-sm text-slate-600 tabular-nums">
+              <li key={c.id} className="text-[11px] text-slate-600 tabular-nums">
                 <span className="font-semibold text-slate-800">{c.changedByName}</span>
                 <span className="text-slate-400 mx-1">·</span>
                 <span>{formatChangedAt(c.changedAt)}</span>

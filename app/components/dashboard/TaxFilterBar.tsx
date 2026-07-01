@@ -6,8 +6,8 @@ import { FILING_TAXES } from '@/app/utils/filingCheck';
 const DASHBOARD_EXCLUDED = new Set(['yearEnd', 'simplePayroll']);
 const ITEMS = FILING_TAXES.filter(t => !DASHBOARD_EXCLUDED.has(t.id));
 
-const iconBtn = (active: boolean) =>
-  `inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-base leading-none transition-colors ${
+const chipBtn = (active: boolean) =>
+  `inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap transition-colors ${
     active
       ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm'
       : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50/50'
@@ -23,11 +23,11 @@ export default function TaxFilterBar({ compact = false }: { compact?: boolean })
         <button
           type="button"
           aria-pressed={allView}
-          title="전체보기"
           onClick={() => setDashboardTaxFilter(null)}
-          className={iconBtn(allView)}
+          className={chipBtn(allView)}
         >
-          <span aria-hidden>▦</span>
+          <span className="text-sm leading-none" aria-hidden>▦</span>
+          전체
         </button>
         {ITEMS.map(item => {
           const active = selected === item.id;
@@ -36,11 +36,11 @@ export default function TaxFilterBar({ compact = false }: { compact?: boolean })
               key={item.id}
               type="button"
               aria-pressed={active}
-              title={item.label}
               onClick={() => setDashboardTaxFilter(active ? null : item.id)}
-              className={iconBtn(active)}
+              className={chipBtn(active)}
             >
-              <span aria-hidden>{item.icon}</span>
+              <span className="text-sm leading-none" aria-hidden>{item.icon}</span>
+              {item.label}
             </button>
           );
         })}

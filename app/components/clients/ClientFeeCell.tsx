@@ -160,7 +160,7 @@ export default function ClientFeeCell({
     return (
       <span
         title={`${CLIENT_FIELD_LABELS.fee} (본인 담당만 수정 가능)`}
-        className={`block w-full min-w-[5rem] text-right text-base font-semibold tabular-nums whitespace-nowrap text-gray-500 px-1.5 py-1 ${className}`}
+        className={`block w-full min-w-0 text-right text-xs font-semibold tabular-nums whitespace-nowrap text-gray-500 px-0.5 py-px ${className}`}
       >
         {display}
       </span>
@@ -173,7 +173,7 @@ export default function ClientFeeCell({
         type="button"
         onClick={openModal}
         title={`클릭하여 ${CLIENT_FIELD_LABELS.fee} 입력`}
-        className={`w-full min-w-[5rem] text-right text-base font-semibold tabular-nums whitespace-nowrap text-gray-900 hover:bg-blue-50 hover:text-blue-900 rounded px-1.5 py-1 transition-colors ${className}`}
+        className={`w-full min-w-0 text-right text-xs font-semibold tabular-nums whitespace-nowrap text-gray-900 hover:bg-blue-50 hover:text-blue-900 rounded px-0.5 py-px transition-colors ${className}`}
       >
         {display}
       </button>
