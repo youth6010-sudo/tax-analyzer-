@@ -55,19 +55,23 @@ function renderInactiveCell(
   label: string,
   excluded: boolean,
   locked: boolean,
+  activateKey?: string,
+  className?: string,
 ) {
+  const incomeType = activateKey ?? colKey;
+  const tdCls = `px-1 py-2 text-center ${className ?? ''}`;
   if (excluded || locked) {
     return (
-      <td key={colKey} className="px-2 py-2 text-center text-slate-200">
+      <td key={colKey} className={`${tdCls} text-slate-200`}>
         —
       </td>
     );
   }
   return (
-    <td key={colKey} className="px-2 py-2 text-center">
+    <td key={colKey} className={tdCls}>
       <button
         type="button"
-        onClick={() => onActivate(row.clientId, colKey)}
+        onClick={() => onActivate(row.clientId, incomeType)}
         className="w-full rounded-lg py-2 text-slate-300 transition-colors hover:bg-blue-50 hover:text-blue-500"
         title={`클릭하여 ${label} 활성화`}
       >
@@ -101,9 +105,6 @@ export default function IncomeTypeGridTable({
 }: Props) {
   const simpleCols = SIMPLE_PAYROLL_GRID_COLUMNS;
   const yearEndCols = YEAR_END_COLUMNS as readonly YearEndColumn[];
-  const incomeColCount = mode === 'simplePayroll' ? simpleCols.length : yearEndCols.length;
-  const colSpan = 4 + incomeColCount;
-
   const simpleHeader = () => {
     const row1: ReactNode[] = [];
     const row2: ReactNode[] = [];
@@ -166,8 +167,39 @@ export default function IncomeTypeGridTable({
     );
   };
 
+  const incomeColCount = mode === 'simplePayroll' ? simpleCols.length : yearEndCols.length;
+  const colSpan = 4 + incomeColCount;
+
+  const simpleColGroup = () => (
+    <colgroup>
+      <col className="w-12" />
+      <col className="w-20" />
+      <col />
+      <col className="w-32" />
+      {simpleCols.map(col => (
+        <col
+          key={col.kind === 'filed' ? col.key : col.kind}
+          className={col.kind === 'laborDate' || col.kind === 'laborMethod' ? 'w-24' : 'w-14'}
+        />
+      ))}
+    </colgroup>
+  );
+
+  const yearEndColGroup = () => (
+    <colgroup>
+      <col className="w-12" />
+      <col className="w-20" />
+      <col />
+      <col className="w-32" />
+      {yearEndCols.map(col => (
+        <col key={col.key} className="w-14" />
+      ))}
+    </colgroup>
+  );
+
   return (
     <table className="w-full table-fixed text-sm">
+      {mode === 'simplePayroll' ? simpleColGroup() : yearEndColGroup()}
       <thead>
         {mode === 'simplePayroll' ? (
           simpleHeader()
@@ -262,18 +294,24 @@ export default function IncomeTypeGridTable({
                         if (!labor.active) {
                           return renderInactiveCell(
                             row,
-                            'laborContentReport',
+                            col.kind,
                             onActivate,
                             '근로내용확인신고',
                             excluded,
                             locked,
+                            'laborContentReport',
+                            col.kind === 'laborDate' ? 'border-l border-slate-50' : undefined,
                           );
                         }
                         const field =
                           col.kind === 'laborDate' ? 'acceptanceDate' : 'acceptanceMethod';
                         const placeholder = col.label;
+                        const isFirstLaborCol = col.kind === 'laborDate';
                         return (
-                          <td key={col.kind} className="border-l border-slate-50 px-1 py-2">
+                          <td
+                            key={col.kind}
+                            className={`px-1 py-2 ${isFirstLaborCol ? 'border-l border-slate-50' : ''}`}
+                          >
                             <input
                               value={labor[field] ?? ''}
                               onChange={e =>
@@ -292,7 +330,7 @@ export default function IncomeTypeGridTable({
                                   ? '원천세 제외 — 더블클릭 업체명으로 복구'
                                   : '더블클릭 — 근로내용확인 비활성화'
                               }
-                              className={`${inputCls} w-full ${excluded ? 'cursor-not-allowed opacity-50' : ''}`}
+                              className={`${inputCls} box-border w-full min-w-0 ${excluded ? 'cursor-not-allowed opacity-50' : ''}`}
                             />
                           </td>
                         );
@@ -303,10 +341,17 @@ export default function IncomeTypeGridTable({
                         return renderNaCell(col.key);
                       }
                       if (!cell.active) {
-                        return renderInactiveCell(row, col.key, onActivate, col.label, excluded, locked);
+                        return renderInactiveCell(
+                          row,
+                          col.key,
+                          onActivate,
+                          col.label,
+                          excluded,
+                          locked,
+                        );
                       }
                       return (
-                        <td key={col.key} className="px-2 py-2 text-center">
+                        <td key={col.key} className="px-1 py-2 text-center">
                           <input
                             type="checkbox"
                             checked={cell.filed}
