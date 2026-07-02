@@ -1,12 +1,12 @@
 import PortalPageShell, { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
-import { requireUser } from '@/lib/auth';
+import { requireUserPage } from '@/lib/auth';
 import { isConfigured, loadYouthIds } from '@/lib/youthIds';
 import YouthIdsBoard from './_components/YouthIdsBoard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function YouthIdsPage() {
-  const user = await requireUser();
+  const user = await requireUserPage();
   const doc = loadYouthIds();
 
   return (

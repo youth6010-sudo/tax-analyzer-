@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isPortalAdmin, requireUser } from '@/lib/auth';
+import { handleApiError } from '@/lib/apiError';
 import {
   createCompanyEvent,
   deleteCompanyEvent,
@@ -12,8 +13,8 @@ export async function GET() {
     await requireUser();
     const items = await listUpcomingCompanyEvents(30);
     return NextResponse.json({ items });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }
 

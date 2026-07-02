@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import type { SessionData } from './session';
@@ -21,6 +22,15 @@ export async function requireUser() {
   const session = await getServerSession();
   if (!session.user) {
     throw new Error('UNAUTHORIZED');
+  }
+  return session.user;
+}
+
+/** 서버 페이지용 — 미인증 시 500 대신 로그인으로 이동 */
+export async function requireUserPage() {
+  const session = await getServerSession();
+  if (!session.user) {
+    redirect('/login');
   }
   return session.user;
 }

@@ -2,12 +2,12 @@ import HomeTopBar from './components/dashboard/HomeTopBar';
 import MyClientsBoard from './components/dashboard/MyClientsBoard';
 import PortalPageShell from './components/portal/PortalPageShell';
 import { portalMain } from './components/portal/uiClasses';
-import { requireUser } from '@/lib/auth';
+import { requireUserPage } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const user = await requireUser();
+  const user = await requireUserPage();
 
   return (
     <PortalPageShell bare>

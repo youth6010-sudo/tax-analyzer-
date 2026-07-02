@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { handleApiError } from '@/lib/apiError';
 import {
   createPersonalChecklistItem,
   listPersonalChecklistForOwner,
@@ -11,8 +12,8 @@ export async function GET() {
     const user = await requireUser();
     const items = await listPersonalChecklistForOwner(user.name, { includeCompleted: false });
     return NextResponse.json({ items });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }
 
