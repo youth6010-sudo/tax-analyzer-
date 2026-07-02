@@ -3,14 +3,14 @@ import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incom
 import type { ClientIncomeTypes, IncomeTypeKey } from '@/app/types/incomeTypes';
 import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
-import { readIncomeTypes, yearEndTypeTargets, isLaborContentReportActive } from '@/lib/incomeTypes';
+import { readIncomeTypes, readYearEndTypes, yearEndTypeTargets, isLaborContentReportActive } from '@/lib/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
-import type { YearEndIncomeType } from '@/lib/yearEndFilingsDb';
+import type { YearEndIncomeKey } from '@/app/types/incomeTypes';
 
 export const AUTO_NO_WH = '원천세 신고내역 없음';
 
@@ -165,12 +165,12 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
 
 export function patchYearEndRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
   row: T,
-  types: ClientIncomeTypes,
+  types: ReturnType<typeof yearEndTypeTargets>,
 ): T {
   const yearEnd = yearEndTypeTargets(types);
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
   for (const col of YEAR_END_COLUMNS) {
-    const active = yearEnd[col.key as YearEndIncomeType];
+    const active = yearEnd[col.key as YearEndIncomeKey];
     const prev = cells[col.key] ?? { active: false, filed: false };
     cells[col.key] = { ...prev, active, ...(active ? {} : { filed: false }) };
   }
@@ -193,13 +193,13 @@ export function buildYearEndGrid(
         !withholdingHistory ||
         withholdingHistory.ids.has(c.id) ||
         (biz !== '' && withholdingHistory.bizNos.has(biz));
-      const types = yearEndTypeTargets(readIncomeTypes(c.intakeData));
+      const types = yearEndTypeTargets(readYearEndTypes(c.intakeData));
       const excludeReason =
         excluded[c.id] ?? (withholdingHistory && !hasWithholdingHistory ? AUTO_NO_WH : null);
       const cells: Record<string, IncomeGridCell> = {};
 
       for (const col of YEAR_END_COLUMNS) {
-        const active = types[col.key as YearEndIncomeType];
+        const active = types[col.key as YearEndIncomeKey];
         const savedRow = filedMap.get(`${c.id}|${col.key}`);
         cells[col.key] = {
           active,

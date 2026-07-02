@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { isMasterUser } from '@/lib/clientAccess';
 import { listClients } from '@/lib/clientsDb';
-import { readIncomeTypes, yearEndTypeTargets } from '@/lib/incomeTypes';
+import { readYearEndTypes, yearEndTypeTargets } from '@/lib/incomeTypes';
 import {
   listYearEndFilings,
   matchYearEndFromExcel,
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     for (const c of filingTargets(clients, 'yearEnd')) {
       const biz = normalizeBizNo(c.businessNo);
       if (biz) bizMap.set(c.id, biz);
-      const t = yearEndTypeTargets(readIncomeTypes(c.intakeData));
+      const t = yearEndTypeTargets(readYearEndTypes(c.intakeData));
       const active: YearEndIncomeType[] = [];
       for (const { key } of YEAR_END_TABLE_TYPES) {
         if (t[key]) active.push(key);

@@ -2,7 +2,12 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { yearEndFilings } from '@/db/schema';
 
-export type YearEndIncomeType = 'retirement' | 'interestDividend';
+export type YearEndIncomeType =
+  | 'employed'
+  | 'retirement'
+  | 'bizIncome'
+  | 'otherTax'
+  | 'interestDividend';
 
 export type YearEndRow = {
   clientId: string;
@@ -12,7 +17,10 @@ export type YearEndRow = {
 };
 
 export const YEAR_END_TABLE_TYPES: { key: YearEndIncomeType; label: string }[] = [
+  { key: 'employed', label: '근로' },
   { key: 'retirement', label: '퇴직' },
+  { key: 'bizIncome', label: '사업' },
+  { key: 'otherTax', label: '기타' },
   { key: 'interestDividend', label: '이자배당' },
 ];
 

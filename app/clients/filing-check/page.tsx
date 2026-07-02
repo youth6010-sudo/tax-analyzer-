@@ -56,6 +56,7 @@ import FilingCheckSessionPanel from '@/app/components/clients/FilingCheckSession
 import ClientFilingSettingsModal from '@/app/components/clients/ClientFilingSettingsModal';
 import IncomeTypeFilingSection, {
   type IncomeFilingStats,
+  type IncomeStatFilter,
   type IncomeTypeFilingHandle,
 } from '@/app/components/clients/IncomeTypeFilingSection';
 import { PortalLoading } from '@/app/components/portal/PortalPageShell';
@@ -188,9 +189,32 @@ function ComprehensiveGroupReceiveCheckbox({
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
+function StatCard({
+  label,
+  value,
+  tone,
+  selected,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+  selected?: boolean;
+  onClick?: () => void;
+}) {
+  const cls = `rounded-2xl border px-4 py-3 text-left transition-shadow ${tone} ${
+    selected ? 'ring-2 ring-blue-400 ring-offset-1' : ''
+  } ${onClick ? 'cursor-pointer hover:shadow-sm' : ''}`;
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cls}>
+        <p className="text-xs font-medium opacity-70">{label}</p>
+        <p className="mt-0.5 text-2xl font-extrabold tabular-nums">{value}</p>
+      </button>
+    );
+  }
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${tone}`}>
+    <div className={cls}>
       <p className="text-xs font-medium opacity-70">{label}</p>
       <p className="mt-0.5 text-2xl font-extrabold tabular-nums">{value}</p>
     </div>
@@ -250,6 +274,8 @@ function FilingCheckPageInner() {
   const [incomeNotice, setIncomeNotice] = useState('');
   const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
+  const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [statFilter, setStatFilter] = useState<IncomeStatFilter>('all');
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
 
   const cycle = getCycle(tax);
@@ -257,6 +283,10 @@ function FilingCheckPageInner() {
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    setStatFilter('all');
+  }, [tax, period.year, period.month, period.vatPhase, selManager]);
 
   const persistSession = useCallback(
     async (data: CheckRecord) => {
@@ -294,6 +324,7 @@ function FilingCheckPageInner() {
   useEffect(() => {
     return () => {
       if (savedTickTimerRef.current) clearTimeout(savedTickTimerRef.current);
+      if (incomeSavedTickTimerRef.current) clearTimeout(incomeSavedTickTimerRef.current);
     };
   }, []);
 
@@ -671,6 +702,53 @@ function FilingCheckPageInner() {
     tax === 'comprehensive'
       ? excludedComprehensiveGroups.map(g => g.clients[0])
       : excludedTargets;
+
+  const toggleStatFilter = useCallback((filter: IncomeStatFilter) => {
+    setStatFilter(prev => (prev === filter ? 'all' : filter));
+  }, []);
+
+  const displayedComprehensiveGroups = useMemo(() => {
+    if (statFilter === 'all') return comprehensiveGroups;
+    return comprehensiveGroups.filter(g => {
+      const excluded = excludeReasonOf(g.clients[0]) !== null;
+      if (statFilter === 'target') return !excluded;
+      const received = isGroupReceived(g);
+      if (statFilter === 'received') return !excluded && received;
+      if (statFilter === 'diff') return !excluded && !received;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comprehensiveGroups, statFilter, record.excluded, tax, withheld]);
+
+  const displayedTargets = useMemo(() => {
+    if (statFilter === 'all') return targets;
+    return targets.filter(c => {
+      const excluded = excludeReasonOf(c) !== null;
+      if (statFilter === 'target') return !excluded;
+      const received = isReceived(c.id, c.businessNo);
+      if (statFilter === 'received') return !excluded && received;
+      if (statFilter === 'diff') return !excluded && !received;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targets, statFilter, record.excluded, record.overrides, excelSet, tax, withheld]);
+
+  const statFilterBanner =
+    statFilter !== 'all' ? (
+      <p className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+        {statFilter === 'target' && '신고대상 업체만 표시 중'}
+        {statFilter === 'received' && '접수완료 업체만 표시 중'}
+        {statFilter === 'diff' && '미완료(차이) 업체만 표시 중'}
+        {' · '}
+        <span className="text-blue-600">통계 카드를 다시 클릭하면 전체 보기</span>
+      </p>
+    ) : null;
+
+  const showIncomeSavedTick = useCallback(() => {
+    setIncomeSavedTick(true);
+    if (incomeSavedTickTimerRef.current) clearTimeout(incomeSavedTickTimerRef.current);
+    incomeSavedTickTimerRef.current = setTimeout(() => setIncomeSavedTick(false), 1200);
+  }, []);
 
   const toggleExclude = (id: string, on: boolean) => {
     const next = { ...record.excluded };
@@ -1150,8 +1228,7 @@ function FilingCheckPageInner() {
                 void mergeHometaxSpecialFilings(f)
                   .then(() =>
                     incomeSectionRef.current?.uploadHometax(f).then(() => {
-                      setIncomeSavedTick(true);
-                      window.setTimeout(() => setIncomeSavedTick(false), 1200);
+                      showIncomeSavedTick();
                     }),
                   )
                   .catch(() => {})
@@ -1204,11 +1281,15 @@ function FilingCheckPageInner() {
               label="신고대상"
               value={incomeStats.target}
               tone="border-blue-100 bg-blue-50/60 text-blue-800"
+              selected={statFilter === 'target'}
+              onClick={() => toggleStatFilter('target')}
             />
             <StatCard
               label="접수완료"
               value={incomeStats.received}
               tone="border-emerald-100 bg-emerald-50/60 text-emerald-800"
+              selected={statFilter === 'received'}
+              onClick={() => toggleStatFilter('received')}
             />
             <StatCard
               label="차이"
@@ -1218,6 +1299,8 @@ function FilingCheckPageInner() {
                   ? 'border-slate-100 bg-slate-50 text-slate-600'
                   : 'border-rose-100 bg-rose-50/60 text-rose-700'
               }
+              selected={statFilter === 'diff'}
+              onClick={() => toggleStatFilter('diff')}
             />
           </div>
           <IncomeTypeFilingSection
@@ -1231,9 +1314,11 @@ function FilingCheckPageInner() {
             onMonthChange={m => setPeriod(p => ({ ...p, month: m }))}
             embedded
             locked={locked}
+            rowFilter={statFilter}
             onStatsChange={setIncomeStats}
             onUploadNotice={setIncomeNotice}
             onEmployedFilingMonth={setEmployedFilingMonth}
+            onSaved={showIncomeSavedTick}
           />
           {completionFooter(incomeStats.diff)}
         </>
@@ -1243,14 +1328,30 @@ function FilingCheckPageInner() {
 
       {/* 현황 */}
       <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
-        <StatCard label="신고대상" value={targetCount} tone="border-blue-100 bg-blue-50/60 text-blue-800" />
-        <StatCard label="접수완료" value={receivedCount} tone="border-emerald-100 bg-emerald-50/60 text-emerald-800" />
+        <StatCard
+          label="신고대상"
+          value={targetCount}
+          tone="border-blue-100 bg-blue-50/60 text-blue-800"
+          selected={statFilter === 'target'}
+          onClick={() => toggleStatFilter('target')}
+        />
+        <StatCard
+          label="접수완료"
+          value={receivedCount}
+          tone="border-emerald-100 bg-emerald-50/60 text-emerald-800"
+          selected={statFilter === 'received'}
+          onClick={() => toggleStatFilter('received')}
+        />
         <StatCard
           label="차이"
           value={diff}
           tone={diff === 0 ? 'border-slate-100 bg-slate-50 text-slate-600' : 'border-rose-100 bg-rose-50/60 text-rose-700'}
+          selected={statFilter === 'diff'}
+          onClick={() => toggleStatFilter('diff')}
         />
       </div>
+
+      {statFilterBanner}
 
       {excelSet.size > 0 && (
         <p className={`${portalAlertInfo} mb-4`}>
@@ -1337,7 +1438,7 @@ function FilingCheckPageInner() {
               </tr>
             ) : (
               <>
-                {comprehensiveGroups.map((g, i) => {
+                {displayedComprehensiveGroups.map((g, i) => {
                   const primary = g.clients[0];
                   const manualExcluded = isManualExcluded(g.primaryClientId);
                   const reason = excludeReasonOf(primary);
@@ -1443,7 +1544,7 @@ function FilingCheckPageInner() {
                   const reason = excludeReasonOf(c);
                   const excluded = reason !== null;
                   const received = !excluded && isReceived(c.id, c.businessNo);
-                  const rowNo = comprehensiveGroups.length + mi + 1;
+                  const rowNo = displayedComprehensiveGroups.length + mi + 1;
                   return (
                     <tr
                       key={c.id}
@@ -1546,7 +1647,7 @@ function FilingCheckPageInner() {
                 </td>
               </tr>
             ) : (
-              targets.map((c, i) => {
+              displayedTargets.map((c, i) => {
                 const manualExcluded = isManualExcluded(c.id);
                 const reason = excludeReasonOf(c);
                 const excluded = reason !== null;

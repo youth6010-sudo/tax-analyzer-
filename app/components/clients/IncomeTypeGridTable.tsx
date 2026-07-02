@@ -38,6 +38,7 @@ type Props = {
     clientId: string,
     patch: Partial<{ acceptanceDate: string; acceptanceMethod: string }>,
   ) => void;
+  locked?: boolean;
 };
 
 const defaultInputCls =
@@ -53,8 +54,9 @@ function renderInactiveCell(
   onActivate: Props['onActivate'],
   label: string,
   excluded: boolean,
+  locked: boolean,
 ) {
-  if (excluded) {
+  if (excluded || locked) {
     return (
       <td key={colKey} className="px-2 py-2 text-center text-slate-200">
         —
@@ -95,6 +97,7 @@ export default function IncomeTypeGridTable({
   onDeactivate,
   onToggleFiled,
   onPatchLabor,
+  locked = false,
 }: Props) {
   const simpleCols = SIMPLE_PAYROLL_GRID_COLUMNS;
   const yearEndCols = YEAR_END_COLUMNS as readonly YearEndColumn[];
@@ -207,39 +210,39 @@ export default function IncomeTypeGridTable({
                   {i + 1}
                 </td>
                 <td className="px-2 py-2 tabular-nums text-slate-500">{row.douzoneCode || '-'}</td>
-                <td className="px-2 py-2">
+                <td className="max-w-0 px-2 py-2">
                   <button
                     type="button"
                     onClick={() => onOpenSettings(row.clientId, row.companyName)}
                     onDoubleClick={e => {
                       e.preventDefault();
-                      onToggleExclude(row.clientId);
+                      if (!locked) onToggleExclude(row.clientId);
                     }}
-                    className={`break-words text-left font-semibold hover:underline ${
+                    className={`block w-full min-w-0 truncate whitespace-nowrap text-left font-semibold hover:underline ${
                       excluded
                         ? 'text-slate-400 line-through decoration-slate-400'
                         : 'text-slate-800 hover:text-blue-600'
                     }`}
                     title={
                       excluded
-                        ? '더블클릭 — 원천세 제외 해제(복구)'
-                        : '클릭 — 설정 · 더블클릭 — 원천세 제외'
+                        ? locked
+                          ? '원천세 제외'
+                          : '더블클릭 — 원천세 제외 해제(복구)'
+                        : locked
+                          ? row.representative
+                            ? `${row.companyName || '(이름 없음)'} · ${row.representative}`
+                            : row.companyName || '(이름 없음)'
+                          : '클릭 — 설정 · 더블클릭 — 원천세 제외'
                     }
                   >
                     {row.companyName || '(이름 없음)'}
+                    {row.representative ? ` · ${row.representative}` : ''}
+                    {excluded && (
+                      <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        원천세 제외
+                      </span>
+                    )}
                   </button>
-                  {row.representative && (
-                    <span
-                      className={`ml-1 text-xs ${excluded ? 'text-slate-300' : 'text-slate-400'}`}
-                    >
-                      {row.representative}
-                    </span>
-                  )}
-                  {excluded && (
-                    <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      원천세 제외
-                    </span>
-                  )}
                 </td>
                 <td
                   className={`whitespace-nowrap px-2 py-2 tabular-nums ${
@@ -259,10 +262,11 @@ export default function IncomeTypeGridTable({
                         if (!labor.active) {
                           return renderInactiveCell(
                             row,
-                            col.kind,
+                            'laborContentReport',
                             onActivate,
                             '근로내용확인신고',
                             excluded,
+                            locked,
                           );
                         }
                         const field =
@@ -274,13 +278,14 @@ export default function IncomeTypeGridTable({
                               value={labor[field] ?? ''}
                               onChange={e =>
                                 !excluded &&
+                                !locked &&
                                 onPatchLabor?.(row.clientId, { [field]: e.target.value })
                               }
                               onDoubleClick={() =>
-                                !excluded && onDeactivate(row.clientId, 'laborContentReport')
+                                !excluded && !locked && onDeactivate(row.clientId, 'laborContentReport')
                               }
-                              readOnly={excluded}
-                              disabled={excluded}
+                              readOnly={excluded || locked}
+                              disabled={excluded || locked}
                               placeholder={placeholder}
                               title={
                                 excluded
@@ -298,24 +303,26 @@ export default function IncomeTypeGridTable({
                         return renderNaCell(col.key);
                       }
                       if (!cell.active) {
-                        return renderInactiveCell(row, col.key, onActivate, col.label, excluded);
+                        return renderInactiveCell(row, col.key, onActivate, col.label, excluded, locked);
                       }
                       return (
                         <td key={col.key} className="px-2 py-2 text-center">
                           <input
                             type="checkbox"
                             checked={cell.filed}
-                            disabled={excluded}
+                            disabled={excluded || locked}
                             onClick={e => e.stopPropagation()}
-                            onDoubleClick={() => !excluded && onDeactivate(row.clientId, col.key)}
+                            onDoubleClick={() => !excluded && !locked && onDeactivate(row.clientId, col.key)}
                             onChange={e =>
-                              !excluded && onToggleFiled(row.clientId, col.key, e.target.checked)
+                              !excluded && !locked && onToggleFiled(row.clientId, col.key, e.target.checked)
                             }
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                             title={
                               excluded
                                 ? '원천세 제외'
-                                : '더블클릭 — 소득유형 비활성화'
+                                : locked
+                                  ? '완료 처리됨'
+                                  : '더블클릭 — 소득유형 비활성화'
                             }
                           />
                         </td>
@@ -324,18 +331,18 @@ export default function IncomeTypeGridTable({
                   : yearEndCols.map(col => {
                       const cell = row.cells[col.key] ?? { active: false, filed: false };
                       if (!cell.active) {
-                        return renderInactiveCell(row, col.key, onActivate, col.label, excluded);
+                        return renderInactiveCell(row, col.key, onActivate, col.label, excluded, locked);
                       }
                       return (
                         <td key={col.key} className="px-2 py-2 text-center">
                           <input
                             type="checkbox"
                             checked={cell.filed}
-                            disabled={excluded}
+                            disabled={excluded || locked}
                             onClick={e => e.stopPropagation()}
-                            onDoubleClick={() => !excluded && onDeactivate(row.clientId, col.key)}
+                            onDoubleClick={() => !excluded && !locked && onDeactivate(row.clientId, col.key)}
                             onChange={e =>
-                              !excluded && onToggleFiled(row.clientId, col.key, e.target.checked)
+                              !excluded && !locked && onToggleFiled(row.clientId, col.key, e.target.checked)
                             }
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                             title={

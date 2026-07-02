@@ -20,8 +20,7 @@ import IncomeTypeGridTable, {
   type IncomeGridRow,
 } from '@/app/components/clients/IncomeTypeGridTable';
 import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
-import type { IncomeTypeKey } from '@/app/types/incomeTypes';
-import type { YearEndIncomeType } from '@/lib/yearEndFilingsDb';
+import type { IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
   simplePayrollMonthlyPeriodKey,
@@ -43,6 +42,8 @@ const inputCls =
 
 export type IncomeFilingStats = { target: number; received: number; diff: number };
 
+export type IncomeStatFilter = 'all' | 'target' | 'received' | 'diff';
+
 export type IncomeTypeFilingHandle = {
   reload: () => Promise<void>;
   uploadHometax: (file: File) => Promise<{ matched: number }>;
@@ -61,6 +62,8 @@ type Props = {
   onStatsChange?: (stats: IncomeFilingStats) => void;
   onUploadNotice?: (text: string) => void;
   onEmployedFilingMonth?: (active: boolean) => void;
+  onSaved?: () => void;
+  rowFilter?: IncomeStatFilter;
 };
 
 type ApiGridRow = IncomeGridRow & { manager?: string };
@@ -78,6 +81,15 @@ async function patchIncomeType(clientId: string, patch: Record<string, boolean>)
     body: JSON.stringify({ incomeTypes: patch }),
   });
   if (!res.ok) throw new Error('소득유형 저장 실패');
+}
+
+async function patchYearEndType(clientId: string, patch: Partial<YearEndClientTypes>) {
+  const res = await fetch(`/api/clients/${clientId}/income-types`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ yearEndTypes: patch }),
+  });
+  if (!res.ok) throw new Error('연말 소득유형 저장 실패');
 }
 
 function filterByManager(grid: ApiGridRow[], manager: string): ApiGridRow[] {
@@ -109,6 +121,21 @@ function isRowFullyFiled(row: ApiGridRow, mode: 'simplePayroll' | 'yearEnd'): bo
     if (!cell?.active) continue;
     if (!cell.filed) return false;
   }
+  return true;
+}
+
+function matchesRowFilter(
+  row: ApiGridRow,
+  mode: 'simplePayroll' | 'yearEnd',
+  filter: IncomeStatFilter,
+): boolean {
+  if (filter === 'all') return true;
+  if (row.excludeReason != null && row.excludeReason !== undefined) return false;
+  const hasActive = Object.values(row.cells).some(c => c.active);
+  if (filter === 'target') return hasActive;
+  const fullyFiled = isRowFullyFiled(row, mode);
+  if (filter === 'received') return hasActive && fullyFiled;
+  if (filter === 'diff') return hasActive && !fullyFiled;
   return true;
 }
 
@@ -146,6 +173,8 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     onStatsChange,
     onUploadNotice,
     onEmployedFilingMonth,
+    onSaved,
+    rowFilter = 'all',
   },
   ref,
 ) {
@@ -177,7 +206,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     return Object.fromEntries(YEAR_END_COLUMNS.map(c => [c.key, c.label]));
   }, [mode]);
 
-  const filteredGrid = useMemo(() => filterByManager(grid, manager), [grid, manager]);
+  const filteredGrid = useMemo(() => {
+    const byManager = filterByManager(grid, manager);
+    if (rowFilter === 'all') return byManager;
+    return byManager.filter(row => matchesRowFilter(row, mode, rowFilter));
+  }, [grid, manager, mode, rowFilter]);
 
   const stats = useMemo(
     () => computeStats(grid, manager, mode),
@@ -192,22 +225,31 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     async (clientId: string) => {
       const res = await fetch(`/api/clients/${clientId}/income-types`, { cache: 'no-store' });
       if (!res.ok) return;
-      const data = (await res.json()) as { incomeTypes?: ClientIncomeTypes };
-      if (!data.incomeTypes) return;
-      const types = data.incomeTypes;
-      setGrid(prev =>
-        prev.map(row => {
-          if (row.clientId !== clientId) return row;
-          if (mode === 'simplePayroll') {
+      const data = (await res.json()) as {
+        incomeTypes?: ClientIncomeTypes;
+        yearEndTypes?: YearEndClientTypes;
+      };
+      if (mode === 'simplePayroll') {
+        if (!data.incomeTypes) return;
+        setGrid(prev =>
+          prev.map(row => {
+            if (row.clientId !== clientId) return row;
             return patchSimplePayrollRowFromTypes(
               row,
-              types,
+              data.incomeTypes!,
               spMeta?.employedFilingMonth ?? false,
             );
-          }
-          return patchYearEndRowFromTypes(row, types);
-        }),
-      );
+          }),
+        );
+      } else {
+        if (!data.yearEndTypes) return;
+        setGrid(prev =>
+          prev.map(row => {
+            if (row.clientId !== clientId) return row;
+            return patchYearEndRowFromTypes(row, data.yearEndTypes!);
+          }),
+        );
+      }
     },
     [mode, spMeta?.employedFilingMonth],
   );
@@ -311,29 +353,29 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
             if (col.kind === 'laborDate' || col.kind === 'laborMethod') continue;
             const cell = row.cells[col.key];
-            if (!cell?.active) continue;
+            if (!cell) continue;
             const pk = col.key === 'employed' && employedKey ? employedKey : monthlyKey;
             if (col.key === 'employed' && !employedKey) continue;
             rows.push({
               clientId: row.clientId,
               incomeType: col.key,
               periodKey: pk,
-              filed: cell.filed,
-              acceptanceDate: cell.acceptanceDate ?? '',
-              acceptanceMethod: cell.acceptanceMethod ?? '',
+              filed: cell.active ? cell.filed : false,
+              acceptanceDate: cell.active ? (cell.acceptanceDate ?? '') : '',
+              acceptanceMethod: cell.active ? (cell.acceptanceMethod ?? '') : '',
             });
           }
           const labor = row.cells.laborContentReport;
-          if (labor?.active) {
+          if (labor) {
             const date = labor.acceptanceDate?.trim() ?? '';
             const method = labor.acceptanceMethod?.trim() ?? '';
             rows.push({
               clientId: row.clientId,
               incomeType: 'laborContentReport',
               periodKey: monthlyKey,
-              filed: !!(date || method),
-              acceptanceDate: date,
-              acceptanceMethod: method,
+              filed: labor.active ? !!(date || method) : false,
+              acceptanceDate: labor.active ? date : '',
+              acceptanceMethod: labor.active ? method : '',
             });
           }
         }
@@ -345,15 +387,15 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         });
         if (!res.ok) throw new Error('저장 실패');
       } else {
-        const rows: { clientId: string; incomeType: YearEndIncomeType; filed: boolean }[] = [];
+        const rows: { clientId: string; incomeType: YearEndIncomeKey; filed: boolean }[] = [];
         for (const row of grid) {
           for (const col of YEAR_END_COLUMNS) {
             const cell = row.cells[col.key];
-            if (!cell?.active) continue;
+            if (!cell) continue;
             rows.push({
               clientId: row.clientId,
               incomeType: col.key,
-              filed: cell.filed,
+              filed: cell.active ? cell.filed : false,
             });
           }
         }
@@ -364,6 +406,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         });
         if (!res.ok) throw new Error('저장 실패');
       }
+      if (embedded) onSaved?.();
       if (!embedded) setMessage('저장되었습니다.');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '저장 실패';
@@ -373,7 +416,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     } finally {
       setSaving(false);
     }
-  }, [mode, grid, spMeta, year, month, embedded, onUploadNotice]);
+  }, [mode, grid, spMeta, year, month, embedded, onUploadNotice, onSaved]);
 
   const scheduleSave = useCallback(() => {
     if (!embedded) return;
@@ -456,7 +499,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   const handleActivate = async (clientId: string, incomeType: string) => {
     if (locked) return;
     try {
-      await patchIncomeType(clientId, { [incomeType]: true });
+      if (mode === 'yearEnd') {
+        await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: true });
+      } else {
+        await patchIncomeType(clientId, { [incomeType]: true });
+      }
       updateCell(clientId, incomeType, { active: true, filed: false });
       if (!embedded) setMessage(`${labelOf(incomeType)} 활성화`);
       scheduleSave();
@@ -470,7 +517,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   const handleDeactivate = async (clientId: string, incomeType: string) => {
     if (locked) return;
     try {
-      await patchIncomeType(clientId, { [incomeType]: false });
+      if (mode === 'yearEnd') {
+        await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: false });
+      } else {
+        await patchIncomeType(clientId, { [incomeType]: false });
+      }
       updateCell(clientId, incomeType, {
         active: false,
         filed: false,
@@ -537,12 +588,24 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
 
   const years = Array.from({ length: 10 }, (_, i) => 2025 + i);
 
+  const filterBanner =
+    rowFilter !== 'all' ? (
+      <p className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+        {rowFilter === 'target' && '신고대상 업체만 표시 중'}
+        {rowFilter === 'received' && '접수완료 업체만 표시 중'}
+        {rowFilter === 'diff' && '미완료(차이) 업체만 표시 중'}
+        {' · '}
+        <span className="text-blue-600">통계 카드를 다시 클릭하면 전체 보기</span>
+      </p>
+    ) : null;
+
   const tableBlock = (
     <div className={`${portalCard} overflow-hidden`}>
       <IncomeTypeGridTable
         mode={mode}
         rows={filteredGrid}
         loading={loading}
+        locked={locked}
         employedFilingMonth={spMeta?.employedFilingMonth ?? false}
         onOpenSettings={(id, name) => setSettingsClient({ id, companyName: name })}
         onToggleExclude={id => void handleToggleExclude(id)}
@@ -557,6 +620,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   if (embedded) {
     return (
       <>
+        {filterBanner}
         {tableBlock}
         {settingsClient && (
           <ClientFilingSettingsModal
@@ -644,6 +708,8 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           {message}
         </p>
       )}
+
+      {filterBanner}
 
       {tableBlock}
 

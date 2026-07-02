@@ -2,8 +2,16 @@ import type {
   ClientIncomeTypes,
   IncomeTypeKey,
   WithholdingSettings,
+  YearEndClientTypes,
+  YearEndIncomeKey,
 } from '@/app/types/incomeTypes';
-import { EMPTY_INCOME_TYPES, INCOME_TYPE_KEYS, SIMPLE_PAYROLL_INCOME_KEYS } from '@/app/types/incomeTypes';
+import {
+  EMPTY_INCOME_TYPES,
+  EMPTY_YEAR_END_TYPES,
+  INCOME_TYPE_KEYS,
+  SIMPLE_PAYROLL_INCOME_KEYS,
+  YEAR_END_INCOME_KEYS,
+} from '@/app/types/incomeTypes';
 
 function yn(value: unknown): boolean {
   if (value === true) return true;
@@ -12,9 +20,46 @@ function yn(value: unknown): boolean {
   return s === 'Y' || s === 'YES' || s === 'TRUE' || s === '1' || s === 'O';
 }
 
-/** 간이지급 — 근로내용확인신고 열 활성 (체크 또는 일용 연동) */
+/** 간이지급 — 근로내용확인신고 열 활성 (일용 연동 제거, laborContentReport만) */
 export function isLaborContentReportActive(types: ClientIncomeTypes): boolean {
-  return types.laborContentReport || types.daily;
+  return types.laborContentReport;
+}
+
+/** 연말정산 전용 소득유형 읽기 (레거시 incomeTypes에서 마이그레이션) */
+export function readYearEndTypes(intakeData: Record<string, unknown> | null | undefined): YearEndClientTypes {
+  if (!intakeData || typeof intakeData !== 'object') return { ...EMPTY_YEAR_END_TYPES };
+
+  const raw =
+    intakeData.yearEndTypes &&
+    typeof intakeData.yearEndTypes === 'object' &&
+    !Array.isArray(intakeData.yearEndTypes)
+      ? (intakeData.yearEndTypes as Record<string, unknown>)
+      : null;
+
+  const income = migrateIncomeTypes(intakeData);
+  const out: YearEndClientTypes = { ...EMPTY_YEAR_END_TYPES };
+
+  for (const key of YEAR_END_INCOME_KEYS) {
+    if (raw && typeof raw[key] === 'boolean') {
+      out[key] = raw[key];
+    } else if (key === 'retirement') {
+      out.retirement = income.retirement;
+    } else if (key === 'interestDividend') {
+      out.interestDividend = income.interestDividend === true;
+    }
+  }
+
+  return out;
+}
+
+/** 연말정산 전용 소득유형 저장 */
+export function patchYearEndTypes(
+  prev: Record<string, unknown>,
+  types: Partial<YearEndClientTypes>,
+): Record<string, unknown> {
+  const current = readYearEndTypes(prev);
+  const next: YearEndClientTypes = { ...current, ...types };
+  return { ...prev, yearEndTypes: next };
 }
 
 /** 레거시 taxFlags + 근로내역(Y/N) → 통합 소득유형 */
@@ -133,12 +178,6 @@ export function simplePayrollTargets(types: ClientIncomeTypes): IncomeTypeKey[] 
 }
 
 /** 연말정산지급명세서 유형별 대상 여부 */
-export function yearEndTypeTargets(types: ClientIncomeTypes): {
-  retirement: boolean;
-  interestDividend: boolean;
-} {
-  return {
-    retirement: types.retirement,
-    interestDividend: types.interestDividend === true,
-  };
+export function yearEndTypeTargets(types: YearEndClientTypes): YearEndClientTypes {
+  return { ...types };
 }

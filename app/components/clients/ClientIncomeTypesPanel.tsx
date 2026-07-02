@@ -6,8 +6,10 @@ import {
   SIMPLE_PAYROLL_INCOME_LABELS,
   YEAR_END_INCOME_KEYS,
   YEAR_END_INCOME_LABELS,
+  EMPTY_YEAR_END_TYPES,
   type ClientIncomeTypes,
   type IncomeTypeKey,
+  type YearEndClientTypes,
   type YearEndIncomeKey,
 } from '@/app/types/incomeTypes';
 import { portalBtnPrimary, portalBtnSecondary, portalCard } from '@/app/components/portal/uiClasses';
@@ -26,6 +28,7 @@ export default function ClientIncomeTypesPanel({
   onSaved,
 }: Props) {
   const [types, setTypes] = useState<ClientIncomeTypes | null>(null);
+  const [yearEndTypes, setYearEndTypes] = useState<YearEndClientTypes>(EMPTY_YEAR_END_TYPES);
   const [semiAnnualTarget, setSemiAnnualTarget] = useState(false);
   const [semiAnnualMonthly, setSemiAnnualMonthly] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,6 +39,7 @@ export default function ClientIncomeTypesPanel({
     if (!res.ok) return;
     const data = await res.json();
     setTypes(data.incomeTypes as ClientIncomeTypes);
+    setYearEndTypes((data.yearEndTypes as YearEndClientTypes) ?? EMPTY_YEAR_END_TYPES);
     setSemiAnnualTarget(Boolean(data.withholdingSettings?.semiAnnualTarget));
     setSemiAnnualMonthly(Boolean(data.withholdingSettings?.semiAnnualMonthlyDisplay));
   }, [clientId]);
@@ -50,8 +54,8 @@ export default function ClientIncomeTypesPanel({
   };
 
   const toggleYearEnd = (key: YearEndIncomeKey) => {
-    if (!canEdit || !types) return;
-    setTypes({ ...types, [key]: !types[key] });
+    if (!canEdit) return;
+    setYearEndTypes(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const save = async () => {
@@ -64,6 +68,7 @@ export default function ClientIncomeTypesPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           incomeTypes: types,
+          yearEndTypes,
           withholdingSettings: {
             semiAnnualTarget,
             semiAnnualMonthlyDisplay: semiAnnualMonthly,
@@ -73,6 +78,7 @@ export default function ClientIncomeTypesPanel({
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
       setTypes(data.incomeTypes);
+      setYearEndTypes(data.yearEndTypes ?? EMPTY_YEAR_END_TYPES);
       onSaved?.(data.incomeTypes);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
@@ -130,7 +136,7 @@ export default function ClientIncomeTypesPanel({
               <input
                 type="checkbox"
                 className="accent-violet-600"
-                checked={types[key] === true}
+                checked={yearEndTypes[key]}
                 disabled={!canEdit}
                 onChange={() => toggleYearEnd(key)}
               />

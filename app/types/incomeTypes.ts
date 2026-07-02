@@ -16,9 +16,25 @@ export const INCOME_TYPE_KEYS = [
 
 export type IncomeTypeKey = (typeof INCOME_TYPE_KEYS)[number];
 
-/** 연말정산지급명세서 전용 */
-export const YEAR_END_INCOME_KEYS = ['retirement', 'interestDividend'] as const;
+/** 연말정산지급명세서 전용 (간이지급 incomeTypes와 분리) */
+export const YEAR_END_INCOME_KEYS = [
+  'employed',
+  'retirement',
+  'bizIncome',
+  'otherTax',
+  'interestDividend',
+] as const;
 export type YearEndIncomeKey = (typeof YEAR_END_INCOME_KEYS)[number];
+
+export type YearEndClientTypes = Record<YearEndIncomeKey, boolean>;
+
+export const EMPTY_YEAR_END_TYPES: YearEndClientTypes = {
+  employed: false,
+  retirement: false,
+  bizIncome: false,
+  otherTax: false,
+  interestDividend: false,
+};
 
 export type ClientIncomeTypes = Record<IncomeTypeKey, boolean> & {
   interestDividend?: boolean;
@@ -60,7 +76,10 @@ export const SIMPLE_PAYROLL_INCOME_LABELS: Record<SimplePayrollIncomeKey, string
 };
 
 export const YEAR_END_INCOME_LABELS: Record<YearEndIncomeKey, string> = {
+  employed: '근로',
   retirement: '퇴직',
+  bizIncome: '사업',
+  otherTax: '기타',
   interestDividend: '이자배당',
 };
 
@@ -90,9 +109,12 @@ export const SIMPLE_PAYROLL_COLUMNS = [
 
 export type SimplePayrollColumnKey = (typeof SIMPLE_PAYROLL_COLUMNS)[number]['key'];
 
-/** 연말정산지급명세서 그리드 열 */
+/** 연말정산지급명세서 그리드 열 — 근로·퇴직·사업·기타·이자배당 */
 export const YEAR_END_COLUMNS = [
+  { key: 'employed' as const, label: '근로' },
   { key: 'retirement' as const, label: '퇴직' },
+  { key: 'bizIncome' as const, label: '사업' },
+  { key: 'otherTax' as const, label: '기타' },
   { key: 'interestDividend' as const, label: '이자배당' },
 ] as const;
 

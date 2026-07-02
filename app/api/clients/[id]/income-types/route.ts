@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { canEditClient } from '@/lib/clientAccess';
 import { getClientById, updateClientDetail } from '@/lib/clientsDb';
-import { patchIncomeTypes, patchWithholdingSettings, readIncomeTypes, readWithholdingSettings } from '@/lib/incomeTypes';
-import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
+import {
+  patchIncomeTypes,
+  patchWithholdingSettings,
+  patchYearEndTypes,
+  readIncomeTypes,
+  readWithholdingSettings,
+  readYearEndTypes,
+} from '@/lib/incomeTypes';
+import type { ClientIncomeTypes, YearEndClientTypes } from '@/app/types/incomeTypes';
 import type { WithholdingSettings } from '@/app/types/incomeTypes';
 
 export async function GET(
@@ -17,6 +24,7 @@ export async function GET(
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({
       incomeTypes: readIncomeTypes(client.intakeData),
+      yearEndTypes: readYearEndTypes(client.intakeData),
       withholdingSettings: readWithholdingSettings(client.intakeData),
     });
   } catch {
@@ -39,12 +47,16 @@ export async function PATCH(
 
     const body = (await request.json()) as {
       incomeTypes?: Partial<ClientIncomeTypes>;
+      yearEndTypes?: Partial<YearEndClientTypes>;
       withholdingSettings?: Partial<WithholdingSettings>;
     };
 
     let intakeData = client.intakeData ?? {};
     if (body.incomeTypes) {
       intakeData = patchIncomeTypes(intakeData, body.incomeTypes);
+    }
+    if (body.yearEndTypes) {
+      intakeData = patchYearEndTypes(intakeData, body.yearEndTypes);
     }
     if (body.withholdingSettings) {
       intakeData = patchWithholdingSettings(intakeData, body.withholdingSettings);
@@ -55,6 +67,7 @@ export async function PATCH(
 
     return NextResponse.json({
       incomeTypes: readIncomeTypes(updated.intakeData),
+      yearEndTypes: readYearEndTypes(updated.intakeData),
       withholdingSettings: readWithholdingSettings(updated.intakeData),
     });
   } catch (e) {
