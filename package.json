@@ -41,7 +41,9 @@
     "docker:up": "docker compose up --build",
     "vercel:login": "npx vercel@latest login",
     "vercel:link": "npx vercel@latest link",
-    "vercel:deploy": "npx vercel@latest deploy --prod"
+    "vercel:deploy": "npx vercel@latest deploy --prod",
+    "vercel:sync-db": "node scripts/sync-supabase-vercel.mjs",
+    "db:compare-env": "node scripts/compare-db-env.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

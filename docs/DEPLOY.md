@@ -13,7 +13,7 @@
 
 | 변수 | 설명 |
 |------|------|
-| `DATABASE_URL` | Neon Postgres 연결 문자열 (Vercel Marketplace → Neon) |
+| `DATABASE_URL` | **Supabase Postgres** 연결 문자열 (서울 리전, 트랜잭션 풀러 `:6543` 권장). 로컬 `.env.local`과 Vercel Production이 **동일 URL**이어야 데이터가 같습니다. |
 | `SESSION_SECRET` | 32자 이상 랜덤 문자열 (iron-session 쿠키 서명) |
 
 Vercel 프로젝트 → **Settings → Environment Variables**에 Production/Preview 모두 설정합니다.
@@ -38,6 +38,14 @@ npm run db:migrate-contacts   # contacts.json → DB (선택)
 ```
 
 배포 후 `/login`에서 ID + 4자리 PIN으로 로그인합니다.
+
+로컬 DB를 Vercel에 맞추려면 (Supabase URL 기준):
+
+```bash
+npm run vercel:sync-db    # .env.local DATABASE_URL → Vercel production/preview/development
+npm run vercel:deploy     # 환경변수 반영 재배포
+npm run db:compare-env    # .env.local vs .env.vercel.production 호스트 비교
+```
 
 ---
 
