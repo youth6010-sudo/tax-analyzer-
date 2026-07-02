@@ -129,11 +129,11 @@ export function buildSimplePayrollGrid(
 }
 
 /** 설정 저장 후 한 업체 행만 소득유형 반영 */
-export function patchSimplePayrollRowFromTypes(
-  row: IncomeTypeGridRow,
+export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
+  row: T,
   types: ClientIncomeTypes,
   employedFilingMonth: boolean,
-): IncomeTypeGridRow {
+): T {
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
 
   for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
@@ -163,10 +163,10 @@ export function patchSimplePayrollRowFromTypes(
   return { ...row, cells };
 }
 
-export function patchYearEndRowFromTypes(
-  row: IncomeTypeGridRow,
+export function patchYearEndRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
+  row: T,
   types: ClientIncomeTypes,
-): IncomeTypeGridRow {
+): T {
   const yearEnd = yearEndTypeTargets(types);
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
   for (const col of YEAR_END_COLUMNS) {
