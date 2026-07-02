@@ -2,6 +2,10 @@ import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { filingCheckSessions, taxFilingChecks } from '@/db/schema';
 import type { FilingTaxId } from '@/app/utils/filingCheck';
+import {
+  carryFieldsFromRecord,
+  hasFilingCarryData,
+} from '@/app/utils/filingCheckStorage';
 
 export type FilingCheckSessionData = {
   overrides: Record<string, boolean>;
@@ -51,6 +55,64 @@ export async function getFilingCheckSession(
   const row = rows[0];
   if (!row) return null;
   return { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) };
+}
+
+/** 직전 완료(done) 신고분 — DB 1회 조회 (클라이언트 48회 fetch 대체) */
+export async function findPreviousCompletedFilingCheckSession(
+  manager: string,
+  taxType: FilingTaxId | string,
+  currentPeriodKey: string,
+): Promise<{ data: FilingCheckSessionData; periodKey: string } | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(filingCheckSessions)
+    .where(
+      and(
+        eq(filingCheckSessions.manager, manager),
+        eq(filingCheckSessions.taxType, taxType),
+      ),
+    );
+
+  let bestKey = '';
+  let bestData: FilingCheckSessionData | null = null;
+  for (const row of rows) {
+    if (row.periodKey >= currentPeriodKey) continue;
+    const data = { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) };
+    if (!data.done) continue;
+    if (row.periodKey > bestKey) {
+      bestKey = row.periodKey;
+      bestData = data;
+    }
+  }
+  return bestData ? { data: bestData, periodKey: bestKey } : null;
+}
+
+export type FilingCheckLoadResult = {
+  data: FilingCheckSessionData;
+  carriedFromPeriodKey: string | null;
+};
+
+/** 현재 기간 세션 + 없으면 직전 완료분 승계 필드 */
+export async function loadFilingCheckSessionWithCarry(
+  manager: string,
+  taxType: FilingTaxId | string,
+  periodKey: string,
+): Promise<FilingCheckLoadResult> {
+  const current = await getFilingCheckSession(manager, taxType, periodKey);
+  if (current && hasFilingCarryData(current)) {
+    return { data: current, carriedFromPeriodKey: null };
+  }
+
+  const previous = await findPreviousCompletedFilingCheckSession(manager, taxType, periodKey);
+  if (previous) {
+    return {
+      data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(previous.data) },
+      carriedFromPeriodKey: previous.periodKey,
+    };
+  }
+
+  return { data: current ?? { ...EMPTY_SESSION_DATA }, carriedFromPeriodKey: null };
 }
 
 export async function upsertFilingCheckSession(

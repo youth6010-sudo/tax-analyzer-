@@ -15,10 +15,10 @@ export function getDb(): Db {
   }
   const isServerless = Boolean(process.env.VERCEL);
   client = postgres(connectionString, {
-    max: isServerless ? 1 : 10,
+    max: isServerless ? 3 : 10,
     prepare: false,
     idle_timeout: 20,
-    connect_timeout: 15,
+    connect_timeout: 10,
   });
   database = drizzle(client, { schema });
   return database;

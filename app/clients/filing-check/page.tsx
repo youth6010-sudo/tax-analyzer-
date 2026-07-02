@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
 import {
@@ -51,7 +51,6 @@ import { prevWithholdingPeriodKey } from '@/lib/periodUtils';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
   hasFilingCarryData,
-  carryFieldsFromRecord,
 } from '@/app/utils/filingCheckStorage';
 import FilingCheckSessionPanel from '@/app/components/clients/FilingCheckSessionPanel';
 import ClientFilingSettingsModal from '@/app/components/clients/ClientFilingSettingsModal';
@@ -59,6 +58,7 @@ import IncomeTypeFilingSection, {
   type IncomeFilingStats,
   type IncomeTypeFilingHandle,
 } from '@/app/components/clients/IncomeTypeFilingSection';
+import { PortalLoading } from '@/app/components/portal/PortalPageShell';
 
 // 신고대상확인에서 직접 추가한 업체(수임처 DB에 없는 임시 대상)
 type ManualClient = {
@@ -145,30 +145,6 @@ function managerPrefix(manager: string): string {
   return `${STORAGE_PREFIX}${manager}:`;
 }
 
-async function fetchPreviousCompletedSession(
-  manager: string,
-  taxId: FilingTaxId,
-  currentPk: string,
-): Promise<{ record: CheckRecord; key: string } | null> {
-  let pk: string | null = previousPeriodKey(taxId, currentPk);
-  for (let step = 0; pk && step < 48; step += 1) {
-    try {
-      const res = await fetch(
-        `/api/filing-check/session?manager=${encodeURIComponent(manager)}&taxType=${taxId}&periodKey=${pk}`,
-        { cache: 'no-store' },
-      );
-      if (res.ok) {
-        const json = (await res.json()) as { data?: CheckRecord };
-        if (json.data?.done) return { record: json.data, key: pk };
-      }
-    } catch {
-      /* try older period */
-    }
-    pk = previousPeriodKey(taxId, pk);
-  }
-  return null;
-}
-
 function TruncateWithTooltip({
   text,
   title,
@@ -222,6 +198,14 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 }
 
 export default function FilingCheckPage() {
+  return (
+    <Suspense fallback={<PortalLoading label="신고대상확인 불러오는 중…" />}>
+      <FilingCheckPageInner />
+    </Suspense>
+  );
+}
+
+function FilingCheckPageInner() {
   const searchParams = useSearchParams();
   const cachedClients = usePortalClients();
   // 신고대상확인은 로그인한 사람과 무관하게 담당자별로 셋팅 → 전체 수임처를 받아 담당자로 가른다.
@@ -345,19 +329,25 @@ export default function FilingCheckPage() {
     const loadFromServer = async () => {
       try {
         const res = await fetch(
-          `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=${tax}&periodKey=${pk}`,
+          `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=${tax}&periodKey=${pk}&withCarry=1`,
           { cache: 'no-store' },
         );
-        if (!res.ok) return null;
-        const json = (await res.json()) as { data?: CheckRecord };
-        return json.data ?? null;
+        if (!res.ok) return { data: null as CheckRecord | null, carriedFromPeriodKey: null as string | null };
+        const json = (await res.json()) as {
+          data?: CheckRecord;
+          carriedFromPeriodKey?: string | null;
+        };
+        return {
+          data: json.data ?? null,
+          carriedFromPeriodKey: json.carriedFromPeriodKey ?? null,
+        };
       } catch {
-        return null;
+        return { data: null, carriedFromPeriodKey: null };
       }
     };
 
     void (async () => {
-      const serverRec = await loadFromServer();
+      const { data: serverRec, carriedFromPeriodKey } = await loadFromServer();
       if (cancelled) return;
 
       let merged: CheckRecord =
@@ -365,24 +355,13 @@ export default function FilingCheckPage() {
           ? { ...EMPTY_RECORD, ...serverRec }
           : { ...EMPTY_RECORD };
 
-      if (!serverRec || !hasFilingCarryData(serverRec)) {
-        const serverPrev = await fetchPreviousCompletedSession(selManager, tax, pk);
-        if (cancelled) return;
-        if (serverPrev) {
-          merged = {
-            ...EMPTY_RECORD,
-            ...carryFieldsFromRecord(serverPrev.record),
-          };
-          setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, serverPrev.key)));
-        } else {
-          setCarriedFrom(null);
-        }
+      if (carriedFromPeriodKey && (!serverRec || !hasFilingCarryData(serverRec))) {
+        setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, carriedFromPeriodKey)));
       } else {
         setCarriedFrom(null);
       }
 
       setRecord(merged);
-      void persistSession(merged);
     })();
 
     loadedKeyRef.current = keyId;

@@ -104,13 +104,18 @@ export default function HomeTasksPanel() {
 
   useEffect(() => {
     void prefetchPortal();
-    void refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 400);
     const onFocus = () => {
       void prefetchPortal(true);
       void refresh();
     };
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [refresh]);
 
   const toggleComplete = async (id: string, completed: boolean) => {

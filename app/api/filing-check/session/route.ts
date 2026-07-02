@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/apiError';
 import { isMasterUser } from '@/lib/clientAccess';
 import {
   getFilingCheckSession,
+  loadFilingCheckSessionWithCarry,
   upsertFilingCheckSession,
   type FilingCheckSessionData,
 } from '@/lib/taxFilingChecksDb';
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
     const manager = searchParams.get('manager') ?? '';
     const taxType = searchParams.get('taxType') ?? '';
     const periodKey = searchParams.get('periodKey') ?? '';
+    const withCarry = searchParams.get('withCarry') === '1';
 
     if (!manager || !taxType || !periodKey) {
       return NextResponse.json({ error: 'manager, taxType, periodKey required' }, { status: 400 });
@@ -22,6 +24,14 @@ export async function GET(request: NextRequest) {
 
     if (!isMasterUser(user) && manager !== user.name && manager !== '전체') {
       throw new Error('FORBIDDEN');
+    }
+
+    if (withCarry) {
+      const loaded = await loadFilingCheckSessionWithCarry(manager, taxType, periodKey);
+      return NextResponse.json({
+        data: loaded.data,
+        carriedFromPeriodKey: loaded.carriedFromPeriodKey,
+      });
     }
 
     const data = await getFilingCheckSession(manager, taxType, periodKey);

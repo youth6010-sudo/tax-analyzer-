@@ -28,19 +28,28 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: 'SESSION_SECRET not configured' }, { status: 503 });
   }
 
-  const response = NextResponse.next();
-  const session = await getIronSession<SessionData>(request, response, getSessionOptionsForEdge());
+  try {
+    const response = NextResponse.next();
+    const session = await getIronSession<SessionData>(request, response, getSessionOptionsForEdge());
 
-  if (!session.user) {
+    if (!session.user) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    return response;
+  } catch {
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Session error' }, { status: 401 });
     }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
-
-  return response;
 }
 
 export const config = {
