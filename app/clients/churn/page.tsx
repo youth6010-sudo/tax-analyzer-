@@ -272,7 +272,7 @@ function ChurnPageInner() {
                 selectedId={selectedRecordId}
                 onSelect={setSelectedRecordId}
               />
-              <div className="xl:sticky xl:top-[4.5rem]">
+              <div className="xl:sticky xl:top-4 xl:self-start">
                 <ChurnRecordPanel
                   record={selectedRecord}
                   onSaved={handleRecordSaved}

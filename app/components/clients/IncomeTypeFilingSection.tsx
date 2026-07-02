@@ -379,7 +379,9 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     if (!embedded) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      void persistGrid().catch(() => {});
+      void persistGrid().catch(() => {
+        onUploadNotice?.('저장 실패 — 서버 연결을 확인해 주세요.');
+      });
     }, 400);
   }, [embedded, persistGrid]);
 

@@ -34,6 +34,7 @@ const SEARCH_FRESH_MS = 300_000;
 let memory: PortalBootstrap | null = null;
 let searchIndexMemory: ClientSearchResult[] | null = null;
 let searchIndexFetchedAt = 0;
+let bootstrapSyncError: string | null = null;
 let inflight: Promise<PortalBootstrap | null> | null = null;
 let searchInflight: Promise<ClientSearchResult[] | null> | null = null;
 const listeners = new Set<() => void>();
@@ -98,6 +99,19 @@ function notify() {
 if (typeof window !== 'undefined') {
   memory = readStorage();
   searchIndexMemory = readSearchIndexStorage();
+}
+
+export function getPortalSyncError(): string | null {
+  return bootstrapSyncError;
+}
+
+export function clearPortalSyncError(): void {
+  bootstrapSyncError = null;
+  notify();
+}
+
+export function usePortalSyncError(): string | null {
+  return useSyncExternalStore(subscribePortal, getPortalSyncError, () => null);
 }
 
 export function getPortalBootstrap(): PortalBootstrap | null {
@@ -234,6 +248,7 @@ export function clearPortal(): void {
   memory = null;
   searchIndexMemory = null;
   searchIndexFetchedAt = 0;
+  bootstrapSyncError = null;
   inflight = null;
   searchInflight = null;
   if (typeof window !== 'undefined') {
@@ -256,8 +271,21 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
 
   inflight = fetch('/api/portal/bootstrap', { credentials: 'same-origin' })
     .then(async res => {
-      if (!res.ok) return memory;
+      if (!res.ok) {
+        if (res.status === 401) {
+          clearPortal();
+          bootstrapSyncError = '로그인이 만료되었습니다. 다시 로그인해 주세요.';
+        } else {
+          bootstrapSyncError =
+            res.status >= 500
+              ? '서버 오류로 데이터를 불러오지 못했습니다. 입력이 저장되지 않을 수 있습니다.'
+              : `동기화 실패 (${res.status}). 새로고침 후 다시 시도해 주세요.`;
+        }
+        notify();
+        return memory;
+      }
       const data = (await res.json()) as PortalBootstrap;
+      bootstrapSyncError = null;
       memory = {
         ...data,
         churnRecords: data.churnRecords ?? [],
@@ -267,7 +295,11 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
       notify();
       return memory;
     })
-    .catch(() => memory)
+    .catch(() => {
+      bootstrapSyncError = '서버에 연결할 수 없습니다. 네트워크 또는 DB 설정을 확인해 주세요.';
+      notify();
+      return memory;
+    })
     .finally(() => {
       inflight = null;
     });

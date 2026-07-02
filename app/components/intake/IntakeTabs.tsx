@@ -28,7 +28,7 @@ export default function IntakeTabs({ active }: { active: IntakeTab }) {
   };
 
   return (
-    <div className="sticky top-[3.75rem] z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-4 bg-[var(--background)]/95 backdrop-blur border-b border-slate-200">
+    <div className="sticky top-0 z-20 mb-4 py-3 bg-[var(--background)]/95 backdrop-blur border-b border-slate-200">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">유입</h1>

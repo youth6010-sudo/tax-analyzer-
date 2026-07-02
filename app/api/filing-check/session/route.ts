@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { handleApiError } from '@/lib/apiError';
 import { isMasterUser } from '@/lib/clientAccess';
 import {
   getFilingCheckSession,
@@ -20,13 +21,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isMasterUser(user) && manager !== user.name && manager !== '전체') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      throw new Error('FORBIDDEN');
     }
 
     const data = await getFilingCheckSession(manager, taxType, periodKey);
     return NextResponse.json({ data });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }
 
@@ -50,12 +51,12 @@ export async function PUT(request: NextRequest) {
     }
 
     if (!isMasterUser(user) && manager !== user.name) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      throw new Error('FORBIDDEN');
     }
 
     await upsertFilingCheckSession(manager, taxType, periodKey, data, user.id);
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return handleApiError(e);
   }
 }

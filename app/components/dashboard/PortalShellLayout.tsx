@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type CSSProperties } from 'react';
 import HomeTasksPanel from './HomeTasksPanel';
 import HomeSidebarNav from './HomeSidebarNav';
 import ContactHeaderSearch from '@/app/components/ContactHeaderSearch';
@@ -21,6 +21,32 @@ const COLLAPSED_RIGHT = 40;
 
 type RightMode = 'open' | 'collapsed';
 
+function readStoredWidth(key: string, fallback: number, min: number, max: number): number {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const n = Number(stored);
+      if (Number.isFinite(n)) return Math.min(max, Math.max(min, n));
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function readStoredRightMode(): RightMode {
+  if (typeof window === 'undefined') return 'open';
+  try {
+    const stored = localStorage.getItem(RIGHT_MODE_KEY);
+    if (stored === 'open' || stored === 'collapsed') return stored;
+    if (stored === 'hidden') return 'collapsed';
+  } catch {
+    /* ignore */
+  }
+  return 'open';
+}
+
 function useResize(
   width: number,
   setWidth: (w: number) => void,
@@ -32,19 +58,6 @@ function useResize(
   const dragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(width);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        const n = Number(stored);
-        if (Number.isFinite(n)) setWidth(Math.min(max, Math.max(min, n)));
-      }
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
-  }, []);
 
   const persist = useCallback(
     (w: number) => {
@@ -108,21 +121,15 @@ function PortalBrand() {
 }
 
 export default function PortalShellLayout({ children }: { children: React.ReactNode }) {
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT);
-  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT);
-  const [rightMode, setRightMode] = useState<RightMode>('open');
+  const [leftWidth, setLeftWidth] = useState(() =>
+    readStoredWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT, MIN_LEFT, MAX_LEFT),
+  );
+  const [rightWidth, setRightWidth] = useState(() =>
+    readStoredWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT, MIN_RIGHT, MAX_RIGHT),
+  );
+  const [rightMode, setRightMode] = useState<RightMode>(readStoredRightMode);
   const leftResize = useResize(leftWidth, setLeftWidth, LEFT_WIDTH_KEY, MIN_LEFT, MAX_LEFT, 'left');
   const rightResize = useResize(rightWidth, setRightWidth, RIGHT_WIDTH_KEY, MIN_RIGHT, MAX_RIGHT, 'right');
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RIGHT_MODE_KEY);
-      if (stored === 'open' || stored === 'collapsed') setRightMode(stored);
-      else if (stored === 'hidden') setRightMode('collapsed');
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   const setRightModePersist = (mode: RightMode) => {
     setRightMode(mode);
@@ -162,9 +169,16 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
 
       <div
         className="flex min-w-0 flex-1 flex-col"
-        style={{ marginLeft: leftWidth, marginRight: effectiveRightWidth }}
+        style={
+          {
+            marginLeft: leftWidth,
+            marginRight: effectiveRightWidth,
+            '--portal-left-w': `${leftWidth}px`,
+            '--portal-right-w': `${effectiveRightWidth}px`,
+          } as CSSProperties
+        }
       >
-        <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 no-print">
+        <header className="sticky top-0 z-[35] shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 no-print">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1">
               <ContactHeaderSearch expanded />
@@ -183,7 +197,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Tp Do List 너비 조절"
+            aria-label="To De List 너비 조절"
             onPointerDown={rightResize.onPointerDown}
             onPointerMove={rightResize.onPointerMove}
             onPointerUp={rightResize.onPointerUp}
@@ -206,7 +220,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
                 className="text-[10px] font-bold text-amber-800 [writing-mode:vertical-rl]"
                 style={{ textOrientation: 'mixed' }}
               >
-                Tp Do List
+                To De List
               </span>
             </div>
           ) : rightMode === 'open' ? (

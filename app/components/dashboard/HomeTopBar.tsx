@@ -25,7 +25,7 @@ export default function HomeTopBar({ userName }: { userName: string }) {
   const mainTotal = corporate + personal;
 
   return (
-    <header className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-blue-100 pb-3 [scrollbar-width:thin]">
+    <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-blue-100 pb-3 [scrollbar-width:thin]">
       <p className="shrink-0 whitespace-nowrap text-base font-bold text-slate-800">
         {userName}님, 안녕하세요 <span aria-hidden>👋</span>
       </p>
@@ -50,6 +50,6 @@ export default function HomeTopBar({ userName }: { userName: string }) {
       <span className="h-4 w-px shrink-0 bg-slate-200" aria-hidden />
 
       <TaxFilterBar compact />
-    </header>
+    </div>
   );
 }

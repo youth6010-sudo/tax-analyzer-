@@ -3,6 +3,9 @@
 export const portalPage =
   'min-h-screen flex flex-col bg-[var(--background)] bg-gradient-to-b from-slate-50 via-[var(--background)] to-slate-100/70';
 
+export const portalStickyBar =
+  'sticky top-0 z-20 bg-[var(--background)]/95 backdrop-blur-sm border-b border-slate-200/80';
+
 export const portalMain = 'flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8';
 
 export const portalMainNarrow = 'flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8';

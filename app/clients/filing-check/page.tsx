@@ -8,6 +8,7 @@ import {
   portalBtnPrimary,
   portalBtnSecondary,
   portalCard,
+  portalStickyBar,
 } from '../../components/portal/uiClasses';
 import {
   getClientDouzoneCode,
@@ -250,6 +251,8 @@ export default function FilingCheckPage() {
   const [parseError, setParseError] = useState('');
   const [copied, setCopied] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const savedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [carriedFrom, setCarriedFrom] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const incomeFileRef = useRef<HTMLInputElement>(null);
@@ -270,6 +273,45 @@ export default function FilingCheckPage() {
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
+
+  const persistSession = useCallback(
+    async (data: CheckRecord) => {
+      try {
+        const res = await fetch('/api/filing-check/session', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            manager: selManager,
+            taxType: tax,
+            periodKey: periodKey(tax, period),
+            data,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((body as { error?: string }).error || `저장 실패 (${res.status})`);
+        }
+        setSaveError('');
+        setSavedTick(true);
+        if (savedTickTimerRef.current) clearTimeout(savedTickTimerRef.current);
+        savedTickTimerRef.current = setTimeout(() => setSavedTick(false), 1200);
+      } catch (e) {
+        setSavedTick(false);
+        setSaveError(
+          e instanceof Error
+            ? e.message
+            : '저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.',
+        );
+      }
+    },
+    [selManager, tax, period],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (savedTickTimerRef.current) clearTimeout(savedTickTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     hydratePortal();
@@ -340,16 +382,7 @@ export default function FilingCheckPage() {
       }
 
       setRecord(merged);
-      void fetch('/api/filing-check/session', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manager: selManager,
-          taxType: tax,
-          periodKey: pk,
-          data: merged,
-        }),
-      }).catch(() => {});
+      void persistSession(merged);
     })();
 
     loadedKeyRef.current = keyId;
@@ -360,7 +393,7 @@ export default function FilingCheckPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyId]);
+  }, [keyId, persistSession]);
 
   // 기록 변경 시 즉시 저장. 완료(done) 상태에서는 완료 취소만 허용.
   const patchRecord = (patch: Partial<CheckRecord>) => {
@@ -368,18 +401,7 @@ export default function FilingCheckPage() {
       const unlocking = prev.done && patch.done === false;
       if (prev.done && !unlocking) return prev;
       const next = { ...prev, ...patch };
-      void fetch('/api/filing-check/session', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manager: selManager,
-          taxType: tax,
-          periodKey: periodKey(tax, period),
-          data: next,
-        }),
-      }).catch(() => {});
-      setSavedTick(true);
-      window.setTimeout(() => setSavedTick(false), 1200);
+      void persistSession(next);
       return next;
     });
   };
@@ -971,11 +993,18 @@ export default function FilingCheckPage() {
 
   return (
     <PortalPageShell>
+      <div className={`${portalStickyBar} -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-3 mb-3 space-y-3`}>
       <PortalPageHeader
         title="신고대상확인"
         description="세목·기간별 신고대상 대비 홈택스 접수 현황을 대조하고 요약을 만듭니다. (신고분별 자동 저장)"
         icon="✅"
       />
+
+      {saveError && (
+        <div className={`${portalAlertInfo} border-red-200 bg-red-50 text-red-800`}>
+          {saveError}
+        </div>
+      )}
 
       {/* 세목 탭 — 균일 너비, 한 줄 고정 */}
       <div className="mb-4 grid grid-cols-7 gap-2">
@@ -1109,6 +1138,11 @@ export default function FilingCheckPage() {
         {!isIncomeTypeTax && savedTick && (
           <span className="text-xs font-medium text-emerald-600">저장됨 ✓</span>
         )}
+        {!isIncomeTypeTax && saveError && (
+          <span className="text-xs font-medium text-red-600" title={saveError}>
+            저장 실패
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {isIncomeTypeTax && (
@@ -1177,6 +1211,7 @@ export default function FilingCheckPage() {
             </button>
           )}
         </div>
+      </div>
       </div>
 
       {isIncomeTypeTax ? (

@@ -1,8 +1,8 @@
 export default function NoticeHeader() {
   return (
-    <header className="border-b border-white/60 bg-white/60 backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 sm:px-6">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-300 via-pink-300 to-violet-300 text-xl shadow-md shadow-rose-200/60">
+    <div className="border-b border-slate-200/80 bg-white/80">
+      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-300 via-pink-300 to-violet-300 text-lg shadow-sm shadow-rose-200/50">
           <span aria-hidden>💌</span>
         </div>
         <div>
@@ -17,6 +17,6 @@ export default function NoticeHeader() {
           </p>
         </div>
       </div>
-    </header>
+    </div>
   );
 }

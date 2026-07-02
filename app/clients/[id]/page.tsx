@@ -7,12 +7,22 @@ import { requireUser } from '@/lib/auth';
 import { canEditClient } from '@/lib/clientAccess';
 import { getClientById } from '@/lib/clientsDb';
 import { getClientRelatedCounts } from '@/lib/workbookDb';
+import { listPersonalChecklistForClient } from '@/lib/personalChecklist';
 
 export const dynamic = 'force-dynamic';
 
 async function RelatedLinksAsync({ clientId, companyName }: { clientId: string; companyName: string }) {
-  const related = await getClientRelatedCounts(clientId, companyName);
-  return <ClientRelatedLinks clientId={clientId} initial={related} />;
+  const [related, checklistItems] = await Promise.all([
+    getClientRelatedCounts(clientId, companyName),
+    listPersonalChecklistForClient(clientId, { includeCompleted: false }),
+  ]);
+  return (
+    <ClientRelatedLinks
+      clientId={clientId}
+      initial={related}
+      checklistItems={checklistItems}
+    />
+  );
 }
 
 export default async function ClientDetailRoute({

@@ -13,7 +13,13 @@ export function getDb(): Db {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }
-  client = postgres(connectionString, { max: 10, prepare: false });
+  const isServerless = Boolean(process.env.VERCEL);
+  client = postgres(connectionString, {
+    max: isServerless ? 1 : 10,
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 15,
+  });
   database = drizzle(client, { schema });
   return database;
 }

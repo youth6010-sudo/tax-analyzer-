@@ -3,8 +3,10 @@ import {
   churnRecords,
   clientMeetings,
   clients,
+  companyEvents,
   intakeInquiries,
   intakeProcesses,
+  personalChecklistItems,
   reportDeliveries,
   settlementVisits,
   users,
@@ -26,6 +28,8 @@ export type DbBackup = {
     reportDeliveries: (typeof reportDeliveries.$inferSelect)[];
     settlementVisits: (typeof settlementVisits.$inferSelect)[];
     workChecklists: (typeof workChecklists.$inferSelect)[];
+    personalChecklistItems: (typeof personalChecklistItems.$inferSelect)[];
+    companyEvents: (typeof companyEvents.$inferSelect)[];
   };
 };
 
@@ -41,6 +45,8 @@ export async function exportDatabaseBackup(): Promise<DbBackup> {
     reportRows,
     settlementRows,
     checklistRows,
+    personalChecklistRows,
+    companyEventRows,
   ] = await Promise.all([
     db.select().from(users),
     db.select().from(clients),
@@ -51,6 +57,8 @@ export async function exportDatabaseBackup(): Promise<DbBackup> {
     db.select().from(reportDeliveries),
     db.select().from(settlementVisits),
     db.select().from(workChecklists),
+    db.select().from(personalChecklistItems),
+    db.select().from(companyEvents),
   ]);
 
   return {
@@ -66,6 +74,8 @@ export async function exportDatabaseBackup(): Promise<DbBackup> {
       reportDeliveries: reportRows,
       settlementVisits: settlementRows,
       workChecklists: checklistRows,
+      personalChecklistItems: personalChecklistRows,
+      companyEvents: companyEventRows,
     },
   };
 }

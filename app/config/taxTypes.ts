@@ -13,6 +13,7 @@ export const TAX_MENU = [
     label: '홈',
     items: [
       { label: '대시보드', href: '/' },
+      { label: '캘린더', href: '/calendar' },
       { label: '청년들 ID', href: '/youth-ids' },
     ],
   },

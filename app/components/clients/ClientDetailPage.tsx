@@ -116,7 +116,7 @@ export default function ClientDetailPage({
           )}
 
           {relatedSlot && (
-            <Section title="연관 메뉴" className="border-b-0">
+            <Section title="연관 업무" className="border-b-0">
               {relatedSlot}
             </Section>
           )}

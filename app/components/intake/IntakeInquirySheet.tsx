@@ -119,7 +119,7 @@ export default function IntakeInquirySheet({
 
   return (
     <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] gap-4 items-start">
-      <div className="rounded-xl border border-slate-200 bg-white min-w-0 lg:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto lg:overflow-x-auto">
+      <div className="rounded-xl border border-slate-200 bg-white min-w-0 lg:max-h-[min(70vh,calc(100dvh-8rem))] lg:overflow-y-auto lg:overflow-x-auto">
         <table className="w-full text-sm leading-relaxed min-w-[640px]">
           <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
             <tr>
@@ -167,7 +167,7 @@ export default function IntakeInquirySheet({
         </table>
       </div>
 
-      <div className="min-w-0 lg:sticky lg:top-[8.75rem] lg:z-20 lg:self-start lg:max-h-[calc(100dvh-9.25rem)] lg:overflow-y-auto">
+      <div className="min-w-0 lg:sticky lg:top-4 lg:z-10 lg:self-start lg:max-h-[min(70vh,calc(100dvh-8rem))] lg:overflow-y-auto">
         {selectedInquiry ? (
           <div className="rounded-xl border border-amber-200 bg-white shadow-sm">
             <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-50 border-b border-amber-100">

@@ -364,8 +364,9 @@ function ClientsPageContent() {
     ].join(' ');
 
   return (
-    <PortalPageShell staticHeader className="!py-3 lg:!py-4">
-      <div className="shrink-0 mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-slate-200 pb-3">
+    <PortalPageShell className="!py-3 lg:!py-4">
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-3 mb-2 bg-[var(--background)]/95 backdrop-blur-sm border-b border-slate-200/80 space-y-2">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/60 pb-3">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">수임처 관리</h1>
           <p className="text-xs text-slate-500 mt-0.5">← → 버튼 또는 가로 스크롤 · 업체명 클릭으로 정보 표시</p>
@@ -485,6 +486,7 @@ function ClientsPageContent() {
               </div>
             </div>
           )}
+      </div>
       </div>
 
       {loading && clients.length === 0 ? (

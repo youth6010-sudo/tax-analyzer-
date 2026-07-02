@@ -660,7 +660,7 @@ export default function Home() {
       )}
 
       {/* ── 화면 헤더 ── */}
-      <header className="no-print sticky top-[3.75rem] z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm shadow-slate-200/30">
+      <header className="no-print sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm shadow-slate-200/30">
         <div className={`${portalContent} py-4 space-y-4`}>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/25">

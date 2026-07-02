@@ -323,6 +323,41 @@ export const yearEndFilings = pgTable(
   ],
 );
 
+/** 개인 체크리스트 (캘린더·할 일) */
+export const personalChecklistItems = pgTable('personal_checklist_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerName: text('owner_name').notNull(),
+  clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  category: text('category').notNull().default('other'),
+  taxType: text('tax_type').notNull().default(''),
+  dueDate: text('due_date').notNull().default(''),
+  completed: boolean('completed').notNull().default(false),
+  reflectInNotes: boolean('reflect_in_notes').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('personal_checklist_owner_idx').on(t.ownerName, t.completed),
+  index('personal_checklist_client_idx').on(t.clientId),
+]);
+
+/** 사내 일정 (캘린더) */
+export const companyEvents = pgTable('company_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  scheduleKind: text('schedule_kind').notNull().default('range'),
+  allDay: boolean('all_day').notNull().default(true),
+  createdBy: text('created_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('company_events_start_idx').on(t.startDate),
+]);
+
 /** 점심 맛집 추가 요청 큐 */
 export const lunchSpotRequests = pgTable('lunch_spot_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -345,3 +380,5 @@ export type FilingCheckSession = typeof filingCheckSessions.$inferSelect;
 export type SimplePayrollFiling = typeof simplePayrollFilings.$inferSelect;
 export type YearEndFiling = typeof yearEndFilings.$inferSelect;
 export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
+export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
+export type CompanyEvent = typeof companyEvents.$inferSelect;

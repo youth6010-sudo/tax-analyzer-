@@ -6,6 +6,8 @@
   --portal-muted: #475569;
   --portal-border: #e2e8f0;
   --portal-surface: #ffffff;
+  /* PortalShellLayout 스크롤 영역 기준 — 페이지 내부 sticky는 top-0 사용 */
+  --portal-sticky-top: 0px;
 }
 
 body {

@@ -1,0 +1,46 @@
+import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth';
+import {
+  createPersonalChecklistItem,
+  listPersonalChecklistForOwner,
+} from '@/lib/personalChecklist';
+import type { ChecklistCategory, ChecklistTaxType } from '@/app/types/calendar';
+
+export async function GET() {
+  try {
+    const user = await requireUser();
+    const items = await listPersonalChecklistForOwner(user.name, { includeCompleted: false });
+    return NextResponse.json({ items });
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const user = await requireUser();
+    const body = await req.json() as {
+      title?: string;
+      category?: ChecklistCategory;
+      taxType?: ChecklistTaxType | '';
+      clientId?: string | null;
+      dueDate?: string;
+      reflectInNotes?: boolean;
+    };
+
+    const item = await createPersonalChecklistItem(user.name, {
+      title: body.title || '',
+      category: body.category || 'other',
+      taxType: body.taxType,
+      clientId: body.clientId,
+      dueDate: body.dueDate,
+      reflectInNotes: body.reflectInNotes,
+    });
+
+    return NextResponse.json({ item });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '저장 실패';
+    if (msg === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}

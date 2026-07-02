@@ -505,7 +505,7 @@ function ScrollButton({
       aria-label={label}
       title={label}
       className={[
-        'sticky top-32 z-20 self-center',
+        'sticky top-1/2 z-10 -translate-y-1/2 self-center',
         'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
         'bg-white border border-slate-200 shadow-lg shadow-slate-300/40',
         'text-slate-700 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300',
@@ -531,7 +531,7 @@ function ManagerQuickNav({
   onSelect: (index: number) => void;
 }) {
   return (
-    <div className="sticky top-0 z-30 -mx-1 mb-3 flex items-center gap-1 overflow-x-auto roster-scroll bg-[var(--background)]/95 backdrop-blur-sm py-2 px-1 border-b border-slate-200/80">
+    <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-center gap-1 overflow-x-auto roster-scroll bg-[var(--background)]/95 backdrop-blur-sm py-2 px-1 border-b border-slate-200/80">
       {managers.map((mgr, i) => {
         const active = i === activeIndex;
         const isSelf = currentUserName === mgr;
