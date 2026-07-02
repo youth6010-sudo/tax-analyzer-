@@ -4,15 +4,37 @@ import { handleApiError } from '@/lib/apiError';
 import {
   createCompanyEvent,
   deleteCompanyEvent,
-  listUpcomingCompanyEvents,
+  listCompanyEvents,
   updateCompanyEvent,
 } from '@/lib/companyEvents';
+import { canCreateCompanyEvent } from '@/lib/calendarAccess';
+import { currentMonthRange } from '@/lib/calendarMonth';
+import { listCheckoffsForEvents } from '@/lib/companyEventCheckoffs';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 
 export async function GET() {
   try {
-    await requireUser();
-    const items = await listUpcomingCompanyEvents(30);
-    return NextResponse.json({ items });
+    const user = await requireUser();
+    const { from, to, year, month } = currentMonthRange();
+    const [items, team] = await Promise.all([
+      listCompanyEvents({ to }),
+      listCalendarTeamMembers(),
+    ]);
+    const checkoffMap = await listCheckoffsForEvents(items.map(i => i.id));
+
+    const enriched = items.map(item => {
+      const checkoffs = checkoffMap.get(item.id) ?? {};
+      const checkoffDone = team.filter(name => checkoffs[name]).length;
+      return {
+        ...item,
+        myCheckoff: checkoffs[user.name] ?? false,
+        checkoffDone,
+        checkoffTotal: team.length,
+        checkoffs,
+      };
+    }).filter(item => item.startDate >= from || !item.myCheckoff);
+
+    return NextResponse.json({ items: enriched, team, month: { year, month } });
   } catch (e) {
     return handleApiError(e);
   }
@@ -21,6 +43,12 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
+    if (!canCreateCompanyEvent(user)) {
+      return NextResponse.json(
+        { error: '회사 일정은 인디·리아만 등록할 수 있습니다.' },
+        { status: 403 },
+      );
+    }
     const body = await req.json() as {
       title?: string;
       description?: string;

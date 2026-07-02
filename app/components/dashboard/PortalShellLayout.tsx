@@ -200,7 +200,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="To De List 너비 조절"
+            aria-label="TO Do List 너비 조절"
             onPointerDown={rightResize.onPointerDown}
             onPointerMove={rightResize.onPointerMove}
             onPointerUp={rightResize.onPointerUp}
@@ -223,7 +223,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
                 className="text-[10px] font-bold text-amber-800 [writing-mode:vertical-rl]"
                 style={{ textOrientation: 'mixed' }}
               >
-                To De List
+                TO Do List
               </span>
             </div>
           ) : rightMode === 'open' ? (

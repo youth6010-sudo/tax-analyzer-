@@ -127,6 +127,8 @@ export async function createPersonalChecklistItem(
   const db = getDb();
   const title = input.title.trim();
   if (!title) throw new Error('제목을 입력하세요.');
+  const dueDate = input.dueDate?.trim() || '';
+  if (!dueDate) throw new Error('마감기한을 지정하세요.');
 
   const [row] = await db
     .insert(personalChecklistItems)
@@ -136,7 +138,7 @@ export async function createPersonalChecklistItem(
       category: input.category,
       taxType: input.category === 'tax' ? (input.taxType || '') : '',
       clientId: input.clientId || null,
-      dueDate: input.dueDate?.trim() || '',
+      dueDate,
       reflectInNotes: Boolean(input.reflectInNotes),
     })
     .returning();
@@ -180,6 +182,10 @@ export async function updatePersonalChecklistItem(
     .limit(1);
 
   if (!existing) throw new Error('NOT_FOUND');
+
+  if (patch.dueDate !== undefined && !patch.dueDate.trim()) {
+    throw new Error('마감기한을 지정하세요.');
+  }
 
   const nextReflect = patch.reflectInNotes ?? existing.reflectInNotes;
   const nextClientId = patch.clientId !== undefined ? patch.clientId : existing.clientId;

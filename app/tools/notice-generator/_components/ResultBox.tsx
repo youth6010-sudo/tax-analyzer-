@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { htmlToPlainText, normalizeHtmlForClipboard } from '../_lib/templates';
+import { htmlToPlainText, normalizeHtmlForClipboard, sanitizeNoticeHtml } from '../_lib/templates';
 
 type Props = {
   messageHtml: string;
@@ -41,13 +41,29 @@ export default function ResultBox({
   // 편집 모드 진입 시 현재 문구를 1회 주입 (입력 중 커서 튐 방지)
   useEffect(() => {
     if (editing && editorRef.current) {
-      editorRef.current.innerHTML = effectiveHtml || '';
+      editorRef.current.innerHTML = sanitizeNoticeHtml(effectiveHtml || '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
   const emitEdit = () => {
-    if (editorRef.current) setEdited(editorRef.current.innerHTML);
+    if (!editorRef.current) return;
+    const sanitized = sanitizeNoticeHtml(editorRef.current.innerHTML);
+    if (editorRef.current.innerHTML !== sanitized) {
+      editorRef.current.innerHTML = sanitized;
+    }
+    setEdited(sanitized);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    const next = html
+      ? sanitizeNoticeHtml(html)
+      : sanitizeNoticeHtml(text.replace(/\n/g, '<br>'));
+    document.execCommand('insertHTML', false, next);
+    emitEdit();
   };
 
   const resetToGenerated = () => {
@@ -85,7 +101,7 @@ export default function ResultBox({
   const copyRich = async () => {
     if (!effectiveHtml) return;
     const richHtml = normalizeHtmlForClipboard(effectiveHtml);
-    const plain = htmlToPlainText(richHtml);
+    const plain = htmlToPlainText(effectiveHtml);
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([
@@ -222,6 +238,7 @@ export default function ResultBox({
           suppressContentEditableWarning
           onInput={emitEdit}
           onBlur={emitEdit}
+          onPaste={handlePaste}
           className="notice-preview min-h-[260px] w-full overflow-auto rounded-2xl border border-violet-200 bg-white p-4 text-sm leading-relaxed text-slate-800 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
         />
       ) : (

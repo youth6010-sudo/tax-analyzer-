@@ -27,6 +27,7 @@ export async function listCalendarEvents(
       href: `/calendar?highlight=${item.id}`,
       subtitle: item.clientName,
       ownerName: item.ownerName,
+      createdAt: item.createdAt,
     });
   }
 
@@ -41,6 +42,9 @@ export async function listCalendarEvents(
       allDay: ev.allDay,
       subtitle: ev.description?.trim() || kindLabel,
       ownerName: ev.createdBy || undefined,
+      createdAt: ev.createdAt,
+      companyScheduleKind: ev.scheduleKind,
+      companyDescription: ev.description,
     });
   }
 

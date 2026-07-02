@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TOKENS, type TemplateSource, type TemplateToken } from '../_lib/template';
+import { sanitizeNoticeHtml } from '../_lib/templates';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -38,14 +39,32 @@ export default function TemplateEditor({
 
   useEffect(() => {
     if (!ref.current || !isCustom) return;
-    if (ref.current.innerHTML !== html) {
-      ref.current.innerHTML = html || '';
+    const sanitized = sanitizeNoticeHtml(html || '');
+    if (ref.current.innerHTML !== sanitized) {
+      ref.current.innerHTML = sanitized;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, html]);
 
   const emit = () => {
-    if (ref.current && isCustom) onChange(ref.current.innerHTML);
+    if (!ref.current || !isCustom) return;
+    const sanitized = sanitizeNoticeHtml(ref.current.innerHTML);
+    if (ref.current.innerHTML !== sanitized) {
+      ref.current.innerHTML = sanitized;
+    }
+    onChange(sanitized);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    const next = html
+      ? sanitizeNoticeHtml(html)
+      : sanitizeNoticeHtml(text.replace(/\n/g, '<br>'));
+    document.execCommand('insertHTML', false, next);
+    emit();
   };
 
   const insertToken = (token: string) => {
@@ -122,6 +141,7 @@ export default function TemplateEditor({
               suppressContentEditableWarning
               onInput={emit}
               onBlur={emit}
+              onPaste={handlePaste}
               className="min-h-[180px] w-full resize-y overflow-auto rounded-2xl border border-rose-100 bg-white/70 p-3 text-sm leading-relaxed text-slate-800 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
             />
           ) : (

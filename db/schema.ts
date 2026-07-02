@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   uuid,
+  primaryKey,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
@@ -358,6 +359,17 @@ export const companyEvents = pgTable('company_events', {
   index('company_events_start_idx').on(t.startDate),
 ]);
 
+/** 회사 일정 — 담당자별 완료 체크 */
+export const companyEventCheckoffs = pgTable('company_event_checkoffs', {
+  eventId: uuid('event_id').notNull().references(() => companyEvents.id, { onDelete: 'cascade' }),
+  memberName: text('member_name').notNull(),
+  completed: boolean('completed').notNull().default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, t => [
+  primaryKey({ columns: [t.eventId, t.memberName] }),
+  index('company_event_checkoffs_member_idx').on(t.memberName),
+]);
+
 /** 점심 맛집 추가 요청 큐 */
 export const lunchSpotRequests = pgTable('lunch_spot_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -382,3 +394,4 @@ export type YearEndFiling = typeof yearEndFilings.$inferSelect;
 export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
 export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
 export type CompanyEvent = typeof companyEvents.$inferSelect;
+export type CompanyEventCheckoff = typeof companyEventCheckoffs.$inferSelect;

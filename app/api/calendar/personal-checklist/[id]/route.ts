@@ -2,9 +2,27 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import {
   deletePersonalChecklistItem,
+  getPersonalChecklistById,
   updatePersonalChecklistItem,
 } from '@/lib/personalChecklist';
 import type { ChecklistCategory, ChecklistTaxType } from '@/app/types/calendar';
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireUser();
+    const { id } = await params;
+    const item = await getPersonalChecklistById(id);
+    if (!item || item.ownerName !== user.name) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json({ item });
+  } catch {
+    return NextResponse.json({ error: '조회 실패' }, { status: 500 });
+  }
+}
 
 export async function PATCH(
   req: Request,

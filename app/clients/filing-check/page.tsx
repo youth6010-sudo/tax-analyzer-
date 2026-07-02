@@ -1202,15 +1202,6 @@ function FilingCheckPageInner() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {isIncomeTypeTax && (
-            <button
-              type="button"
-              onClick={() => void incomeSectionRef.current?.reload()}
-              className={portalBtnSecondary}
-            >
-              새로고침
-            </button>
-          )}
           {!isIncomeTypeTax && record.fileName && (
             <span className="max-w-[12rem] truncate text-xs text-slate-500">{record.fileName}</span>
           )}

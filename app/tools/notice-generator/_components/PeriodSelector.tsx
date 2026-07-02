@@ -77,17 +77,22 @@ export default function PeriodSelector({ taxType, params, onChange }: Props) {
         {/* 부가세: 과세기간 */}
         {taxType === TAX_TYPES.VAT && (
           <Field label="과세기간">
-            <select
-              className={selectClass}
-              value={params.vatPeriodId}
-              onChange={e => onChange('vatPeriodId', e.target.value)}
-            >
-              {VAT_PERIODS.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1.5">
+              <select
+                className={selectClass}
+                value={params.vatPeriodId}
+                onChange={e => onChange('vatPeriodId', e.target.value)}
+              >
+                {VAT_PERIODS.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400">
+                일반과세자 예정/확정, 개인 일반과세자 반기 확정, 간이과세자 연간 확정을 모두 선택할 수 있습니다.
+              </p>
+            </div>
           </Field>
         )}
 

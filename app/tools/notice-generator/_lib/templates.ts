@@ -49,7 +49,7 @@ function noticeDash(text: string): string {
 }
 
 function wrapNoticeHtml(body: string): string {
-  return `<div style="line-height:1.8;">${body}</div>`;
+  return `<div style="margin:0;padding:0;line-height:1.6;color:#334155;font-size:14px;">${body}</div>`;
 }
 
 function isBlankBlock(el: HTMLElement): boolean {
@@ -57,23 +57,115 @@ function isBlankBlock(el: HTMLElement): boolean {
   return html === '' || html === '<br>' || html === '<br/>';
 }
 
-/** div 블록 나열 → br 줄 구조로 변환 (서식 유지 복사용 · 저장된 레거시 서식 포함) */
+function isBoldLike(el: HTMLElement): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'b' || tag === 'strong' || /^h[1-6]$/.test(tag)) return true;
+  const fontWeight = (el.style.fontWeight || '').trim().toLowerCase();
+  if (fontWeight === 'bold' || fontWeight === 'bolder') return true;
+  const numeric = Number.parseInt(fontWeight, 10);
+  return Number.isFinite(numeric) && numeric >= 600;
+}
+
+function sanitizeNodeStyles(el: HTMLElement) {
+  const tag = el.tagName.toLowerCase();
+  const isTable = tag === 'table';
+  const isCell = tag === 'td' || tag === 'th';
+  const isTableRow = tag === 'tr';
+  const isTableSection = tag === 'thead' || tag === 'tbody' || tag === 'tfoot' || tag === 'colgroup' || tag === 'col';
+  const isBold = isBoldLike(el) || tag === 'th';
+  const textColor = isBold ? '#0f172a' : '#334155';
+
+  const prevAlign = el.style.textAlign;
+  const prevWidth = el.style.width;
+  const prevColSpan = el.getAttribute('colspan');
+  const prevRowSpan = el.getAttribute('rowspan');
+
+  for (const attr of Array.from(el.attributes)) {
+    if (attr.name === 'colspan' || attr.name === 'rowspan') continue;
+    el.removeAttribute(attr.name);
+  }
+  if (prevColSpan) el.setAttribute('colspan', prevColSpan);
+  if (prevRowSpan) el.setAttribute('rowspan', prevRowSpan);
+
+  if (isTable) {
+    el.style.borderCollapse = 'collapse';
+    el.style.tableLayout = 'fixed';
+    if (prevWidth) el.style.width = prevWidth;
+    el.style.margin = '6px 0';
+    el.style.fontSize = '13px';
+    el.style.lineHeight = '1.7';
+    el.style.color = '#334155';
+    el.style.backgroundColor = 'transparent';
+    return;
+  }
+
+  if (isTableSection || isTableRow) {
+    el.style.backgroundColor = 'transparent';
+    return;
+  }
+
+  if (isCell) {
+    el.style.border = '1px solid #e5e7eb';
+    el.style.padding = '8px 12px';
+    el.style.color = textColor;
+    el.style.backgroundColor = 'transparent';
+    if (isBold) el.style.fontWeight = '700';
+    if (prevAlign) el.style.textAlign = prevAlign;
+    return;
+  }
+
+  el.style.color = textColor;
+  el.style.backgroundColor = 'transparent';
+  if (tag === 'div' || tag === 'p' || tag === 'li') {
+    el.style.margin = '0';
+  }
+  if (isBold) {
+    el.style.fontWeight = '700';
+  } else {
+    el.style.fontWeight = '';
+  }
+}
+
+function collapseNoticeBreaks(html: string): string {
+  return html
+    .replace(/(<br\s*\/?>\s*)+/gi, '<br>')
+    .replace(/^(<br\s*\/?>\s*)+/gi, '')
+    .replace(/(<br\s*\/?>\s*)+$/gi, '');
+}
+
+/** 외부 HTML을 안내문 용도로 정리: 색상은 일반/볼드만 유지, 배경색 제거 */
+export function sanitizeNoticeHtml(html: string): string {
+  if (!html?.trim() || typeof document === 'undefined') return html;
+
+  const root = document.createElement('div');
+  root.innerHTML = html;
+
+  root.querySelectorAll('script,style,meta,link,title').forEach(el => el.remove());
+  root.querySelectorAll('*').forEach(node => sanitizeNodeStyles(node as HTMLElement));
+
+  return collapseNoticeBreaks(
+    root.innerHTML.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''),
+  );
+}
+
+/** div 블록 나열 → br 줄 구조로 변환 (서식 유지 복사용) */
 export function normalizeHtmlForClipboard(html: string): string {
   if (!html?.trim() || typeof document === 'undefined') return html;
 
   const root = document.createElement('div');
-  root.innerHTML = html.trim();
+  root.innerHTML = sanitizeNoticeHtml(html).trim();
 
   const flatten = (el: Element): string => {
     const tag = el.tagName.toLowerCase();
     if (tag === 'table') return el.outerHTML;
     if (tag === 'br') return '<br>';
+    if (tag === 'ol' || tag === 'ul') return (el as HTMLElement).outerHTML;
 
     if (tag === 'div' || tag === 'p') {
       const block = el as HTMLElement;
       if (isBlankBlock(block)) return '<br>';
 
-      const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table');
+      const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
       if (blockChild) {
         return Array.from(block.children)
           .map(child => flatten(child))
@@ -110,7 +202,7 @@ export function normalizeHtmlForClipboard(html: string): string {
     })
     .join('');
 
-  return wrapNoticeHtml(body.replace(/(<br\s*\/?>){3,}/gi, '<br><br>'));
+  return wrapNoticeHtml(collapseNoticeBreaks(body));
 }
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {

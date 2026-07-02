@@ -3,6 +3,7 @@ import { getDb } from '@/db';
 import { companyEvents } from '@/db/schema';
 import type { CompanyEventDto, CompanyScheduleKind } from '@/app/types/calendar';
 import { isPortalAdmin } from '@/lib/masterAccess';
+import { currentMonthRange } from '@/lib/calendarMonth';
 
 function toDto(row: typeof companyEvents.$inferSelect): CompanyEventDto {
   return {
@@ -32,6 +33,8 @@ export async function listCompanyEvents(opts?: {
       and(gte(companyEvents.startDate, opts.from), lte(companyEvents.startDate, opts.to)),
       and(lte(companyEvents.startDate, opts.to), gte(companyEvents.endDate, opts.from)),
     ));
+  } else if (opts?.to) {
+    conditions.push(lte(companyEvents.startDate, opts.to));
   }
 
   const rows = await db
@@ -45,16 +48,8 @@ export async function listCompanyEvents(opts?: {
 }
 
 export async function listUpcomingCompanyEvents(limit = 20): Promise<CompanyEventDto[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const db = getDb();
-  const rows = await db
-    .select()
-    .from(companyEvents)
-    .where(gte(companyEvents.endDate, today))
-    .orderBy(asc(companyEvents.startDate))
-    .limit(limit);
-
-  return rows.map(toDto);
+  const { from, to } = currentMonthRange();
+  return listCompanyEvents({ from, to, limit });
 }
 
 export type CreateCompanyEventInput = {
@@ -73,16 +68,11 @@ export async function createCompanyEvent(
   const db = getDb();
   const title = input.title.trim();
   const startDate = input.startDate.trim();
-  if (!title || !startDate) throw new Error('제목과 시작일을 입력하세요.');
+  if (!title) throw new Error('제목을 입력하세요.');
+  if (!startDate) throw new Error('마감기한을 지정하세요.');
 
-  const scheduleKind: CompanyScheduleKind = input.scheduleKind === 'deadline' ? 'deadline' : 'range';
-  const endDate = scheduleKind === 'deadline'
-    ? startDate
-    : (input.endDate?.trim() || startDate);
-
-  if (scheduleKind === 'range' && endDate < startDate) {
-    throw new Error('종료일은 시작일보다 빠를 수 없습니다.');
-  }
+  const scheduleKind: CompanyScheduleKind = 'deadline';
+  const endDate = startDate;
 
   const [row] = await db
     .insert(companyEvents)

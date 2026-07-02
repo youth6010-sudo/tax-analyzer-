@@ -2042,6 +2042,26 @@ body[data-capture] .print-header-logo {
   animation: wc-name-reveal 0.4s ease-out forwards;
 }
 
+/* ── 캘린더 담당자 칩 색 ── */
+.cal-mgr-daya {
+  background-color: #e8c84a; /* 개나리 */
+}
+.cal-mgr-blue {
+  background-color: #9dcce8; /* 파스텔블루 */
+}
+.cal-mgr-ria {
+  background-color: #c9b8e8; /* 연보라 */
+}
+.cal-mgr-winter {
+  background-color: #e87898; /* 진달래 */
+}
+.cal-mgr-charlie {
+  background-color: #dc2626; /* 빨강 */
+}
+.cal-mgr-perry {
+  background-color: #22a55a; /* 초록 */
+}
+
 /* ── 세무 신고 안내 문구 생성기 (/tools/notice-generator) ── */
 .notice-bg {
   background:
@@ -2050,10 +2070,10 @@ body[data-capture] .print-header-logo {
     linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 45%, #eff6ff 100%);
 }
 
-/* 결과 미리보기 내부 기본 줄간격 */
+/* 결과 미리보기 — 블록 여백 없이 미리보기와 복사본 줄간격 일치 */
 .notice-preview p,
 .notice-preview div {
-  min-height: 1em;
+  margin: 0;
 }
 
 @keyframes notice-pop-in {

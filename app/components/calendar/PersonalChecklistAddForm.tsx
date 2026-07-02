@@ -7,6 +7,8 @@ import {
   CHECKLIST_TAX_OPTIONS,
   type ChecklistCategory,
   type ChecklistTaxType,
+  type PersonalChecklistDto,
+  formatCalendarCreatedAt,
 } from '@/app/types/calendar';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
@@ -15,8 +17,11 @@ import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 
 type Props = {
   onCreated?: () => void;
+  onUpdated?: () => void;
+  onDeleted?: () => void;
   onCancel?: () => void;
   defaultClientId?: string;
+  editItem?: PersonalChecklistDto | null;
   inModal?: boolean;
 };
 
@@ -37,7 +42,16 @@ function filingTaxToChecklistTax(id: FilingTaxId | null): ChecklistTaxType | nul
   return null;
 }
 
-export default function PersonalChecklistAddForm({ onCreated, onCancel, defaultClientId, inModal }: Props) {
+export default function PersonalChecklistAddForm({
+  onCreated,
+  onUpdated,
+  onDeleted,
+  onCancel,
+  defaultClientId,
+  editItem = null,
+  inModal,
+}: Props) {
+  const isEdit = Boolean(editItem);
   const dashboardTax = useDashboardTaxFilter();
   const initialTax = filingTaxToChecklistTax(dashboardTax) ?? 'withholding';
 
@@ -63,9 +77,23 @@ export default function PersonalChecklistAddForm({ onCreated, onCancel, defaultC
   }, []);
 
   useEffect(() => {
+    if (editItem) {
+      setCategory(editItem.category);
+      setTaxType(editItem.taxType || initialTax);
+      setTitle(editItem.title);
+      setClientId(editItem.clientId || '');
+      setDueDate(editItem.dueDate || '');
+      setReflectInNotes(editItem.reflectInNotes);
+      return;
+    }
     const mapped = filingTaxToChecklistTax(dashboardTax);
     if (mapped) setTaxType(mapped);
-  }, [dashboardTax]);
+    setCategory('tax');
+    setTitle('');
+    setClientId(defaultClientId || '');
+    setDueDate('');
+    setReflectInNotes(false);
+  }, [editItem, dashboardTax, defaultClientId, initialTax]);
 
   const clients = useMemo(() => {
     if (category !== 'tax') {
@@ -83,36 +111,67 @@ export default function PersonalChecklistAddForm({ onCreated, onCancel, defaultC
 
   const handleTaxTypeChange = (next: ChecklistTaxType) => {
     setTaxType(next);
-    setClientId('');
+    if (!isEdit) setClientId('');
   };
 
   const handleCategoryChange = (next: ChecklistCategory) => {
     setCategory(next);
-    setClientId('');
+    if (!isEdit) setClientId('');
   };
 
-  const submit = async () => {
+  const handleDelete = async () => {
+    if (!editItem) return;
+    if (!confirm(`"${editItem.title}" 항목을 삭제할까요?`)) return;
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/calendar/personal-checklist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          category,
-          taxType: category === 'tax' ? taxType : '',
-          clientId: clientId || null,
-          dueDate,
-          reflectInNotes,
-        }),
-      });
+      const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '삭제 실패');
+      onDeleted?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '삭제 실패');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!dueDate) {
+      alert('마감기한을 입력하세요.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const payload = {
+      title,
+      category,
+      taxType: category === 'tax' ? taxType : '',
+      clientId: clientId || null,
+      dueDate,
+      reflectInNotes,
+    };
+    try {
+      const res = await fetch(
+        isEdit && editItem
+          ? `/api/calendar/personal-checklist/${editItem.id}`
+          : '/api/calendar/personal-checklist',
+        {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
-      setTitle('');
-      setDueDate('');
-      setReflectInNotes(false);
-      onCreated?.();
+      if (!isEdit) {
+        setTitle('');
+        setDueDate('');
+        setReflectInNotes(false);
+        onCreated?.();
+      } else {
+        onUpdated?.();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
     } finally {
@@ -184,6 +243,8 @@ export default function PersonalChecklistAddForm({ onCreated, onCancel, defaultC
         value={dueDate}
         onChange={e => setDueDate(e.target.value)}
         className={portalInput + ' w-full text-xs py-1.5'}
+        required
+        aria-label="마감기한"
       />
 
       <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
@@ -198,14 +259,30 @@ export default function PersonalChecklistAddForm({ onCreated, onCancel, defaultC
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
+      {isEdit && editItem?.createdAt && (
+        <p className="text-xs text-slate-500">
+          등록: {formatCalendarCreatedAt(editItem.createdAt)}
+        </p>
+      )}
+
       <div className="flex gap-2">
+        {isEdit && (
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={saving}
+            className="rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            삭제
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void submit()}
           disabled={saving || !title.trim()}
           className={portalBtnPrimary + ' flex-1 text-xs py-1.5'}
         >
-          {saving ? '저장 중…' : '추가'}
+          {saving ? '저장 중…' : isEdit ? '저장' : '추가'}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} className={portalBtnSecondary + ' text-xs py-1.5'}>

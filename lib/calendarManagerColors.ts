@@ -3,16 +3,28 @@ import type { CalendarEventDto } from '@/app/types/calendar';
 /** 사내 일정 — 검은색 */
 export const COMPANY_CHIP_COLOR = 'bg-slate-900';
 
-/** 담당자 고정 색 (팀 닉네임 기준) */
+/** 담당자 고정 색 (팀 닉네임 기준) — `app/globals.css` `.cal-mgr-*` */
 export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
-  다야: 'bg-red-600',
-  블루: 'bg-blue-600',
-  리아: 'bg-emerald-600',
-  윈터: 'bg-yellow-600',
+  다야: 'cal-mgr-daya',
+  블루: 'cal-mgr-blue',
+  리아: 'cal-mgr-ria',
+  윈터: 'cal-mgr-winter',
   인디: 'bg-slate-500',
-  찰리: 'bg-pink-500',
-  페리: 'bg-purple-600',
+  찰리: 'cal-mgr-charlie',
+  페리: 'cal-mgr-perry',
 };
+
+/** 파스텔·밝은 칩 — 진한 글자 */
+const LIGHT_MANAGER_CHIP_COLORS = new Set([
+  MANAGER_COLOR_BY_NAME.다야,
+  MANAGER_COLOR_BY_NAME.블루,
+  MANAGER_COLOR_BY_NAME.리아,
+  MANAGER_COLOR_BY_NAME.윈터,
+]);
+
+export function isLightManagerChipColor(color: string): boolean {
+  return LIGHT_MANAGER_CHIP_COLORS.has(color);
+}
 
 /** 범례·필터 표시 순서 */
 export const MANAGER_LEGEND_ORDER = ['다야', '블루', '리아', '윈터', '인디', '찰리', '페리'] as const;

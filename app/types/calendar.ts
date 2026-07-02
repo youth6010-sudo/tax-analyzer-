@@ -31,6 +31,10 @@ export type CompanyEventDto = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  myCheckoff?: boolean;
+  checkoffDone?: number;
+  checkoffTotal?: number;
+  checkoffs?: Record<string, boolean>;
 };
 
 export function formatCompanyEventSchedule(
@@ -57,7 +61,25 @@ export type CalendarEventDto = {
   href?: string;
   subtitle?: string;
   ownerName?: string;
+  createdAt?: string;
+  companyScheduleKind?: CompanyScheduleKind;
+  companyDescription?: string;
 };
+
+/** 캘린더·체크리스트 등록일시 표시 */
+export function formatCalendarCreatedAt(iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
 
 export type TaxDeadlineDto = {
   id: string;

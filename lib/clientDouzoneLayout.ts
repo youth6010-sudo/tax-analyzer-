@@ -35,6 +35,7 @@ export const DETAIL_SKIP_KEYS = new Set([
   'noticeData',
   'withholdingSettings',
   'incomeTypes',
+  'yearEndTypes',
   ...MAIN_META_INTAKE_KEYS,
 ]);
 

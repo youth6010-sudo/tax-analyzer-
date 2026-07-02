@@ -673,7 +673,7 @@ export default function NoticeGeneratorPage() {
           {/* 우측: 결과 영역 */}
           <div className="space-y-5">
             <DeadlineCard meta={meta} deadline={deadline} />
-            <ResultBox messageHtml={messageHtml} />
+            <ResultBox messageHtml={messageHtml} editable />
             {isVat && (
               <>
                 <VatReportField value={vatReport} onChange={setVatReport} />

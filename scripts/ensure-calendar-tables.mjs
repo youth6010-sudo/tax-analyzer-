@@ -24,6 +24,7 @@ if (!url) {
 const migrationPaths = [
   path.join(root, 'drizzle', '0002_calendar.sql'),
   path.join(root, 'drizzle', '0003_company_schedule_kind.sql'),
+  path.join(root, 'drizzle', '0004_company_event_checkoffs.sql'),
 ];
 
 const sql = postgres(url, { max: 1, prepare: false });

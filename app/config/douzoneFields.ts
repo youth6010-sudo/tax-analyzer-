@@ -57,8 +57,11 @@ export function douzoneExtraEntries(intakeData: Record<string, unknown>): { labe
 
   for (const [key, value] of Object.entries(intakeData)) {
     if (skip.has(key)) continue;
-    if (value == null || String(value).trim() === '') continue;
-    out.push({ label: DOUZONE_FIELD_LABELS[key] ?? key, value: String(value) });
+    if (value == null) continue;
+    if (typeof value === 'object') continue;
+    const text = String(value).trim();
+    if (!text) continue;
+    out.push({ label: DOUZONE_FIELD_LABELS[key] ?? key, value: text });
   }
 
   const notes = intakeData.notes;
