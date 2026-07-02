@@ -29,6 +29,14 @@ import {
 import { parseHometaxFile } from '@/app/utils/filingCheck';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { UNCategorized } from '@/app/utils/clientsGrouping';
+import type { ClientRecord } from '@/app/types/client';
+import {
+  buildSimplePayrollGrid,
+  buildYearEndGrid,
+  patchSimplePayrollRowFromTypes,
+  patchYearEndRowFromTypes,
+} from '@/lib/incomeTypeFilingGrid';
+import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
 
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400';
@@ -43,6 +51,7 @@ export type IncomeTypeFilingHandle = {
 type Props = {
   mode: 'simplePayroll' | 'yearEnd';
   manager: string;
+  clients: ClientRecord[];
   year: number;
   month?: number;
   onYearChange?: (year: number) => void;
@@ -127,6 +136,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   {
     mode,
     manager,
+    clients,
     year,
     month: monthProp,
     onYearChange,
@@ -178,38 +188,99 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     onStatsChange?.(stats);
   }, [stats, onStatsChange]);
 
+  const refreshClientIncomeTypes = useCallback(
+    async (clientId: string) => {
+      const res = await fetch(`/api/clients/${clientId}/income-types`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as { incomeTypes?: ClientIncomeTypes };
+      if (!data.incomeTypes) return;
+      const types = data.incomeTypes;
+      setGrid(prev =>
+        prev.map(row => {
+          if (row.clientId !== clientId) return row;
+          if (mode === 'simplePayroll') {
+            return patchSimplePayrollRowFromTypes(
+              row,
+              types,
+              spMeta?.employedFilingMonth ?? false,
+            );
+          }
+          return patchYearEndRowFromTypes(row, types);
+        }),
+      );
+    },
+    [mode, spMeta?.employedFilingMonth],
+  );
+
   const load = useCallback(async () => {
-    if (embedded && !manager) return;
+    if (embedded && !manager) {
+      setLoading(true);
+      return;
+    }
     setLoading(true);
     if (!embedded) setMessage('');
+
+    const applySimplePayroll = (built: ReturnType<typeof buildSimplePayrollGrid>) => {
+      setGrid(built.grid);
+      setSpMeta({
+        monthlyPeriodKey: built.meta.monthlyPeriodKey,
+        employedPeriodKey: built.meta.employedPeriodKey,
+        employedFilingMonth: built.meta.employedFilingMonth,
+      });
+      onEmployedFilingMonth?.(built.meta.employedFilingMonth);
+    };
+
     try {
+      if (mode === 'simplePayroll') {
+        applySimplePayroll(buildSimplePayrollGrid(clients, periodKey, [], {}));
+      } else {
+        setGrid(buildYearEndGrid(clients, year, [], {}));
+        onEmployedFilingMonth?.(false);
+      }
+
       const url =
         mode === 'simplePayroll'
           ? `/api/tax/simple-payroll?periodKey=${encodeURIComponent(periodKey)}&manager=${encodeURIComponent(manager)}`
           : `/api/tax/year-end?year=${year}&manager=${encodeURIComponent(manager)}`;
       const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error('불러오기 실패');
-      const data = await res.json();
-      setGrid(data.grid ?? []);
-      if (mode === 'simplePayroll') {
-        const employedFilingMonth = data.employedFilingMonth ?? false;
-        setSpMeta({
-          monthlyPeriodKey: data.monthlyPeriodKey,
-          employedPeriodKey: data.employedPeriodKey ?? null,
-          employedFilingMonth,
-        });
-        onEmployedFilingMonth?.(employedFilingMonth);
-      } else {
-        onEmployedFilingMonth?.(false);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.grid)) {
+          setGrid(data.grid);
+        }
+        if (mode === 'simplePayroll' && data.monthlyPeriodKey) {
+          setSpMeta({
+            monthlyPeriodKey: data.monthlyPeriodKey,
+            employedPeriodKey: data.employedPeriodKey ?? null,
+            employedFilingMonth: data.employedFilingMonth ?? false,
+          });
+          onEmployedFilingMonth?.(data.employedFilingMonth ?? false);
+        }
+      } else if (clients.length === 0) {
+        const err = await res.json().catch(() => ({}));
+        const msg = typeof err.error === 'string' ? err.error : '불러오기 실패';
+        if (embedded) onUploadNotice?.(msg);
+        else setMessage(msg);
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '불러오기 실패';
-      if (embedded) onUploadNotice?.(msg);
-      else setMessage(msg);
+      if (clients.length === 0) {
+        const msg = e instanceof Error ? e.message : '불러오기 실패';
+        if (embedded) onUploadNotice?.(msg);
+        else setMessage(msg);
+      }
     } finally {
       setLoading(false);
     }
-  }, [mode, periodKey, year, manager, embedded, onUploadNotice, onEmployedFilingMonth]);
+  }, [
+    mode,
+    periodKey,
+    year,
+    manager,
+    clients,
+    embedded,
+    onUploadNotice,
+    onEmployedFilingMonth,
+  ]);
 
   useEffect(() => {
     void load();
@@ -490,7 +561,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
             clientId={settingsClient.id}
             companyName={settingsClient.companyName}
             onClose={() => setSettingsClient(null)}
-            onSaved={() => void load()}
+            onSaved={() => void refreshClientIncomeTypes(settingsClient.id)}
           />
         )}
       </>
@@ -579,7 +650,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           clientId={settingsClient.id}
           companyName={settingsClient.companyName}
           onClose={() => setSettingsClient(null)}
-          onSaved={() => void load()}
+          onSaved={() => void refreshClientIncomeTypes(settingsClient.id)}
         />
       )}
     </>

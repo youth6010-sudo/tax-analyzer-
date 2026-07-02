@@ -11,24 +11,19 @@ import {
 import { getExcludedClientIds } from '@/lib/taxFilingChecksDb';
 import {
   employedSimplePayrollPeriodKey,
-  isSimplePayrollEmployedFilingMonth,
-  parseSimplePayrollViewPeriod,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
+import { buildSimplePayrollGrid, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
 import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
-import { SIMPLE_PAYROLL_GRID_COLUMNS } from '@/app/types/incomeTypes';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
-import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 
-function sortGrid<T extends { douzoneCode: string; companyName: string }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => {
-    const ca = a.douzoneCode.replace(/\D/g, '');
-    const cb = b.douzoneCode.replace(/\D/g, '');
-    if (ca && cb) return parseInt(ca, 10) - parseInt(cb, 10);
-    if (ca) return -1;
-    if (cb) return 1;
-    return a.companyName.localeCompare(b.companyName, 'ko');
-  });
+function apiError(e: unknown) {
+  if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.error('[simple-payroll]', e);
+  const message = e instanceof Error ? e.message : 'Server error';
+  return NextResponse.json({ error: message }, { status: 500 });
 }
 
 export async function GET(request: NextRequest) {
@@ -42,10 +37,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'periodKey required' }, { status: 400 });
     }
 
-    const { year, month } = parseSimplePayrollViewPeriod(periodKey);
-    const monthlyKey = simplePayrollMonthlyPeriodKey(year, month);
-    const employedKey = employedSimplePayrollPeriodKey(year, month);
-    const employedFilingMonth = isSimplePayrollEmployedFilingMonth(month);
+    const meta = simplePayrollPeriodMeta(periodKey);
+    const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
 
     const clients = await listClients({
       mineOnly: !isMasterUser(user),
@@ -53,78 +46,22 @@ export async function GET(request: NextRequest) {
       userName: user.name,
     });
 
-    const baseTargets = filingTargets(clients, 'simplePayroll');
-    const excluded = await getExcludedClientIds(manager, 'withholding', monthlyKey);
-
-    const periodKeys = employedKey ? [monthlyKey, employedKey] : [monthlyKey];
+    const excluded = await getExcludedClientIds(manager, 'withholding', monthlyPeriodKey);
+    const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const filedMap = new Map(saved.map(r => [`${r.periodKey}|${r.clientId}|${r.incomeType}`, r]));
-
-    const grid = sortGrid(
-      baseTargets.map(c => {
-          const types = readIncomeTypes(c.intakeData);
-          const excludeReason = excluded[c.id] ?? null;
-          const cells: Record<
-            string,
-            {
-              active: boolean;
-              applicable: boolean;
-              filed: boolean;
-              acceptanceDate: string;
-              acceptanceMethod: string;
-            }
-          > = {};
-
-          for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
-            if (col.kind === 'laborDate' || col.kind === 'laborMethod') continue;
-            const key = col.key;
-            const isEmployed = key === 'employed';
-            const storageKey = isEmployed && employedKey ? employedKey : monthlyKey;
-            const saved = filedMap.get(`${storageKey}|${c.id}|${key}`);
-            const typeOn = types[key];
-            const applicable = isEmployed ? employedFilingMonth : true;
-            cells[key] = {
-              applicable,
-              active: typeOn && applicable,
-              filed: saved?.filed ?? false,
-              acceptanceDate: saved?.acceptanceDate ?? '',
-              acceptanceMethod: saved?.acceptanceMethod ?? '',
-            };
-          }
-
-          const laborSaved = filedMap.get(`${monthlyKey}|${c.id}|laborContentReport`);
-          cells.laborContentReport = {
-            applicable: true,
-            active: types.laborContentReport,
-            filed: laborSaved?.filed ?? false,
-            acceptanceDate: laborSaved?.acceptanceDate ?? '',
-            acceptanceMethod: laborSaved?.acceptanceMethod ?? '',
-          };
-
-          return {
-            clientId: c.id,
-            companyName: c.companyName,
-            representative: c.representative,
-            businessNo: c.businessNo,
-            douzoneCode: getClientDouzoneCode(c) || '',
-            manager: c.manager,
-            excludeReason,
-            cells,
-          };
-        }),
-    );
+    const { grid } = buildSimplePayrollGrid(clients, periodKey, saved, excluded);
 
     return NextResponse.json({
-      year,
-      month,
-      monthlyPeriodKey: monthlyKey,
-      employedPeriodKey: employedKey,
+      year: meta.year,
+      month: meta.month,
+      monthlyPeriodKey,
+      employedPeriodKey,
       employedFilingMonth,
       excluded,
       grid,
     });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }
 
@@ -145,10 +82,7 @@ export async function PUT(request: NextRequest) {
       }[];
     };
 
-    let rows = body.rows;
-    if (!rows && body.periodKey) {
-      return NextResponse.json({ error: 'rows required' }, { status: 400 });
-    }
+    const rows = body.rows;
     if (!rows) {
       return NextResponse.json({ error: 'rows required' }, { status: 400 });
     }
@@ -176,8 +110,8 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }
 
@@ -189,7 +123,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'periodKey, bizNos required' }, { status: 400 });
     }
 
-    const { year, month } = parseSimplePayrollViewPeriod(body.periodKey);
+    const { year, month } = simplePayrollPeriodMeta(body.periodKey);
     const monthlyKey = simplePayrollMonthlyPeriodKey(year, month);
     const employedKey = employedSimplePayrollPeriodKey(year, month);
 
@@ -236,7 +170,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ matched });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }

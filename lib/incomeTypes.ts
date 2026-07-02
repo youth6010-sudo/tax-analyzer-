@@ -12,6 +12,11 @@ function yn(value: unknown): boolean {
   return s === 'Y' || s === 'YES' || s === 'TRUE' || s === '1' || s === 'O';
 }
 
+/** 간이지급 — 근로내용확인신고 열 활성 (체크 또는 일용 연동) */
+export function isLaborContentReportActive(types: ClientIncomeTypes): boolean {
+  return types.laborContentReport || types.daily;
+}
+
 /** 레거시 taxFlags + 근로내역(Y/N) → 통합 소득유형 */
 export function migrateIncomeTypes(intakeData: Record<string, unknown>): ClientIncomeTypes {
   const flags =
@@ -26,13 +31,21 @@ export function migrateIncomeTypes(intakeData: Record<string, unknown>): ClientI
 
   const payrollHistory = intakeData.payrollHistory;
 
+  const legacyEmployed = yn(intakeData.employed);
+  const legacyDaily = yn(intakeData.daily);
+
   const out: ClientIncomeTypes = { ...EMPTY_INCOME_TYPES };
 
   for (const key of INCOME_TYPE_KEYS) {
     if (existing && typeof existing[key] === 'boolean') {
       out[key] = existing[key];
+    } else if (key === 'employed' && legacyEmployed) {
+      out.employed = true;
+    } else if (key === 'daily' && legacyDaily) {
+      out.daily = true;
     } else if (key === 'laborContentReport') {
-      out.laborContentReport = yn(existing?.laborContentReport) || yn(payrollHistory);
+      out.laborContentReport =
+        yn(existing?.laborContentReport) || yn(flags.laborContentReport) || yn(payrollHistory);
     } else if (key in flags) {
       out[key] = yn(flags[key]);
     }

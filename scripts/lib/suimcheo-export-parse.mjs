@@ -95,8 +95,13 @@ export function detectSuimcheoExport(rows) {
 }
 
 function headerIndex(headerRow, ...names) {
+  const cells = headerRow.map(cellText);
   for (const name of names) {
-    const idx = headerRow.findIndex(h => cellText(h) === name || cellText(h).includes(name));
+    const exact = cells.findIndex(h => h === name);
+    if (exact >= 0) return exact;
+  }
+  for (const name of names) {
+    const idx = cells.findIndex(h => h.includes(name));
     if (idx >= 0) return idx;
   }
   return -1;
@@ -181,6 +186,17 @@ export function parseSuimcheoExportRows(rows) {
     const contact = splitContactPhone(row[col.phone]);
     const isClosed = Boolean(closedDate);
 
+    const incomeTypes = {
+      employed: yn(row[col.employed]),
+      daily: yn(row[col.daily]),
+      retirement: yn(row[col.retirement]),
+      bizIncome: yn(row[col.bizIncome]),
+      interestDividend: yn(row[col.interestDividend]),
+      otherTax: yn(row[col.otherTax]),
+      /** 근로내역(Y/N) = 근로내용확인신고 */
+      laborContentReport: yn(row[col.payrollHistory]),
+    };
+
     parsed.push({
       code: cell(row, col.code),
       companyName,
@@ -224,17 +240,17 @@ export function parseSuimcheoExportRows(rows) {
         taxOfficeContact: cell(row, col.taxOfficeContact),
         taxOfficePhone: cell(row, col.taxOfficePhone),
         clientContact: cell(row, col.clientContact),
-        payrollHistory: cell(row, col.payrollHistory),
         relatedCompanies: cell(row, col.relatedCompanies),
         statusLabel: isClosed ? '폐업' : statusRaw,
+        incomeTypes,
         taxFlags: {
-          employed: yn(row[col.employed]),
-          daily: yn(row[col.daily]),
-          retirement: yn(row[col.retirement]),
-          bizIncome: yn(row[col.bizIncome]),
-          interestDividend: yn(row[col.interestDividend]),
-          otherTax: yn(row[col.otherTax]),
-          proxyPay: yn(row[col.proxyPay]),
+          employed: incomeTypes.employed,
+          daily: incomeTypes.daily,
+          retirement: incomeTypes.retirement,
+          bizIncome: incomeTypes.bizIncome,
+          interestDividend: incomeTypes.interestDividend,
+          otherTax: incomeTypes.otherTax,
+          laborContentReport: incomeTypes.laborContentReport,
         },
         notes: {
           payroll: cell(row, col.notePayroll),

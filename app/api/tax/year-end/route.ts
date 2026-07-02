@@ -11,13 +11,21 @@ import {
   type YearEndIncomeType,
 } from '@/lib/yearEndFilingsDb';
 import { YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
+import { buildYearEndGrid } from '@/lib/incomeTypeFilingGrid';
 import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
-import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import {
-  AUTO_NO_WH,
   getWithholdingExclusionsForYear,
   getWithholdingReceiptHistoryForYear,
 } from '@/lib/taxFilingChecksDb';
+
+function apiError(e: unknown) {
+  if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.error('[year-end]', e);
+  const message = e instanceof Error ? e.message : 'Server error';
+  return NextResponse.json({ error: message }, { status: 500 });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,52 +40,15 @@ export async function GET(request: NextRequest) {
       userName: user.name,
     });
 
-    const base = filingTargets(clients, 'yearEnd');
     const saved = await listYearEndFilings(year);
-    const filedMap = new Map(saved.map(r => [`${r.clientId}|${r.incomeType}`, r]));
     const yearExcluded = await getWithholdingExclusionsForYear(manager, year);
-
-    const { ids: withheldIds, bizNos: withheldBiz } = await getWithholdingReceiptHistoryForYear(
+    const { ids, bizNos } = await getWithholdingReceiptHistoryForYear(
       manager,
       year,
       normalizeBizNo,
     );
 
-    const grid = base.map(c => {
-        const biz = normalizeBizNo(c.businessNo);
-        const hasWithholdingHistory =
-          withheldIds.has(c.id) || (biz !== '' && withheldBiz.has(biz));
-        const types = yearEndTypeTargets(readIncomeTypes(c.intakeData));
-        const excludeReason =
-          yearExcluded[c.id] ?? (hasWithholdingHistory ? null : AUTO_NO_WH);
-        const cells: Record<string, { active: boolean; filed: boolean }> = {};
-        for (const col of YEAR_END_COLUMNS) {
-          const active = types[col.key as YearEndIncomeType];
-          const savedRow = filedMap.get(`${c.id}|${col.key}`);
-          cells[col.key] = {
-            active,
-            filed: savedRow?.filed ?? false,
-          };
-        }
-        return {
-          clientId: c.id,
-          companyName: c.companyName,
-          representative: c.representative,
-          businessNo: c.businessNo,
-          douzoneCode: getClientDouzoneCode(c) || '',
-          manager: c.manager,
-          excludeReason,
-          cells,
-        };
-      })
-      .sort((a, b) => {
-        const ca = a.douzoneCode.replace(/\D/g, '');
-        const cb = b.douzoneCode.replace(/\D/g, '');
-        if (ca && cb) return parseInt(ca, 10) - parseInt(cb, 10);
-        if (ca) return -1;
-        if (cb) return 1;
-        return a.companyName.localeCompare(b.companyName, 'ko');
-      });
+    const grid = buildYearEndGrid(clients, year, saved, yearExcluded, { ids, bizNos });
 
     const tables: Record<
       YearEndIncomeType,
@@ -112,8 +83,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ year, grid, tables });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }
 
@@ -136,8 +107,8 @@ export async function PUT(request: NextRequest) {
     );
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }
 
@@ -170,7 +141,7 @@ export async function POST(request: NextRequest) {
 
     const matched = await matchYearEndFromExcel(body.year, body.bizNos, bizMap, typesMap, user.name);
     return NextResponse.json({ matched });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    return apiError(e);
   }
 }

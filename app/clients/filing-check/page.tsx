@@ -1210,6 +1210,7 @@ export default function FilingCheckPage() {
             ref={incomeSectionRef}
             mode={tax === 'simplePayroll' ? 'simplePayroll' : 'yearEnd'}
             manager={selManager}
+            clients={clients}
             year={period.year}
             month={period.month}
             onYearChange={y => setPeriod(p => ({ ...p, year: y }))}
