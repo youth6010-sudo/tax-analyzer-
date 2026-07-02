@@ -1,23 +1,27 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 
-/** 개인 일정 칩 — 담당자별 고정 팔레트 (흰 글자 대비 600톤) */
+/**
+ * 개인 일정 칩 — 담당자별 팔레트
+ * 팀 목록 순서대로 할당되므로, 인접 인덱스가 색상환에서 멀리 떨어지게 배열함.
+ * 사내 일정(sky)과 겹치지 않도록 청록·하늘 계열은 제외.
+ */
 export const MANAGER_CHIP_COLORS = [
-  'bg-amber-600',
-  'bg-violet-600',
-  'bg-emerald-600',
-  'bg-rose-600',
-  'bg-indigo-600',
-  'bg-orange-600',
-  'bg-teal-600',
-  'bg-fuchsia-600',
-  'bg-lime-700',
-  'bg-cyan-700',
+  'bg-red-600', // 빨강
+  'bg-blue-700', // 파랑
+  'bg-lime-700', // 연두
+  'bg-orange-600', // 주황
+  'bg-violet-600', // 보라
+  'bg-rose-600', // 장미
+  'bg-emerald-600', // 초록
+  'bg-fuchsia-600', // 자홍
+  'bg-amber-700', // 황갈
+  'bg-purple-600', // 자주
 ] as const;
 
 export const COMPANY_CHIP_COLOR = 'bg-sky-600';
 
 const KIND_CHIP_COLORS: Record<CalendarEventDto['kind'], string> = {
-  personal: 'bg-amber-600',
+  personal: MANAGER_CHIP_COLORS[0],
   company: COMPANY_CHIP_COLOR,
   tax_deadline: 'bg-emerald-600',
   client_task: 'bg-rose-600',
