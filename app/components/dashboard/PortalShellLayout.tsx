@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import HomeTasksPanel from './HomeTasksPanel';
 import HomeSidebarNav from './HomeSidebarNav';
 import ContactHeaderSearch from '@/app/components/ContactHeaderSearch';
@@ -121,13 +121,16 @@ function PortalBrand() {
 }
 
 export default function PortalShellLayout({ children }: { children: React.ReactNode }) {
-  const [leftWidth, setLeftWidth] = useState(() =>
-    readStoredWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT, MIN_LEFT, MAX_LEFT),
-  );
-  const [rightWidth, setRightWidth] = useState(() =>
-    readStoredWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT, MIN_RIGHT, MAX_RIGHT),
-  );
-  const [rightMode, setRightMode] = useState<RightMode>(readStoredRightMode);
+  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT);
+  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT);
+  const [rightMode, setRightMode] = useState<RightMode>('open');
+
+  useLayoutEffect(() => {
+    setLeftWidth(readStoredWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT, MIN_LEFT, MAX_LEFT));
+    setRightWidth(readStoredWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT, MIN_RIGHT, MAX_RIGHT));
+    setRightMode(readStoredRightMode());
+  }, []);
+
   const leftResize = useResize(leftWidth, setLeftWidth, LEFT_WIDTH_KEY, MIN_LEFT, MAX_LEFT, 'left');
   const rightResize = useResize(rightWidth, setRightWidth, RIGHT_WIDTH_KEY, MIN_RIGHT, MAX_RIGHT, 'right');
 
