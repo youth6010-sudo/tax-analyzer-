@@ -51,9 +51,9 @@ function SectionHeader({
       <button
         type="button"
         onClick={onToggle}
-        className="flex flex-1 items-center gap-1.5 text-left text-xs font-bold text-amber-950 py-1"
+        className="flex flex-1 items-center gap-1.5 text-left text-sm font-bold text-amber-950 py-1"
       >
-        <span className="text-[10px] text-amber-700">{open ? '▼' : '▶'}</span>
+        <span className="text-xs text-amber-700">{open ? '▼' : '▶'}</span>
         {title}
       </button>
       {onAdd && (
@@ -132,11 +132,11 @@ export default function HomeTasksPanel() {
   return (
     <>
       <section className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 shadow-sm">
-        <h2 className="text-sm font-bold text-amber-950">To De List</h2>
-        <p className="text-[11px] text-amber-900/80 mt-0.5">개인 · 회사 · 업체</p>
+        <h2 className="text-base font-bold text-amber-950">To De List</h2>
+        <p className="text-xs text-amber-900/80 mt-0.5">개인 · 회사 · 업체</p>
 
         {loading ? (
-          <p className="mt-4 text-xs text-amber-900/70 text-center py-4">불러오는 중…</p>
+          <p className="mt-4 text-sm text-amber-900/70 text-center py-4">불러오는 중…</p>
         ) : (
           <div className="mt-2 space-y-3">
             <div>
@@ -149,13 +149,13 @@ export default function HomeTasksPanel() {
               {sections.personal && (
                 <div className="space-y-1.5 mt-1">
                   {personal.length === 0 ? (
-                    <p className="text-xs text-amber-900/60 py-2 text-center">항목 없음</p>
+                    <p className="text-sm text-amber-900/60 py-2 text-center">항목 없음</p>
                   ) : (
                     <ul className="space-y-1">
                       {personal.map(item => (
                         <li
                           key={item.id}
-                          className="flex items-start gap-2 rounded-lg border border-amber-100 bg-white px-2 py-2 text-xs"
+                          className="flex items-start gap-2.5 rounded-lg border border-amber-100 bg-white px-3 py-2.5 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -164,16 +164,16 @@ export default function HomeTasksPanel() {
                             className="mt-0.5"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-gray-800 leading-snug">{item.title}</p>
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            <p className="font-semibold text-slate-800 leading-snug">{item.title}</p>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
                                 {item.category === 'tax' ? taxLabel(item.taxType) : '기타'}
                               </span>
                               {item.clientName && (
-                                <span className="text-[10px] text-gray-500">{item.clientName}</span>
+                                <span className="text-xs text-slate-500">{item.clientName}</span>
                               )}
                               {item.reflectInNotes && (
-                                <span className="text-[10px] text-blue-600">특이사항 반영</span>
+                                <span className="text-xs text-blue-600">특이사항 반영</span>
                               )}
                             </div>
                           </div>
@@ -197,16 +197,16 @@ export default function HomeTasksPanel() {
                   {companyEvents.map(ev => (
                     <div
                       key={ev.id}
-                      className="rounded-lg border border-sky-100 bg-white px-2.5 py-2 text-xs"
+                      className="rounded-lg border border-sky-100 bg-white px-3 py-2.5 text-sm"
                     >
-                      <p className="font-semibold text-sky-900">{ev.title}</p>
-                      <p className="text-[10px] text-sky-700 mt-0.5">
+                      <p className="font-semibold text-sky-900 leading-snug">{ev.title}</p>
+                      <p className="text-xs text-sky-700 mt-1 leading-relaxed">
                         {formatCompanyEventSchedule(ev)}
                       </p>
                     </div>
                   ))}
                   {companyEvents.length === 0 && (
-                    <p className="text-xs text-amber-900/60 py-2 text-center">일정 없음</p>
+                    <p className="text-sm text-amber-900/60 py-2 text-center">일정 없음</p>
                   )}
                 </div>
               )}
@@ -221,16 +221,16 @@ export default function HomeTasksPanel() {
               {sections.client && (
                 <ul className="space-y-1.5 mt-1">
                   {clientTasks.length === 0 ? (
-                    <p className="text-xs text-amber-900/60 py-2 text-center">할 일 없음</p>
+                    <p className="text-sm text-amber-900/60 py-2 text-center">할 일 없음</p>
                   ) : (
                     clientTasks.map(t => (
                       <li key={t.id}>
                         <Link
                           href={t.href}
-                          className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-100 bg-white px-2.5 py-2 text-xs hover:border-amber-300 hover:shadow-sm transition-shadow"
+                          className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-100 bg-white px-3 py-2.5 text-sm hover:border-amber-300 hover:shadow-sm transition-shadow"
                         >
                           <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
+                            className={`text-xs font-bold px-2 py-0.5 rounded-md shrink-0 ${
                               t.type === 'nts_alert'
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-amber-100 text-amber-900'
@@ -238,8 +238,8 @@ export default function HomeTasksPanel() {
                           >
                             {TYPE_LABEL[t.type]}
                           </span>
-                          <span className="font-semibold text-gray-800 flex-1 min-w-0 leading-snug">{t.title}</span>
-                          {t.subtitle && <span className="text-[10px] text-gray-500">{t.subtitle}</span>}
+                          <span className="font-semibold text-slate-800 flex-1 min-w-0 leading-snug">{t.title}</span>
+                          {t.subtitle && <span className="text-xs text-slate-500">{t.subtitle}</span>}
                         </Link>
                       </li>
                     ))

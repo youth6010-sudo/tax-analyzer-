@@ -31,7 +31,7 @@ export default function CalendarToolbar({
         >
           ‹
         </button>
-        <h1 className="text-lg font-bold text-slate-900 min-w-[8rem] text-center">
+        <h1 className="text-xl font-bold text-slate-900 min-w-[9rem] text-center tabular-nums">
           {year}년 {month}월
         </h1>
         <button

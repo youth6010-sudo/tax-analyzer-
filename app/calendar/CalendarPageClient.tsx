@@ -6,10 +6,10 @@ import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import { portalMain } from '@/app/components/portal/uiClasses';
 import CalendarToolbar, { type CalendarViewMode } from '@/app/components/calendar/CalendarToolbar';
 import CalendarView from '@/app/components/calendar/CalendarView';
-import CalendarEventChip from '@/app/components/calendar/CalendarEventChip';
 import CalendarTeamFilter from '@/app/components/calendar/CalendarTeamFilter';
+import { eventDisplayTitle } from '@/app/components/calendar/CalendarEventChip';
 import type { CalendarEventDto } from '@/app/types/calendar';
-import { buildCalendarLegend } from '@/lib/calendarManagerColors';
+import { buildCalendarLegend, formatCalendarDateLabel, resolveEventChipColor } from '@/lib/calendarManagerColors';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 
@@ -170,10 +170,13 @@ export default function CalendarPageClient() {
           />
         )}
 
-        <div className="flex flex-wrap gap-3 mb-3">
+        <div className="flex flex-wrap gap-2 mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
           {legend.map(item => (
-            <span key={item.key} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-              <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
+            <span
+              key={item.key}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 shadow-sm"
+            >
+              <span className={`h-3 w-3 rounded-full ring-1 ring-black/10 ${item.color}`} />
               {item.label}
             </span>
           ))}
@@ -195,27 +198,57 @@ export default function CalendarPageClient() {
         )}
 
         {selectedDate && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-800 mb-2">
-              {selectedDate} 일정
+          <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900 mb-3">
+              {formatCalendarDateLabel(selectedDate)} 일정
             </h2>
             {dayEvents.length === 0 ? (
-              <p className="text-xs text-slate-500">일정 없음</p>
+              <p className="text-sm text-slate-500">일정 없음</p>
             ) : (
-              <ul className="space-y-2">
-                {dayEvents.map(ev => (
-                  <li
-                    key={ev.id}
-                    className={`flex items-center gap-2 ${
-                      highlight && ev.id.includes(highlight) ? 'ring-2 ring-amber-300 rounded-lg p-1' : ''
-                    }`}
-                  >
-                    <CalendarEventChip event={ev} currentUser={currentUser} members={members} />
-                    {ev.subtitle && (
-                      <span className="text-xs text-slate-500">{ev.subtitle}</span>
-                    )}
-                  </li>
-                ))}
+              <ul className="space-y-2.5">
+                {dayEvents.map(ev => {
+                  const color = resolveEventChipColor(ev, members);
+                  const title = eventDisplayTitle(ev, currentUser);
+                  const highlighted = highlight && ev.id.includes(highlight);
+                  return (
+                    <li
+                      key={ev.id}
+                      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
+                        highlighted
+                          ? 'border-amber-300 bg-amber-50 ring-2 ring-amber-200'
+                          : 'border-slate-100 bg-slate-50/60'
+                      }`}
+                    >
+                      <span
+                        className={`mt-1 h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10 ${color}`}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {ev.href ? (
+                            <a
+                              href={ev.href}
+                              className="text-sm font-semibold text-slate-900 hover:text-blue-600 hover:underline"
+                            >
+                              {title}
+                            </a>
+                          ) : (
+                            <p className="text-sm font-semibold text-slate-900">{title}</p>
+                          )}
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                            {ev.kind === 'company' ? '사내' : '개인'}
+                          </span>
+                        </div>
+                        {ev.subtitle && (
+                          <p className="mt-1 text-sm text-slate-600 leading-relaxed">{ev.subtitle}</p>
+                        )}
+                        {ev.kind === 'personal' && ev.ownerName && (
+                          <p className="mt-0.5 text-xs text-slate-500">담당: {ev.ownerName}</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
