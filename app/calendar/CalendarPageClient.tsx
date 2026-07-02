@@ -6,9 +6,10 @@ import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import { portalMain } from '@/app/components/portal/uiClasses';
 import CalendarToolbar, { type CalendarViewMode } from '@/app/components/calendar/CalendarToolbar';
 import CalendarView from '@/app/components/calendar/CalendarView';
-import CalendarEventChip, { kindLegend } from '@/app/components/calendar/CalendarEventChip';
+import CalendarEventChip from '@/app/components/calendar/CalendarEventChip';
 import CalendarTeamFilter from '@/app/components/calendar/CalendarTeamFilter';
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { buildCalendarLegend } from '@/lib/calendarManagerColors';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 
@@ -142,6 +143,11 @@ export default function CalendarPageClient() {
     ev => selectedDate >= ev.startDate && selectedDate <= ev.endDate,
   );
 
+  const legend = useMemo(
+    () => buildCalendarLegend(members, selectedOwners),
+    [members, selectedOwners],
+  );
+
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full py-4`}>
@@ -165,8 +171,8 @@ export default function CalendarPageClient() {
         )}
 
         <div className="flex flex-wrap gap-3 mb-3">
-          {kindLegend().map(item => (
-            <span key={item.kind} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+          {legend.map(item => (
+            <span key={item.key} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
               <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
               {item.label}
             </span>
@@ -184,6 +190,7 @@ export default function CalendarPageClient() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             currentUser={currentUser}
+            members={members}
           />
         )}
 
@@ -203,7 +210,7 @@ export default function CalendarPageClient() {
                       highlight && ev.id.includes(highlight) ? 'ring-2 ring-amber-300 rounded-lg p-1' : ''
                     }`}
                   >
-                    <CalendarEventChip event={ev} currentUser={currentUser} />
+                    <CalendarEventChip event={ev} currentUser={currentUser} members={members} />
                     {ev.subtitle && (
                       <span className="text-xs text-slate-500">{ev.subtitle}</span>
                     )}

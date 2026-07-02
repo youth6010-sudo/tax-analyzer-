@@ -23,6 +23,7 @@ type DayCellProps = {
   onSelect: (date: string) => void;
   tall?: boolean;
   currentUser?: string;
+  members?: readonly string[];
 };
 
 export function CalendarDayCell({
@@ -35,6 +36,7 @@ export function CalendarDayCell({
   onSelect,
   tall = false,
   currentUser,
+  members = [],
 }: DayCellProps) {
   const maxVisible = tall ? 8 : 6;
   const visible = events.slice(0, maxVisible);
@@ -63,7 +65,7 @@ export function CalendarDayCell({
       </span>
       <div className="mt-1 space-y-0.5 overflow-y-auto max-h-[calc(100%-2rem)]">
         {visible.map(ev => (
-          <CalendarEventChip key={ev.id} event={ev} compact currentUser={currentUser} />
+          <CalendarEventChip key={ev.id} event={ev} compact currentUser={currentUser} members={members} />
         ))}
         {more > 0 && (
           <span className="text-[10px] text-slate-500 font-medium">+{more}건</span>
@@ -123,6 +125,7 @@ type Props = {
   selectedDate: string;
   onSelectDate: (date: string) => void;
   currentUser?: string;
+  members?: readonly string[];
 };
 
 export default function CalendarView({
@@ -133,6 +136,7 @@ export default function CalendarView({
   selectedDate,
   onSelectDate,
   currentUser,
+  members = [],
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -168,6 +172,7 @@ export default function CalendarView({
                 onSelect={onSelectDate}
                 tall
                 currentUser={currentUser}
+                members={members}
               />
             );
           })}
@@ -206,6 +211,7 @@ export default function CalendarView({
               events={dayEvents}
               onSelect={onSelectDate}
               currentUser={currentUser}
+              members={members}
             />
           );
         })}

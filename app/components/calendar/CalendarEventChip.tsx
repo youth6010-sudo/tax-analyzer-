@@ -1,10 +1,11 @@
 'use client';
 
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { COMPANY_CHIP_COLOR, managerChipColor } from '@/lib/calendarManagerColors';
 
 const KIND_COLORS: Record<CalendarEventDto['kind'], string> = {
   personal: 'bg-amber-500',
-  company: 'bg-sky-500',
+  company: COMPANY_CHIP_COLOR,
   tax_deadline: 'bg-emerald-500',
   client_task: 'bg-rose-500',
 };
@@ -16,16 +17,25 @@ function displayTitle(event: CalendarEventDto, currentUser?: string): string {
   return event.title;
 }
 
+function resolveChipColor(event: CalendarEventDto, members: readonly string[]): string {
+  if (event.kind === 'personal' && event.ownerName && members.length > 0) {
+    return managerChipColor(event.ownerName, members);
+  }
+  return KIND_COLORS[event.kind];
+}
+
 export default function CalendarEventChip({
   event,
   compact,
   currentUser,
+  members = [],
 }: {
   event: CalendarEventDto;
   compact?: boolean;
   currentUser?: string;
+  members?: readonly string[];
 }) {
-  const color = KIND_COLORS[event.kind];
+  const color = resolveChipColor(event, members);
   const label = displayTitle(event, currentUser);
   const inner = (
     <span
@@ -46,11 +56,4 @@ export default function CalendarEventChip({
     );
   }
   return inner;
-}
-
-export function kindLegend() {
-  return [
-    { kind: 'personal' as const, label: '개인', color: 'bg-amber-500' },
-    { kind: 'company' as const, label: '사내', color: 'bg-sky-500' },
-  ];
 }

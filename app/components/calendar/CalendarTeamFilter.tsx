@@ -1,5 +1,7 @@
 'use client';
 
+import { managerChipColor } from '@/lib/calendarManagerColors';
+
 type Props = {
   members: string[];
   currentUser: string;
@@ -56,6 +58,10 @@ export default function CalendarTeamFilter({
               checked={selected.includes(name)}
               onChange={() => toggle(name)}
               className="rounded border-slate-300"
+            />
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${managerChipColor(name, members)}`}
+              aria-hidden
             />
             <span className={name === currentUser ? 'font-bold text-slate-900' : ''}>
               {name}
