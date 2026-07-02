@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       userName: user.name,
     });
 
-    const baseTargets = filingTargets(clients, 'withholding');
+    const baseTargets = filingTargets(clients, 'simplePayroll');
     const excluded = await getExcludedClientIds(manager, 'withholding', monthlyKey);
 
     const periodKeys = employedKey ? [monthlyKey, employedKey] : [monthlyKey];
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     const monthlyTypesMap = new Map<string, IncomeTypeKey[]>();
     const employedTypesMap = new Map<string, IncomeTypeKey[]>();
 
-    for (const c of filingTargets(clients, 'withholding')) {
+    for (const c of filingTargets(clients, 'simplePayroll')) {
       const biz = normalizeBizNo(c.businessNo);
       if (biz) bizMap.set(c.id, biz);
       const types = readIncomeTypes(c.intakeData);

@@ -13,7 +13,11 @@ import {
 import { YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
 import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
-import { getFilingCheckSession, getWithholdingExclusionsForYear } from '@/lib/taxFilingChecksDb';
+import {
+  AUTO_NO_WH,
+  getWithholdingExclusionsForYear,
+  getWithholdingReceiptHistoryForYear,
+} from '@/lib/taxFilingChecksDb';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,24 +37,19 @@ export async function GET(request: NextRequest) {
     const filedMap = new Map(saved.map(r => [`${r.clientId}|${r.incomeType}`, r]));
     const yearExcluded = await getWithholdingExclusionsForYear(manager, year);
 
-    const withheldIds = new Set<string>();
-    const withheldBiz = new Set<string>();
-    for (let m = 1; m <= 12; m += 1) {
-      const pk = `${year}-${String(m).padStart(2, '0')}`;
-      const session = await getFilingCheckSession(manager, 'withholding', pk);
-      if (!session) continue;
-      for (const b of session.excelBizNos ?? []) withheldBiz.add(normalizeBizNo(b));
-      for (const [id, v] of Object.entries(session.overrides ?? {})) if (v) withheldIds.add(id);
-    }
+    const { ids: withheldIds, bizNos: withheldBiz } = await getWithholdingReceiptHistoryForYear(
+      manager,
+      year,
+      normalizeBizNo,
+    );
 
-    const grid = base
-      .filter(c => {
+    const grid = base.map(c => {
         const biz = normalizeBizNo(c.businessNo);
-        return withheldIds.has(c.id) || (biz !== '' && withheldBiz.has(biz));
-      })
-      .map(c => {
+        const hasWithholdingHistory =
+          withheldIds.has(c.id) || (biz !== '' && withheldBiz.has(biz));
         const types = yearEndTypeTargets(readIncomeTypes(c.intakeData));
-        const excludeReason = yearExcluded[c.id] ?? null;
+        const excludeReason =
+          yearExcluded[c.id] ?? (hasWithholdingHistory ? null : AUTO_NO_WH);
         const cells: Record<string, { active: boolean; filed: boolean }> = {};
         for (const col of YEAR_END_COLUMNS) {
           const active = types[col.key as YearEndIncomeType];

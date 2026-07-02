@@ -3,16 +3,14 @@ import { cookies } from 'next/headers';
 import type { SessionData } from './session';
 import { getSessionOptions } from './session';
 
-export const PORTAL_ADMIN_LOGIN_ID = 'charlie';
+export {
+  isMasterUser,
+  isPortalAdmin,
+  MASTER_LOGIN_IDS,
+  PORTAL_ADMIN_LOGIN_ID,
+} from './masterAccess';
 
-/** 마스터 권한 — 전체 수임처 조회·관리 (찰리 또는 admin 역할) */
-export function isMasterUser(user: { role?: 'staff' | 'admin'; loginId?: string }) {
-  return user.role === 'admin' || user.loginId === PORTAL_ADMIN_LOGIN_ID;
-}
-
-export function isPortalAdmin(user: { role?: 'staff' | 'admin'; loginId?: string }) {
-  return isMasterUser(user);
-}
+import { isPortalAdmin } from './masterAccess';
 
 export async function getServerSession() {
   const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());

@@ -31,7 +31,7 @@ export default function LunchSpotRequestForm() {
     fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
-        const admin = data?.user?.role === 'admin';
+        const admin = !!data?.isMaster;
         setIsAdmin(admin);
         if (admin) {
           fetch('/api/lunch/requests')

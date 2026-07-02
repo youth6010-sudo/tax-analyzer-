@@ -277,7 +277,7 @@ export default function FilingCheckPage() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (d?.user?.name) setCurrentUserName(String(d.user.name).trim());
-        if (d?.user?.loginId === 'charlie' || d?.user?.role === 'admin') setIsMaster(true);
+        if (d?.isMaster) setIsMaster(true);
       })
       .catch(() => {});
   }, []);
@@ -437,7 +437,7 @@ export default function FilingCheckPage() {
   // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
   const taxTargetsAll = useMemo(() => {
     if (tax === 'withholding') return withholdingTargetsForPeriod(clients, period.month);
-    if (tax === 'simplePayroll') return filingTargets(clients, 'withholding');
+    if (tax === 'simplePayroll') return filingTargets(clients, 'simplePayroll');
     return filingTargets(clients, tax);
   }, [clients, tax, period.month]);
 

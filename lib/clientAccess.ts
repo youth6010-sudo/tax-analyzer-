@@ -2,17 +2,14 @@ import { and, eq, or, type SQL } from 'drizzle-orm';
 import { clients } from '@/db/schema';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import type { SessionUser } from '@/lib/session';
+import { isMasterUser } from '@/lib/masterAccess';
 
-const ADMIN_LOGIN_ID = 'charlie';
+export { isMasterUser } from '@/lib/masterAccess';
 
 export type ClientAccessFields = {
   assignedUserId?: string | null;
   manager?: string | null;
 };
-
-export function isMasterUser(user: SessionUser): boolean {
-  return user.role === 'admin' || user.loginId === ADMIN_LOGIN_ID;
-}
 
 export function canAccessClient(user: SessionUser, client: ClientAccessFields): boolean {
   if (isMasterUser(user)) return true;
@@ -29,7 +26,7 @@ export function assertCanAccessClient(
   if (!canAccessClient(user, client)) throw new Error('FORBIDDEN');
 }
 
-/** 정보 수정 권한 = 담당자 본인 또는 관리자(찰리). assertCanAccessClient와 동일 규칙. */
+/** 정보 수정 권한 = 담당자 본인 또는 마스터 사용자 */
 export const canEditClient = canAccessClient;
 export const assertCanEditClient = assertCanAccessClient;
 

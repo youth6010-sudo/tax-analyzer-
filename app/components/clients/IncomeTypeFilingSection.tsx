@@ -27,6 +27,7 @@ import {
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
 import { parseHometaxFile } from '@/app/utils/filingCheck';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { UNCategorized } from '@/app/utils/clientsGrouping';
 
 const inputCls =
@@ -72,7 +73,9 @@ async function patchIncomeType(clientId: string, patch: Record<string, boolean>)
 
 function filterByManager(grid: ApiGridRow[], manager: string): ApiGridRow[] {
   if (!manager || manager === '전체') return grid;
-  return grid.filter(r => (r.manager?.trim() || UNCategorized) === manager);
+  const names = new Set(getManagerMatchNames(manager));
+  names.add(manager);
+  return grid.filter(r => names.has(r.manager?.trim() || UNCategorized));
 }
 
 function isRowFullyFiled(row: ApiGridRow, mode: 'simplePayroll' | 'yearEnd'): boolean {
@@ -176,6 +179,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   }, [stats, onStatsChange]);
 
   const load = useCallback(async () => {
+    if (embedded && !manager) return;
     setLoading(true);
     if (!embedded) setMessage('');
     try {

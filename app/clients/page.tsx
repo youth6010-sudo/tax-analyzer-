@@ -79,9 +79,7 @@ function ClientsPageContent() {
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.user?.name) setCurrentUserName(String(data.user.name).trim());
-        if (data?.user) {
-          setIsAdmin(data.user.role === 'admin' || data.user.loginId === 'charlie');
-        }
+        if (data?.isMaster) setIsAdmin(true);
       })
       .catch(() => {});
   }, []);

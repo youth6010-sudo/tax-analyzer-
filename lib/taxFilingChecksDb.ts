@@ -117,6 +117,63 @@ export async function getWithholdingExclusionsForHalf(
   return merged;
 }
 
+const AUTO_NO_WH = '원천세 신고내역 없음';
+
+function mergeWithholdingReceiptHistory(
+  session: FilingCheckSessionData | null | undefined,
+  ids: Set<string>,
+  bizNos: Set<string>,
+  normalizeBizNo: (v: string | undefined | null) => string,
+): void {
+  if (!session) return;
+  for (const b of session.excelBizNos ?? []) {
+    const normalized = normalizeBizNo(b);
+    if (normalized) bizNos.add(normalized);
+  }
+  for (const [id, v] of Object.entries(session.overrides ?? {})) {
+    if (v) ids.add(id);
+  }
+}
+
+/** 해당 연도 원천세 접수 이력(업체 id·사업자번호) — 연말정산 대상 판별용 */
+export async function getWithholdingReceiptHistoryForYear(
+  manager: string,
+  year: number,
+  normalizeBizNo: (v: string | undefined | null) => string,
+): Promise<{ ids: Set<string>; bizNos: Set<string> }> {
+  const ids = new Set<string>();
+  const bizNos = new Set<string>();
+  const db = getDb();
+  const allManagers = !manager || manager === '전체';
+
+  for (let m = 1; m <= 12; m += 1) {
+    const pk = `${year}-${String(m).padStart(2, '0')}`;
+    if (allManagers) {
+      const rows = await db
+        .select()
+        .from(filingCheckSessions)
+        .where(
+          and(eq(filingCheckSessions.taxType, 'withholding'), eq(filingCheckSessions.periodKey, pk)),
+        );
+      for (const row of rows) {
+        mergeWithholdingReceiptHistory(
+          { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) },
+          ids,
+          bizNos,
+          normalizeBizNo,
+        );
+      }
+    } else {
+      const session = await getFilingCheckSession(manager, 'withholding', pk);
+      mergeWithholdingReceiptHistory(session, ids, bizNos, normalizeBizNo);
+    }
+  }
+
+  return { ids, bizNos };
+}
+
+export { AUTO_NO_WH };
+
 /** 해당 연도 원천세 세션 제외 업체 합집합 */
 export async function getWithholdingExclusionsForYear(
   manager: string,

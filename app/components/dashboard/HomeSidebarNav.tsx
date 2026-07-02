@@ -12,7 +12,7 @@ export default function HomeSidebarNav() {
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(data => setIsAdmin(data?.user?.role === 'admin'))
+      .then(data => setIsAdmin(!!data?.isMaster))
       .catch(() => setIsAdmin(false));
   }, []);
 

@@ -172,7 +172,7 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
   // 종소세 외에는 사업자번호 없는/000 시작 업체 제외
   const withBizNo = clients.filter(c => !hasPlaceholderBizNo(c));
 
-  if (taxId === 'withholding' || taxId === 'yearEnd') {
+  if (taxId === 'withholding' || taxId === 'yearEnd' || taxId === 'simplePayroll') {
     return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);
   }
   if (taxId === 'vat') {
