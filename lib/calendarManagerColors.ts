@@ -1,46 +1,69 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 
-/**
- * 개인 일정 칩 — 담당자별 팔레트
- * 팀 목록 순서대로 할당되므로, 인접 인덱스가 색상환에서 멀리 떨어지게 배열함.
- * 사내 일정(sky)과 겹치지 않도록 청록·하늘 계열은 제외.
- */
-export const MANAGER_CHIP_COLORS = [
-  'bg-red-600', // 빨강
-  'bg-blue-700', // 파랑
-  'bg-lime-700', // 연두
-  'bg-orange-600', // 주황
-  'bg-violet-600', // 보라
-  'bg-rose-600', // 장미
-  'bg-emerald-600', // 초록
-  'bg-fuchsia-600', // 자홍
-  'bg-amber-700', // 황갈
-  'bg-purple-600', // 자주
+/** 사내 일정 — 검은색 */
+export const COMPANY_CHIP_COLOR = 'bg-slate-900';
+
+/** 담당자 고정 색 (팀 닉네임 기준) */
+export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
+  다야: 'bg-red-600',
+  블루: 'bg-blue-600',
+  리아: 'bg-emerald-600',
+  윈터: 'bg-yellow-600',
+  인디: 'bg-slate-500',
+  찰리: 'bg-pink-500',
+  페리: 'bg-purple-600',
+};
+
+/** 범례·필터 표시 순서 */
+export const MANAGER_LEGEND_ORDER = ['다야', '블루', '리아', '윈터', '인디', '찰리', '페리'] as const;
+
+/** 미등록 담당자 fallback */
+const FALLBACK_MANAGER_COLORS = [
+  'bg-orange-600',
+  'bg-teal-600',
+  'bg-violet-600',
+  'bg-rose-600',
+  'bg-cyan-700',
+  'bg-lime-700',
 ] as const;
 
-export const COMPANY_CHIP_COLOR = 'bg-sky-600';
-
 const KIND_CHIP_COLORS: Record<CalendarEventDto['kind'], string> = {
-  personal: MANAGER_CHIP_COLORS[0],
+  personal: MANAGER_COLOR_BY_NAME.다야,
   company: COMPANY_CHIP_COLOR,
   tax_deadline: 'bg-emerald-600',
   client_task: 'bg-rose-600',
 };
 
 export function managerChipColor(ownerName: string, members: readonly string[]): string {
-  const idx = members.indexOf(ownerName);
-  if (idx < 0) return MANAGER_CHIP_COLORS[0];
-  return MANAGER_CHIP_COLORS[idx % MANAGER_CHIP_COLORS.length];
+  const name = ownerName.trim();
+  const fixed = MANAGER_COLOR_BY_NAME[name];
+  if (fixed) return fixed;
+
+  const idx = members.indexOf(name);
+  if (idx >= 0) return FALLBACK_MANAGER_COLORS[idx % FALLBACK_MANAGER_COLORS.length];
+  return 'bg-slate-600';
 }
 
 export function resolveEventChipColor(
   event: CalendarEventDto,
   members: readonly string[],
 ): string {
-  if (event.kind === 'personal' && event.ownerName && members.length > 0) {
+  if (event.kind === 'company') return COMPANY_CHIP_COLOR;
+  if (event.kind === 'personal' && event.ownerName) {
     return managerChipColor(event.ownerName, members);
   }
   return KIND_CHIP_COLORS[event.kind];
+}
+
+function sortOwnersForLegend(owners: string[], members: string[]): string[] {
+  return [...owners].sort((a, b) => {
+    const ia = MANAGER_LEGEND_ORDER.indexOf(a as (typeof MANAGER_LEGEND_ORDER)[number]);
+    const ib = MANAGER_LEGEND_ORDER.indexOf(b as (typeof MANAGER_LEGEND_ORDER)[number]);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return members.indexOf(a) - members.indexOf(b);
+  });
 }
 
 export function buildCalendarLegend(
@@ -56,7 +79,7 @@ export function buildCalendarLegend(
       ? members.filter(name => selectedOwners.includes(name))
       : members;
 
-  for (const name of owners) {
+  for (const name of sortOwnersForLegend(owners, members)) {
     legend.push({
       key: `personal-${name}`,
       label: name,
@@ -72,3 +95,6 @@ export function formatCalendarDateLabel(iso: string): string {
   const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
   return `${iso} (${weekdays[d.getDay()]})`;
 }
+
+/** @deprecated 이름 고정 색 사용 — 하위 호환 */
+export const MANAGER_CHIP_COLORS = Object.values(MANAGER_COLOR_BY_NAME);

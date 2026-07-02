@@ -1,6 +1,6 @@
 'use client';
 
-import { managerChipColor } from '@/lib/calendarManagerColors';
+import { managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
 
 type Props = {
   members: string[];
@@ -8,6 +8,17 @@ type Props = {
   selected: string[];
   onChange: (names: string[]) => void;
 };
+
+function sortMembers(names: string[]): string[] {
+  return [...names].sort((a, b) => {
+    const ia = MANAGER_LEGEND_ORDER.indexOf(a as (typeof MANAGER_LEGEND_ORDER)[number]);
+    const ib = MANAGER_LEGEND_ORDER.indexOf(b as (typeof MANAGER_LEGEND_ORDER)[number]);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return a.localeCompare(b, 'ko');
+  });
+}
 
 export default function CalendarTeamFilter({
   members,
@@ -48,7 +59,7 @@ export default function CalendarTeamFilter({
         </div>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-        {members.map(name => (
+        {sortMembers(members).map(name => (
           <label
             key={name}
             className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer"

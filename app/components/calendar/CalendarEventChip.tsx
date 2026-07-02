@@ -27,11 +27,12 @@ export default function CalendarEventChip({
 }) {
   const color = resolveEventChipColor(event, members);
   const label = displayTitle(event, currentUser);
+  const lightText = color === 'bg-yellow-600';
   const inner = (
     <span
-      className={`block truncate rounded-md font-semibold text-white shadow-sm ring-1 ring-black/10 ${color} ${
-        compact ? 'px-1.5 py-0.5 text-[11px] leading-snug' : 'px-2.5 py-1 text-sm leading-snug'
-      }`}
+      className={`block truncate rounded-md font-semibold shadow-sm ring-1 ring-black/10 ${color} ${
+        lightText ? 'text-slate-900' : 'text-white'
+      } ${compact ? 'px-1.5 py-0.5 text-[11px] leading-snug' : 'px-2.5 py-1 text-sm leading-snug'}`}
       title={label}
     >
       {label}
