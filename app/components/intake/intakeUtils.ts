@@ -424,11 +424,19 @@ export function extraNamesFromClients(
   return clients.filter(c => c.id === id).map(c => c.companyName);
 }
 
-export function findProcessForInquiry(
+function pickBestProcess(list: ProcessRow[]): ProcessRow | null {
+  if (!list.length) return null;
+  return [...list].sort((a, b) => {
+    const diff = processMatchScore(b) - processMatchScore(a);
+    return diff !== 0 ? diff : b.updatedAt.localeCompare(a.updatedAt);
+  })[0];
+}
+
+/** 상담 ID·excel_key로 직접 연결된 프로세스만 (client_id·상호 유사 매칭 제외) */
+export function findExplicitProcessesForInquiry(
   inquiry: InquiryRow,
   processes: ProcessRow[],
-  clients: ClientNameRef[] = [],
-): ProcessRow | null {
+): ProcessRow[] {
   const candidates = new Map<string, ProcessRow>();
 
   if (inquiry.excelKey?.startsWith('from-process||')) {
@@ -464,6 +472,20 @@ export function findProcessForInquiry(
     }
   }
 
+  return [...candidates.values()];
+}
+
+export function findProcessForInquiry(
+  inquiry: InquiryRow,
+  processes: ProcessRow[],
+  clients: ClientNameRef[] = [],
+): ProcessRow | null {
+  const explicit = findExplicitProcessesForInquiry(inquiry, processes);
+  const explicitPick = pickBestProcess(explicit);
+  if (explicitPick) return explicitPick;
+
+  const candidates = new Map<string, ProcessRow>();
+
   const clientId = inquiry.clientId
     ?? resolveClientIdByName(inquiry.companyName, clients, inquiry.excelKey);
   if (clientId) {
@@ -490,12 +512,7 @@ export function findProcessForInquiry(
     }
   }
 
-  const list = [...candidates.values()];
-  if (!list.length) return null;
-  return list.sort((a, b) => {
-    const diff = processMatchScore(b) - processMatchScore(a);
-    return diff !== 0 ? diff : b.updatedAt.localeCompare(a.updatedAt);
-  })[0];
+  return pickBestProcess([...candidates.values()]);
 }
 
 export function inquiryExcelKeyFromProcess(processExcelKey: string): string {

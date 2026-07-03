@@ -38,15 +38,12 @@ const PHONE_LINK_LABELS: Record<string, string> = {
   phone: '연락처',
   companyName: '상호명',
   representative: '성함',
-  email: '이메일',
+  openDate: '개업일',
+  location: '사업장 위치',
   industry: '업종',
   revenue: '매출 규모',
-  consultDate: '상담일시',
-  consultAmPm: '오전/오후',
-  consultContactType: '유선/대면',
   channel: '유입경로',
   channelDetail: '유입 상세',
-  requestDetails: '요청사항',
   payrollFullTime: '상용직',
   payrollDaily: '일용직',
   payrollOther: '사업/기타',
@@ -57,10 +54,6 @@ const PHONE_LINK_LABELS: Record<string, string> = {
   prevDocsReturned: '자료 반환',
   prevUnpaidIssues: '미수·분쟁',
   prevComplaints: '이전 불만',
-  needMeeting: '대면 필요',
-  meetingDate: '대면 예정일',
-  meetingPlace: '상담 장소',
-  docsToBring: '준비 자료',
   clientNeeds: '고객 니즈',
   taxStatusSummary: '세무현황요약',
   potentialTaxIssues: '세무 이슈',
@@ -179,6 +172,7 @@ function PhaseColumn({
   const header = PHASE_HEADER[column.phaseId] ?? 'from-slate-50 to-slate-100 border-slate-200';
   const accent = PHASE_ACCENT[column.phaseId] ?? 'text-slate-700';
   const showPhoneLink = column.phaseId !== 'phone';
+  const phoneLinkAtBottom = column.phaseId === 'visit';
   const showVisitLink = column.phaseId === 'close';
 
   return (
@@ -187,7 +181,7 @@ function PhaseColumn({
         <h3 className={`text-sm font-black ${accent}`}>{column.label}</h3>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 space-y-4 max-h-[min(72vh,calc(100dvh-14rem))]">
-        {showPhoneLink && <LinkedPhoneSummary form={form} />}
+        {showPhoneLink && !phoneLinkAtBottom && <LinkedPhoneSummary form={form} />}
         {showVisitLink && <LinkedVisitSummary form={form} />}
         {column.steps.map(step => {
           const fields = step.fields.filter(
@@ -219,6 +213,7 @@ function PhaseColumn({
             </section>
           );
         })}
+        {showPhoneLink && phoneLinkAtBottom && <LinkedPhoneSummary form={form} />}
       </div>
     </article>
   );

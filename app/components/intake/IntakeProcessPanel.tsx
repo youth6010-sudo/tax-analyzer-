@@ -304,6 +304,7 @@ export default function IntakeProcessPanel({
               <div className="min-w-[10rem] flex-1">
                 <IntakeClientLink
                   disabled={linking || registering || saving}
+                  currentClientId={registeredClientId}
                   onLinked={c => void handleLink(c.id)}
                 />
               </div>

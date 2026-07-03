@@ -2,22 +2,22 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
-import {
-  getPortalSearchIndex,
-  hydratePortal,
-  prefetchSearchIndex,
-  searchPortalClients,
-} from '@/app/utils/portalStore';
-import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
+import { hydratePortal } from '@/app/utils/portalStore';
 
 type Props = {
   disabled?: boolean;
+  /** 이미 연결된 수임처 — 다른 업체 선택 시 확인 */
+  currentClientId?: string | null;
   onLinked: (client: ClientRecord) => void;
 };
 
-export default function IntakeClientLink({ disabled, onLinked }: Props) {
+export default function IntakeClientLink({
+  disabled,
+  currentClientId = null,
+  onLinked,
+}: Props) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ClientRecord[]>([]);
+  const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [linking, setLinking] = useState(false);
@@ -27,7 +27,6 @@ export default function IntakeClientLink({ disabled, onLinked }: Props) {
 
   useEffect(() => {
     hydratePortal();
-    void prefetchSearchIndex();
   }, []);
 
   useEffect(() => {
@@ -50,24 +49,21 @@ export default function IntakeClientLink({ disabled, onLinked }: Props) {
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const local = getPortalSearchIndex().length > 0
-        ? (searchPortalClients(q) as ClientRecord[])
-        : [];
-      setResults(local);
       setLoading(true);
+      setResults([]);
 
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+      // 활성 수임처만 — 로컬 캐시(삭제·이탈 포함 stale)는 쓰지 않음
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&activeOnly=1`, { signal: ac.signal })
         .then(r => (r.ok ? r.json() : { clients: [] }))
         .then(data => {
-          const api = (data.clients ?? []) as ClientSearchResult[];
-          setResults(mergeClientSearchResults(local, api));
+          setResults((data.clients ?? []) as ClientSearchResult[]);
         })
         .catch(err => {
-          if (err?.name !== 'AbortError') setResults(local);
+          if (err?.name !== 'AbortError') setResults([]);
         })
         .finally(() => setLoading(false));
     }, 200);
@@ -78,6 +74,13 @@ export default function IntakeClientLink({ disabled, onLinked }: Props) {
   }, [query]);
 
   const pick = async (client: ClientRecord) => {
+    if (currentClientId && client.id !== currentClientId) {
+      const ok = window.confirm(
+        `연결 수임처를 「${client.companyName}」으로 변경하시겠습니까?`,
+      );
+      if (!ok) return;
+    }
+
     setLinking(true);
     try {
       onLinked(client);
@@ -117,11 +120,16 @@ export default function IntakeClientLink({ disabled, onLinked }: Props) {
                 type="button"
                 disabled={linking}
                 onClick={() => void pick(c)}
-                className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50"
+                className={`w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 ${
+                  currentClientId === c.id ? 'bg-emerald-50' : ''
+                }`}
               >
                 <span className="font-semibold text-slate-900">{c.companyName}</span>
                 {c.manager && (
                   <span className="ml-2 text-slate-500">{c.manager}</span>
+                )}
+                {currentClientId === c.id && (
+                  <span className="ml-2 text-[10px] font-bold text-emerald-700">연결됨</span>
                 )}
               </button>
             </li>

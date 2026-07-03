@@ -13,6 +13,7 @@ import {
   mergeExternalRefs,
   parseExternalRefs,
 } from '@/lib/externalRefs';
+import { processBelongsToInquiry } from '@/lib/intakeProcessLink';
 
 function str(v: unknown): string {
   return v == null ? '' : String(v).trim();
@@ -31,19 +32,12 @@ export function buildInquiryContent(data: Record<string, unknown>): string {
     {
       title: '[전화] 기본',
       keys: [
-        ['요청사항', 'requestDetails'],
         ['유입', 'channel'],
         ['유입 상세', 'channelDetail'],
         ['매출', 'revenue'],
+        ['개업일', 'openDate'],
+        ['사업장', 'location'],
         ['과·면세', 'vatTaxStatus'],
-      ],
-    },
-    {
-      title: '[전화] 상담일시',
-      keys: [
-        ['일시', 'consultDate'],
-        ['오전/오후', 'consultAmPm'],
-        ['유선/대면', 'consultContactType'],
       ],
     },
     {
@@ -74,7 +68,7 @@ export function buildInquiryContent(data: Record<string, unknown>): string {
       ],
     },
     {
-      title: '[전화] 일정',
+      title: '[대면] 일정',
       keys: [
         ['대면 필요', 'needMeeting'], ['예정일', 'meetingDate'],
         ['장소', 'meetingPlace'], ['준비자료', 'docsToBring'],
@@ -510,20 +504,36 @@ export async function registerClientFromIntake(
     [process] = await db.select().from(intakeProcesses).where(eq(intakeProcesses.id, processId)).limit(1);
   }
 
-  const companyName = (process?.companyName || inquiry.companyName).trim();
-  if (!companyName || companyName === '(미입력)') throw new Error('COMPANY_NAME_REQUIRED');
+  const companyNameFromIntake = (process?.companyName || inquiry.companyName).trim();
+  if (!companyNameFromIntake || companyNameFromIntake === '(미입력)') throw new Error('COMPANY_NAME_REQUIRED');
+
+  const processMatchesInquiry = process
+    ? processBelongsToInquiry(
+      { excelKey: inquiry.excelKey ?? undefined, extra: inquiry.extra ?? {} },
+      { excelKey: process.excelKey ?? undefined },
+    )
+    : true;
+
+  const resolveCompanyName = (existingName: string) => {
+    if (!processMatchesInquiry) return existingName.trim() || companyNameFromIntake;
+    return companyNameFromIntake;
+  };
 
   const extRefs = externalRefsFromInquiryExtra(inquiry.extra ?? {}, managerName);
-  const baseIntake = {
-    inquiryId,
-    processId,
-    ...(inquiry.address ? { address: inquiry.address } : {}),
-  };
-  const intakePayload = intakeDataWithExternalRefs(baseIntake, extRefs);
 
   if (inquiry.clientId) {
     const [existing] = await db.select().from(clients).where(eq(clients.id, inquiry.clientId)).limit(1);
+    const safeProcessId = processMatchesInquiry
+      ? processId
+      : (typeof existing?.intakeData?.processId === 'string' ? existing.intakeData.processId : processId);
+    const baseIntake = {
+      inquiryId,
+      processId: safeProcessId,
+      ...(inquiry.address ? { address: inquiry.address } : {}),
+    };
+
     if (existing?.status === 'active') {
+      const companyName = resolveCompanyName(existing.companyName);
       const [updated] = await db
         .update(clients)
         .set({
@@ -542,12 +552,13 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
-      if (process && !process.clientId) {
+      if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }
       return clientToRecord(updated);
     }
     if (existing?.status === 'intake') {
+      const companyName = companyNameFromIntake;
       const [updated] = await db
         .update(clients)
         .set({
@@ -567,17 +578,24 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
-      if (process && !process.clientId) {
+      if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }
       return clientToRecord(updated);
     }
   }
 
+  const baseIntake = {
+    inquiryId,
+    processId,
+    ...(inquiry.address ? { address: inquiry.address } : {}),
+  };
+  const intakePayload = intakeDataWithExternalRefs(baseIntake, extRefs);
+
   const [client] = await db
     .insert(clients)
     .values({
-      companyName,
+      companyName: companyNameFromIntake,
       phone: inquiry.phone,
       representative: inquiry.representative,
       businessNo: inquiry.businessNo,

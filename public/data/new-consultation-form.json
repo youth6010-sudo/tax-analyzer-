@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 8,
   "title": "신규 고객 초기 상담",
   "subtitle": "전화 상담 · 대면 상담 · 마무리·후속 — 기장상담지 연동",
   "phases": [
@@ -13,13 +13,14 @@
       "phase": "phone",
       "order": 1,
       "title": "전화 수신 · 기본 정보",
-      "description": "통화 중 가장 먼저 확인하는 연락처·상호·성함·이메일 순으로 입력합니다.",
+      "description": "통화 중 가장 먼저 확인하는 연락처·상호·성함·개업일·사업장 위치 순으로 입력합니다.",
       "guide": "「왜 세무사를 바꾸려 하는지」 또는 「왜 처음 세무사를 찾는지」가 핵심 맥락입니다.",
       "fields": [
         { "key": "phone", "label": "연락처", "required": true },
         { "key": "companyName", "label": "상호명", "required": true },
         { "key": "representative", "label": "성함" },
-        { "key": "email", "label": "이메일", "type": "email" },
+        { "key": "openDate", "label": "개업일", "type": "date" },
+        { "key": "location", "label": "사업장 위치" },
         { "key": "industry", "label": "업종" },
         { "key": "revenue", "label": "매출 규모", "placeholder": "예) 10억" }
       ]
@@ -28,15 +29,11 @@
       "id": "phone-1b",
       "phase": "phone",
       "order": 2,
-      "title": "상담 일시 · 유입",
-      "description": "상담일시(날짜·오전/오후·유선/대면)와 유입경로·요청사항을 기록합니다.",
+      "title": "유입",
+      "description": "유입경로를 기록합니다.",
       "fields": [
-        { "key": "consultDate", "label": "상담일시", "type": "date" },
-        { "key": "consultAmPm", "label": "오전/오후", "type": "select", "options": ["", "오전", "오후"] },
-        { "key": "consultContactType", "label": "유선/대면", "type": "select", "options": ["", "유선", "대면"] },
         { "key": "channel", "label": "유입경로", "type": "select", "options": ["", "지인 소개", "블로그", "인터넷 검색", "AI", "홍보앱", "SNS", "기존 세무사 불만", "신규 창업", "기타"] },
-        { "key": "channelDetail", "label": "소개·검색경로 상세", "type": "textarea", "placeholder": "블로그, AI, 홍보앱, SNS 등" },
-        { "key": "requestDetails", "label": "요청사항", "type": "textarea", "placeholder": "예) 26년 상반기 부가세 신고부터 6월부터 기장 서비스 요청" }
+        { "key": "channelDetail", "label": "소개·검색경로 상세", "type": "textarea", "placeholder": "블로그, AI, 홍보앱, SNS 등" }
       ]
     },
     {
@@ -69,23 +66,9 @@
       ]
     },
     {
-      "id": "phone-3",
-      "phase": "phone",
-      "order": 5,
-      "title": "대면 상담 일정 조율",
-      "description": "대면 상담 일정과 준비 자료를 안내합니다.",
-      "guide": "통화 종료 후 상담 내용을 기록합니다. (이 폼 저장으로 유입관리·프로세스에 반영)",
-      "fields": [
-        { "key": "needMeeting", "label": "대면 상담 필요", "type": "select", "options": ["", "예", "아니오", "보류"] },
-        { "key": "meetingDate", "label": "대면 상담 예정일", "type": "date" },
-        { "key": "meetingPlace", "label": "상담 장소", "type": "select", "options": ["", "우리 사무실", "고객 사무실", "화상", "미정"] },
-        { "key": "docsToBring", "label": "준비 자료 안내", "type": "textarea", "placeholder": "재무제표, 세무조정계산서, 사업자등록증, 급여 현황 등" }
-      ]
-    },
-    {
       "id": "phone-4",
       "phase": "phone",
-      "order": 6,
+      "order": 5,
       "title": "상담내용",
       "description": "기장상담지 상담내용 항목 — 통화 중·직후에 바로 기록합니다.",
       "fields": [
@@ -95,6 +78,20 @@
         { "key": "proposedServiceScope", "label": "4) 제시 서비스 범위", "type": "textarea", "placeholder": "예) 기본서비스(기장,세무신고) + 추가서비스(급여 및 4대보험 관리)" },
         { "key": "feeDirection", "label": "5) 수임료 방향", "type": "textarea", "placeholder": "예) 기본 10만~15만원, 추가서비스 5만원, 월 15~20만원(계약시 확정)" },
         { "key": "consultRemarks", "label": "6) 비고·특이사항", "type": "textarea" }
+      ]
+    },
+    {
+      "id": "visit-3",
+      "phase": "visit",
+      "order": 6,
+      "title": "대면 상담 일정 조율",
+      "description": "대면 상담 일정과 준비 자료를 안내합니다.",
+      "guide": "통화 종료 후 대면 일정과 준비 자료를 안내합니다.",
+      "fields": [
+        { "key": "needMeeting", "label": "대면 상담 필요", "type": "select", "options": ["", "예", "아니오", "보류"] },
+        { "key": "meetingDate", "label": "대면 상담 예정일", "type": "date" },
+        { "key": "meetingPlace", "label": "상담 장소", "type": "select", "options": ["", "우리 사무실", "고객 사무실", "화상", "미정"] },
+        { "key": "docsToBring", "label": "준비 자료 안내", "type": "textarea", "placeholder": "재무제표, 세무조정계산서, 사업자등록증, 급여 현황 등" }
       ]
     },
     {
@@ -143,9 +140,7 @@
         { "key": "payrollStatus", "label": "인건비·직원·4대보험 (보완)", "type": "textarea" },
         { "key": "diagFilingStatus", "label": "현재 신고 상태", "type": "textarea" },
         { "key": "diagTaxRisks", "label": "잠재 세무 리스크 (보완)", "type": "textarea" },
-        { "key": "businessNo", "label": "사업자등록번호" },
-        { "key": "openDate", "label": "개업일", "type": "date" },
-        { "key": "location", "label": "사업장 위치" }
+        { "key": "businessNo", "label": "사업자등록번호" }
       ]
     },
     {
@@ -183,6 +178,7 @@
         { "key": "recordAttendees", "label": "참석자" },
         { "key": "recordSummary", "label": "현황·리스크 요약", "type": "textarea" },
         { "key": "agreedServiceScope", "label": "합의 서비스 범위", "type": "textarea" },
+        { "key": "email", "label": "이메일", "type": "email" },
         { "key": "proposalSentPlan", "label": "제안서", "type": "select", "options": ["", "3영업일 내 발송 예정", "발송 완료", "보류"] }
       ]
     },
