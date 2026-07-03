@@ -4,7 +4,8 @@ import { filingCheckSessions, taxFilingChecks } from '@/db/schema';
 import type { FilingTaxId } from '@/app/utils/filingCheck';
 import {
   carryFieldsFromRecord,
-  hasFilingCarryData,
+  hasCarryFieldsData,
+  mergeCarryFieldLayers,
 } from '@/app/utils/filingCheckStorage';
 
 export type FilingCheckSessionData = {
@@ -57,7 +58,37 @@ export async function getFilingCheckSession(
   return { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) };
 }
 
-/** 직전 완료(done) 신고분 — DB 1회 조회 (클라이언트 48회 fetch 대체) */
+/** 직전 신고분(완료 여부 무관) — DB 1회 조회 */
+export async function findMostRecentPreviousFilingCheckSession(
+  manager: string,
+  taxType: FilingTaxId | string,
+  currentPeriodKey: string,
+): Promise<{ data: FilingCheckSessionData; periodKey: string } | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(filingCheckSessions)
+    .where(
+      and(
+        eq(filingCheckSessions.manager, manager),
+        eq(filingCheckSessions.taxType, taxType),
+      ),
+    );
+
+  let bestKey = '';
+  let bestData: FilingCheckSessionData | null = null;
+  for (const row of rows) {
+    if (row.periodKey >= currentPeriodKey) continue;
+    const data = { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) };
+    if (row.periodKey > bestKey) {
+      bestKey = row.periodKey;
+      bestData = data;
+    }
+  }
+  return bestData ? { data: bestData, periodKey: bestKey } : null;
+}
+
+/** @deprecated 비교·레거시용 — 완료(done)분만 */
 export async function findPreviousCompletedFilingCheckSession(
   manager: string,
   taxType: FilingTaxId | string,
@@ -93,26 +124,60 @@ export type FilingCheckLoadResult = {
   carriedFromPeriodKey: string | null;
 };
 
-/** 현재 기간 세션 + 없으면 직전 완료분 승계 필드 */
+function receiptSlice(rec: Partial<FilingCheckSessionData> | null | undefined) {
+  return {
+    overrides: rec?.overrides ?? {},
+    excelBizNos: rec?.excelBizNos ?? [],
+    fileName: rec?.fileName ?? '',
+    specialFilings: rec?.specialFilings ?? [],
+    done: rec?.done ?? false,
+    siteDone: rec?.siteDone,
+  };
+}
+
+/** 현재 기간 세션 + 없으면 직전 신고분에서 제외·특이사항 승계 (접수는 매월 새로) */
 export async function loadFilingCheckSessionWithCarry(
   manager: string,
   taxType: FilingTaxId | string,
   periodKey: string,
 ): Promise<FilingCheckLoadResult> {
   const current = await getFilingCheckSession(manager, taxType, periodKey);
-  if (current && hasFilingCarryData(current)) {
-    return { data: current, carriedFromPeriodKey: null };
+  const previous = await findMostRecentPreviousFilingCheckSession(manager, taxType, periodKey);
+
+  if (current === null) {
+    if (previous) {
+      return {
+        data: {
+          ...EMPTY_SESSION_DATA,
+          ...carryFieldsFromRecord(previous.data),
+          ...receiptSlice(null),
+        },
+        carriedFromPeriodKey: previous.periodKey,
+      };
+    }
+    return { data: { ...EMPTY_SESSION_DATA }, carriedFromPeriodKey: null };
   }
 
-  const previous = await findPreviousCompletedFilingCheckSession(manager, taxType, periodKey);
-  if (previous) {
+  const receipt = receiptSlice(current);
+  if (hasCarryFieldsData(current)) {
     return {
-      data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(previous.data) },
+      data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
+      carriedFromPeriodKey: null,
+    };
+  }
+
+  if (previous) {
+    const carry = mergeCarryFieldLayers(previous.data, current);
+    return {
+      data: { ...EMPTY_SESSION_DATA, ...carry, ...receipt },
       carriedFromPeriodKey: previous.periodKey,
     };
   }
 
-  return { data: current ?? { ...EMPTY_SESSION_DATA }, carriedFromPeriodKey: null };
+  return {
+    data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
+    carriedFromPeriodKey: null,
+  };
 }
 
 export async function upsertFilingCheckSession(

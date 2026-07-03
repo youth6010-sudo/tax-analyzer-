@@ -6,6 +6,7 @@ import { readIncomeTypes } from '@/lib/incomeTypes';
 import {
   listSimplePayrollFilingsByKeys,
   matchSimplePayrollFromExcel,
+  resetSimplePayrollReceipt,
   upsertSimplePayrollFilings,
 } from '@/lib/simplePayrollFilingsDb';
 import { getExcludedClientIds } from '@/lib/taxFilingChecksDb';
@@ -149,6 +150,17 @@ export async function POST(request: NextRequest) {
       if (types.employed && employedKey) employedTypesMap.set(c.id, ['employed']);
     }
 
+    const fileBizSet = new Set(
+      body.bizNos.map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+    );
+    const targetBizSet = new Set(
+      [...bizMap.values()].map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+    );
+    let extraCount = 0;
+    for (const b of fileBizSet) {
+      if (!targetBizSet.has(b)) extraCount += 1;
+    }
+
     let matched = 0;
     if (monthlyTypesMap.size > 0) {
       matched += await matchSimplePayrollFromExcel(
@@ -169,7 +181,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ matched });
+    return NextResponse.json({ matched, total: fileBizSet.size, extraCount });
+  } catch (e) {
+    return apiError(e);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireUser();
+    const periodKey = request.nextUrl.searchParams.get('periodKey') ?? '';
+    if (!periodKey) {
+      return NextResponse.json({ error: 'periodKey required' }, { status: 400 });
+    }
+
+    const meta = simplePayrollPeriodMeta(periodKey);
+    const keys = meta.employedPeriodKey
+      ? [meta.monthlyPeriodKey, meta.employedPeriodKey]
+      : [meta.monthlyPeriodKey];
+    await resetSimplePayrollReceipt(keys);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e);
   }

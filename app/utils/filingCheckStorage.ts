@@ -15,17 +15,51 @@ export const EMPTY_CHECK_RECORD: CheckRecord = {
   extraClients: [],
 };
 
-/** 제외사유·특이사항 등 실질 데이터가 있는지 */
+/** 제외·특이사항·직접추가 업체 등 승계 대상 필드 */
+export function hasCarryFieldsData(rec: Partial<CheckRecord> | null | undefined): boolean {
+  if (!rec) return false;
+  if (Object.keys(rec.excluded ?? {}).length > 0) return true;
+  if (Object.keys(rec.rowNotes ?? {}).length > 0) return true;
+  if ((rec.extraClients?.length ?? 0) > 0) return true;
+  if (rec.diffReason?.trim()) return true;
+  if (Object.keys(rec.specialReasons ?? {}).length > 0) return true;
+  return false;
+}
+
+/** 접수목록(엑셀·체크)만 초기화 — 제외사유·특이사항·추가 업체는 유지 */
+export function resetReceiptOnly(rec: CheckRecord): CheckRecord {
+  return {
+    ...rec,
+    overrides: {},
+    excelBizNos: [],
+    fileName: '',
+    specialFilings: [],
+    done: false,
+  };
+}
+
+export function mergeCarryFieldLayers(
+  previous: CheckRecord | null | undefined,
+  current: CheckRecord | null | undefined,
+): Pick<CheckRecord, 'diffReason' | 'specialReasons' | 'excluded' | 'rowNotes' | 'extraClients'> {
+  const prev = carryFieldsFromRecord(previous ? { ...EMPTY_CHECK_RECORD, ...previous } : EMPTY_CHECK_RECORD);
+  const cur = carryFieldsFromRecord(current ? { ...EMPTY_CHECK_RECORD, ...current } : EMPTY_CHECK_RECORD);
+  return {
+    excluded: { ...prev.excluded, ...cur.excluded },
+    rowNotes: { ...prev.rowNotes, ...cur.rowNotes },
+    specialReasons: { ...prev.specialReasons, ...cur.specialReasons },
+    extraClients: cur.extraClients.length > 0 ? cur.extraClients : prev.extraClients,
+    diffReason: cur.diffReason.trim() ? cur.diffReason : prev.diffReason,
+  };
+}
+
+/** 제외사유·특이사항·접수 등 실질 데이터가 있는지 */
 export function hasFilingCarryData(rec: Partial<CheckRecord> | null | undefined): boolean {
   if (!rec) return false;
+  if (hasCarryFieldsData(rec)) return true;
   if (rec.done) return true;
   if (rec.fileName?.trim()) return true;
   if ((rec.excelBizNos?.length ?? 0) > 0) return true;
-  if (rec.diffReason?.trim()) return true;
-  if (Object.keys(rec.excluded ?? {}).length > 0) return true;
-  if (Object.keys(rec.rowNotes ?? {}).length > 0) return true;
-  if (Object.keys(rec.specialReasons ?? {}).length > 0) return true;
-  if ((rec.extraClients?.length ?? 0) > 0) return true;
   if ((rec.specialFilings?.length ?? 0) > 0) return true;
   return false;
 }

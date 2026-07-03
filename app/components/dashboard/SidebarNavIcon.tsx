@@ -1,5 +1,28 @@
 type Props = { name: string; className?: string };
 
+/** 계산기 — 디스플레이 + 2×2 연산(＋－×＝), 사이드 메뉴와 동일한 라인 아이콘 */
+export function CalculatorGridIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={`${className} shrink-0`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="5" y="2" width="14" height="20" rx="2.5" />
+      <rect x="7.5" y="4.5" width="9" height="4" rx="1" />
+      <path d="M8.25 13.25h2.5M9.5 12v2.5" />
+      <path d="M14.25 13.25h2.5" />
+      <path d="M8.4 17.1l2.2 2.2M10.6 17.1l-2.2 2.2" />
+      <path d="M14.25 17.25h2.5M14.25 18.75h2.5" />
+    </svg>
+  );
+}
+
 export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
   const common = `${className} shrink-0`;
   switch (name) {
@@ -79,12 +102,7 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
         </svg>
       );
     case 'comprehensive':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 21H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14l5 5v11a2 2 0 0 1-2 2Z" />
-          <path d="M14 3v5h5M8 13h8M8 17h5" />
-        </svg>
-      );
+      return <CalculatorGridIcon className={className} />;
     case 'gacha':
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -160,4 +178,16 @@ const HREF_ICON: Record<string, string> = {
 
 export function iconForHref(href: string): string {
   return HREF_ICON[href] ?? 'dashboard';
+}
+
+/** 페이지 상단 헤더용 — 브랜드 블루 톤 */
+export function PageHeaderIcon({ name }: { name: string }) {
+  return (
+    <span
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white text-[#4b6cb7] shadow-sm shadow-blue-100/60"
+      aria-hidden
+    >
+      <SidebarNavIcon name={name} className="h-6 w-6" />
+    </span>
+  );
 }

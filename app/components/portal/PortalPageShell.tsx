@@ -61,19 +61,23 @@ export function PortalPageHeader({
   title: string;
   description?: string;
   actions?: ReactNode;
-  icon?: string;
+  icon?: ReactNode;
 }) {
   return (
     <div className="mb-7 pb-6 border-b border-slate-200">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
-          {icon ? (
-            <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white to-slate-50 border border-slate-200/90 text-xl shadow-sm shadow-slate-200/50"
-              aria-hidden
-            >
-              {icon}
-            </span>
+          {icon != null ? (
+            typeof icon === 'string' ? (
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white to-slate-50 border border-slate-200/90 text-xl shadow-sm shadow-slate-200/50"
+                aria-hidden
+              >
+                {icon}
+              </span>
+            ) : (
+              icon
+            )
           ) : null}
           <div className="min-w-0">
             <h1 className={portalH1}>{title}</h1>

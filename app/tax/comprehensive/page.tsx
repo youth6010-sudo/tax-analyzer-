@@ -20,6 +20,7 @@ import { fmt, toNum } from '@/app/lib/taxAmountFmt';
 import type { BusinessRow } from '@/app/lib/businessRowCompute';
 import { computeRow } from '@/app/lib/businessRowCompute';
 import { loadIndustryRates, formatKRW, formatPct } from '@/app/utils/calculator';
+import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 import type { IndustryRate } from '@/app/types';
 import {
   portalBtnDark,
@@ -28,9 +29,12 @@ import {
   portalBtnSecondary,
   portalBtnSuccessFill,
   portalCard,
-  portalContent,
   portalFieldLabel,
+  portalH1,
   portalInput,
+  portalMain,
+  portalStickyBar,
+  portalSubtitle,
 } from '@/app/components/portal/uiClasses';
 import {
   LS_MAIN,
@@ -638,7 +642,7 @@ export default function Home() {
   const prevYearPrintPrefix = prevYear.trim() ? `${prevYear.trim()}년 ` : '';
 
   return (
-    <div className="flex-1 bg-[var(--background)]">
+    <div className="flex-1 min-h-full bg-gradient-to-b from-sky-50 via-white to-blue-50/40">
 
       {/* ── 인쇄 전용 헤더 ── */}
       <div className="print-only hidden border-b-2 border-gray-900 pb-2 mb-3 px-2">
@@ -660,27 +664,22 @@ export default function Home() {
       )}
 
       {/* ── 화면 헤더 ── */}
-      <header className="no-print sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm shadow-slate-200/30">
-        <div className={`${portalContent} py-4 space-y-4`}>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/25">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                {taxpayer && (
-                  <span className="text-lg font-bold text-blue-800">{taxpayer}</span>
-                )}
-                <h1 className="text-lg font-semibold text-slate-900">종합소득세 분석</h1>
-                <span className="portal-meta">{today}</span>
+      <div className={`${portalStickyBar} no-print`}>
+        <div className={`${portalMain} w-full space-y-4 pb-4 pt-2`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <PageHeaderIcon name="comprehensive" />
+              <div className="min-w-0">
+                <h1 className={portalH1}>종합소득세 분석</h1>
+                {taxpayer ? (
+                  <p className="mt-1 text-sm font-semibold text-[#4b6cb7]">{taxpayer}</p>
+                ) : null}
+                <p className={portalSubtitle}>{today}</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <div className="flex flex-wrap items-center gap-2">
               {analyzed && (
-                <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 border border-slate-200/70">
+                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
                   <button onClick={() => window.print()} className={portalBtnDark}>
                     🖨 인쇄
                   </button>
@@ -710,7 +709,7 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 border border-slate-200/70">
+              <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button onClick={() => void exportWorkJson()}
                   className={portalBtnSecondary}
                   title="입력·시뮬레이션을 JSON으로 저장 (Chrome·Edge에서는 저장 위치 선택 가능)">
@@ -729,37 +728,37 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={`${portalCard} p-3 bg-slate-50/60`}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label className="flex items-center gap-2 min-w-0">
-                <span className={portalFieldLabel + ' shrink-0 w-8'}>전기</span>
+          <div className={`${portalCard} p-3`}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="flex min-w-0 items-center gap-2">
+                <span className={portalFieldLabel + ' w-8 shrink-0'}>전기</span>
                 <input type="text" value={prevYear} onChange={e => setPrevYear(e.target.value)}
                   placeholder="2024"
                   className={`${portalInput} flex-1 font-mono`}
                 />
-                <span className="text-xs text-slate-400 shrink-0">년</span>
+                <span className="shrink-0 text-xs text-slate-400">년</span>
               </label>
-              <label className="flex items-center gap-2 min-w-0">
-                <span className={portalFieldLabel + ' shrink-0 w-8'}>당기</span>
+              <label className="flex min-w-0 items-center gap-2">
+                <span className={portalFieldLabel + ' w-8 shrink-0'}>당기</span>
                 <input type="text" value={currYear} onChange={e => setCurrYear(e.target.value)}
                   placeholder="2025"
                   className={`${portalInput} flex-1 font-mono`}
                 />
-                <span className="text-xs text-slate-400 shrink-0">년</span>
+                <span className="shrink-0 text-xs text-slate-400">년</span>
               </label>
-              <label className="flex items-center gap-2 min-w-0">
-                <span className={portalFieldLabel + ' shrink-0 w-12'}>소득자</span>
+              <label className="flex min-w-0 items-center gap-2">
+                <span className={portalFieldLabel + ' w-12 shrink-0'}>소득자</span>
                 <input type="text" value={taxpayer} onChange={e => setTaxpayer(e.target.value)}
                   placeholder="성명 / 상호"
-                  className={`${portalInput} flex-1 bg-blue-50/60 border-blue-200/80 font-medium`}
+                  className={`${portalInput} flex-1 border-blue-200/80 bg-blue-50/40 font-medium`}
                 />
               </label>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className={`${portalContent} py-6 space-y-5`}>
+      <main className={`${portalMain} w-full space-y-5 py-6`}>
 
         {industryRatesStatus === 'loading' && (
           <div className="no-print rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-2.5 text-xs text-blue-800 flex flex-wrap items-center justify-between gap-2">
@@ -1120,7 +1119,7 @@ export default function Home() {
         {analyzed && (
           <>
             {/* ── 분석 섹션 래퍼 (시뮬레이션과 동일 스타일) ── */}
-            <div className="space-y-4 bg-orange-50/30 rounded-3xl border border-orange-100 p-5 shadow-sm">
+            <div className={`${portalCard} space-y-4 p-5`}>
 
             <div className="analysis-section-print-top space-y-4">
             {/* 제목 — 인쇄에도 화면과 동일(체크박스만 제외) */}
@@ -1336,7 +1335,6 @@ export default function Home() {
             )}
           </>
         )}
-      </div>
 
       {/* ── 인쇄 부속: 전기 항목별 비율분석 → 이어서 당기 ── */}
       {showPrevExpDetailPrint && (
@@ -1421,6 +1419,7 @@ export default function Home() {
           </div>
         </div>
       )}
+    </main>
     </div>
   );
 }

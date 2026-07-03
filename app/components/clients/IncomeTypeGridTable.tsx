@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
 
 export type GridCellState = {
@@ -23,12 +24,21 @@ export type IncomeGridRow = {
 
 type YearEndColumn = { key: string; label: string };
 
+export type IncomeColumnStat = {
+  key: string;
+  label: string;
+  target: number;
+  received: number;
+  diff: number;
+};
+
 type Props = {
   mode: 'simplePayroll' | 'yearEnd';
   rows: IncomeGridRow[];
   loading?: boolean;
   employedFilingMonth?: boolean;
   inputCls?: string;
+  columnStats?: IncomeColumnStat[];
   onOpenSettings: (clientId: string, companyName: string) => void;
   onToggleExclude: (clientId: string) => void;
   onActivate: (clientId: string, incomeType: string) => void;
@@ -95,6 +105,7 @@ export default function IncomeTypeGridTable({
   loading,
   employedFilingMonth = true,
   inputCls = defaultInputCls,
+  columnStats,
   onOpenSettings,
   onToggleExclude,
   onActivate,
@@ -105,6 +116,22 @@ export default function IncomeTypeGridTable({
 }: Props) {
   const simpleCols = SIMPLE_PAYROLL_GRID_COLUMNS;
   const yearEndCols = YEAR_END_COLUMNS as readonly YearEndColumn[];
+  const statMap = useMemo(() => {
+    const m = new Map<string, IncomeColumnStat>();
+    for (const s of columnStats ?? []) m.set(s.key, s);
+    return m;
+  }, [columnStats]);
+
+  const renderColCount = (key: string) => {
+    const s = statMap.get(key);
+    if (!s || s.target <= 0) return null;
+    return (
+      <div className="mt-0.5 text-[10px] font-normal tabular-nums text-emerald-600">
+        {s.received}/{s.target}
+      </div>
+    );
+  };
+
   const simpleHeader = () => {
     const row1: ReactNode[] = [];
     const row2: ReactNode[] = [];
@@ -115,6 +142,7 @@ export default function IncomeTypeGridTable({
         row1.push(
           <th key={col.key} rowSpan={2} className="px-1 py-2 text-center font-semibold">
             {col.label}
+            {renderColCount(col.key)}
           </th>,
         );
       } else if (col.kind === 'laborDate') {
@@ -125,6 +153,7 @@ export default function IncomeTypeGridTable({
             className="border-l border-slate-200 px-1 py-1 text-center font-semibold text-violet-700"
           >
             근로내용확인신고
+            {renderColCount('laborContentReport')}
           </th>,
         );
         row2.push(
@@ -212,6 +241,7 @@ export default function IncomeTypeGridTable({
             {yearEndCols.map(col => (
               <th key={col.key} className="px-1 py-2 text-center font-semibold">
                 {col.label}
+                {renderColCount(col.key)}
               </th>
             ))}
           </tr>

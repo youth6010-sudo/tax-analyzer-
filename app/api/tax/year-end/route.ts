@@ -6,6 +6,7 @@ import { readYearEndTypes, yearEndTypeTargets } from '@/lib/incomeTypes';
 import {
   listYearEndFilings,
   matchYearEndFromExcel,
+  resetYearEndReceipt,
   upsertYearEndFilings,
   YEAR_END_TABLE_TYPES,
   type YearEndIncomeType,
@@ -139,8 +140,33 @@ export async function POST(request: NextRequest) {
       if (active.length) typesMap.set(c.id, active);
     }
 
+    const fileBizSet = new Set(
+      body.bizNos.map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+    );
+    const targetBizSet = new Set(
+      [...bizMap.values()].map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+    );
+    let extraCount = 0;
+    for (const b of fileBizSet) {
+      if (!targetBizSet.has(b)) extraCount += 1;
+    }
+
     const matched = await matchYearEndFromExcel(body.year, body.bizNos, bizMap, typesMap, user.name);
-    return NextResponse.json({ matched });
+    return NextResponse.json({ matched, total: fileBizSet.size, extraCount });
+  } catch (e) {
+    return apiError(e);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireUser();
+    const year = Number(request.nextUrl.searchParams.get('year'));
+    if (!year) {
+      return NextResponse.json({ error: 'year required' }, { status: 400 });
+    }
+    await resetYearEndReceipt(year);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e);
   }

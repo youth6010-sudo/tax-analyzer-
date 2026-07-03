@@ -66,7 +66,7 @@ export default function FilingCheckSessionPanel({
           <label className="text-sm font-semibold text-slate-700">특이사항 · 차이 사유</label>
           {carriedFrom && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              직전 완료 신고({carriedFrom}) 기준 불러옴
+              직전 신고({carriedFrom}) 제외·특이사항 불러옴
             </span>
           )}
         </div>

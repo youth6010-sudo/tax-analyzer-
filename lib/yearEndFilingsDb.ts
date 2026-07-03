@@ -100,3 +100,12 @@ export async function matchYearEndFromExcel(
   if (rows.length > 0) await upsertYearEndFilings(year, rows, updatedBy);
   return matched;
 }
+
+/** 접수(체크)만 초기화 — 소득유형 활성·제외는 유지 */
+export async function resetYearEndReceipt(year: number): Promise<void> {
+  const db = getDb();
+  await db
+    .update(yearEndFilings)
+    .set({ filed: false, updatedAt: new Date() })
+    .where(eq(yearEndFilings.year, year));
+}

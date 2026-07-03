@@ -19,7 +19,7 @@ import IncomeTypeGridTable, {
   type GridCellState,
   type IncomeGridRow,
 } from '@/app/components/clients/IncomeTypeGridTable';
-import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
+import { SIMPLE_PAYROLL_COLUMNS, SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
 import type { IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
@@ -40,13 +40,27 @@ import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400';
 
-export type IncomeFilingStats = { target: number; received: number; diff: number };
+export type IncomeColumnStat = {
+  key: string;
+  label: string;
+  target: number;
+  received: number;
+  diff: number;
+};
+
+export type IncomeFilingStats = {
+  target: number;
+  received: number;
+  diff: number;
+  byColumn: IncomeColumnStat[];
+};
 
 export type IncomeStatFilter = 'all' | 'target' | 'received' | 'diff';
 
 export type IncomeTypeFilingHandle = {
   reload: () => Promise<void>;
-  uploadHometax: (file: File) => Promise<{ matched: number }>;
+  uploadHometax: (file: File) => Promise<{ matched: number; total: number; extraCount: number }>;
+  resetReceipt: () => Promise<void>;
 };
 
 type Props = {
@@ -139,24 +153,56 @@ function matchesRowFilter(
   return true;
 }
 
+function isCellReceived(
+  cell: GridCellState | undefined,
+  key: string,
+): boolean {
+  if (!cell?.active) return false;
+  if (key === 'laborContentReport') {
+    return (
+      cell.filed ||
+      !!(cell.acceptanceDate?.trim() || cell.acceptanceMethod?.trim())
+    );
+  }
+  return cell.filed;
+}
+
+function columnDefs(mode: 'simplePayroll' | 'yearEnd') {
+  if (mode === 'simplePayroll') {
+    return SIMPLE_PAYROLL_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+  }
+  return YEAR_END_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+}
+
 function computeStats(
   grid: ApiGridRow[],
   manager: string,
   mode: 'simplePayroll' | 'yearEnd',
 ): IncomeFilingStats {
   const rows = filterByManager(grid, manager);
+
+  const byColumn: IncomeColumnStat[] = columnDefs(mode).map(({ key, label }) => {
+    let colTarget = 0;
+    let colReceived = 0;
+    for (const row of rows) {
+      if (row.excludeReason != null && row.excludeReason !== undefined) continue;
+      const cell = row.cells[key];
+      if (!cell?.active) continue;
+      colTarget += 1;
+      if (isCellReceived(cell, key)) colReceived += 1;
+    }
+    return { key, label, target: colTarget, received: colReceived, diff: colTarget - colReceived };
+  });
+
+  // 열 헤더(근로·일용·사업…)와 동일하게 체크 칸 단위로 합산 — 업체 수(곳)와 혼동 방지
   let target = 0;
   let received = 0;
-
-  for (const row of rows) {
-    if (row.excludeReason != null && row.excludeReason !== undefined) continue;
-    const hasActive = Object.values(row.cells).some(c => c.active);
-    if (!hasActive) continue;
-    target += 1;
-    if (isRowFullyFiled(row, mode)) received += 1;
+  for (const col of byColumn) {
+    target += col.target;
+    received += col.received;
   }
 
-  return { target, received, diff: target - received };
+  return { target, received, diff: target - received, byColumn };
 }
 
 const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(function IncomeTypeFilingSection(
@@ -451,11 +497,17 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         const data = await res.json();
         if (!res.ok) throw new Error('매칭 실패');
         const matched = Number(data.matched ?? 0);
-        const notice = `접수목록 ${matched}건을 사업자번호로 대조해 자동 체크했습니다.`;
-        if (embedded) onUploadNotice?.(notice);
-        else setMessage(notice);
+        const total = Number(data.total ?? 0);
+        const extraCount = Number(data.extraCount ?? 0);
+        if (!embedded) {
+          setMessage(
+            total > 0
+              ? `접수목록 ${total}건 중 ${matched}건을 자동 체크했습니다.`
+              : `접수목록 ${matched}건을 사업자번호로 대조해 자동 체크했습니다.`,
+          );
+        }
         await load();
-        return { matched };
+        return { matched, total, extraCount };
       } catch (e) {
         const msg = e instanceof Error ? e.message : '엑셀 처리 실패';
         if (embedded) onUploadNotice?.(msg);
@@ -468,13 +520,25 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     [mode, periodKey, year, embedded, onUploadNotice, load],
   );
 
+  const resetReceipt = useCallback(async () => {
+    const url =
+      mode === 'simplePayroll'
+        ? `/api/tax/simple-payroll?periodKey=${encodeURIComponent(periodKey)}`
+        : `/api/tax/year-end?year=${year}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new Error('접수 초기화 실패');
+    if (!embedded) setMessage('접수(체크)만 초기화했습니다.');
+    await load();
+  }, [mode, periodKey, year, embedded, load]);
+
   useImperativeHandle(
     ref,
     () => ({
       reload: load,
       uploadHometax,
+      resetReceipt,
     }),
-    [load, uploadHometax],
+    [load, uploadHometax, resetReceipt],
   );
 
   const updateCell = (clientId: string, incomeType: string, patch: Partial<GridCellState>) => {
@@ -607,6 +671,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         loading={loading}
         locked={locked}
         employedFilingMonth={spMeta?.employedFilingMonth ?? false}
+        columnStats={stats.byColumn}
         onOpenSettings={(id, name) => setSettingsClient({ id, companyName: name })}
         onToggleExclude={id => void handleToggleExclude(id)}
         onActivate={(id, key) => void handleActivate(id, key)}

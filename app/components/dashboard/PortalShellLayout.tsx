@@ -112,8 +112,8 @@ function PortalBrand() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo.png"
-        alt="세무법인청년들"
-        className="h-10 w-auto max-w-[4.5rem] object-contain shrink-0"
+        alt="세무법인 청년들"
+        className="h-10 w-auto max-w-[5.5rem] object-contain shrink-0"
       />
       <div className="min-w-0 leading-tight">
         <p className="text-sm font-extrabold text-slate-800">B-System</p>

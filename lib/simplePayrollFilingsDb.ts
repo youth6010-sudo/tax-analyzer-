@@ -144,3 +144,18 @@ export async function matchSimplePayrollFromExcel(
   if (rows.length > 0) await upsertSimplePayrollFilings(periodKey, rows, updatedBy);
   return matched;
 }
+
+/** 접수(체크·근로내용확인 입력)만 초기화 — 소득유형 활성·제외는 유지 */
+export async function resetSimplePayrollReceipt(periodKeys: string[]): Promise<void> {
+  if (periodKeys.length === 0) return;
+  const db = getDb();
+  await db
+    .update(simplePayrollFilings)
+    .set({
+      filed: false,
+      acceptanceDate: '',
+      acceptanceMethod: '',
+      updatedAt: new Date(),
+    })
+    .where(inArray(simplePayrollFilings.periodKey, periodKeys));
+}

@@ -66,7 +66,7 @@ export default function PersonalChecklistAddForm({
   const isEdit = Boolean(editItem);
   const isMaster = useIsMasterUser();
 
-  const [taxType, setTaxType] = useState<ChecklistTaxType>('other');
+  const [taxType, setTaxType] = useState<ChecklistTaxType | ''>('');
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(defaultClientId || '');
   const [dueDate, setDueDate] = useState('');
@@ -97,7 +97,7 @@ export default function PersonalChecklistAddForm({
       setReflectInNotes(editItem.reflectInNotes);
       return;
     }
-    setTaxType('other');
+    setTaxType('');
     setTitle('');
     setClientId(defaultClientId || '');
     setDueDate('');
@@ -105,7 +105,7 @@ export default function PersonalChecklistAddForm({
   }, [editItem, defaultClientId]);
 
   const clients = useMemo(() => {
-    if (taxType === 'other') {
+    if (!taxType || taxType === 'other') {
       return allClients
         .filter(c => c.status !== 'churned')
         .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
@@ -118,7 +118,7 @@ export default function PersonalChecklistAddForm({
     if (!clients.some(c => c.id === clientId)) setClientId('');
   }, [clients, clientId]);
 
-  const handleTaxTypeChange = (next: ChecklistTaxType) => {
+  const handleTaxTypeChange = (next: ChecklistTaxType | '') => {
     setTaxType(next);
     if (!isEdit) setClientId('');
   };
@@ -141,6 +141,10 @@ export default function PersonalChecklistAddForm({
   };
 
   const submit = async () => {
+    if (!taxType) {
+      window.alert('구분을 선택해주세요.');
+      return;
+    }
     if (!title.trim()) {
       window.alert('체크리스트 내용을 입력해주세요.');
       return;
@@ -179,8 +183,10 @@ export default function PersonalChecklistAddForm({
         throw new Error(msg);
       }
       if (!isEdit) {
+        setTaxType('');
         setTitle('');
         setDueDate('');
+        setClientId(defaultClientId || '');
         setReflectInNotes(false);
         onCreated?.();
       } else {
@@ -197,13 +203,15 @@ export default function PersonalChecklistAddForm({
 
   return (
     <div className={wrapperCls}>
-      <FormRow label="구분">
+      <FormRow label="구분" required>
         <select
           value={taxType}
-          onChange={e => handleTaxTypeChange(e.target.value as ChecklistTaxType)}
+          onChange={e => handleTaxTypeChange(e.target.value as ChecklistTaxType | '')}
           className={portalInput + ' w-full text-xs py-1.5'}
           aria-label="구분"
+          aria-required
         >
+          <option value="">선택</option>
           {CHECKLIST_TAX_OPTIONS.map(o => (
             <option key={o.id} value={o.id}>{o.label}</option>
           ))}
@@ -219,17 +227,6 @@ export default function PersonalChecklistAddForm({
         />
       </FormRow>
 
-      <FormRow label="수임처">
-        <ScopedClientSearch
-          candidates={clients}
-          clientId={clientId}
-          onSelect={setClientId}
-          loading={clientsLoading}
-          placeholder="검색"
-          emptyHint={taxType === 'other' ? '검색 결과 없음' : '해당 세목 범위에서 검색 결과 없음'}
-        />
-      </FormRow>
-
       <FormRow label="마감일" required>
         <input
           type="date"
@@ -237,6 +234,23 @@ export default function PersonalChecklistAddForm({
           onChange={e => setDueDate(e.target.value)}
           className={portalInput + ' w-full text-xs py-1.5'}
           aria-required
+        />
+      </FormRow>
+
+      <FormRow label="수임처">
+        <ScopedClientSearch
+          candidates={clients}
+          clientId={clientId}
+          onSelect={setClientId}
+          loading={clientsLoading}
+          placeholder="검색"
+          emptyHint={
+            !taxType
+              ? '구분을 먼저 선택하세요'
+              : taxType === 'other'
+                ? '검색 결과 없음'
+                : '해당 세목 범위에서 검색 결과 없음'
+          }
         />
       </FormRow>
 
@@ -250,10 +264,6 @@ export default function PersonalChecklistAddForm({
         <span>업체별 특이사항에 반영</span>
       </label>
 
-      <p className="pl-[6.5rem] text-[10px] text-slate-400">
-        <span className="text-red-500">*</span> 필수 입력
-      </p>
-
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       {isEdit && editItem?.createdAt && (
@@ -262,7 +272,7 @@ export default function PersonalChecklistAddForm({
         </p>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         {isEdit && (
           <button
             type="button"
@@ -277,15 +287,18 @@ export default function PersonalChecklistAddForm({
           type="button"
           onClick={() => void submit()}
           disabled={saving}
-          className={portalBtnPrimary + ' flex-1 text-xs py-1.5'}
+          className={portalBtnPrimary + ' text-xs py-1.5' + (isEdit ? ' flex-1' : '')}
         >
-          {saving ? '저장 중…' : isEdit ? '저장' : '추가'}
+          {saving ? '저장 중…' : isEdit ? '저장' : '체크리스트 추가'}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} className={portalBtnSecondary + ' text-xs py-1.5'}>
             취소
           </button>
         )}
+        <span className="ml-auto shrink-0 text-[10px] text-slate-400">
+          <span className="text-red-500">*</span> 필수입력
+        </span>
       </div>
     </div>
   );

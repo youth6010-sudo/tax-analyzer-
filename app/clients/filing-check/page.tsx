@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
+import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 import {
   portalAlertInfo,
   portalBtnPrimary,
@@ -50,7 +51,7 @@ import {
 import { prevWithholdingPeriodKey } from '@/lib/periodUtils';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
-  hasFilingCarryData,
+  resetReceiptOnly,
 } from '@/app/utils/filingCheckStorage';
 import FilingCheckSessionPanel from '@/app/components/clients/FilingCheckSessionPanel';
 import ClientFilingSettingsModal from '@/app/components/clients/ClientFilingSettingsModal';
@@ -225,27 +226,34 @@ function FilingBottomStats({
   target,
   received,
   diff,
+  unit = '곳',
 }: {
   target: number;
   received: number;
   diff: number;
+  unit?: '곳' | '건';
 }) {
   return (
     <div
-      className={`${portalCard} mt-3 flex flex-wrap items-center justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
+      className={`${portalCard} mt-3 flex flex-wrap items-start justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
     >
-      <p className="text-sm font-semibold text-slate-800">
-        총 체크{' '}
-        <span className="tabular-nums text-emerald-700">{received}</span>
-        <span className="font-normal text-slate-500"> / 신고대상 </span>
-        <span className="tabular-nums text-blue-700">{target}</span>
-        <span className="font-normal text-slate-500">곳</span>
-        {diff > 0 && (
-          <span className="ml-2 font-medium tabular-nums text-rose-600">(차이 {diff}곳)</span>
-        )}
-      </p>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">
+          총 체크{' '}
+          <span className="tabular-nums text-emerald-700">{received}</span>
+          <span className="font-normal text-slate-500"> / 신고대상 </span>
+          <span className="tabular-nums text-blue-700">{target}</span>
+          <span className="font-normal text-slate-500">{unit}</span>
+          {diff > 0 && (
+            <span className="ml-2 font-medium tabular-nums text-rose-600">
+              (차이 {diff}
+              {unit})
+            </span>
+          )}
+        </p>
+      </div>
       {diff === 0 && target > 0 && (
-        <span className="text-xs font-medium text-emerald-700">전체 접수 완료</span>
+        <span className="shrink-0 text-xs font-medium text-emerald-700">전체 접수 완료</span>
       )}
     </div>
   );
@@ -299,9 +307,13 @@ function FilingCheckPageInner() {
     target: 0,
     received: 0,
     diff: 0,
+    byColumn: [],
   });
   const [incomeParsing, setIncomeParsing] = useState(false);
   const [incomeNotice, setIncomeNotice] = useState('');
+  const [incomeUploadMatched, setIncomeUploadMatched] = useState(0);
+  const [incomeUploadTotal, setIncomeUploadTotal] = useState(0);
+  const [incomeUploadExtra, setIncomeUploadExtra] = useState(0);
   const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
   const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -411,12 +423,9 @@ function FilingCheckPageInner() {
       const { data: serverRec, carriedFromPeriodKey } = await loadFromServer();
       if (cancelled) return;
 
-      let merged: CheckRecord =
-        serverRec && hasFilingCarryData(serverRec)
-          ? { ...EMPTY_RECORD, ...serverRec }
-          : { ...EMPTY_RECORD };
+      let merged: CheckRecord = serverRec ? { ...EMPTY_RECORD, ...serverRec } : { ...EMPTY_RECORD };
 
-      if (carriedFromPeriodKey && (!serverRec || !hasFilingCarryData(serverRec))) {
+      if (carriedFromPeriodKey) {
         setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, carriedFromPeriodKey)));
       } else {
         setCarriedFrom(null);
@@ -488,6 +497,7 @@ function FilingCheckPageInner() {
 
   useEffect(() => {
     setIncomeNotice('');
+    setIncomeUploadMatched(0);
     setEmployedFilingMonth(false);
   }, [tax, period.year, period.month, selManager]);
 
@@ -1084,7 +1094,7 @@ function FilingCheckPageInner() {
       <PortalPageHeader
         title="신고대상확인"
         description="세목·기간별 신고대상 대비 홈택스 접수 현황을 대조하고 요약을 만듭니다. (신고분별 자동 저장)"
-        icon="✅"
+        icon={<PageHeaderIcon name="filing-check" />}
       />
 
       {saveError && (
@@ -1246,13 +1256,25 @@ function FilingCheckPageInner() {
               if (isIncomeTypeTax) {
                 setIncomeParsing(true);
                 setIncomeNotice('');
-                void mergeHometaxSpecialFilings(f)
-                  .then(() =>
-                    incomeSectionRef.current?.uploadHometax(f).then(() => {
-                      showIncomeSavedTick();
-                    }),
-                  )
-                  .catch(() => {})
+                const upload = incomeSectionRef.current?.uploadHometax(f);
+                if (!upload) {
+                  setIncomeParsing(false);
+                  setIncomeNotice('목록을 불러온 뒤 다시 업로드해 주세요.');
+                  return;
+                }
+                void upload
+                  .then(({ matched, total, extraCount }) => {
+                    setIncomeUploadMatched(matched);
+                    setIncomeUploadTotal(total);
+                    setIncomeUploadExtra(extraCount);
+                    showIncomeSavedTick();
+                  })
+                  .catch(err => {
+                    setIncomeUploadMatched(0);
+                    setIncomeUploadTotal(0);
+                    setIncomeUploadExtra(0);
+                    setIncomeNotice(err instanceof Error ? err.message : '엑셀 처리 실패');
+                  })
                   .finally(() => {
                     setIncomeParsing(false);
                     if (incomeFileRef.current) incomeFileRef.current.value = '';
@@ -1274,17 +1296,43 @@ function FilingCheckPageInner() {
             !locked &&
             (excelSet.size > 0 ||
               Object.keys(record.overrides).length > 0 ||
-              Object.keys(record.excluded).length > 0 ||
+              record.fileName.trim() ||
               record.done) && (
             <button
               type="button"
               onClick={() => {
-                patchRecord(EMPTY_RECORD);
+                patchRecord(resetReceiptOnly(record));
                 if (fileRef.current) fileRef.current.value = '';
               }}
               className={portalBtnSecondary}
             >
-              초기화
+              접수 초기화
+            </button>
+          )}
+          {isIncomeTypeTax &&
+            !locked &&
+            (incomeStats.received > 0 || incomeUploadTotal > 0) && (
+            <button
+              type="button"
+              onClick={() => {
+                const reset = incomeSectionRef.current?.resetReceipt;
+                if (!reset) return;
+                void reset()
+                  .then(() => {
+                    setIncomeUploadMatched(0);
+                    setIncomeUploadTotal(0);
+                    setIncomeUploadExtra(0);
+                    setIncomeNotice('');
+                    if (incomeFileRef.current) incomeFileRef.current.value = '';
+                    showIncomeSavedTick();
+                  })
+                  .catch(err => {
+                    setIncomeNotice(err instanceof Error ? err.message : '접수 초기화 실패');
+                  });
+              }}
+              className={portalBtnSecondary}
+            >
+              접수 초기화
             </button>
           )}
         </div>
@@ -1299,14 +1347,14 @@ function FilingCheckPageInner() {
           {sessionPanel}
           <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
             <StatCard
-              label="신고대상"
+              label="신고대상(건)"
               value={incomeStats.target}
               tone="border-blue-100 bg-blue-50/60 text-blue-800"
               selected={statFilter === 'target'}
               onClick={() => toggleStatFilter('target')}
             />
             <StatCard
-              label="접수완료"
+              label="접수완료(건)"
               value={incomeStats.received}
               tone="border-emerald-100 bg-emerald-50/60 text-emerald-800"
               selected={statFilter === 'received'}
@@ -1324,6 +1372,13 @@ function FilingCheckPageInner() {
               onClick={() => toggleStatFilter('diff')}
             />
           </div>
+          {incomeUploadTotal > 0 && (
+            <p className={`${portalAlertInfo} mb-4`}>
+              접수목록 {incomeUploadTotal}건을 사업자번호로 대조해 {incomeUploadMatched}건을 자동 체크했습니다.
+              {incomeUploadExtra > 0 &&
+                ` 이 중 ${incomeUploadExtra}건은 현재 ${taxLabel} 신고대상 수임처와 일치하지 않습니다.`}
+            </p>
+          )}
           <IncomeTypeFilingSection
             ref={incomeSectionRef}
             mode={tax === 'simplePayroll' ? 'simplePayroll' : 'yearEnd'}
@@ -1341,11 +1396,13 @@ function FilingCheckPageInner() {
             onEmployedFilingMonth={setEmployedFilingMonth}
             onSaved={showIncomeSavedTick}
           />
-          {incomeNotice.includes('대조') && incomeStats.target > 0 && (
+          {incomeStats.target > 0 &&
+            (incomeStats.received > 0 || incomeUploadMatched > 0) && (
             <FilingBottomStats
               target={incomeStats.target}
               received={incomeStats.received}
               diff={incomeStats.diff}
+              unit="건"
             />
           )}
           {completionFooter(incomeStats.diff)}
