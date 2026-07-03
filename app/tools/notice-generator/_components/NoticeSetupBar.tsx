@@ -209,8 +209,8 @@ export default function NoticeSetupBar({
             <PeriodSecondField taxType={taxType} params={params} onParamChange={onParamChange} />
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-end gap-2">
-            <label className={`${inlineField} min-w-[7.5rem] flex-1`}>
+          <div className={noticeHalfRow}>
+            <label className="block min-w-0">
               <span className={noticeLabel}>자료 제출 마감</span>
               <input
                 type="text"
@@ -222,34 +222,36 @@ export default function NoticeSetupBar({
                 className={fieldClass}
               />
             </label>
-            <label className={`${inlineField} w-[4.5rem]`}>
-              <span className={noticeLabel}>시</span>
-              <select
-                value={materialDeadline.hour}
-                onChange={e => updateMaterial({ hour: Number(e.target.value) })}
-                className={fieldClass}
-              >
-                {HOURS.map(h => (
-                  <option key={h} value={h}>
-                    {String(h).padStart(2, '0')}시
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={`${inlineField} w-[4.5rem]`}>
-              <span className={noticeLabel}>분</span>
-              <select
-                value={materialDeadline.minute}
-                onChange={e => updateMaterial({ minute: Number(e.target.value) })}
-                className={fieldClass}
-              >
-                {MINUTES.map(m => (
-                  <option key={m} value={m}>
-                    {String(m).padStart(2, '0')}분
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex min-w-0 items-end gap-2">
+              <label className={`${inlineField} min-w-0 flex-1`}>
+                <span className={noticeLabel}>시</span>
+                <select
+                  value={materialDeadline.hour}
+                  onChange={e => updateMaterial({ hour: Number(e.target.value) })}
+                  className={fieldClass}
+                >
+                  {HOURS.map(h => (
+                    <option key={h} value={h}>
+                      {String(h).padStart(2, '0')}시
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${inlineField} min-w-0 flex-1`}>
+                <span className={noticeLabel}>분</span>
+                <select
+                  value={materialDeadline.minute}
+                  onChange={e => updateMaterial({ minute: Number(e.target.value) })}
+                  className={fieldClass}
+                >
+                  {MINUTES.map(m => (
+                    <option key={m} value={m}>
+                      {String(m).padStart(2, '0')}분
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 

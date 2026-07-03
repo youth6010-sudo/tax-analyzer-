@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { portalBtnPrimary } from '@/app/components/portal/uiClasses';
 
 export type IntakeTab = 'intake' | 'consultation';
 
@@ -29,16 +28,9 @@ export default function IntakeTabs({ active }: { active: IntakeTab }) {
 
   return (
     <div className="sticky top-0 z-20 mb-4 py-3 bg-[var(--background)]/95 backdrop-blur border-b border-slate-200">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">유입</h1>
-          <p className="portal-meta mt-0.5">유입관리 · 신규상담</p>
-        </div>
-        {active !== 'consultation' && (
-          <Link href={href('consultation')} className={portalBtnPrimary}>
-            + 신규상담
-          </Link>
-        )}
+      <div className="mb-3">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">유입</h1>
+        <p className="portal-meta mt-0.5">유입관리 · 신규상담</p>
       </div>
       <div className="flex flex-wrap gap-1">
         {TABS.map(t => (

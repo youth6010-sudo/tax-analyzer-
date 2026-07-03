@@ -21,6 +21,7 @@ function str(v: unknown): string {
 const ENTITY_MAP: Record<string, string> = {
   개인: 'individual',
   법인: 'corporate',
+  간이: 'individual',
   프리랜서: 'individual',
   면세: 'nonBusiness',
 };
@@ -30,8 +31,39 @@ export function buildInquiryContent(data: Record<string, unknown>): string {
     {
       title: '[전화] 기본',
       keys: [
-        ['계기', 'channel'], ['계기 상세', 'channelDetail'], ['매출', 'revenue'],
-        ['이전 세무사', 'hasPrevAccountant'],
+        ['요청사항', 'requestDetails'],
+        ['유입', 'channel'],
+        ['유입 상세', 'channelDetail'],
+        ['매출', 'revenue'],
+        ['과·면세', 'vatTaxStatus'],
+      ],
+    },
+    {
+      title: '[전화] 상담일시',
+      keys: [
+        ['일시', 'consultDate'],
+        ['오전/오후', 'consultAmPm'],
+        ['유선/대면', 'consultContactType'],
+      ],
+    },
+    {
+      title: '[전화] 인건비·사업자',
+      keys: [
+        ['상용직', 'payrollFullTime'],
+        ['일용직', 'payrollDaily'],
+        ['사업/기타', 'payrollOther'],
+        ['사업자 유형', 'businessEntityType'],
+      ],
+    },
+    {
+      title: '[전화] 상담내용',
+      keys: [
+        ['니즈', 'clientNeeds'],
+        ['세무현황', 'taxStatusSummary'],
+        ['세무 이슈', 'potentialTaxIssues'],
+        ['서비스 범위', 'proposedServiceScope'],
+        ['수임료 방향', 'feeDirection'],
+        ['비고', 'consultRemarks'],
       ],
     },
     {
@@ -229,6 +261,7 @@ export async function createConsultation(
 ) {
   const companyName = str(data.companyName);
   if (!companyName) throw new Error('COMPANY_NAME_REQUIRED');
+  if (!str(data.phone)) throw new Error('PHONE_REQUIRED');
 
   const consultId = randomUUID();
   const today = new Date().toISOString().slice(0, 10);
@@ -348,7 +381,13 @@ export async function updateProcessChecklist(
 
 export async function updateProcessField(
   id: string,
-  patch: { clientId?: string | null; monthlyFee?: number | null; feeStartDate?: string; channel?: string },
+  patch: {
+    clientId?: string | null;
+    companyName?: string;
+    monthlyFee?: number | null;
+    feeStartDate?: string;
+    channel?: string;
+  },
 ) {
   const db = getDb();
   const [row] = await db.update(intakeProcesses)
@@ -484,7 +523,30 @@ export async function registerClientFromIntake(
 
   if (inquiry.clientId) {
     const [existing] = await db.select().from(clients).where(eq(clients.id, inquiry.clientId)).limit(1);
-    if (existing?.status === 'active') return clientToRecord(existing);
+    if (existing?.status === 'active') {
+      const [updated] = await db
+        .update(clients)
+        .set({
+          companyName,
+          phone: inquiry.phone || existing.phone,
+          representative: inquiry.representative || existing.representative,
+          businessNo: inquiry.businessNo || existing.businessNo,
+          feeSummary: process?.monthlyFee ?? inquiry.proposedFee ?? existing.feeSummary,
+          intakeData: intakeDataWithExternalRefs({
+            ...(existing.intakeData ?? {}),
+            ...baseIntake,
+            ...(process?.feeStartDate ? { feeStartDate: process.feeStartDate } : {}),
+            ...(process?.channel ? { intakeChannel: process.channel } : {}),
+          }, mergeExternalRefs(parseExternalRefs(existing.intakeData), extRefs)),
+          updatedAt: new Date(),
+        })
+        .where(eq(clients.id, existing.id))
+        .returning();
+      if (process && !process.clientId) {
+        await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
+      }
+      return clientToRecord(updated);
+    }
     if (existing?.status === 'intake') {
       const [updated] = await db
         .update(clients)

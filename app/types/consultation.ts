@@ -61,3 +61,19 @@ export function isFieldVisible(field: ConsultationField, form: Record<string, st
 export function phaseLabel(config: ConsultationFormConfig, phaseId: string): string {
   return config.phases.find(p => p.id === phaseId)?.label ?? phaseId;
 }
+
+export type ConsultationPhaseColumn = {
+  phaseId: string;
+  label: string;
+  steps: ConsultationStep[];
+};
+
+/** 단계별 마법사 대신 3열(전화·대면·마무리) 레이아웃용 */
+export function getPhaseColumns(config: ConsultationFormConfig): ConsultationPhaseColumn[] {
+  const steps = getActiveSteps(config);
+  return config.phases.map(p => ({
+    phaseId: p.id,
+    label: p.label,
+    steps: steps.filter(s => s.phase === p.id),
+  }));
+}

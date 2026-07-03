@@ -274,38 +274,6 @@ export default function ContactDetailView({
       {error && <div className={`${portalAlertError} ${flat ? 'mx-4' : ''}`}>{error}</div>}
 
       <article className={flat ? '' : `${portalCard} overflow-hidden`}>
-        {flat && isEditing ? (
-          <div className="border-b border-slate-200 px-4 py-4">
-            <h1 className="mb-4 text-lg font-bold leading-snug text-slate-900">{contact.companyName}</h1>
-            <CategorySection title="기업구분" compact>
-              <div className="flex flex-wrap gap-2">
-                {BUSINESS_ENTITY_TYPES.map(t => {
-                  const checked = form.businessEntityType === t.id;
-                  return (
-                    <label
-                      key={t.id}
-                      className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                        checked
-                          ? 'border-slate-700 bg-slate-700 text-white'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-slate-400'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="businessEntityType"
-                        checked={checked}
-                        onChange={() => setBusinessEntityType(t.id)}
-                        className="sr-only"
-                      />
-                      {t.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </CategorySection>
-          </div>
-        ) : (
-        <>
         <div className={`${flat ? 'border-b border-slate-200 px-4 py-3' : 'px-5 py-4 bg-slate-50 border-b border-slate-100'}`}>
           {!flat && <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">거래처</p>}
           <div className={`${flat ? 'flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5' : ''}`}>
@@ -466,32 +434,30 @@ export default function ContactDetailView({
           </div>
         </div>
 
-          <div className={flat ? 'px-4 py-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3' : 'p-5 grid gap-3 sm:grid-cols-2'}>
-            {viewFields.map(({ key, label, mono }) => (
-              <div key={key} className={flat ? 'min-w-0' : 'rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3'}>
-                <p className={`font-medium text-slate-400 ${flat ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</p>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={form[key] as string}
-                    onChange={e => updateField(key, e.target.value)}
-                    className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''} ${flat ? '!py-1 !text-xs' : ''}`}
-                  />
-                ) : (
-                  <p className={`font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''} ${flat ? 'text-xs' : 'text-sm'}`}>
-                    {key === 'phone'
-                      ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
-                      : key === 'businessNo' || key === 'corporateNo' || key === 'residentNo'
-                        ? displayValue(formatIdField(key, contact[key] as string))
-                        : displayValue(contact[key] as string)}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-        )}
-        </article>
+        <div className={flat ? 'px-4 py-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3' : 'p-5 grid gap-3 sm:grid-cols-2'}>
+          {viewFields.map(({ key, label, mono }) => (
+            <div key={key} className={flat ? 'min-w-0' : 'rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3'}>
+              <p className={`font-medium text-slate-400 ${flat ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</p>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={form[key] as string}
+                  onChange={e => updateField(key, e.target.value)}
+                  className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''} ${flat ? '!py-1 !text-xs' : ''}`}
+                />
+              ) : (
+                <p className={`font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''} ${flat ? 'text-xs' : 'text-sm'}`}>
+                  {key === 'phone'
+                    ? displayValue(formatPhoneWithContactName(contact.phone, primaryContactName))
+                    : key === 'businessNo' || key === 'corporateNo' || key === 'residentNo'
+                      ? displayValue(formatIdField(key, contact[key] as string))
+                      : displayValue(contact[key] as string)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </article>
     </div>
   );
 }

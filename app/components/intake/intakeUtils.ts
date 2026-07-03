@@ -1,5 +1,9 @@
 import { CHECKLIST_KEYS, BLUEHOLE_CODE_KEY } from '@/app/types/intake';
 import { compareIntakeDateDesc, formatIntakeDate } from '@/app/utils/intakeDates';
+import {
+  buildBookkeepingConsultSheetText,
+  formRecordToBookkeepingSource,
+} from '@/lib/bookkeepingConsultCopy';
 
 export { CHECKLIST_KEYS, BLUEHOLE_CODE_KEY };
 
@@ -170,40 +174,6 @@ export function inquiryEmail(extra: Record<string, unknown> | undefined): string
   return typeof extra?.email === 'string' ? extra.email : '';
 }
 
-function appendBlueholeLine(lines: string[], label: string, value: string | number | null | undefined): void {
-  const v = value == null ? '' : String(value).trim();
-  if (!v) return;
-  lines.push(`${label}: ${v}`);
-}
-
-/** 블루홀 수동 등록 시 붙여넣기용 텍스트 */
-export function buildBlueholeRegisterText(inquiry: InquiryRow, process?: ProcessRow | null): string {
-  const lines: string[] = [];
-  const monthlyFee = process?.monthlyFee ?? inquiry.proposedFee;
-
-  appendBlueholeLine(lines, '상호', process?.companyName || inquiry.companyName);
-  appendBlueholeLine(lines, '대표', inquiry.representative);
-  appendBlueholeLine(lines, '사업자번호', inquiry.businessNo);
-  appendBlueholeLine(lines, '업종', inquiry.industry);
-  appendBlueholeLine(lines, '주소', inquiry.address);
-  appendBlueholeLine(lines, '연락처', inquiry.phone);
-  appendBlueholeLine(lines, '대표 연락처', inquiryRepPhone(inquiry.extra));
-  appendBlueholeLine(lines, '관리자', inquiryAdmin(inquiry.extra));
-  appendBlueholeLine(lines, '관리자 연락처', inquiryAdminPhone(inquiry.extra));
-  appendBlueholeLine(lines, '이메일', inquiryEmail(inquiry.extra));
-  appendBlueholeLine(lines, '유입 채널', process?.channel || inquiry.channel);
-  appendBlueholeLine(lines, '상담자', inquiry.consultant);
-  appendBlueholeLine(lines, '문의일', inquiry.inquiryDate);
-  if (monthlyFee != null && Number.isFinite(monthlyFee)) {
-    appendBlueholeLine(lines, '월 수수료', `${monthlyFee.toLocaleString('ko-KR')}원`);
-  }
-  appendBlueholeLine(lines, '수임 시작일', process?.feeStartDate);
-  appendBlueholeLine(lines, '문의·상담 내용', inquiry.inquiryContent);
-  appendBlueholeLine(lines, '비고', inquiryNote(inquiry.extra));
-
-  return lines.join('\n');
-}
-
 export function inquiryFieldValue(row: InquiryRow, key: string): string {
   switch (key) {
     case 'inquiryDate': return formatIntakeDate(row.inquiryDate);
@@ -233,6 +203,39 @@ export function inquiryFormFields(extra: Record<string, unknown> | undefined): R
   return form && typeof form === 'object' && !Array.isArray(form)
     ? form as Record<string, unknown>
     : null;
+}
+
+/** 블루홀·기장상담지 붙여넣기용 (청년들 신규기장 상담지 양식) */
+export function buildBlueholeRegisterText(inquiry: InquiryRow, process?: ProcessRow | null): string {
+  const form = inquiryFormFields(inquiry.extra) ?? {};
+  const monthlyFee = process?.monthlyFee ?? inquiry.proposedFee;
+  const feeLine = monthlyFee != null && Number.isFinite(monthlyFee)
+    ? `${monthlyFee.toLocaleString('ko-KR')}원`
+    : '';
+
+  const src = formRecordToBookkeepingSource(form, {
+    consultDate: String(form.consultDate ?? inquiry.inquiryDate ?? ''),
+    channel: process?.channel || inquiry.channel,
+    representative: inquiry.representative || String(form.representative ?? ''),
+    industry: inquiry.industry || String(form.industry ?? ''),
+    companyName: process?.companyName || inquiry.companyName,
+    phone: inquiry.phone || String(form.phone ?? ''),
+    email: inquiryEmail(inquiry.extra) || String(form.email ?? ''),
+    inquiryContent: inquiry.inquiryContent,
+    note: inquiryNote(inquiry.extra),
+    feeDirection: feeLine
+      ? [String(form.feeDirection ?? ''), `월 예상수수료: ${feeLine}`].filter(Boolean).join('\n')
+      : String(form.feeDirection ?? ''),
+    consultRemarks: [
+      String(form.consultRemarks ?? ''),
+      inquiry.businessNo ? `사업자번호: ${inquiry.businessNo}` : '',
+      inquiry.address ? `주소: ${inquiry.address}` : '',
+      inquiry.consultant ? `상담자: ${inquiry.consultant}` : '',
+      process?.feeStartDate ? `수임 시작일: ${process.feeStartDate}` : '',
+    ].filter(Boolean).join('\n'),
+  });
+
+  return buildBookkeepingConsultSheetText(src);
 }
 
 export function hasInquiryDetail(q: InquiryRow): boolean {

@@ -45,7 +45,7 @@ export default function IntakeSplitView({
       <header className="mb-3">
         <h2 className="text-base font-bold text-slate-900">유입관리</h2>
         <p className="text-xs text-slate-600 mt-1">
-          {inquiries.length}건 · 왼쪽 목록 스크롤 · 오른쪽은 화면에 붙어 따라옴
+          {inquiries.length}건 · 업체명까지 고정 · 연락처부터 가로 스크롤
         </p>
       </header>
       <IntakeInquirySheet

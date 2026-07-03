@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { INQUIRY_LIST_COLUMNS } from '@/app/config/intakeSheets';
+import { INQUIRY_LIST_COLUMNS, type SheetColumn } from '@/app/config/intakeSheets';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import IntakeInquiryDetail from './IntakeInquiryDetail';
 import IntakeProcessPanel from './IntakeProcessPanel';
@@ -14,18 +14,47 @@ import {
   type ProcessRow,
 } from './intakeUtils';
 
+const LAST_STICKY_KEY = 'companyName';
+
+function parseRemWidth(width?: string): number {
+  if (!width) return 5;
+  const m = width.match(/^([\d.]+)rem$/);
+  return m ? parseFloat(m[1]) : 5;
+}
+
+function buildStickyLeft(columns: SheetColumn[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  let acc = 0;
+  for (const col of columns) {
+    if (col.sticky) {
+      out[col.key] = `${acc}rem`;
+      acc += parseRemWidth(col.width);
+    }
+  }
+  return out;
+}
+
+const STICKY_LEFT = buildStickyLeft(INQUIRY_LIST_COLUMNS);
+
+function cellWidthStyle(col: SheetColumn) {
+  if (!col.width) return undefined;
+  return { width: col.width, minWidth: col.width };
+}
+
 function CellValue({ row, colKey }: { row: InquiryRow; colKey: string }) {
   const raw = inquiryFieldValue(row, colKey);
   if (!raw.trim()) return <span className="text-gray-400">-</span>;
-  if (colKey === 'proposedFee') return <span className="font-medium tabular-nums">{Number(raw).toLocaleString()}</span>;
+  if (colKey === 'proposedFee') {
+    return <span className="font-medium tabular-nums">{Number(raw).toLocaleString()}</span>;
+  }
   if (colKey === 'companyName') {
-    return <span className="font-bold text-gray-900">{raw}</span>;
+    return <span className="font-semibold text-gray-900">{raw}</span>;
   }
   if (colKey === 'inquiryDate') {
-    return <span className="text-gray-800 whitespace-nowrap tabular-nums">{raw}</span>;
+    return <span className="tabular-nums text-gray-800">{raw}</span>;
   }
   if (colKey === 'blueholeCase') {
-    return <BlueholeCaseLink value={raw} className="text-xs" />;
+    return <BlueholeCaseLink value={raw} className="text-xs truncate block max-w-full" />;
   }
   return <span className="text-gray-800">{raw}</span>;
 }
@@ -121,21 +150,30 @@ export default function IntakeInquirySheet({
 
   return (
     <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] gap-4 items-start">
-      <div className="rounded-xl border border-slate-200 bg-white min-w-0 lg:max-h-[min(70vh,calc(100dvh-8rem))] lg:overflow-y-auto lg:overflow-x-auto">
-        <table className="w-full text-sm leading-relaxed min-w-[640px]">
-          <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+      <div className="rounded-xl border border-slate-200 bg-white min-w-0 lg:max-h-[min(70vh,calc(100dvh-8rem))] overflow-x-auto overflow-y-auto">
+        <table className="w-max text-sm border-separate border-spacing-0">
+          <thead className="bg-slate-50 sticky top-0 z-30 border-b border-slate-200">
             <tr>
-              {INQUIRY_LIST_COLUMNS.map(col => (
-                <th
-                  key={col.key}
-                  style={col.width ? { width: col.width, minWidth: col.width } : undefined}
-                  className={`px-3 py-2.5 text-left portal-table-head ${
-                    col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''
-                  }`}
-                >
-                  {col.label}
-                </th>
-              ))}
+              {INQUIRY_LIST_COLUMNS.map(col => {
+                const sticky = !!col.sticky;
+                const isLastSticky = col.key === LAST_STICKY_KEY;
+                return (
+                  <th
+                    key={col.key}
+                    style={{
+                      ...cellWidthStyle(col),
+                      ...(sticky ? { left: STICKY_LEFT[col.key] } : {}),
+                    }}
+                    className={[
+                      'px-2 py-2 text-left portal-table-head whitespace-nowrap',
+                      sticky ? 'sticky z-30 bg-slate-50' : '',
+                      isLastSticky ? 'shadow-[4px_0_6px_-4px_rgba(15,23,42,0.12)]' : '',
+                    ].join(' ')}
+                  >
+                    {col.label}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -149,19 +187,39 @@ export default function IntakeInquirySheet({
                     else rowRefs.current.delete(row.id);
                   }}
                   onClick={() => onSelect(active ? null : row.id)}
-                  className={`cursor-pointer transition-colors ${
+                  className={`group cursor-pointer transition-colors ${
                     active ? 'bg-amber-50 ring-1 ring-inset ring-amber-200' : 'hover:bg-slate-50'
                   }`}
                 >
-                  {INQUIRY_LIST_COLUMNS.map(col => (
-                    <td
-                      key={col.key}
-                      style={col.width ? { width: col.width, minWidth: col.width } : undefined}
-                      className={`px-3 py-2.5 align-top ${col.key === 'inquiryDate' ? 'whitespace-nowrap' : ''}`}
-                    >
-                      <CellValue row={row} colKey={col.key} />
-                    </td>
-                  ))}
+                  {INQUIRY_LIST_COLUMNS.map(col => {
+                    const sticky = !!col.sticky;
+                    const isLastSticky = col.key === LAST_STICKY_KEY;
+                    const raw = inquiryFieldValue(row, col.key);
+                    return (
+                      <td
+                        key={col.key}
+                        title={raw.trim() || undefined}
+                        style={
+                          sticky
+                            ? { ...cellWidthStyle(col), left: STICKY_LEFT[col.key] }
+                            : cellWidthStyle(col)
+                        }
+                        className={[
+                          'px-2 py-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis',
+                          sticky ? 'sticky z-10' : 'relative z-0',
+                          sticky
+                            ? active
+                              ? 'bg-amber-50'
+                              : 'bg-white group-hover:bg-slate-50'
+                            : '',
+                          !sticky && active ? 'bg-amber-50' : '',
+                          isLastSticky ? 'shadow-[4px_0_6px_-4px_rgba(15,23,42,0.12)]' : '',
+                        ].join(' ')}
+                      >
+                        <CellValue row={row} colKey={col.key} />
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -214,7 +272,9 @@ export default function IntakeInquirySheet({
                 />
               </section>
               <section className="rounded-lg border border-slate-200 bg-white p-3">
-                <h3 className="text-xs font-bold text-slate-900 mb-2">상세내용</h3>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-xs font-bold text-slate-900">상세내용 · 신규상담</h3>
+                </div>
                 <IntakeInquiryDetail
                   inquiry={selectedInquiry}
                   onUpdated={onInquiryUpdated}

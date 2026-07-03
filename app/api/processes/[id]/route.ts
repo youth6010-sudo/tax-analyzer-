@@ -14,6 +14,7 @@ export async function PATCH(
       checklist?: Record<string, boolean | string | string[]>;
       toggledKey?: ChecklistKey;
       blueholeCode?: string;
+      companyName?: string;
       monthlyFee?: number | null;
       feeStartDate?: string;
       channel?: string;
@@ -29,6 +30,7 @@ export async function PATCH(
     }
 
     const row = await updateProcessField(id, {
+      companyName: body.companyName,
       monthlyFee: body.monthlyFee,
       feeStartDate: body.feeStartDate,
       channel: body.channel,

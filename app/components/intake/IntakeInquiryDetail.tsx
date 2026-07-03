@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { ConsultationFormConfig } from '../../types/consultation';
+import type { ConsultationField, ConsultationFormConfig } from '../../types/consultation';
 import { formatIntakeDate } from '../../utils/intakeDates';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import BlueholeRegisterCopyButton from './BlueholeRegisterCopyButton';
@@ -96,6 +96,24 @@ function MetaGrid({ items, compact }: { items: { label: string; value: string }[
   );
 }
 
+function formDataToStrings(form: Record<string, unknown> | null): Record<string, string> {
+  if (!form) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(form)) {
+    if (v != null && String(v).trim() !== '') out[k] = String(v);
+  }
+  return out;
+}
+
+function fieldLabelMap(config: ConsultationFormConfig | null): Map<string, string> {
+  const m = new Map<string, string>();
+  if (!config) return m;
+  for (const step of config.steps) {
+    for (const f of step.fields) m.set(f.key, f.label);
+  }
+  return m;
+}
+
 function FormFieldsSection({ form, config }: { form: Record<string, unknown>; config: ConsultationFormConfig | null }) {
   const labeled = useMemo(() => {
     if (!config) {
@@ -129,6 +147,82 @@ function FormFieldsSection({ form, config }: { form: Record<string, unknown>; co
   );
 }
 
+const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
+
+function ConsultationFormEditFields({
+  form,
+  config,
+  onChange,
+}: {
+  form: Record<string, string>;
+  config: ConsultationFormConfig | null;
+  onChange: (key: string, value: string) => void;
+}) {
+  const labels = fieldLabelMap(config);
+  const keys = Object.keys(form);
+  if (!keys.length) return null;
+
+  const fieldMeta = new Map<string, ConsultationField>();
+  if (config) {
+    for (const step of config.steps) {
+      for (const f of step.fields) fieldMeta.set(f.key, f);
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-3">
+      <p className="text-xs font-bold text-blue-700">신규상담 항목</p>
+      {keys.map(key => {
+        const meta = fieldMeta.get(key);
+        const label = labels.get(key) ?? key;
+        const value = form[key] ?? '';
+        if (meta?.type === 'textarea') {
+          return (
+            <label key={key} className="block text-xs">
+              <span className="font-semibold text-gray-600">{label}</span>
+              <textarea
+                value={value}
+                onChange={e => onChange(key, e.target.value)}
+                rows={3}
+                className={inputCls}
+              />
+            </label>
+          );
+        }
+        if (meta?.type === 'select') {
+          return (
+            <label key={key} className="block text-xs">
+              <span className="font-semibold text-gray-600">{label}</span>
+              <select
+                value={value}
+                onChange={e => onChange(key, e.target.value)}
+                className={inputCls}
+              >
+                {(meta.options ?? ['']).map(o => (
+                  <option key={o || '_'} value={o}>
+                    {o || '선택…'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
+        }
+        return (
+          <label key={key} className="block text-xs">
+            <span className="font-semibold text-gray-600">{label}</span>
+            <input
+              type={meta?.type === 'date' ? 'date' : meta?.type === 'number' ? 'number' : 'text'}
+              value={value}
+              onChange={e => onChange(key, e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function TextBlock({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
   if (!value.trim()) return null;
   return (
@@ -138,8 +232,6 @@ function TextBlock({ label, value, compact }: { label: string; value: string; co
     </div>
   );
 }
-
-const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
 
 export default function IntakeInquiryDetail({
   inquiry,
@@ -154,9 +246,16 @@ export default function IntakeInquiryDetail({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<EditState>(() => toEditState(inquiry));
+  const [consultationForm, setConsultationForm] = useState<Record<string, string>>(() =>
+    formDataToStrings(inquiryFormFields(inquiry.extra)),
+  );
   const [formConfig, setFormConfig] = useState<ConsultationFormConfig | null>(null);
 
-  useEffect(() => { setForm(toEditState(inquiry)); setEditing(false); }, [inquiry]);
+  useEffect(() => {
+    setForm(toEditState(inquiry));
+    setConsultationForm(formDataToStrings(inquiryFormFields(inquiry.extra)));
+    setEditing(false);
+  }, [inquiry]);
 
   useEffect(() => {
     void fetch('/data/new-consultation-form.json')
@@ -214,6 +313,7 @@ export default function IntakeInquiryDetail({
             admin: form.admin.trim(),
             adminPhone: form.adminPhone.trim(),
             email: form.email.trim(),
+            ...(Object.keys(consultationForm).length > 0 ? { form: consultationForm } : {}),
           },
         }),
       });
@@ -237,7 +337,12 @@ export default function IntakeInquiryDetail({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setForm(toEditState(inquiry)); setEditing(false); setError(''); }}
+              onClick={() => {
+                setForm(toEditState(inquiry));
+                setConsultationForm(formDataToStrings(inquiryFormFields(inquiry.extra)));
+                setEditing(false);
+                setError('');
+              }}
               className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
             >
               취소
@@ -307,6 +412,11 @@ export default function IntakeInquiryDetail({
             className={inputCls}
           />
         </label>
+        <ConsultationFormEditFields
+          form={consultationForm}
+          config={formConfig}
+          onChange={(key, value) => setConsultationForm(prev => ({ ...prev, [key]: value }))}
+        />
       </div>
     );
   }
@@ -319,7 +429,7 @@ export default function IntakeInquiryDetail({
           onClick={() => setEditing(true)}
           className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-700 font-semibold hover:bg-white hover:border-blue-300"
         >
-          수정
+          신규상담·상세 수정
         </button>
       </div>
       <MetaGrid items={metaItems} compact={compact} />

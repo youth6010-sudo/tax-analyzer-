@@ -39,14 +39,14 @@ export type SheetColumn = {
 };
 
 export const INQUIRY_LIST_COLUMNS: SheetColumn[] = [
-  { key: 'inquiryDate', label: '문의일자', width: '5.5rem' },
-  { key: 'companyName', label: '업체명' },
-  { key: 'phone', label: '전화번호', width: '7rem' },
-  { key: 'channel', label: '유입채널' },
-  { key: 'consultant', label: '초회상담자' },
-  { key: 'blueholeCase', label: '블루홀케이스', width: '5.5rem' },
-  { key: 'contractStatus', label: '계약유무' },
-  { key: 'proposedFee', label: '제안금액', type: 'number' },
+  { key: 'inquiryDate', label: '문의 일자', width: '5.25rem', sticky: true },
+  { key: 'companyName', label: '업체명', width: '9rem', sticky: true },
+  { key: 'phone', label: '연락처', width: '6.75rem' },
+  { key: 'consultant', label: '초회상담자', width: '5.25rem' },
+  { key: 'channel', label: '유입채널', width: '5.5rem' },
+  { key: 'blueholeCase', label: '블루홀케이스', width: '6.5rem' },
+  { key: 'contractStatus', label: '계약유무', width: '4.75rem' },
+  { key: 'proposedFee', label: '제안금액', width: '5.5rem', type: 'number' },
 ];
 
 export const INQUIRY_COLUMNS: SheetColumn[] = [

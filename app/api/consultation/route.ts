@@ -22,6 +22,9 @@ export async function POST(request: Request) {
     if (e instanceof Error && e.message === 'COMPANY_NAME_REQUIRED') {
       return NextResponse.json({ error: '상호명은 필수입니다.' }, { status: 400 });
     }
+    if (e instanceof Error && e.message === 'PHONE_REQUIRED') {
+      return NextResponse.json({ error: '연락처는 필수입니다.' }, { status: 400 });
+    }
     if (e instanceof Error && e.message === 'DRAFT_NOT_FOUND') {
       return NextResponse.json({ error: '초안을 찾을 수 없습니다.' }, { status: 404 });
     }

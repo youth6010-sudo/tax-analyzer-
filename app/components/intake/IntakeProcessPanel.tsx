@@ -93,7 +93,24 @@ export default function IntakeProcessPanel({
     setError('');
   }, [inquiry, process]);
 
-  const saveMeta = async () => {
+  const syncToClient = async (processId: string | null): Promise<string | null> => {
+    if (!inquiry.id) return null;
+    const syncRes = await fetch('/api/intake/register-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inquiryId: inquiry.id, processId }),
+    });
+    if (!syncRes.ok) {
+      const syncData = await syncRes.json();
+      throw new Error(syncData.error ?? '수임처 반영 실패');
+    }
+    const syncData = await syncRes.json();
+    const id = syncData.client?.id != null ? String(syncData.client.id) : null;
+    if (id) setRegisteredClientId(id);
+    return id;
+  };
+
+  const saveMeta = async (options?: { syncClient?: boolean }): Promise<ProcessRow | null> => {
     setSaving(true);
     setError('');
     const feeRaw = form.monthlyFee.trim().replace(/,/g, '');
@@ -105,6 +122,8 @@ export default function IntakeProcessPanel({
       channel: form.channel.trim(),
     };
 
+    let savedProcess: ProcessRow | null = process;
+
     try {
       if (process) {
         const res = await fetch(`/api/processes/${process.id}`, {
@@ -114,7 +133,8 @@ export default function IntakeProcessPanel({
         });
         if (!res.ok) throw new Error('저장 실패');
         const data = await res.json();
-        onProcessUpdated(processRowFromApi(data.process as Record<string, unknown>));
+        savedProcess = processRowFromApi(data.process as Record<string, unknown>);
+        onProcessUpdated(savedProcess);
       } else {
         const res = await fetch('/api/intake/processes', {
           method: 'POST',
@@ -123,10 +143,33 @@ export default function IntakeProcessPanel({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? '등록 실패');
-        onProcessCreated(processRowFromApi(data.process as Record<string, unknown>));
+        savedProcess = processRowFromApi(data.process as Record<string, unknown>);
+        onProcessCreated(savedProcess);
       }
+
+      if (inquiry.id) {
+        const inqRes = await fetch(`/api/intake/inquiries/${inquiry.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            companyName: payload.companyName,
+            channel: payload.channel,
+            proposedFee: payload.monthlyFee,
+          }),
+        });
+        if (!inqRes.ok) throw new Error('유입 정보 저장 실패');
+      }
+
+      const shouldSync = options?.syncClient !== false
+        && Boolean(registeredClientId ?? inquiry.clientId);
+      if (shouldSync && savedProcess) {
+        await syncToClient(savedProcess.id);
+      }
+
+      return savedProcess;
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
+      return null;
     } finally {
       setSaving(false);
     }
@@ -143,7 +186,8 @@ export default function IntakeProcessPanel({
     setRegistering(true);
     setError('');
     try {
-      const proc = await ensureProcess();
+      const proc = await saveMeta();
+      if (!proc) return;
       const clientId = await onRegisterClient(inquiry.id, proc.id);
       if (clientId) setRegisteredClientId(clientId);
     } catch (e) {
@@ -158,9 +202,10 @@ export default function IntakeProcessPanel({
     setLinking(true);
     setError('');
     try {
-      const proc = process ?? (await ensureProcess());
+      const proc = (await saveMeta({ syncClient: false })) ?? process ?? (await ensureProcess());
       await onLinkClient(inquiry.id, proc.id, clientId);
       setRegisteredClientId(clientId);
+      if (inquiry.id) await syncToClient(proc.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : '수임처 연결 실패');
     } finally {
@@ -223,11 +268,11 @@ export default function IntakeProcessPanel({
         <div className="col-span-2 sm:col-span-1 flex items-end">
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || registering}
             onClick={() => void saveMeta()}
             className="w-full text-xs px-3 py-2 rounded-md bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50"
           >
-            {saving ? '…' : '저장'}
+            {saving ? '…' : registeredClientId ? '저장·수임처 반영' : '저장'}
           </button>
         </div>
       </div>
@@ -248,18 +293,28 @@ export default function IntakeProcessPanel({
 
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-200/60">
         {registeredClientId ? (
-          <Link
-            href={`/clients/${registeredClientId}`}
-            className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
-          >
-            수임처 →
-          </Link>
+          <>
+            <Link
+              href={`/clients/${registeredClientId}`}
+              className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
+            >
+              수임처 →
+            </Link>
+            {onLinkClient && inquiry.id && (
+              <div className="min-w-[10rem] flex-1">
+                <IntakeClientLink
+                  disabled={linking || registering || saving}
+                  onLinked={c => void handleLink(c.id)}
+                />
+              </div>
+            )}
+          </>
         ) : (
           <>
             {allowRegister && inquiry.id && (
               <button
                 type="button"
-                disabled={registering || !canRegister(inquiry, process)}
+                disabled={registering || saving || !canRegister(inquiry, process)}
                 onClick={() => void handleRegister()}
                 className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
               >
@@ -268,7 +323,7 @@ export default function IntakeProcessPanel({
             )}
             {onLinkClient && inquiry.id && (
               <IntakeClientLink
-                disabled={linking || registering}
+                disabled={linking || registering || saving}
                 onLinked={c => void handleLink(c.id)}
               />
             )}
