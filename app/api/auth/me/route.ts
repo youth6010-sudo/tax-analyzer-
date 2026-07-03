@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
-import { isMasterUser } from '@/lib/masterAccess';
+import { isDataViewer, isDeveloperAdmin } from '@/lib/masterAccess';
 
 export async function GET() {
   try {
@@ -8,7 +8,14 @@ export async function GET() {
     if (!session.user) {
       return NextResponse.json({ user: null }, { status: 401 });
     }
-    return NextResponse.json({ user: session.user, isMaster: isMasterUser(session.user) });
+    const user = session.user;
+    return NextResponse.json({
+      user,
+      isMaster: isDataViewer(user),
+      isDeveloper: isDeveloperAdmin(user),
+      adminMode: !!user.adminMode,
+      canToggleAdminMode: user.loginId?.trim().toLowerCase() === 'ria',
+    });
   } catch {
     return NextResponse.json({ user: null }, { status: 401 });
   }

@@ -1,10 +1,16 @@
 import { and, eq, or, type SQL } from 'drizzle-orm';
 import { clients } from '@/db/schema';
-import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import type { SessionUser } from '@/lib/session';
-import { isMasterUser, shouldFilterClientsToMine } from '@/lib/masterAccess';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { isDataViewer, isDeveloperAdmin } from '@/lib/masterAccess';
 
-export { isMasterUser, shouldFilterClientsToMine } from '@/lib/masterAccess';
+export {
+  isMasterUser,
+  isDataViewer,
+  isDeveloperAdmin,
+  isPortalAdmin,
+  shouldFilterClientsToMine,
+} from '@/lib/masterAccess';
 export type { RestrictedClientListScope } from '@/lib/masterAccess';
 
 export type ClientAccessFields = {
@@ -12,8 +18,9 @@ export type ClientAccessFields = {
   manager?: string | null;
 };
 
+/** 읽기 — 전체 조회 권한 또는 본인 담당 */
 export function canAccessClient(user: SessionUser, client: ClientAccessFields): boolean {
-  if (isMasterUser(user)) return true;
+  if (isDataViewer(user)) return true;
   if (client.assignedUserId === user.id) return true;
   const matchNames = getManagerMatchNames(user.name);
   return matchNames.some(name => name === (client.manager ?? ''));
@@ -27,9 +34,21 @@ export function assertCanAccessClient(
   if (!canAccessClient(user, client)) throw new Error('FORBIDDEN');
 }
 
-/** 정보 수정 권한 = 담당자 본인 또는 마스터 사용자 */
-export const canEditClient = canAccessClient;
-export const assertCanEditClient = assertCanAccessClient;
+/** 수정 — 전체 조회 권한(인디·개발자) 또는 본인 담당 */
+export function canEditClient(user: SessionUser, client: ClientAccessFields): boolean {
+  if (isDataViewer(user)) return true;
+  if (client.assignedUserId === user.id) return true;
+  const matchNames = getManagerMatchNames(user.name);
+  return matchNames.some(name => name === (client.manager ?? ''));
+}
+
+export function assertCanEditClient(
+  user: SessionUser,
+  client: ClientAccessFields | null | undefined,
+): asserts client is ClientAccessFields {
+  if (!client) throw new Error('NOT_FOUND');
+  if (!canEditClient(user, client)) throw new Error('FORBIDDEN');
+}
 
 /**
  * 조회(읽기)용 — 로그인한 직원은 모든 수임처를 볼 수 있다(전체 업체 파악).

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser, isPortalAdmin } from '@/lib/auth';
+import { requireUser, isDataViewer } from '@/lib/auth';
 import { shouldFilterClientsToMine, type RestrictedClientListScope } from '@/lib/masterAccess';
 import { listClients } from '@/lib/clientsDb';
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       userName: user.name,
       businessEntityType,
       assignedUserId:
-        isPortalAdmin(user) && searchParams.get('assignedUserId')
+        isDataViewer(user) && searchParams.get('assignedUserId')
           ? searchParams.get('assignedUserId')!
           : undefined,
     });

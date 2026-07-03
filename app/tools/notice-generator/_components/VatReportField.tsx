@@ -7,6 +7,7 @@ import {
   noticeSection,
   noticeSectionTitle,
   noticeTextarea,
+  noticeTextareaCompact,
 } from './noticeUi';
 
 const inputClass = `${noticeInput} !py-1.5 text-xs w-full min-w-0 box-border`;
@@ -237,20 +238,20 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
               <textarea
                 value={value.refundReason}
                 onChange={e => update({ refundReason: e.target.value })}
-                rows={2}
+                rows={1}
                 placeholder="환급 해당 시 사유 기재"
-                className={`${noticeTextarea} mt-1 !text-xs`}
+                className={`${noticeTextareaCompact} mt-1 w-full text-sm`}
               />
             </div>
           )}
-          <div className="sm:col-span-2">
+          <div className="min-w-0 sm:col-span-2">
             <label className={noticeLabel}>특이사항</label>
             <textarea
               value={value.vatSpecialNotes}
               onChange={e => update({ vatSpecialNotes: e.target.value })}
-              rows={2}
+              rows={1}
               placeholder="해당 시 내용 기재"
-              className={`${noticeTextarea} mt-1 !text-xs`}
+              className={`${noticeTextareaCompact} mt-1 w-full text-sm`}
             />
           </div>
         </div>

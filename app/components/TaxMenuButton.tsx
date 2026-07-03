@@ -15,7 +15,7 @@ export default function TaxMenuButton() {
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(data => setIsAdmin(!!data?.isMaster))
+      .then(data => setIsAdmin(!!data?.isDeveloper))
       .catch(() => setIsAdmin(false));
   }, []);
 

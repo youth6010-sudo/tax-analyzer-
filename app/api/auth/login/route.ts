@@ -7,13 +7,18 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import type { SessionData } from '@/lib/session';
 import { getSessionOptions } from '@/lib/session';
+import {
+  canChooseAdminMode,
+  isAlwaysAdminModeLogin,
+} from '@/lib/masterAccess';
 import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { loginId?: string; pin?: string };
+    const body = (await request.json()) as { loginId?: string; pin?: string; adminMode?: boolean };
     const loginId = body.loginId?.trim().toLowerCase();
     const pin = body.pin?.trim();
+    const requestedAdminMode = body.adminMode === true;
 
     if (!loginId || !pin || !/^\d{4}$/.test(pin)) {
       return NextResponse.json({ error: '아이디와 4자리 PIN을 입력해 주세요.' }, { status: 400 });
@@ -36,12 +41,17 @@ export async function POST(request: Request) {
 
     clearRateLimit(`login:${loginId}`);
 
+    const adminMode =
+      isAlwaysAdminModeLogin(loginId) ||
+      (canChooseAdminMode(loginId) && requestedAdminMode);
+
     const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());
     session.user = {
       id: user.id,
       loginId: user.loginId,
       name: user.name,
       role: user.role,
+      adminMode: adminMode || undefined,
     };
     await session.save();
 

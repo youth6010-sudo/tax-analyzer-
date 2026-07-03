@@ -342,7 +342,7 @@ function FilingCheckPageInner() {
   const [isMaster, setIsMaster] = useState(false);
   const [incomePanelClient, setIncomePanelClient] = useState<ClientRecord | null>(null);
   const [prevSession, setPrevSession] = useState<FilingCheckSessionData | null>(null);
-  // 찰리(관리자)만 담당자 선택 — 일반 담당자는 본인 세션만
+  // 전체 조회 권한(인디·개발자)만 담당자 선택 — 일반 담당자는 본인 세션만
   const [storedManager, setStoredManager] = useLocalStorage<string>('filingCheck.manager.v1', '');
   const selManager = useMemo(() => {
     if (isMaster) return storedManager || currentUserName || ALL_MANAGERS;
@@ -1258,7 +1258,7 @@ function FilingCheckPageInner() {
         })}
       </div>
 
-      {/* 담당자 선택 — 관리자(찰리)만 */}
+      {/* 담당자 선택 — 전체 조회 권한(인디·개발자 관리자) */}
       {isMaster && (
       <div className={`${portalCard} mb-3 p-3`}>
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">

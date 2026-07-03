@@ -16,12 +16,12 @@ import {
   noticeLabel,
   noticeMeta,
   noticeSection,
-  noticeSectionTitle,
   noticeTwoCol,
 } from './noticeUi';
 
 const selectClass = `${noticeInput} mt-1 w-full min-w-0 box-border`;
 const fieldClass = `${noticeInput} w-full min-w-0 box-border`;
+const inlineField = 'block min-w-0 shrink-0';
 
 const HOURS = Array.from({ length: 10 }, (_, i) => i + 9);
 const MINUTES = [0, 30];
@@ -188,7 +188,7 @@ export default function NoticeSetupBar({
       </div>
 
       <div className={noticeTwoCol}>
-        <div className="min-w-0 space-y-3">
+        <div className="flex min-w-0 flex-col gap-3">
           <div className={noticeHalfRow}>
             <label className="block min-w-0">
               <span className={noticeLabel}>
@@ -209,57 +209,52 @@ export default function NoticeSetupBar({
             <PeriodSecondField taxType={taxType} params={params} onParamChange={onParamChange} />
           </div>
 
-          <div>
-            <h3 className={noticeSectionTitle}>자료 제출 마감</h3>
-            <div className={`${noticeHalfRow} mt-2`}>
-              <div className="min-w-0">
-                <label className={`${noticeLabel} mb-1 block`}>날짜</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={dateText}
-                  onChange={e => handleDateText(e.target.value)}
-                  placeholder="2026.07.27"
-                  maxLength={10}
-                  className={fieldClass}
-                />
-              </div>
-              <div className="grid min-w-0 grid-cols-2 gap-2">
-                <div className="min-w-0">
-                  <label className={`${noticeLabel} mb-1 block`}>시</label>
-                  <select
-                    value={materialDeadline.hour}
-                    onChange={e => updateMaterial({ hour: Number(e.target.value) })}
-                    className={fieldClass}
-                  >
-                    {HOURS.map(h => (
-                      <option key={h} value={h}>
-                        {String(h).padStart(2, '0')}시
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-0">
-                  <label className={`${noticeLabel} mb-1 block`}>분</label>
-                  <select
-                    value={materialDeadline.minute}
-                    onChange={e => updateMaterial({ minute: Number(e.target.value) })}
-                    className={fieldClass}
-                  >
-                    {MINUTES.map(m => (
-                      <option key={m} value={m}>
-                        {String(m).padStart(2, '0')}분
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
+          <div className="flex min-w-0 flex-wrap items-end gap-2">
+            <label className={`${inlineField} min-w-[7.5rem] flex-1`}>
+              <span className={noticeLabel}>자료 제출 마감</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={dateText}
+                onChange={e => handleDateText(e.target.value)}
+                placeholder="2026.07.27"
+                maxLength={10}
+                className={fieldClass}
+              />
+            </label>
+            <label className={`${inlineField} w-[4.5rem]`}>
+              <span className={noticeLabel}>시</span>
+              <select
+                value={materialDeadline.hour}
+                onChange={e => updateMaterial({ hour: Number(e.target.value) })}
+                className={fieldClass}
+              >
+                {HOURS.map(h => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, '0')}시
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`${inlineField} w-[4.5rem]`}>
+              <span className={noticeLabel}>분</span>
+              <select
+                value={materialDeadline.minute}
+                onChange={e => updateMaterial({ minute: Number(e.target.value) })}
+                className={fieldClass}
+              >
+                {MINUTES.map(m => (
+                  <option key={m} value={m}>
+                    {String(m).padStart(2, '0')}분
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
 
         {deadline && (
-          <div className="flex min-h-[7.5rem] min-w-0 flex-col justify-center rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex min-h-full min-w-0 flex-col justify-center self-stretch rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <p className={`${noticeMeta} !mt-0`}>
               {taxLabel} · {deadline.periodLabel}
             </p>

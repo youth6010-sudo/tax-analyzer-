@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { asc, ne } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { users } from '@/db/schema';
+import { canChooseAdminMode, isAlwaysAdminModeLogin } from '@/lib/masterAccess';
 
 export async function GET() {
   try {
@@ -13,7 +14,13 @@ export async function GET() {
       .where(ne(users.loginId, 'admin'))
       .orderBy(asc(users.name));
 
-    return NextResponse.json({ users: rows });
+    return NextResponse.json({
+      users: rows.map(u => ({
+        ...u,
+        canChooseAdminMode: canChooseAdminMode(u.loginId),
+        isDeveloperLogin: isAlwaysAdminModeLogin(u.loginId),
+      })),
+    });
   } catch (e) {
     console.error('login-users error', e);
     return NextResponse.json({ error: '사용자 목록을 불러오지 못했습니다.' }, { status: 500 });

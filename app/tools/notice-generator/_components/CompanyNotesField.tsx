@@ -4,6 +4,7 @@ import {
   noticeSection,
   noticeSectionTitle,
   noticeTextarea,
+  noticeTwoCol,
 } from './noticeUi';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -54,7 +55,7 @@ export default function CompanyNotesField({
     <section className={noticeSection}>
       <h2 className={noticeSectionTitle}>수임처 정보</h2>
 
-      <div className="mt-3 space-y-3">
+      <div className={`${noticeTwoCol} mt-3`}>
         <div className="min-w-0">
           <label className={noticeLabel}>
             기존 수취 자료
@@ -65,7 +66,7 @@ export default function CompanyNotesField({
           <textarea
             value={materials}
             onChange={e => onMaterialsChange(e.target.value)}
-            rows={4}
+            rows={5}
             placeholder={materialsPlaceholder ?? '- 매출/매입 세금계산서\n- 카드/현금영수증 매출 내역'}
             className={`${noticeTextarea} mt-1 w-full`}
           />
@@ -76,9 +77,9 @@ export default function CompanyNotesField({
           <textarea
             value={notes}
             onChange={e => onNotesChange(e.target.value)}
-            rows={7}
+            rows={5}
             placeholder={notesPlaceholder ?? '예) 4분기 매입 세금계산서는 이미 수령함.'}
-            className={`${noticeTextarea} mt-1 min-h-[11rem] w-full resize-y`}
+            className={`${noticeTextarea} mt-1 w-full`}
           />
         </div>
       </div>

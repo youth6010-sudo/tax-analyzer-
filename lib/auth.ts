@@ -6,9 +6,13 @@ import { getSessionOptions } from './session';
 
 export {
   isMasterUser,
+  isDataViewer,
+  isDeveloperAdmin,
   isPortalAdmin,
   MASTER_LOGIN_IDS,
-  PORTAL_ADMIN_LOGIN_ID,
+  DEVELOPER_LOGIN_IDS,
+  DATA_VIEWER_LOGIN_IDS,
+  canToggleAdminMode,
 } from './masterAccess';
 
 import { isPortalAdmin } from './masterAccess';

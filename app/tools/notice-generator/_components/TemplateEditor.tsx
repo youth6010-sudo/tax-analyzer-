@@ -38,7 +38,7 @@ export default function TemplateEditor({
   tokens = TOKENS,
   hint,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const isCustom = source === 'custom';
   const displayHtml = isCustom ? html : defaultHtml;

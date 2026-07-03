@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import { portalFooterMeta } from '@/app/components/portal/uiClasses';
+import { noticePageSplit } from './_components/noticeUi';
 import NoticeClientPicker, { type PickedClient } from './_components/NoticeClientPicker';
 import NoticeSetupBar from './_components/NoticeSetupBar';
 import NoticeCollapsibleSection from './_components/NoticeCollapsibleSection';
@@ -564,121 +565,125 @@ export default function NoticeGeneratorPage() {
         icon={<PageHeaderIcon name="notice-generator" />}
       />
 
-      <div className="space-y-3">
-        <NoticeSetupBar
-          taxType={taxType}
-          onSelectTax={handleSelectTax}
-          params={params}
-          onParamChange={handleParamChange}
-          deadline={deadline}
-          taxLabel={meta.name}
-          materialDeadline={materialDeadline}
-          onMaterialDeadlineChange={handleMaterialDeadlineChange}
-          clientPicker={
-            <NoticeClientPicker
-              value={
-                selectedClient
-                  ? { id: selectedClient.id, companyName: clientCompanyName }
-                  : null
-              }
-              onSelect={client => void handleSelectClient(client)}
-            />
-          }
-        />
-
-        <CompanyNotesField
-          materials={effectiveMaterials}
-          onMaterialsChange={handleMaterialsChange}
-          materialsPlaceholder={DEFAULT_MATERIALS_BY_TAX[taxType]}
-          notes={effectiveNotes}
-          onNotesChange={handleNotesChange}
-          notesPlaceholder={NOTES_EXAMPLE_BY_TAX[taxType]}
-          clientLinked={inClientMode}
-          saveState={saveState}
-          showPayroll={isWithholding}
-          payrollByUs={effectivePayrollByUs}
-          onPayrollChange={handlePayrollChange}
-          onSave={() => void handleSaveClient()}
-        />
-      </div>
-
-      {isVat && (
-        <NoticeCollapsibleSection title="신고 결과 보고 (부가세)">
-          <VatReportField value={vatReport} onChange={setVatReport} embedded />
-        </NoticeCollapsibleSection>
-      )}
-
-      <NoticeCollapsibleSection title="신고 결과 안내 (납부세액)">
-        <PaymentNoticeField
-          value={payment}
-          onChange={setPayment}
-          taxTypeName={meta.name}
-          hasLocalTax={hasLocalIncomeTax(taxType)}
-          isWithholding={taxType === TAX_TYPES.WITHHOLDING}
-          showInstallments={isVat}
-          vatAmountLinked={isVat && vatPaymentLinked}
-          onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
-          onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
-          embedded
-        />
-      </NoticeCollapsibleSection>
-
-      {templateLoaded && (
-        <NoticeCollapsibleSection title="담당자 서식 설정">
-          <TemplateEditor
-            key={scenario}
-            html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
-            onChange={handleNoticeTemplateChange}
-            source={noticeSource}
-            onSourceChange={handleNoticeSourceChange}
-            onSave={handleNoticeTemplateSave}
-            hasCustomSaved={hasNoticeCustom}
-            saveState={templateSaveState}
-            title={SCENARIO_LABEL[scenario]}
-            defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+      <NoticeSetupBar
+        taxType={taxType}
+        onSelectTax={handleSelectTax}
+        params={params}
+        onParamChange={handleParamChange}
+        deadline={deadline}
+        taxLabel={meta.name}
+        materialDeadline={materialDeadline}
+        onMaterialDeadlineChange={handleMaterialDeadlineChange}
+        clientPicker={
+          <NoticeClientPicker
+            value={
+              selectedClient
+                ? { id: selectedClient.id, companyName: clientCompanyName }
+                : null
+            }
+            onSelect={client => void handleSelectClient(client)}
           />
+        }
+      />
+
+      <div className={`${noticePageSplit} w-full`}>
+        <div className="space-y-3 min-w-0">
+          <CompanyNotesField
+            materials={effectiveMaterials}
+            onMaterialsChange={handleMaterialsChange}
+            materialsPlaceholder={DEFAULT_MATERIALS_BY_TAX[taxType]}
+            notes={effectiveNotes}
+            onNotesChange={handleNotesChange}
+            notesPlaceholder={NOTES_EXAMPLE_BY_TAX[taxType]}
+            clientLinked={inClientMode}
+            saveState={saveState}
+            showPayroll={isWithholding}
+            payrollByUs={effectivePayrollByUs}
+            onPayrollChange={handlePayrollChange}
+            onSave={() => void handleSaveClient()}
+          />
+
           {isVat && (
-            <TemplateEditor
-              key="vat-report-template"
-              html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
-              onChange={handleVatReportTemplateChange}
-              source={vatReportSource}
-              onSourceChange={handleVatReportSourceChange}
-              onSave={handleVatReportTemplateSave}
-              hasCustomSaved={hasVatReportCustom}
-              saveState={vatTemplateSaveState}
-              title="신고 결과 보고 서식 (부가세)"
-              defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
-              tokens={VAT_REPORT_TOKENS}
-              hint="부가세 신고 결과 보고 문구 서식입니다."
-            />
+            <NoticeCollapsibleSection title="신고 결과 보고 (부가세)">
+              <VatReportField value={vatReport} onChange={setVatReport} embedded />
+            </NoticeCollapsibleSection>
           )}
-          <TemplateEditor
-            key="payment-notice-template"
-            html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
-            onChange={handlePaymentNoticeTemplateChange}
-            source={paymentNoticeSource}
-            onSourceChange={handlePaymentNoticeSourceChange}
-            onSave={handlePaymentNoticeTemplateSave}
-            hasCustomSaved={hasPaymentNoticeCustom}
-            saveState={paymentTemplateSaveState}
-            title="신고 결과 안내 서식 (납부세액)"
-            defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
-            tokens={PAYMENT_NOTICE_TOKENS}
-            hint="납부·환급·분납 안내 문구 서식입니다."
-          />
-        </NoticeCollapsibleSection>
-      )}
 
-      <NoticeCollapsibleSection title="생성된 안내 문구">
-        <NoticeResultTabs
-          mainHtml={messageHtml}
-          paymentHtml={paymentHtml}
-          vatHtml={vatReportHtml}
-          showVat={isVat}
-          embedded
-        />
-      </NoticeCollapsibleSection>
+          <NoticeCollapsibleSection title="신고 결과 안내 (납부세액)">
+            <PaymentNoticeField
+              value={payment}
+              onChange={setPayment}
+              taxTypeName={meta.name}
+              hasLocalTax={hasLocalIncomeTax(taxType)}
+              isWithholding={taxType === TAX_TYPES.WITHHOLDING}
+              showInstallments={isVat}
+              vatAmountLinked={isVat && vatPaymentLinked}
+              onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
+              onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
+              embedded
+            />
+          </NoticeCollapsibleSection>
+        </div>
+
+        <div className="space-y-3 min-w-0 md:border-l md:border-slate-200 md:pl-4">
+          {templateLoaded && (
+            <NoticeCollapsibleSection title="담당자 서식 설정">
+              <TemplateEditor
+                key={scenario}
+                html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+                onChange={handleNoticeTemplateChange}
+                source={noticeSource}
+                onSourceChange={handleNoticeSourceChange}
+                onSave={handleNoticeTemplateSave}
+                hasCustomSaved={hasNoticeCustom}
+                saveState={templateSaveState}
+                title={SCENARIO_LABEL[scenario]}
+                defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+              />
+              {isVat && (
+                <TemplateEditor
+                  key="vat-report-template"
+                  html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
+                  onChange={handleVatReportTemplateChange}
+                  source={vatReportSource}
+                  onSourceChange={handleVatReportSourceChange}
+                  onSave={handleVatReportTemplateSave}
+                  hasCustomSaved={hasVatReportCustom}
+                  saveState={vatTemplateSaveState}
+                  title="신고 결과 보고 서식 (부가세)"
+                  defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
+                  tokens={VAT_REPORT_TOKENS}
+                  hint="부가세 신고 결과 보고 문구 서식입니다."
+                />
+              )}
+              <TemplateEditor
+                key="payment-notice-template"
+                html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                onChange={handlePaymentNoticeTemplateChange}
+                source={paymentNoticeSource}
+                onSourceChange={handlePaymentNoticeSourceChange}
+                onSave={handlePaymentNoticeTemplateSave}
+                hasCustomSaved={hasPaymentNoticeCustom}
+                saveState={paymentTemplateSaveState}
+                title="신고 결과 안내 서식 (납부세액)"
+                defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                tokens={PAYMENT_NOTICE_TOKENS}
+                hint="납부·환급·분납 안내 문구 서식입니다."
+              />
+            </NoticeCollapsibleSection>
+          )}
+
+          <NoticeCollapsibleSection title="생성된 안내 문구">
+            <NoticeResultTabs
+              mainHtml={messageHtml}
+              paymentHtml={paymentHtml}
+              vatHtml={vatReportHtml}
+              showVat={isVat}
+              embedded
+            />
+          </NoticeCollapsibleSection>
+        </div>
+      </div>
 
       <p className={portalFooterMeta}>
         마감일은 법정기한 기준입니다. 공휴일: 2025~2035년 · 연도: {SELECTABLE_YEARS[0]}~

@@ -125,7 +125,7 @@ export default function CalendarPageClient() {
       .catch(() => { /* ignore */ });
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setIsAdmin(!!(d as { isMaster?: boolean })?.isMaster))
+      .then(d => setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper))
       .catch(() => { /* ignore */ });
   }, []);
 

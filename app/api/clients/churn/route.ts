@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/apiError';
 import { assertCanAccessClient } from '@/lib/clientAccess';
-import { requireUser, isPortalAdmin } from '@/lib/auth';
+import { requireUser, isDataViewer } from '@/lib/auth';
 import { churnClient, getClientById, listClients } from '@/lib/clientsDb';
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     const user = await requireUser();
     const clients = await listClients({
       status: 'active',
-      mineOnly: !isPortalAdmin(user),
+      mineOnly: !isDataViewer(user),
       userId: user.id,
       userName: user.name,
     });

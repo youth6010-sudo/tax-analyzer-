@@ -6,15 +6,13 @@ import { noticeSection, noticeSectionTitle } from './noticeUi';
 type Props = {
   title: string;
   children: ReactNode;
-  defaultOpen?: boolean;
 };
 
 export default function NoticeCollapsibleSection({
   title,
   children,
-  defaultOpen = true,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(true);
 
   return (
     <section className={noticeSection}>

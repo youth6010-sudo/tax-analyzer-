@@ -543,10 +543,12 @@ function ScrollButton({
   direction,
   onClick,
   label,
+  className = '',
 }: {
   direction: 'left' | 'right';
   onClick: () => void;
   label: string;
+  className?: string;
 }) {
   return (
     <button
@@ -555,14 +557,14 @@ function ScrollButton({
       aria-label={label}
       title={label}
       className={[
-        'sticky top-1/2 z-10 -translate-y-1/2 self-center',
-        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-        'bg-white border border-slate-200 shadow-lg shadow-slate-300/40',
-        'text-slate-700 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300',
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+        'bg-white/95 border border-slate-200 shadow-md shadow-slate-300/30',
+        'text-slate-700 hover:text-slate-900 hover:bg-white hover:border-slate-300',
         'active:scale-95 transition-all',
+        className,
       ].join(' ')}
     >
-      <span className="text-xl leading-none font-semibold" aria-hidden>
+      <span className="text-lg leading-none font-semibold" aria-hidden>
         {direction === 'left' ? '‹' : '›'}
       </span>
     </button>
@@ -619,25 +621,28 @@ function canPanelScrollInDirection(el: HTMLElement, deltaY: number): boolean {
 function HorizontalRosterStrip({
   managers,
   currentUserName,
+  fitAllColumns = false,
   children,
 }: {
   managers: string[];
   currentUserName?: string | null;
+  fitAllColumns?: boolean;
   children: React.ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const useHorizontalScroll = !fitAllColumns;
 
   const scrollToIndex = useCallback((index: number) => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || !useHorizontalScroll) return;
     const clamped = Math.max(0, Math.min(index, managers.length - 1));
     el.scrollTo({
       left: clamped * (COLUMN_WIDTH + COLUMN_GAP),
       behavior: 'smooth',
     });
     setActiveIndex(clamped);
-  }, [managers.length]);
+  }, [managers.length, useHorizontalScroll]);
 
   const scrollByColumn = useCallback((direction: -1 | 1) => {
     scrollToIndex(activeIndex + direction);
@@ -645,7 +650,7 @@ function HorizontalRosterStrip({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || !useHorizontalScroll) return;
 
     const onScroll = () => {
       const idx = Math.round(el.scrollLeft / (COLUMN_WIDTH + COLUMN_GAP));
@@ -687,7 +692,7 @@ function HorizontalRosterStrip({
       el.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [managers.length, scrollByColumn]);
+  }, [managers.length, scrollByColumn, useHorizontalScroll]);
 
   return (
     <div>
@@ -699,19 +704,41 @@ function HorizontalRosterStrip({
           onSelect={scrollToIndex}
         />
       )}
-      <div className="flex items-start gap-1">
-        {managers.length > 1 && (
-          <ScrollButton direction="left" label="이전 담당자" onClick={() => scrollByColumn(-1)} />
+      <div className="relative">
+        {managers.length > 1 && useHorizontalScroll && (
+          <>
+            <ScrollButton
+              direction="left"
+              label="이전 담당자"
+              onClick={() => scrollByColumn(-1)}
+              className="absolute left-0 top-1/2 z-20 -translate-y-1/2 -translate-x-1/2"
+            />
+            <ScrollButton
+              direction="right"
+              label="다음 담당자"
+              onClick={() => scrollByColumn(1)}
+              className="absolute right-0 top-1/2 z-20 -translate-y-1/2 translate-x-1/2"
+            />
+          </>
         )}
         <div
           ref={scrollRef}
-          className="roster-h-scroll roster-scroll flex-1 min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-2 pb-2"
+          className={
+            fitAllColumns
+              ? 'grid grid-cols-1 gap-2.5 min-w-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
+              : 'roster-h-scroll roster-scroll min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-3 pb-2'
+          }
         >
-          <div className="flex items-start gap-2.5 w-max py-0.5">{children}</div>
+          <div
+            className={
+              fitAllColumns
+                ? 'contents'
+                : 'flex items-start gap-2.5 w-max py-0.5'
+            }
+          >
+            {children}
+          </div>
         </div>
-        {managers.length > 1 && (
-          <ScrollButton direction="right" label="다음 담당자" onClick={() => scrollByColumn(1)} />
-        )}
       </div>
     </div>
   );
@@ -779,12 +806,16 @@ export default function ManagerRosterGrid({
     <HorizontalRosterStrip
       managers={managerGroups.map(g => g.manager)}
       currentUserName={currentUserName}
+      fitAllColumns={visibleManagers.length <= 5}
     >
       {managerGroups.map(mgr => (
         <div
           key={mgr.manager}
-          className="snap-start shrink-0 flex flex-col"
-          style={{ width: COLUMN_WIDTH }}
+          className={[
+            'flex flex-col min-w-0',
+            visibleManagers.length <= 5 ? 'w-full' : 'snap-start shrink-0',
+          ].join(' ')}
+          style={visibleManagers.length <= 5 ? undefined : { width: COLUMN_WIDTH }}
         >
           <ManagerSection
             manager={mgr.manager}

@@ -1,4 +1,4 @@
-import { isPortalAdmin, requireUser } from '@/lib/auth';
+import { isDataViewer, requireUser } from '@/lib/auth';
 import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '@/lib/clientsDb';
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 import { listInquiries, listIntakeProcesses } from '@/lib/workbookDb';
@@ -23,13 +23,13 @@ function statsFromClients(clients: { businessEntityType?: string | null }[]): Po
 
 export async function getPortalBootstrap() {
   const user = await requireUser();
-  const mineOnly = !isPortalAdmin(user);
+  const mineOnly = !isDataViewer(user);
   const accessFilter = mineOnly
     ? { mineOnly: true as const, userId: user.id, userName: user.name }
     : {};
 
   const [tasks, activeClients, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
-    listDashboardTasks({ name: user.name, isAdmin: isPortalAdmin(user) }),
+    listDashboardTasks({ name: user.name, isAdmin: isDataViewer(user) }),
     listClients({
       status: 'active',
       mineOnly,

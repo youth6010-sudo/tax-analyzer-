@@ -6,7 +6,13 @@ import { clearPortal } from '@/app/utils/portalStore';
 
 const STORAGE_KEY = 'busan-login-id';
 
-type LoginUser = { loginId: string; name: string; role: string };
+type LoginUser = {
+  loginId: string;
+  name: string;
+  role: string;
+  canChooseAdminMode?: boolean;
+  isDeveloperLogin?: boolean;
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -17,6 +23,7 @@ function LoginForm() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [loginId, setLoginId] = useState('');
   const [pin, setPin] = useState('');
+  const [adminMode, setAdminMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -52,7 +59,9 @@ function LoginForm() {
     setPin('');
     setError(null);
     setListOpen(false);
-  }, []);
+    const picked = users.find(u => u.loginId === id);
+    setAdminMode(!!picked?.isDeveloperLogin);
+  }, [users]);
 
   const appendPin = useCallback((digit: string) => {
     setPin(p => (p.length < 4 ? p + digit : p));
@@ -74,7 +83,7 @@ function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginId, pin }),
+        body: JSON.stringify({ loginId, pin, adminMode }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -91,7 +100,7 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
-  }, [loginId, pin, next, router]);
+  }, [loginId, pin, adminMode, next, router]);
 
   useEffect(() => {
     if (pin.length === 4 && loginId) {
@@ -100,6 +109,8 @@ function LoginForm() {
   }, [pin, loginId, submit]);
 
   const selected = users.find(u => u.loginId === loginId);
+  const showAdminModeChoice = !!selected?.canChooseAdminMode;
+  const isDeveloperLogin = !!selected?.isDeveloperLogin;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 px-4 py-8">
@@ -172,6 +183,9 @@ function LoginForm() {
                             )}
                           </span>
                           {user.name}
+                          {user.isDeveloperLogin && (
+                            <span className="ml-1.5 text-[10px] font-bold text-violet-300">개발자</span>
+                          )}
                         </button>
                       </li>
                     );
@@ -181,6 +195,32 @@ function LoginForm() {
             </div>
           )}
         </div>
+
+        {loginId && (showAdminModeChoice || isDeveloperLogin) && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            {isDeveloperLogin ? (
+              <p className="text-xs font-semibold text-violet-200">
+                개발자 계정 — 관리자 모드로 접속됩니다
+              </p>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={adminMode}
+                  onChange={e => setAdminMode(e.target.checked)}
+                  disabled={loading}
+                  className="mt-0.5 h-4 w-4 rounded border-white/30 bg-white/10 text-violet-500 focus:ring-violet-400"
+                />
+                <span className="text-xs leading-relaxed text-violet-100">
+                  <span className="font-semibold text-white">관리자 모드로 접속</span>
+                  <span className="block mt-0.5 text-violet-200/80">
+                    전체 데이터 조회·수정, 개발 중 메뉴(블루홀·데이터 관리 등) 사용
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+        )}
 
         <div className={`mt-6 transition-opacity ${loginId ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
           <span className="text-xs font-semibold text-violet-200">

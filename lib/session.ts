@@ -5,6 +5,8 @@ export interface SessionUser {
   loginId: string;
   name: string;
   role: 'staff' | 'admin';
+  /** 리아 등 — 로그인 시 관리자 모드 선택 시 true */
+  adminMode?: boolean;
 }
 
 export interface SessionData {

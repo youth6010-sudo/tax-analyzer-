@@ -155,7 +155,7 @@ export default function HomeTasksPanel() {
       .then(d => {
         const user = (d as { user?: { name?: string; loginId?: string } })?.user;
         setCurrentUser(user?.name || '');
-        setIsAdmin(!!(d as { isMaster?: boolean })?.isMaster);
+        setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper);
         setCanAddCompany(canCreateCompanyEvent(user));
       })
       .catch(() => { /* ignore */ });

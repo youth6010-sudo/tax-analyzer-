@@ -62,7 +62,7 @@ function ClientsPageContent() {
   const [fetchedClients, setFetchedClients] = useState<ClientRecord[] | null>(null);
   const [fetching, setFetching] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEditAll, setCanEditAll] = useState(false);
   const [feeRefreshKeys, setFeeRefreshKeys] = useState<Record<string, number>>({});
   const [clientOrderVersion, setClientOrderVersion] = useState(0);
   // 담당자 표시 순서(사용자가 자유롭게 변경 · 브라우저에 저장)
@@ -105,7 +105,7 @@ function ClientsPageContent() {
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.user?.name) setCurrentUserName(String(data.user.name).trim());
-        if (data?.isMaster) setIsAdmin(true);
+        if (data?.isMaster) setCanEditAll(true);
       })
       .catch(() => {});
   }, []);
@@ -555,7 +555,7 @@ function ClientsPageContent() {
             visibleManagers={orderedVisibleManagers}
             visibleOptionalCategories={rosterOptionalCategories}
             currentUserName={currentUserName}
-            isAdmin={isAdmin}
+            isAdmin={canEditAll}
             onFeeChange={handleFeeChange}
           feeRefreshKeys={feeRefreshKeys}
           orderVersion={clientOrderVersion}
