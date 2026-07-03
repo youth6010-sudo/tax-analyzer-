@@ -95,7 +95,7 @@ export type FetchedClientNotice = {
 
 // 수임처 상세를 받아 안내문 관련 데이터를 추출
 export async function fetchClientNotice(id: string): Promise<FetchedClientNotice> {
-  const res = await fetch(`/api/clients/${id}`, { credentials: 'same-origin' });
+  const res = await fetch(`/api/clients/${id}?scope=notice`, { credentials: 'same-origin' });
   if (!res.ok) throw new Error('수임처 정보를 불러오지 못했습니다.');
   const data = await res.json();
   const client = data.client ?? data.contact;

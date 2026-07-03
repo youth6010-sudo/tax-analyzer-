@@ -5,7 +5,7 @@ import {
   getPersonalChecklistById,
   updatePersonalChecklistItem,
 } from '@/lib/personalChecklist';
-import type { ChecklistCategory, ChecklistTaxType } from '@/app/types/calendar';
+import type { ChecklistTaxType } from '@/app/types/calendar';
 
 export async function GET(
   _req: Request,
@@ -33,8 +33,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json() as {
       title?: string;
-      category?: ChecklistCategory;
-      taxType?: ChecklistTaxType | '';
+      taxType?: ChecklistTaxType;
       clientId?: string | null;
       dueDate?: string;
       completed?: boolean;

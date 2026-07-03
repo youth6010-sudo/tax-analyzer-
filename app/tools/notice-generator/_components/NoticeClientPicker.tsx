@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
 import { hydratePortal, prefetchSearchIndex } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
+import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 
 export type PickedClient = { id: string; companyName: string };
 
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export default function NoticeClientPicker({ value, onSelect }: Props) {
+  const isMaster = useIsMasterUser();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,11 +40,10 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
 
   useEffect(() => {
     const q = query.trim();
-    if (!q) return;
+    if (!q || isMaster === null) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      // 안내문구 생성기에서는 로그인 사용자가 담당하는 수임처만 노출/편집 가능.
       const local: ClientRecord[] = [];
       setResults(local);
       setLoading(true);
@@ -51,7 +52,10 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
       const ac = new AbortController();
       abortRef.current = ac;
 
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&mineOnly=1`, { signal: ac.signal })
+      const params = new URLSearchParams({ q, scope: 'notice' });
+      if (!isMaster) params.set('mineOnly', '1');
+
+      fetch(`/api/clients/search?${params.toString()}`, { signal: ac.signal })
         .then(r => (r.ok ? r.json() : { clients: [] }))
         .then(data => {
           const api = (data.clients ?? []) as ClientSearchResult[];
@@ -66,7 +70,7 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, isMaster]);
 
   if (value) {
     return (
@@ -89,6 +93,10 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
     );
   }
 
+  const searchPlaceholder = isMaster
+    ? '수임처 검색 (업체명·사업자번호·대표자)'
+    : '내 담당 수임처 검색 (업체명·사업자번호·대표자)';
+
   return (
     <div ref={rootRef} className="relative">
       <input
@@ -104,13 +112,13 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
           }
         }}
         onFocus={() => setOpen(true)}
-        placeholder="내 담당 수임처 검색 (업체명·사업자번호·대표자)"
+        placeholder={searchPlaceholder}
         className="w-full rounded-2xl border border-rose-100 bg-white/70 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
       />
 
       {open && query.trim() && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-2xl border border-rose-100 bg-white shadow-lg">
-          {loading && results.length === 0 ? (
+          {isMaster === null || (loading && results.length === 0) ? (
             <p className="px-3 py-4 text-center text-sm text-slate-400">검색 중…</p>
           ) : results.length === 0 ? (
             <p className="px-3 py-4 text-center text-sm text-slate-500">검색 결과 없음</p>

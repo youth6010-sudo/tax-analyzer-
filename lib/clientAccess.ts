@@ -2,9 +2,10 @@ import { and, eq, or, type SQL } from 'drizzle-orm';
 import { clients } from '@/db/schema';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import type { SessionUser } from '@/lib/session';
-import { isMasterUser } from '@/lib/masterAccess';
+import { isMasterUser, shouldFilterClientsToMine } from '@/lib/masterAccess';
 
-export { isMasterUser } from '@/lib/masterAccess';
+export { isMasterUser, shouldFilterClientsToMine } from '@/lib/masterAccess';
+export type { RestrictedClientListScope } from '@/lib/masterAccess';
 
 export type ClientAccessFields = {
   assignedUserId?: string | null;

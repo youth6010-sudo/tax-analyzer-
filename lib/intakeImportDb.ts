@@ -7,6 +7,7 @@ import {
   shouldSkipOperationalRow,
   type ParsedOperational,
 } from '@/lib/intakeWorkbookParse';
+import { normalizeChurnClosureFields } from '@/app/config/churnOptions';
 
 export type IntakeImportStats = {
   inquiries: { inserted: number; updated: number; skipped: number };
@@ -14,20 +15,31 @@ export type IntakeImportStats = {
   churns: { inserted: number; updated: number; skipped: number; clientsMarkedChurned: number };
 };
 
-type ClientLookupRow = { id: string; companyName: string; manager: string; businessNo: string };
+type ClientLookupRow = {
+  id: string;
+  companyName: string;
+  manager: string;
+  businessNo: string;
+  intakeData: Record<string, unknown>;
+  ntsStatusCode: string;
+  ntsClosedDate: string;
+};
 
 type ClientLookup = {
   byBiz: Map<string, string>;
   byFull: Map<string, string>;
   byName: Map<string, string>;
+  byId: Map<string, ClientLookupRow>;
 };
 
 function buildClientLookup(rows: ClientLookupRow[]): ClientLookup {
   const byBiz = new Map<string, string>();
   const byFull = new Map<string, string>();
   const byName = new Map<string, string>();
+  const byId = new Map<string, ClientLookupRow>();
 
   for (const r of rows) {
+    byId.set(r.id, r);
     const biz = normBizNo(r.businessNo);
     if (biz.length >= 10 && !byBiz.has(biz)) byBiz.set(biz, r.id);
 
@@ -38,7 +50,7 @@ function buildClientLookup(rows: ClientLookupRow[]): ClientLookup {
     if (nameKey && !byName.has(nameKey)) byName.set(nameKey, r.id);
   }
 
-  return { byBiz, byFull, byName };
+  return { byBiz, byFull, byName, byId };
 }
 
 function resolveClientId(
@@ -90,6 +102,9 @@ export async function importOperationalData(parsed: ParsedOperational): Promise<
       companyName: clients.companyName,
       manager: clients.manager,
       businessNo: clients.businessNo,
+      intakeData: clients.intakeData,
+      ntsStatusCode: clients.ntsStatusCode,
+      ntsClosedDate: clients.ntsClosedDate,
     })
     .from(clients);
   const lookup = buildClientLookup(clientRows);
@@ -219,6 +234,19 @@ export async function importOperationalData(parsed: ParsedOperational): Promise<
       const clientId = resolveClientId(lookup, row.companyName, row.manager, row.businessNo);
       const churnedAt = row.churnedAt ? new Date(row.churnedAt) : new Date();
       const validChurnedAt = Number.isNaN(churnedAt.getTime()) ? new Date() : churnedAt;
+      const linked = clientId ? lookup.byId.get(clientId) : undefined;
+      const { dataCleanup, churnType } = normalizeChurnClosureFields(
+        row.dataCleanup,
+        row.churnType,
+        { reason: row.reason, earlySign: row.earlySign },
+        linked
+          ? {
+              intakeData: linked.intakeData,
+              ntsStatusCode: linked.ntsStatusCode,
+              ntsClosedDate: linked.ntsClosedDate,
+            }
+          : null,
+      );
 
       const existing = await tx
         .select({ id: churnRecords.id })
@@ -233,8 +261,8 @@ export async function importOperationalData(parsed: ParsedOperational): Promise<
             clientId,
             companyName: row.companyName,
             reason: row.reason,
-            churnType: row.churnType,
-            dataCleanup: row.dataCleanup,
+            churnType,
+            dataCleanup,
             earlySign: row.earlySign,
             feeAmount: row.feeAmount,
             manager: row.manager,
@@ -248,8 +276,8 @@ export async function importOperationalData(parsed: ParsedOperational): Promise<
           companyName: row.companyName,
           reason: row.reason,
           detail: '',
-          churnType: row.churnType,
-          dataCleanup: row.dataCleanup,
+          churnType,
+          dataCleanup,
           earlySign: row.earlySign,
           feeAmount: row.feeAmount,
           manager: row.manager,

@@ -221,6 +221,36 @@ function StatCard({
   );
 }
 
+function FilingBottomStats({
+  target,
+  received,
+  diff,
+}: {
+  target: number;
+  received: number;
+  diff: number;
+}) {
+  return (
+    <div
+      className={`${portalCard} mt-3 flex flex-wrap items-center justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
+    >
+      <p className="text-sm font-semibold text-slate-800">
+        총 체크{' '}
+        <span className="tabular-nums text-emerald-700">{received}</span>
+        <span className="font-normal text-slate-500"> / 신고대상 </span>
+        <span className="tabular-nums text-blue-700">{target}</span>
+        <span className="font-normal text-slate-500">곳</span>
+        {diff > 0 && (
+          <span className="ml-2 font-medium tabular-nums text-rose-600">(차이 {diff}곳)</span>
+        )}
+      </p>
+      {diff === 0 && target > 0 && (
+        <span className="text-xs font-medium text-emerald-700">전체 접수 완료</span>
+      )}
+    </div>
+  );
+}
+
 export default function FilingCheckPage() {
   return (
     <Suspense fallback={<PortalLoading label="신고대상확인 불러오는 중…" />}>
@@ -340,7 +370,7 @@ function FilingCheckPageInner() {
   }, []);
 
   useEffect(() => {
-    const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+    const url = isMaster ? '/api/clients' : '/api/clients?mine=1&scope=filing';
     fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
@@ -1311,6 +1341,13 @@ function FilingCheckPageInner() {
             onEmployedFilingMonth={setEmployedFilingMonth}
             onSaved={showIncomeSavedTick}
           />
+          {incomeNotice.includes('대조') && incomeStats.target > 0 && (
+            <FilingBottomStats
+              target={incomeStats.target}
+              received={incomeStats.received}
+              diff={incomeStats.diff}
+            />
+          )}
           {completionFooter(incomeStats.diff)}
         </>
       ) : (
@@ -1797,6 +1834,10 @@ function FilingCheckPageInner() {
         )}
       </div>
 
+      {excelSet.size > 0 && (
+        <FilingBottomStats target={targetCount} received={receivedCount} diff={diff} />
+      )}
+
       {completionFooter(diff)}
         </>
       )}
@@ -1874,7 +1915,7 @@ function FilingCheckPageInner() {
           canEdit={!locked}
           onClose={() => setIncomePanelClient(null)}
           onSaved={() => {
-            const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+            const url = isMaster ? '/api/clients' : '/api/clients?mine=1&scope=filing';
             fetch(url, { cache: 'no-store' })
               .then(r => (r.ok ? r.json() : null))
               .then(d => {

@@ -13,6 +13,10 @@ import PortalTabs from '../../components/portal/PortalTabs';
 import { portalAlertError, portalAlertWarning, portalCard } from '../../components/portal/uiClasses';
 import type { ClientRecord, ChurnRecordView } from '../../types/client';
 import {
+  clientNeedsChurnBackfill,
+  matchChurnRecordForClient,
+} from '@/app/utils/churnMatch';
+import {
   getPortalChurnMissingClients,
   getPortalChurnRecords,
   hydratePortal,
@@ -37,7 +41,6 @@ function ChurnPageInner() {
   const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<ChurnFormValues>(defaultChurnFormValues);
-  const [backfillNote, setBackfillNote] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +76,13 @@ function ChurnPageInner() {
   useEffect(() => {
     hydratePortal();
     syncFromPortal();
+    void loadHistory({ silent: hasChurnCache() });
     return subscribePortal(syncFromPortal);
-  }, [syncFromPortal]);
+  }, [syncFromPortal, loadHistory]);
+
+  useEffect(() => {
+    if (tab === 'register') void loadHistory({ silent: true });
+  }, [tab, loadHistory]);
 
   useEffect(() => {
     void prefetchPortal().then(() => {
@@ -110,7 +118,6 @@ function ChurnPageInner() {
     if (fromMissing) {
       setTab('register');
       setSelectedClient(fromMissing);
-      setBackfillNote(true);
       if (fromMissing.feeSummary != null) {
         setFormValues(v => ({ ...v, feeAmount: String(fromMissing.feeSummary) }));
       }
@@ -122,7 +129,6 @@ function ChurnPageInner() {
         if (data?.client) {
           setTab('register');
           setSelectedClient(data.client);
-          setBackfillNote(data.client.status === 'churned');
           if (data.client.feeSummary != null) {
             setFormValues(v => ({ ...v, feeAmount: String(data.client.feeSummary) }));
           }
@@ -142,13 +148,21 @@ function ChurnPageInner() {
     [history, selectedRecordId],
   );
 
+  const matchedRegisterRecord = useMemo(
+    () => (selectedClient ? matchChurnRecordForClient(selectedClient, history) : null),
+    [selectedClient, history],
+  );
+
+  const showBackfillNote = selectedClient
+    ? clientNeedsChurnBackfill(selectedClient, history)
+    : false;
+
   const handleFormChange = (patch: Partial<ChurnFormValues>) => {
     setFormValues(v => ({ ...v, ...patch }));
   };
 
   const handleClientChange = (client: ClientRecord | null) => {
     setSelectedClient(client);
-    setBackfillNote(client?.status === 'churned');
     if (client?.feeSummary != null) {
       setFormValues(v => ({ ...v, feeAmount: String(client.feeSummary) }));
     }
@@ -157,6 +171,10 @@ function ChurnPageInner() {
   const handleSubmit = async () => {
     if (!selectedClient) {
       setError('수임처를 검색해 선택해 주세요.');
+      return;
+    }
+    if (matchChurnRecordForClient(selectedClient, history)) {
+      setError('이미 유출 이력이 등록된 수임처입니다. 유출 이력 탭에서 확인해 주세요.');
       return;
     }
     if (!formValues.reason.trim()) {
@@ -188,7 +206,6 @@ function ChurnPageInner() {
       if (!res.ok) throw new Error(data.error ?? '등록 실패');
       setSelectedClient(null);
       setFormValues(defaultChurnFormValues());
-      setBackfillNote(false);
       setTab('history');
       await loadHistory({ silent: true });
     } catch (err) {
@@ -201,10 +218,16 @@ function ChurnPageInner() {
   const handleMissingClick = (client: ClientRecord) => {
     setTab('register');
     setSelectedClient(client);
-    setBackfillNote(true);
     if (client.feeSummary != null) {
       setFormValues(v => ({ ...v, feeAmount: String(client.feeSummary) }));
     }
+  };
+
+  const handleViewExistingRecord = () => {
+    if (!matchedRegisterRecord) return;
+    setTab('history');
+    setSelectedRecordId(matchedRegisterRecord.id);
+    void loadHistory({ silent: true });
   };
 
   const handleRecordSaved = (record: ChurnRecordView) => {
@@ -257,7 +280,9 @@ function ChurnPageInner() {
           onChange={handleFormChange}
           saving={saving}
           onSubmit={() => void handleSubmit()}
-          backfillNote={backfillNote}
+          backfillNote={showBackfillNote}
+          existingRecord={matchedRegisterRecord}
+          onViewExistingRecord={handleViewExistingRecord}
         />
       ) : (
         <div className="space-y-6">

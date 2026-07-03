@@ -126,7 +126,8 @@ export default function NoticeGeneratorPage() {
 
   // 부가세 신고 결과 보고 및 검토 입력값 (세션 전용)
   const [vatReport, setVatReport] = useState<VatReport>(EMPTY_VAT_REPORT);
-  const lastAutoVatPayment = useRef<number | null>(null);
+  /** 부가세만: 신고결과보고 최종세액 → 납부금액 자동 연동 (수동 수정 시 해제) */
+  const [vatPaymentLinked, setVatPaymentLinked] = useState(true);
 
   const [params, setParams] = useLocalStorage<DeadlineParams>('tng.params', {
     year: getDefaultYear(),
@@ -217,7 +218,7 @@ export default function NoticeGeneratorPage() {
       refundClaimed: false,
       installments: [],
     });
-    lastAutoVatPayment.current = null;
+    setVatPaymentLinked(next === TAX_TYPES.VAT);
     // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경
     // (원천세 -3일 / 부가세 -2주 / 종소세 -3주 / 법인세 직전 달 15일)
     const nextDeadline = calculateDeadline(next, params);
@@ -548,37 +549,22 @@ export default function NoticeGeneratorPage() {
     [taxType, deadline, vatReport, activeVatReportTemplate],
   );
 
-  // 부가세: 신고 결과 보고 입력 → 최종세액을 신고 결과 안내(납부금액)에 자동 반영
+  // 부가세: 신고 결과 보고 최종세액 → 납부금액 자동 연동 (연동 모드일 때만, 수동 입력 시 중단)
   useEffect(() => {
-    if (!isVat) return;
+    if (!isVat || !vatPaymentLinked) return;
     const { finalTax } = calcVatReport(vatReport);
-    const prevAuto = lastAutoVatPayment.current;
     setPayment(prev => {
-      const amountIsAuto =
-        prevAuto === null || prev.amount === 0 || prev.amount === prevAuto;
-      if (!amountIsAuto) return prev;
-
-      lastAutoVatPayment.current = finalTax;
-
       const installments = [...prev.installments];
       if (prev.slips >= 2 && installments.length > 0) {
-        const inst0 = installments[0];
-        const inst0Auto =
-          inst0.amount === 0 || inst0.amount === prevAuto || prevAuto === null;
-        if (inst0Auto) {
-          installments[0] = { ...inst0, amount: finalTax };
-        }
+        installments[0] = { ...installments[0], amount: finalTax };
       }
-
-      const instChanged =
-        prev.slips >= 2 &&
-        installments.length > 0 &&
-        installments[0].amount !== prev.installments[0]?.amount;
-      if (prev.amount === finalTax && !instChanged) return prev;
-
+      const instSynced =
+        prev.slips < 2 ||
+        (installments[0]?.amount === finalTax);
+      if (prev.amount === finalTax && instSynced) return prev;
       return { ...prev, amount: finalTax, installments };
     });
-  }, [isVat, vatReport, payment.slips]);
+  }, [isVat, vatReport, payment.slips, vatPaymentLinked]);
 
   const meta = TAX_TYPE_META[taxType];
 
@@ -687,6 +673,9 @@ export default function NoticeGeneratorPage() {
               hasLocalTax={hasLocalIncomeTax(taxType)}
               isWithholding={taxType === TAX_TYPES.WITHHOLDING}
               showInstallments={isVat}
+              vatAmountLinked={isVat && vatPaymentLinked}
+              onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
+              onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
             />
             <ResultBox messageHtml={paymentHtml} title="신고 결과 안내 문구 (납부세액)" editable />
           </div>

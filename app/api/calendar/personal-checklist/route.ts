@@ -5,7 +5,7 @@ import {
   createPersonalChecklistItem,
   listPersonalChecklistForOwner,
 } from '@/lib/personalChecklist';
-import type { ChecklistCategory, ChecklistTaxType } from '@/app/types/calendar';
+import type { ChecklistTaxType } from '@/app/types/calendar';
 
 export async function GET() {
   try {
@@ -22,8 +22,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     const body = await req.json() as {
       title?: string;
-      category?: ChecklistCategory;
-      taxType?: ChecklistTaxType | '';
+      taxType?: ChecklistTaxType;
       clientId?: string | null;
       dueDate?: string;
       reflectInNotes?: boolean;
@@ -31,8 +30,7 @@ export async function POST(req: Request) {
 
     const item = await createPersonalChecklistItem(user.name, {
       title: body.title || '',
-      category: body.category || 'other',
-      taxType: body.taxType,
+      taxType: body.taxType || 'other',
       clientId: body.clientId,
       dueDate: body.dueDate,
       reflectInNotes: body.reflectInNotes,

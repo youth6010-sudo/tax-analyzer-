@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
-import { formatCalendarCreatedAt, formatCompanyEventSchedule } from '@/app/types/calendar';
-import { CHECKLIST_TAX_OPTIONS } from '@/app/types/calendar';
+import { formatCompanyEventSchedule, formatChecklistDueDate, getChecklistTypeLabel, isChecklistPastDue } from '@/app/types/calendar';
+import type { ChecklistTaxType } from '@/app/types/calendar';
 import { prefetchPortal, usePortalTasks } from '@/app/utils/portalStore';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
@@ -34,43 +34,58 @@ function readSectionState(): SectionState {
   return { personal: true, company: true, client: true };
 }
 
-function taxLabel(taxType: string): string {
-  return CHECKLIST_TAX_OPTIONS.find(t => t.id === taxType)?.label || taxType;
+function taxLabel(taxType: ChecklistTaxType): string {
+  return getChecklistTypeLabel(taxType);
 }
 
-function SectionHeader({
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+function SectionCard({
   title,
+  count,
   open,
   onToggle,
   onAdd,
+  children,
 }: {
   title: string;
+  count: number;
   open: boolean;
   onToggle: () => void;
   onAdd?: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-white/70 px-2 py-1 ring-1 ring-amber-100">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex flex-1 items-center gap-2 text-left text-sm font-bold text-amber-950 py-1"
-      >
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[10px] text-amber-700">
-          {open ? '▼' : '▶'}
-        </span>
-        {title}
-      </button>
-      {onAdd && (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50/50">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
         <button
           type="button"
-          onClick={onAdd}
-          className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100"
-          title="추가"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          +
+          <span className="text-[10px] text-slate-400">{open ? '▼' : '▶'}</span>
+          <span className="truncate text-sm font-bold text-slate-800">{title}</span>
         </button>
-      )}
+        <CountBadge count={count} />
+        {onAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="shrink-0 rounded-md bg-[#4b6cb7]/10 px-2 py-0.5 text-xs font-bold text-[#4b6cb7] hover:bg-[#4b6cb7]/15"
+            title="추가"
+          >
+            +
+          </button>
+        )}
+      </div>
+      {open && <div className="p-2">{children}</div>}
     </div>
   );
 }
@@ -90,6 +105,16 @@ export default function HomeTasksPanel() {
   const [canAddCompany, setCanAddCompany] = useState(false);
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
+
+  const personalPending = useMemo(
+    () => personal.filter(p => !p.completed).length,
+    [personal],
+  );
+  const companyPending = useMemo(
+    () => companyEvents.filter(e => !e.myCheckoff).length,
+    [companyEvents],
+  );
+  const totalPending = personalPending + companyPending + clientTasks.length;
 
   const toggleSection = (key: keyof SectionState) => {
     setSections(prev => {
@@ -191,49 +216,54 @@ export default function HomeTasksPanel() {
   };
 
   const companySectionTitle = companyMonth
-    ? `2. 회사 일정 (${companyMonth.month}월)`
-    : '2. 회사 일정';
+    ? `회사 일정 (${companyMonth.month}월)`
+    : '회사 일정';
 
   return (
     <>
       <HomeCalendarProgress />
-      <section className="rounded-2xl border border-rose-200/90 bg-gradient-to-b from-rose-100 via-pink-50 to-white p-3 shadow-sm">
-        <div className="rounded-2xl bg-white/75 px-3 py-3 ring-1 ring-rose-100/90">
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-sm text-rose-500">
-              *
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#4b6cb7]/10 text-[#4b6cb7]">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
             </span>
-            <div>
-              <h2 className="text-base font-extrabold tracking-tight text-rose-950">TO Do List</h2>
-              <p className="text-xs text-rose-900/70 mt-0.5">개인 · 회사 · 업체</p>
-            </div>
+            <h2 className="text-sm font-bold text-slate-800">TO Do List</h2>
+            <CountBadge count={totalPending} />
           </div>
         </div>
 
         {loading ? (
-          <p className="mt-4 text-sm text-rose-900/70 text-center py-4">불러오는 중…</p>
+          <p className="py-6 text-center text-sm text-slate-500">불러오는 중…</p>
         ) : (
-          <div className="mt-3 space-y-3">
-            <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-2.5">
-              <SectionHeader
-                title="1. 개인 체크리스트"
-                open={sections.personal}
-                onToggle={() => toggleSection('personal')}
-                onAdd={() => setAddModal('personal')}
-              />
-              {sections.personal && (
-                <div className="space-y-1.5 mt-1">
-                  {personal.length === 0 ? (
-                    <p className="text-sm text-amber-900/60 py-2 text-center">항목 없음</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {personal.map(item => (
-                        <li
-                          key={item.id}
-                          onDoubleClick={() => openPersonalEdit(item)}
-                          className="flex items-start gap-2.5 rounded-2xl border border-amber-100 bg-white px-3 py-2.5 text-sm cursor-pointer shadow-[0_1px_0_rgba(251,191,36,0.08)] hover:border-amber-300 hover:bg-amber-50/40"
-                          title="더블클릭하여 수정·삭제"
-                        >
+          <div className="space-y-2 p-2.5">
+            <SectionCard
+              title="개인 체크리스트"
+              count={personalPending}
+              open={sections.personal}
+              onToggle={() => toggleSection('personal')}
+              onAdd={() => setAddModal('personal')}
+            >
+                {personal.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">항목 없음</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {personal.map(item => (
+                      <li
+                        key={item.id}
+                        onDoubleClick={() => openPersonalEdit(item)}
+                        className="relative cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm hover:border-[#4b6cb7]/30"
+                        title="더블클릭하여 수정·삭제"
+                      >
+                        {!item.completed && (
+                          <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                            !
+                          </span>
+                        )}
+                        <div className="flex items-start gap-2.5 pr-4">
                           <input
                             type="checkbox"
                             checked={item.completed}
@@ -242,117 +272,127 @@ export default function HomeTasksPanel() {
                             className="mt-0.5"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-slate-800 leading-snug">{item.title}</p>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-                                {item.category === 'tax' ? taxLabel(item.taxType) : '기타'}
+                            <p className={`font-semibold leading-snug ${item.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                              {item.title}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                {taxLabel(item.taxType)}
                               </span>
-                              {item.clientName && (
-                                <span className="text-xs text-slate-500">{item.clientName}</span>
-                              )}
-                              {item.reflectInNotes && (
-                                <span className="text-xs text-blue-600">특이사항 반영</span>
-                              )}
-                              {item.createdAt && (
-                                <span className="text-xs text-slate-400">
-                                  등록 {formatCalendarCreatedAt(item.createdAt)}
+                              {item.dueDate && (
+                                <span
+                                  className={`text-[10px] font-bold ${
+                                    !item.completed && isChecklistPastDue(item.dueDate)
+                                      ? 'text-red-600'
+                                      : 'text-slate-600'
+                                  }`}
+                                >
+                                  마감 {formatChecklistDueDate(item.dueDate)}
                                 </span>
+                              )}
+                              {item.clientName && (
+                                <span className="text-[10px] text-[#4b6cb7]">{item.clientName}</span>
                               )}
                             </div>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
 
-            <div className="rounded-2xl border border-pink-100 bg-pink-50/55 p-2.5">
-              <SectionHeader
-                title={companySectionTitle}
-                open={sections.company}
-                onToggle={() => toggleSection('company')}
-                onAdd={canAddCompany ? () => setAddModal('company') : undefined}
-              />
-              {sections.company && (
-                <div className="space-y-1.5 mt-1">
-                  {companyEvents.map(ev => (
-                    <div
-                      key={ev.id}
-                      className="flex items-start gap-2 rounded-2xl border border-sky-100 bg-white px-3 py-2.5 text-sm shadow-[0_1px_0_rgba(125,211,252,0.08)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={ev.myCheckoff ?? false}
-                        onChange={e => void toggleCompanyCheckoff(ev, e.target.checked)}
-                        className="mt-1 shrink-0"
-                        title="내 업무 완료"
-                      />
-                      <div
-                        className={`min-w-0 flex-1 ${canEditCompany(ev) ? 'cursor-pointer' : ''}`}
-                        onClick={() => canEditCompany(ev) && openCompanyEdit(ev)}
-                        title={canEditCompany(ev) ? '클릭하여 수정·삭제' : undefined}
+            <SectionCard
+              title={companySectionTitle}
+              count={companyPending}
+              open={sections.company}
+              onToggle={() => toggleSection('company')}
+              onAdd={canAddCompany ? () => setAddModal('company') : undefined}
+            >
+                {companyEvents.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">이번 달 일정 없음</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {companyEvents.map(ev => (
+                      <li
+                        key={ev.id}
+                        className="relative rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm"
                       >
-                        <p className="font-semibold text-sky-900 leading-snug">{ev.title}</p>
-                        <p className="text-xs text-sky-700 mt-1 leading-relaxed">
-                          {formatCompanyEventSchedule(ev)}
-                        </p>
-                        {ev.createdAt && (
-                          <p className="text-xs text-slate-400 mt-1">
-                            등록 {formatCalendarCreatedAt(ev.createdAt)}
-                          </p>
+                        {!ev.myCheckoff && (
+                          <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                            !
+                          </span>
                         )}
-                        {(ev.checkoffTotal ?? teamMembers.length) > 0 && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            팀 완료 {ev.checkoffDone ?? 0}/{ev.checkoffTotal ?? teamMembers.length}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {companyEvents.length === 0 && (
-                    <p className="text-sm text-amber-900/60 py-2 text-center">이번 달 일정 없음</p>
-                  )}
-                </div>
-              )}
-            </div>
+                        <div className="flex items-start gap-2 pr-4">
+                          <input
+                            type="checkbox"
+                            checked={ev.myCheckoff ?? false}
+                            onChange={e => void toggleCompanyCheckoff(ev, e.target.checked)}
+                            className="mt-1 shrink-0"
+                            title="내 업무 완료"
+                          />
+                          <div
+                            className={`min-w-0 flex-1 ${canEditCompany(ev) ? 'cursor-pointer' : ''}`}
+                            onClick={() => canEditCompany(ev) && openCompanyEdit(ev)}
+                            title={canEditCompany(ev) ? '클릭하여 수정·삭제' : undefined}
+                          >
+                            <p className="font-semibold leading-snug text-slate-800">{ev.title}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                              {formatCompanyEventSchedule(ev)}
+                            </p>
+                            {(ev.checkoffTotal ?? teamMembers.length) > 0 && (
+                              <p className="mt-1 text-[10px] text-slate-400">
+                                팀 완료 {ev.checkoffDone ?? 0}/{ev.checkoffTotal ?? teamMembers.length}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
 
-            <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/45 p-2.5">
-              <SectionHeader
-                title="3. 업체관련"
-                open={sections.client}
-                onToggle={() => toggleSection('client')}
-              />
-              {sections.client && (
-                <ul className="space-y-1.5 mt-1">
-                  {clientTasks.length === 0 ? (
-                    <p className="text-sm text-amber-900/60 py-2 text-center">할 일 없음</p>
-                  ) : (
-                    clientTasks.map(t => (
+            <SectionCard
+              title="업체 관련"
+              count={clientTasks.length}
+              open={sections.client}
+              onToggle={() => toggleSection('client')}
+            >
+                {clientTasks.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">할 일 없음</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {clientTasks.map(t => (
                       <li key={t.id}>
                         <Link
                           href={t.href}
-                          className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100 bg-white px-3 py-2.5 text-sm hover:border-rose-200 hover:shadow-sm transition-shadow"
+                          className="relative flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm hover:border-[#4b6cb7]/30"
                         >
+                          <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                            1
+                          </span>
                           <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                            className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${
                               t.type === 'nts_alert'
                                 ? 'bg-red-100 text-red-700'
-                                : 'bg-amber-100 text-amber-900'
+                                : 'bg-blue-50 text-[#4b6cb7]'
                             }`}
                           >
                             {TYPE_LABEL[t.type]}
                           </span>
-                          <span className="font-semibold text-slate-800 flex-1 min-w-0 leading-snug">{t.title}</span>
-                          {t.subtitle && <span className="text-xs text-slate-500">{t.subtitle}</span>}
+                          <span className="min-w-0 flex-1 pr-4 font-semibold leading-snug text-slate-800">
+                            {t.title}
+                          </span>
+                          {t.subtitle && (
+                            <span className="text-[10px] text-slate-400">{t.subtitle}</span>
+                          )}
                         </Link>
                       </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </div>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
           </div>
         )}
       </section>
@@ -394,7 +434,7 @@ export default function HomeTasksPanel() {
       <CenterModal
         open={addModal === 'personal'}
         title="개인 체크리스트 추가"
-        description="세목·기타 구분 후 체크리스트를 등록합니다."
+        description="구분 선택 후 체크리스트를 등록합니다."
         onClose={closeModal}
       >
         <PersonalChecklistAddForm

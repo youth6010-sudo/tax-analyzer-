@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser, isPortalAdmin } from '@/lib/auth';
+import { shouldFilterClientsToMine, type RestrictedClientListScope } from '@/lib/masterAccess';
 import { listClients } from '@/lib/clientsDb';
 
 export async function GET(request: NextRequest) {
@@ -7,7 +8,9 @@ export async function GET(request: NextRequest) {
     const user = await requireUser();
     const { searchParams } = request.nextUrl;
     const status = searchParams.get('status') as 'intake' | 'active' | 'churned' | null;
-    const mineOnly = searchParams.get('mine') === '1';
+    const scope = searchParams.get('scope') as RestrictedClientListScope | null;
+    const mineOnly =
+      searchParams.get('mine') === '1' || shouldFilterClientsToMine(user, scope);
     const includeChurned = searchParams.get('includeChurned') === '1';
     const businessEntityType = searchParams.get('entity') ?? undefined;
 

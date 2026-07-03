@@ -30,6 +30,86 @@ export function joinCheckboxValue(selected: string[]): string {
   return selected.filter(Boolean).join(', ');
 }
 
+function ensureOptionChecked(raw: string, options: readonly string[], opt: string): string {
+  const selected = parseCheckboxValue(raw, options);
+  if (selected.includes(opt)) return joinCheckboxValue(selected);
+  return joinCheckboxValue([...selected, opt]);
+}
+
+/** 수임처 상세 — 상태 폐업·국세청 폐업 등 */
+export type ChurnClientClosureHint = {
+  intakeData?: Record<string, unknown> | null;
+  ntsStatusCode?: string | null;
+  ntsClosedDate?: string | null;
+};
+
+export function clientIndicatesBusinessClosure(client: ChurnClientClosureHint | null | undefined): boolean {
+  if (!client) return false;
+  if (String(client.intakeData?.statusLabel ?? '').trim() === '폐업') return true;
+  const code = client.ntsStatusCode?.trim() ?? '';
+  if (code === '03') return true;
+  if (String(client.intakeData?.closedDate ?? '').trim()) return true;
+  if (client.ntsClosedDate?.trim()) return true;
+  return false;
+}
+
+/** 유출 이력 텍스트에 폐업이 언급되면 true */
+export function recordMentionsClosure(fields: {
+  dataCleanup?: string;
+  churnType?: string;
+  reason?: string;
+  detail?: string;
+  earlySign?: string;
+}): boolean {
+  return [fields.dataCleanup, fields.churnType, fields.reason, fields.detail, fields.earlySign].some(
+    t => (t ?? '').includes('폐업'),
+  );
+}
+
+export function shouldApplyClosureCheckboxes(
+  fields: {
+    dataCleanup: string;
+    churnType: string;
+    reason?: string;
+    detail?: string;
+    earlySign?: string;
+  },
+  client?: ChurnClientClosureHint | null,
+): boolean {
+  if (clientIndicatesBusinessClosure(client)) return true;
+  return recordMentionsClosure(fields);
+}
+
+export function withClosureCheckboxes(
+  dataCleanup: string,
+  churnType: string,
+  extra?: { reason?: string; detail?: string; earlySign?: string },
+): { dataCleanup: string; churnType: string } {
+  if (!recordMentionsClosure({ dataCleanup, churnType, ...extra })) {
+    return { dataCleanup, churnType };
+  }
+  return {
+    dataCleanup: ensureOptionChecked(dataCleanup, DATA_CLEANUP_OPTIONS, '폐업'),
+    churnType: ensureOptionChecked(churnType, CHURN_TYPE_OPTIONS, '폐업'),
+  };
+}
+
+/** 수임처 폐업 상태 또는 이력 텍스트 기준으로 자료정리·유형 '폐업' 체크값 맞춤 */
+export function normalizeChurnClosureFields(
+  dataCleanup: string,
+  churnType: string,
+  extra?: { reason?: string; detail?: string; earlySign?: string },
+  client?: ChurnClientClosureHint | null,
+): { dataCleanup: string; churnType: string } {
+  if (!shouldApplyClosureCheckboxes({ dataCleanup, churnType, ...extra }, client)) {
+    return { dataCleanup, churnType };
+  }
+  return {
+    dataCleanup: ensureOptionChecked(dataCleanup, DATA_CLEANUP_OPTIONS, '폐업'),
+    churnType: ensureOptionChecked(churnType, CHURN_TYPE_OPTIONS, '폐업'),
+  };
+}
+
 export function parseNumberedItems(raw: string): Set<number> {
   const set = new Set<number>();
   for (const line of raw.split('\n')) {

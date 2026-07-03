@@ -3,45 +3,31 @@
 import { useEffect, useState } from 'react';
 import type { DashboardCalendarProgress } from '@/lib/dashboardCalendarProgress';
 
-function MiniProgressBar({
+function ProgressRow({
   label,
   done,
   total,
-  color,
+  accent,
 }: {
   label: string;
   done: number;
   total: number;
-  color: 'amber' | 'sky';
+  accent: 'blue' | 'teal';
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const barBg = color === 'amber' ? 'bg-amber-100' : 'bg-sky-100';
-  const barFill = color === 'amber' ? 'bg-amber-500' : 'bg-sky-500';
-  const textCls = color === 'amber' ? 'text-amber-900' : 'text-sky-900';
-  const badgeCls = color === 'amber'
-    ? 'bg-amber-100 text-amber-800 border-amber-200'
-    : 'bg-sky-100 text-sky-800 border-sky-200';
-  const cardCls = color === 'amber'
-    ? 'border-amber-200/80 bg-amber-50/60'
-    : 'border-sky-200/80 bg-sky-50/60';
+  const fill = accent === 'blue' ? 'bg-[#4b6cb7]' : 'bg-teal-500';
+  const track = accent === 'blue' ? 'bg-blue-100' : 'bg-teal-100';
 
   return (
-    <div className={`rounded-2xl border px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.03)] ${cardCls}`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${badgeCls}`}>
-          {label}
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-slate-700">{label}</span>
+        <span className="text-xs font-bold tabular-nums text-slate-500">
+          {done}/{total} · {pct}%
         </span>
-        <span className={`text-xs font-bold tabular-nums ${textCls}`}>{pct}%</span>
       </div>
-      <div className={`mt-2 flex items-center justify-between gap-2 text-xs font-semibold ${textCls}`}>
-        <span>진행도</span>
-        <span className="tabular-nums">{done}/{total}</span>
-      </div>
-      <div className={`mt-1.5 h-2.5 w-full overflow-hidden rounded-full ring-1 ring-white/60 ${barBg}`}>
-        <div
-          className={`h-full rounded-full transition-all ${barFill}`}
-          style={{ width: `${pct}%` }}
-        />
+      <div className={`mt-2 h-2 overflow-hidden rounded-full ${track}`}>
+        <div className={`h-full rounded-full transition-all ${fill}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -60,23 +46,32 @@ export default function HomeCalendarProgress() {
   if (!data) return null;
 
   return (
-    <div className="mb-4 rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/80 px-3 py-3 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-sm font-bold text-slate-800">이번 달 일정 진행도</span>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">{data.monthLabel}</span>
+    <div className="mb-3 shrink-0 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#4b6cb7]/10 text-[#4b6cb7]">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20V10M18 20V4M6 20v-4" />
+            </svg>
+          </span>
+          <span className="text-sm font-bold text-slate-800">이번 달 일정 진행도</span>
+        </div>
+        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+          {data.monthLabel}
+        </span>
       </div>
-      <div className="space-y-2">
-        <MiniProgressBar
+      <div className="space-y-2 p-3">
+        <ProgressRow
           label="개인 일정"
           done={data.personalCompleted}
           total={data.personalRegistered}
-          color="amber"
+          accent="blue"
         />
-        <MiniProgressBar
+        <ProgressRow
           label="회사 업무"
           done={data.companyCompleted}
           total={data.companyTotal}
-          color="sky"
+          accent="teal"
         />
       </div>
     </div>

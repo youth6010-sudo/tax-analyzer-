@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/apiError';
 import { requireUser } from '@/lib/auth';
+import { shouldFilterClientsToMine, type RestrictedClientListScope } from '@/lib/masterAccess';
 import { searchClients } from '@/lib/clientsDb';
 
 export async function GET(request: NextRequest) {
@@ -11,8 +12,9 @@ export async function GET(request: NextRequest) {
     const activeOnly = sp.get('activeOnly') === '1';
     const includeChurned = sp.get('includeChurned') === '1';
     const includeIntake = sp.get('includeIntake') !== '0';
-    // 기본은 전체 검색이지만, mineOnly=1이면 담당(본인) 수임처만 반환한다.
-    const mineOnly = sp.get('mineOnly') === '1';
+    const scope = sp.get('scope') as RestrictedClientListScope | null;
+    const requestedMineOnly = sp.get('mineOnly') === '1';
+    const mineOnly = requestedMineOnly || shouldFilterClientsToMine(user, scope);
     const clients = await searchClients(q, {
       activeOnly,
       includeChurned,

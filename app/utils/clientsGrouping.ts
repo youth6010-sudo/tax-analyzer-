@@ -11,12 +11,13 @@ export const MANAGER_DISPLAY_ORDER = Object.keys(STAFF_REAL_NAMES);
 export const UNCategorized = '미분류';
 export const SINGO_DAERI = '신고대리';
 export const NON_BUSINESS_CATEGORY = '비사업자';
+export const UNUSED_CATEGORY = '미사용';
 
 /** 구분·대분류 공통 표시 순서 */
-export const GROUP_DISPLAY_ORDER = ['개인', '법인', SINGO_DAERI, '미사용', '비사업자'] as const;
+export const GROUP_DISPLAY_ORDER = ['개인', '법인', SINGO_DAERI, UNUSED_CATEGORY, '비사업자'] as const;
 
 /** UI 대분류 canonical (import·표시 공통) */
-export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_DAERI, '미사용', '비사업자']);
+export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_DAERI, UNUSED_CATEGORY, '비사업자']);
 
 export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
@@ -83,7 +84,7 @@ export function compareGroupLabels(a: string, b: string): number {
 
 /** 왼쪽 열: 개인 → 신고대리 … / 오른쪽 열: 법인 → 미사용 … */
 export const LEFT_COLUMN_LABELS = new Set<string>(['개인', SINGO_DAERI]);
-export const RIGHT_COLUMN_LABELS = new Set<string>(['법인', '미사용', '비사업자']);
+export const RIGHT_COLUMN_LABELS = new Set<string>(['법인', UNUSED_CATEGORY, '비사업자']);
 
 /** 목록 기본 노출 대분류 */
 export const ALWAYS_VISIBLE_CATEGORIES = new Set<string>(['개인', '법인']);

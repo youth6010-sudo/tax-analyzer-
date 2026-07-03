@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/apiError';
 import { assertCanAccessClient, assertClientExists } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
+import { shouldFilterClientsToMine, type RestrictedClientListScope } from '@/lib/masterAccess';
 
 import {
   deleteClientById,
@@ -19,12 +20,17 @@ import { clientRecordToContact, clientRecordToListRecord } from '@/lib/clientMap
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } };
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
+    const scope = new URL(request.url).searchParams.get('scope') as RestrictedClientListScope | null;
     const client = await getClientById(id);
-    assertClientExists(client); // 조회는 전체 허용
+    if (shouldFilterClientsToMine(user, scope)) {
+      assertCanAccessClient(user, client);
+    } else {
+      assertClientExists(client);
+    }
     return NextResponse.json(
       { client, contact: clientRecordToContact(client!) },
       NO_STORE,

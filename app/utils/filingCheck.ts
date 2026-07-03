@@ -4,6 +4,7 @@ import {
   getClientCategory,
   SINGO_DAERI,
   NON_BUSINESS_CATEGORY,
+  UNUSED_CATEGORY,
   shouldShowComprehensiveOptionalClient,
 } from '@/app/utils/clientsGrouping';
 import { shouldShowInWithholdingPeriod, simplePayrollMonthlyPeriodKey, type SimplePayrollHalf } from '@/lib/periodUtils';
@@ -152,14 +153,16 @@ export function isVatSummaryOnlyClient(c: ClientRecord): boolean {
 }
 
 // 세목별 최초 신고대상 산출
-// 공통: 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
+// 공통: 미사용 대분류 제외, 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
 // 원천세: 신고대리 제외한 모든 업체
 // 부가세: 비사업자·(개인)면세 제외 — 단 법인 면세는 합계표 제출 위해 포함
 // 면세(사업장현황): 개인 면세사업자
 // 법인세: 법인 / 종소세: 개인(법인 아님) — 신고대리·비사업자 개인형은 코드 있을 때 포함
 export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): ClientRecord[] {
+  const active = clients.filter(c => getClientCategory(c) !== UNUSED_CATEGORY);
+
   if (taxId === 'comprehensive') {
-    return clients.filter(c => {
+    return active.filter(c => {
       if (isCorporateClient(c)) return false;
       const cat = getClientCategory(c);
       if (cat === SINGO_DAERI || cat === NON_BUSINESS_CATEGORY) {
@@ -170,7 +173,7 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
   }
 
   // 종소세 외에는 사업자번호 없는/000 시작 업체 제외
-  const withBizNo = clients.filter(c => !hasPlaceholderBizNo(c));
+  const withBizNo = active.filter(c => !hasPlaceholderBizNo(c));
 
   if (taxId === 'withholding' || taxId === 'yearEnd' || taxId === 'simplePayroll') {
     return withBizNo.filter(c => getClientCategory(c) !== SINGO_DAERI);

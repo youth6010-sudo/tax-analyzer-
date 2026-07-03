@@ -6,6 +6,7 @@ import type {
   ChecklistTaxType,
   PersonalChecklistDto,
 } from '@/app/types/calendar';
+import { checklistTaxTypeFromRow, normalizeChecklistTaxType } from '@/app/types/calendar';
 import { syncChecklistToClientNotes, unsyncChecklistFromClientNotes } from '@/lib/personalChecklistSync';
 import { getClientById } from '@/lib/clientsDb';
 
@@ -20,7 +21,7 @@ function toDto(
     clientName,
     title: row.title,
     category: row.category as ChecklistCategory,
-    taxType: (row.taxType || '') as ChecklistTaxType | '',
+    taxType: checklistTaxTypeFromRow(row),
     dueDate: row.dueDate,
     completed: row.completed,
     reflectInNotes: row.reflectInNotes,
@@ -113,8 +114,7 @@ export async function listPersonalChecklistInRangeForOwner(
 
 export type CreateChecklistInput = {
   title: string;
-  category: ChecklistCategory;
-  taxType?: ChecklistTaxType | '';
+  taxType: ChecklistTaxType;
   clientId?: string | null;
   dueDate?: string;
   reflectInNotes?: boolean;
@@ -130,13 +130,15 @@ export async function createPersonalChecklistItem(
   const dueDate = input.dueDate?.trim() || '';
   if (!dueDate) throw new Error('마감기한을 지정하세요.');
 
+  const normalized = normalizeChecklistTaxType(input.taxType);
+
   const [row] = await db
     .insert(personalChecklistItems)
     .values({
       ownerName,
       title,
-      category: input.category,
-      taxType: input.category === 'tax' ? (input.taxType || '') : '',
+      category: normalized.category,
+      taxType: normalized.taxType,
       clientId: input.clientId || null,
       dueDate,
       reflectInNotes: Boolean(input.reflectInNotes),
@@ -161,8 +163,7 @@ export async function createPersonalChecklistItem(
 
 export type UpdateChecklistInput = Partial<{
   title: string;
-  category: ChecklistCategory;
-  taxType: ChecklistTaxType | '';
+  taxType: ChecklistTaxType;
   clientId: string | null;
   dueDate: string;
   completed: boolean;
@@ -189,22 +190,21 @@ export async function updatePersonalChecklistItem(
 
   const nextReflect = patch.reflectInNotes ?? existing.reflectInNotes;
   const nextClientId = patch.clientId !== undefined ? patch.clientId : existing.clientId;
-  const nextCategory = patch.category ?? (existing.category as ChecklistCategory);
   const nextTaxType = patch.taxType !== undefined
     ? patch.taxType
-    : (existing.taxType as ChecklistTaxType | '');
+    : checklistTaxTypeFromRow(existing);
+  const normalized = normalizeChecklistTaxType(nextTaxType);
 
   const [row] = await db
     .update(personalChecklistItems)
     .set({
       ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
-      ...(patch.category !== undefined ? { category: patch.category } : {}),
-      ...(patch.taxType !== undefined ? { taxType: patch.taxType } : {}),
       ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
       ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate.trim() } : {}),
       ...(patch.completed !== undefined ? { completed: patch.completed } : {}),
       ...(patch.reflectInNotes !== undefined ? { reflectInNotes: patch.reflectInNotes } : {}),
-      taxType: nextCategory === 'tax' ? nextTaxType : '',
+      category: normalized.category,
+      taxType: normalized.taxType,
       updatedAt: new Date(),
     })
     .where(eq(personalChecklistItems.id, id))

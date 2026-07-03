@@ -78,6 +78,12 @@ type Props = {
   isWithholding: boolean;
   // 부가세: 납부서 장수만큼 회차별 날짜·금액 입력
   showInstallments: boolean;
+  /** 부가세 신고결과보고 금액 연동 중 */
+  vatAmountLinked?: boolean;
+  /** 납부금액 수동 입력 시 (연동 해제) */
+  onManualAmountEdit?: () => void;
+  /** 부가세 신고결과보고 금액 다시 연동 */
+  onReLinkVatAmount?: () => void;
 };
 
 export default function PaymentNoticeField({
@@ -87,8 +93,16 @@ export default function PaymentNoticeField({
   hasLocalTax,
   isWithholding,
   showInstallments,
+  vatAmountLinked = false,
+  onManualAmountEdit,
+  onReLinkVatAmount,
 }: Props) {
   const update = (patch: Partial<PaymentNotice>) => onChange({ ...value, ...patch });
+
+  const patchAmount = (patch: Partial<PaymentNotice>) => {
+    if (onManualAmountEdit) onManualAmountEdit();
+    update(patch);
+  };
 
   const useInstallments = showInstallments && value.slips >= 2;
 
@@ -106,7 +120,8 @@ export default function PaymentNoticeField({
     setDateTexts(value.installments.map(it => isoToDotted(it.date)));
   }, [value.installments]);
 
-  const updateInstallment = (i: number, patch: Partial<{ date: string; amount: number }>) => {
+  const updateInstallment = (i: number, patch: Partial<{ date: string; amount: number }>, manual = false) => {
+    if (manual) onManualAmountEdit?.();
     const next = value.installments.map((it, idx) => (idx === i ? { ...it, ...patch } : it));
     update({ installments: next });
   };
@@ -146,6 +161,24 @@ export default function PaymentNoticeField({
         </label>
       </div>
 
+      {vatAmountLinked && (
+        <p className="mt-2 text-[11px] font-medium text-blue-600">
+          신고 결과 보고 최종세액과 연동 중입니다. 직접 수정하면 수동 입력으로 전환됩니다.
+        </p>
+      )}
+      {!vatAmountLinked && onReLinkVatAmount && showInstallments && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-slate-500">수동 입력 중</span>
+          <button
+            type="button"
+            onClick={onReLinkVatAmount}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+          >
+            신고결과 다시 연동
+          </button>
+        </div>
+      )}
+
       {!useInstallments && (
         <div className={`mt-3 grid gap-3 ${hasLocalTax ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <div>
@@ -155,7 +188,7 @@ export default function PaymentNoticeField({
             <div className="relative">
               <MoneyInput
                 value={value.amount}
-                onChange={n => update({ amount: n })}
+                onChange={n => patchAmount({ amount: n })}
                 placeholder="예) 1,250,000"
                 className={`${inputClass} pr-8`}
               />
@@ -205,7 +238,7 @@ export default function PaymentNoticeField({
               <div className="relative">
                 <MoneyInput
                   value={it.amount}
-                  onChange={n => updateInstallment(i, { amount: n })}
+                  onChange={n => updateInstallment(i, { amount: n }, true)}
                   placeholder="금액"
                   className={`${inputClass} pr-7`}
                 />

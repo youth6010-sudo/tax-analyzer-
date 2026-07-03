@@ -12,7 +12,7 @@ import {
   EARLY_SIGN_ITEMS,
   REASON_ITEMS,
 } from '@/app/config/churnOptions';
-import type { ClientRecord } from '@/app/types/client';
+import type { ClientRecord, ChurnRecordView } from '@/app/types/client';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 export type ChurnFormValues = {
@@ -34,6 +34,8 @@ type Props = {
   saving: boolean;
   onSubmit: () => void;
   backfillNote?: boolean;
+  existingRecord?: ChurnRecordView | null;
+  onViewExistingRecord?: () => void;
 };
 
 function todayInputValue() {
@@ -61,6 +63,8 @@ export default function ChurnRegisterForm({
   saving,
   onSubmit,
   backfillNote,
+  existingRecord,
+  onViewExistingRecord,
 }: Props) {
   return (
     <form
@@ -78,7 +82,23 @@ export default function ChurnRegisterForm({
         {selectedClient && (
           <p className="mt-2 text-sm font-bold text-gray-900">{selectedClient.companyName}</p>
         )}
-        {backfillNote && selectedClient?.status === 'churned' && (
+        {existingRecord && (
+          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+            <p className="text-xs text-blue-800 font-medium">
+              이미 유출 이력이 등록되어 있습니다. 유출 이력 탭에서 확인·수정할 수 있습니다.
+            </p>
+            {onViewExistingRecord && (
+              <button
+                type="button"
+                onClick={onViewExistingRecord}
+                className="mt-1.5 text-xs font-bold text-blue-700 hover:underline"
+              >
+                유출 이력 보기
+              </button>
+            )}
+          </div>
+        )}
+        {backfillNote && !existingRecord && selectedClient?.status === 'churned' && (
           <p className="mt-2 text-xs text-amber-700 font-medium">
             유출 상태이나 이력이 없는 수임처입니다. 아래 내용을 입력해 이력을 등록합니다.
           </p>
@@ -163,10 +183,10 @@ export default function ChurnRegisterForm({
 
         <button
           type="submit"
-          disabled={saving || !selectedClient}
+          disabled={saving || !selectedClient || !!existingRecord}
           className="w-full py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50"
         >
-          {saving ? '등록 중…' : '유출 등록'}
+          {saving ? '등록 중…' : existingRecord ? '이미 등록됨' : '유출 등록'}
         </button>
       </div>
     </form>

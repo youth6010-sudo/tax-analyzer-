@@ -4,6 +4,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { TAX_MENU } from '@/app/config/taxTypes';
+import SidebarNavIcon, { iconForHref } from './SidebarNavIcon';
+
+const linkBase = 'flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors';
+const linkActive = 'bg-[#4b6cb7] font-semibold text-white shadow-sm';
+const linkInactive = 'text-slate-600 hover:bg-slate-100';
+
+function isActive(pathname: string, href: string): boolean {
+  const [path, query] = href.split('?');
+  if (query) {
+    return pathname === path;
+  }
+  if (path === '/') return pathname === '/';
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
 
 export default function HomeSidebarNav() {
   const pathname = usePathname();
@@ -19,19 +33,18 @@ export default function HomeSidebarNav() {
   const groups = TAX_MENU.filter(g => !('adminOnly' in g && g.adminOnly) || isAdmin);
 
   return (
-    <nav className="space-y-2.5 text-sm" aria-label="포털 메뉴">
+    <nav className="space-y-4 text-sm" aria-label="포털 메뉴">
       {groups.map(group => {
         if ('href' in group) {
           const href = group.href as string;
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const active = isActive(pathname, href);
           return (
             <div key={group.id}>
               <Link
                 href={href}
-                className={`block rounded-lg px-2.5 py-1.5 font-semibold transition-colors ${
-                  active ? 'bg-blue-600 text-white' : 'text-slate-800 hover:bg-slate-100'
-                }`}
+                className={`${linkBase} py-2.5 ${active ? linkActive : linkInactive}`}
               >
+                <SidebarNavIcon name={iconForHref(href)} />
                 {group.label}
               </Link>
             </div>
@@ -39,20 +52,17 @@ export default function HomeSidebarNav() {
         }
         return (
           <div key={group.id}>
-            <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{group.label}</p>
-            <ul className="mt-0.5 space-y-0.5">
+            <p className="px-2 text-[11px] font-bold tracking-wide text-slate-400">{group.label}</p>
+            <ul className="mt-1 space-y-0.5">
               {group.items.map(item => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const active = isActive(pathname, item.href);
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`block rounded-lg px-2.5 py-1.5 transition-colors ${
-                        active
-                          ? 'bg-blue-50 font-semibold text-blue-800 ring-1 ring-inset ring-blue-200'
-                          : 'text-slate-700 hover:bg-slate-50'
-                      }`}
+                      className={`${linkBase} ${active ? linkActive : linkInactive}`}
                     >
+                      <SidebarNavIcon name={iconForHref(item.href)} />
                       {item.label}
                     </Link>
                   </li>

@@ -1,6 +1,8 @@
 export type ChecklistCategory = 'tax' | 'other';
 
-export type ChecklistTaxType = 'withholding' | 'vat' | 'comprehensive' | 'corporate';
+export type ChecklistTaxType = 'withholding' | 'vat' | 'comprehensive' | 'corporate' | 'other';
+
+export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other'> | '';
 
 export type PersonalChecklistDto = {
   id: string;
@@ -9,7 +11,7 @@ export type PersonalChecklistDto = {
   clientName?: string;
   title: string;
   category: ChecklistCategory;
-  taxType: ChecklistTaxType | '';
+  taxType: ChecklistTaxType;
   dueDate: string;
   completed: boolean;
   reflectInNotes: boolean;
@@ -81,6 +83,23 @@ export function formatCalendarCreatedAt(iso: string | undefined): string {
   });
 }
 
+/** 체크리스트 마감일 (YYYY-MM-DD) */
+export function formatChecklistDueDate(dueDate: string | undefined): string {
+  if (!dueDate?.trim()) return '';
+  const [y, m, d] = dueDate.split('-').map(Number);
+  if (!y || !m || !d) return dueDate;
+  return `${y}. ${m}. ${d}.`;
+}
+
+export function isChecklistPastDue(dueDate: string | undefined): boolean {
+  if (!dueDate?.trim()) return false;
+  const due = new Date(`${dueDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
 export type TaxDeadlineDto = {
   id: string;
   taxType: string;
@@ -94,4 +113,29 @@ export const CHECKLIST_TAX_OPTIONS: { id: ChecklistTaxType; label: string }[] = 
   { id: 'vat', label: '부가세' },
   { id: 'comprehensive', label: '종합소득세' },
   { id: 'corporate', label: '법인세' },
+  { id: 'other', label: '기타' },
 ];
+
+export function checklistTaxTypeFromRow(row: {
+  category: string;
+  taxType: string | null;
+}): ChecklistTaxType {
+  if (row.category === 'other') return 'other';
+  const stored = row.taxType || '';
+  if (stored === 'withholding' || stored === 'vat' || stored === 'comprehensive' || stored === 'corporate') {
+    return stored;
+  }
+  return 'other';
+}
+
+export function normalizeChecklistTaxType(taxType: ChecklistTaxType): {
+  category: ChecklistCategory;
+  taxType: StoredChecklistTaxType;
+} {
+  if (taxType === 'other') return { category: 'other', taxType: '' };
+  return { category: 'tax', taxType };
+}
+
+export function getChecklistTypeLabel(taxType: ChecklistTaxType): string {
+  return CHECKLIST_TAX_OPTIONS.find(t => t.id === taxType)?.label ?? '기타';
+}

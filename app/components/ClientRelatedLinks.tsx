@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import type { PersonalChecklistDto } from '@/app/types/calendar';
-import { CHECKLIST_TAX_OPTIONS } from '@/app/types/calendar';
+import type { ChecklistTaxType } from '@/app/types/calendar';
+import { getChecklistTypeLabel } from '@/app/types/calendar';
 
 type Related = {
   hasInquiry: boolean;
@@ -11,8 +12,8 @@ type Related = {
   companyName: string;
 };
 
-function taxLabel(taxType: string): string {
-  return CHECKLIST_TAX_OPTIONS.find(t => t.id === taxType)?.label || '세목';
+function taxLabel(taxType: ChecklistTaxType): string {
+  return getChecklistTypeLabel(taxType);
 }
 
 export default function ClientRelatedLinks({
@@ -65,7 +66,7 @@ export default function ClientRelatedLinks({
                   className="flex items-center gap-2 text-xs rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-900 hover:bg-amber-100"
                 >
                   <span className="font-bold shrink-0">
-                    {item.category === 'tax' ? taxLabel(item.taxType) : '기타'}
+                    {taxLabel(item.taxType)}
                   </span>
                   <span className="truncate">{item.title}</span>
                   {item.reflectInNotes && (

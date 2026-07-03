@@ -105,12 +105,15 @@ function useResize(
 
 function PortalBrand() {
   return (
-    <Link href="/" className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-slate-50 transition-colors">
+    <Link
+      href="/"
+      className="flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo.png"
         alt="세무법인청년들"
-        className="h-[3.375rem] w-auto max-w-[6.75rem] object-contain shrink-0"
+        className="h-10 w-auto max-w-[4.5rem] object-contain shrink-0"
       />
       <div className="min-w-0 leading-tight">
         <p className="text-sm font-extrabold text-slate-800">B-System</p>
@@ -193,7 +196,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
       </div>
 
       <aside
-        className="fixed right-0 top-0 z-40 h-[100dvh] shrink-0 border-l border-slate-200 bg-white transition-[width] duration-200"
+        className="fixed right-0 top-0 z-40 h-[100dvh] shrink-0 border-l border-slate-200 bg-slate-50 transition-[width] duration-200"
         style={{ width: effectiveRightWidth }}
       >
         {rightMode === 'open' && (
@@ -214,13 +217,13 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
               <button
                 type="button"
                 onClick={() => setRightModePersist('open')}
-                className="rounded-md border border-amber-200 bg-amber-50 p-1.5 text-[10px] font-bold text-amber-900 hover:bg-amber-100"
+                className="rounded-md border border-[#4b6cb7]/30 bg-white p-1.5 text-[10px] font-bold text-[#4b6cb7] shadow-sm hover:bg-blue-50"
                 title="펼치기"
               >
                 ◀
               </button>
               <span
-                className="text-[10px] font-bold text-amber-800 [writing-mode:vertical-rl]"
+                className="text-[10px] font-bold text-[#4b6cb7] [writing-mode:vertical-rl]"
                 style={{ textOrientation: 'mixed' }}
               >
                 TO Do List

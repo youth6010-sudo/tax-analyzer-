@@ -16,3 +16,14 @@ export function isMasterUser(
 }
 
 export const isPortalAdmin = isMasterUser;
+
+/** 신고대상확인·안내문 생성기 등 — 마스터가 아니면 담당 수임처만 */
+export type RestrictedClientListScope = 'notice' | 'filing';
+
+export function shouldFilterClientsToMine(
+  user: { role?: 'staff' | 'admin'; loginId?: string } | null | undefined,
+  scope?: RestrictedClientListScope | null,
+): boolean {
+  if (isMasterUser(user)) return false;
+  return scope === 'notice' || scope === 'filing';
+}

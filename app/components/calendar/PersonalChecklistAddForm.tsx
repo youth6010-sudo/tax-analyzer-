@@ -5,15 +5,14 @@ import { getPortalClients, hydratePortal } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
 import {
   CHECKLIST_TAX_OPTIONS,
-  type ChecklistCategory,
   type ChecklistTaxType,
   type PersonalChecklistDto,
   formatCalendarCreatedAt,
 } from '@/app/types/calendar';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
-import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
+import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 
 type Props = {
   onCreated?: () => void;
@@ -25,21 +24,34 @@ type Props = {
   inModal?: boolean;
 };
 
-function checklistTaxToFilingTax(taxType: ChecklistTaxType): FilingTaxId {
+function checklistTaxToFilingTax(taxType: Exclude<ChecklistTaxType, 'other'>): FilingTaxId {
   return taxType;
 }
 
-function clientsForTaxType(clients: ClientRecord[], taxType: ChecklistTaxType): ClientRecord[] {
+function clientsForTaxType(clients: ClientRecord[], taxType: Exclude<ChecklistTaxType, 'other'>): ClientRecord[] {
   return filingTargets(clients, checklistTaxToFilingTax(taxType))
     .filter(c => c.status !== 'churned')
     .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
 }
 
-function filingTaxToChecklistTax(id: FilingTaxId | null): ChecklistTaxType | null {
-  if (id === 'withholding' || id === 'vat' || id === 'comprehensive' || id === 'corporate') {
-    return id;
-  }
-  return null;
+function FormRow({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="w-[5.5rem] shrink-0 pt-2 text-xs font-semibold leading-snug text-slate-600">
+        {label}
+        {required && <span className="text-red-500" aria-hidden> *</span>}
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
 }
 
 export default function PersonalChecklistAddForm({
@@ -52,11 +64,9 @@ export default function PersonalChecklistAddForm({
   inModal,
 }: Props) {
   const isEdit = Boolean(editItem);
-  const dashboardTax = useDashboardTaxFilter();
-  const initialTax = filingTaxToChecklistTax(dashboardTax) ?? 'withholding';
+  const isMaster = useIsMasterUser();
 
-  const [category, setCategory] = useState<ChecklistCategory>('tax');
-  const [taxType, setTaxType] = useState<ChecklistTaxType>(initialTax);
+  const [taxType, setTaxType] = useState<ChecklistTaxType>('other');
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(defaultClientId || '');
   const [dueDate, setDueDate] = useState('');
@@ -67,42 +77,41 @@ export default function PersonalChecklistAddForm({
   const [clientsLoading, setClientsLoading] = useState(true);
 
   useEffect(() => {
+    if (isMaster === null) return;
     hydratePortal();
     setClientsLoading(true);
-    fetch('/api/clients?mine=1', { cache: 'no-store' })
+    const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+    fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => setAllClients((d?.clients as ClientRecord[]) ?? getPortalClients()))
       .catch(() => setAllClients(getPortalClients()))
       .finally(() => setClientsLoading(false));
-  }, []);
+  }, [isMaster]);
 
   useEffect(() => {
     if (editItem) {
-      setCategory(editItem.category);
-      setTaxType(editItem.taxType || initialTax);
+      setTaxType(editItem.taxType);
       setTitle(editItem.title);
       setClientId(editItem.clientId || '');
       setDueDate(editItem.dueDate || '');
       setReflectInNotes(editItem.reflectInNotes);
       return;
     }
-    const mapped = filingTaxToChecklistTax(dashboardTax);
-    if (mapped) setTaxType(mapped);
-    setCategory('tax');
+    setTaxType('other');
     setTitle('');
     setClientId(defaultClientId || '');
     setDueDate('');
     setReflectInNotes(false);
-  }, [editItem, dashboardTax, defaultClientId, initialTax]);
+  }, [editItem, defaultClientId]);
 
   const clients = useMemo(() => {
-    if (category !== 'tax') {
+    if (taxType === 'other') {
       return allClients
         .filter(c => c.status !== 'churned')
         .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
     }
     return clientsForTaxType(allClients, taxType);
-  }, [allClients, category, taxType]);
+  }, [allClients, taxType]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -111,11 +120,6 @@ export default function PersonalChecklistAddForm({
 
   const handleTaxTypeChange = (next: ChecklistTaxType) => {
     setTaxType(next);
-    if (!isEdit) setClientId('');
-  };
-
-  const handleCategoryChange = (next: ChecklistCategory) => {
-    setCategory(next);
     if (!isEdit) setClientId('');
   };
 
@@ -137,16 +141,19 @@ export default function PersonalChecklistAddForm({
   };
 
   const submit = async () => {
-    if (!dueDate) {
-      alert('마감기한을 입력하세요.');
+    if (!title.trim()) {
+      window.alert('체크리스트 내용을 입력해주세요.');
+      return;
+    }
+    if (!dueDate.trim()) {
+      window.alert('마감일을 입력해주세요.');
       return;
     }
     setSaving(true);
     setError('');
     const payload = {
       title,
-      category,
-      taxType: category === 'tax' ? taxType : '',
+      taxType,
       clientId: clientId || null,
       dueDate,
       reflectInNotes,
@@ -163,7 +170,14 @@ export default function PersonalChecklistAddForm({
         },
       );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
+      if (!res.ok) {
+        const msg = (data as { error?: string }).error || '저장 실패';
+        if (msg.includes('마감')) {
+          window.alert('마감일을 입력해주세요.');
+          return;
+        }
+        throw new Error(msg);
+      }
       if (!isEdit) {
         setTitle('');
         setDueDate('');
@@ -183,71 +197,50 @@ export default function PersonalChecklistAddForm({
 
   return (
     <div className={wrapperCls}>
-      <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => handleCategoryChange('tax')}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            category === 'tax' ? 'bg-amber-100 text-amber-900' : 'text-slate-500 hover:bg-slate-50'
-          }`}
-        >
-          세목
-        </button>
-        <button
-          type="button"
-          onClick={() => handleCategoryChange('other')}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            category === 'other' ? 'bg-amber-100 text-amber-900' : 'text-slate-500 hover:bg-slate-50'
-          }`}
-        >
-          기타
-        </button>
-      </div>
-
-      {category === 'tax' && (
+      <FormRow label="구분">
         <select
           value={taxType}
           onChange={e => handleTaxTypeChange(e.target.value as ChecklistTaxType)}
           className={portalInput + ' w-full text-xs py-1.5'}
+          aria-label="구분"
         >
           {CHECKLIST_TAX_OPTIONS.map(o => (
             <option key={o.id} value={o.id}>{o.label}</option>
           ))}
         </select>
-      )}
+      </FormRow>
 
-      <input
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder="체크리스트 내용"
-        className={portalInput + ' w-full text-xs py-1.5'}
-      />
+      <FormRow label="체크리스트 내용" required>
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          className={portalInput + ' w-full text-xs py-1.5'}
+          aria-required
+        />
+      </FormRow>
 
-      <ScopedClientSearch
-        candidates={clients}
-        clientId={clientId}
-        onSelect={setClientId}
-        loading={clientsLoading}
-        placeholder={
-          category === 'tax'
-            ? `${CHECKLIST_TAX_OPTIONS.find(o => o.id === taxType)?.label ?? '세목'} 수임처 검색`
-            : '수임처 검색'
-        }
-        emptyHint={
-          category === 'tax' ? '해당 세목 범위에서 검색 결과 없음' : '검색 결과 없음'
-        }
-      />
+      <FormRow label="수임처">
+        <ScopedClientSearch
+          candidates={clients}
+          clientId={clientId}
+          onSelect={setClientId}
+          loading={clientsLoading}
+          placeholder="검색"
+          emptyHint={taxType === 'other' ? '검색 결과 없음' : '해당 세목 범위에서 검색 결과 없음'}
+        />
+      </FormRow>
 
-      <input
-        type="date"
-        value={dueDate}
-        onChange={e => setDueDate(e.target.value)}
-        className={portalInput + ' w-full text-xs py-1.5'}
-        required
-        aria-label="마감기한"
-      />
+      <FormRow label="마감일" required>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className={portalInput + ' w-full text-xs py-1.5'}
+          aria-required
+        />
+      </FormRow>
 
-      <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+      <label className="flex items-start gap-2 pl-[6.5rem] text-xs text-slate-600 cursor-pointer">
         <input
           type="checkbox"
           checked={reflectInNotes}
@@ -257,10 +250,14 @@ export default function PersonalChecklistAddForm({
         <span>업체별 특이사항에 반영</span>
       </label>
 
+      <p className="pl-[6.5rem] text-[10px] text-slate-400">
+        <span className="text-red-500">*</span> 필수 입력
+      </p>
+
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       {isEdit && editItem?.createdAt && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500 pl-[6.5rem]">
           등록: {formatCalendarCreatedAt(editItem.createdAt)}
         </p>
       )}
@@ -279,7 +276,7 @@ export default function PersonalChecklistAddForm({
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={saving || !title.trim()}
+          disabled={saving}
           className={portalBtnPrimary + ' flex-1 text-xs py-1.5'}
         >
           {saving ? '저장 중…' : isEdit ? '저장' : '추가'}

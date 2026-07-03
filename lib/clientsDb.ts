@@ -1,8 +1,13 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
 import type { ChurnSummary, ClientFeeChange, ClientStatus } from '@/app/types/client';
+import {
+  clientIndicatesBusinessClosure,
+  normalizeChurnClosureFields,
+  type ChurnClientClosureHint,
+} from '@/app/config/churnOptions';
 import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
 import { computeFeeSummary, readFeeBreakdown } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
@@ -606,22 +611,37 @@ export async function churnClient(
 
   if (existing.status === 'intake') throw new Error('NOT_FOUND');
 
-  const existingRecord = await getChurnRecordByClientId(id);
+  const existingRecord = await getChurnRecordForClient(id, existing.companyName);
   if (existingRecord) throw new Error('ALREADY_HAS_RECORD');
 
   const churnedAt = data.churnedAt?.trim()
     ? new Date(data.churnedAt.trim())
     : new Date();
 
+  const reason = data.reason.trim();
+  const detail = data.detail?.trim() ?? '';
+  const earlySign = data.earlySign?.trim() ?? '';
+  const clientHint: ChurnClientClosureHint = {
+    intakeData: existing.intakeData,
+    ntsStatusCode: existing.nts?.statusCode,
+    ntsClosedDate: existing.nts?.closedDate,
+  };
+  const { dataCleanup, churnType } = normalizeChurnClosureFields(
+    data.dataCleanup?.trim() ?? '',
+    data.churnType?.trim() ?? '',
+    { reason, detail, earlySign },
+    clientHint,
+  );
+
   await db.insert(churnRecords).values({
     clientId: id,
     companyName: existing.companyName,
     manager: data.manager?.trim() || existing.manager,
-    reason: data.reason.trim(),
-    detail: data.detail?.trim() ?? '',
-    churnType: data.churnType?.trim() ?? '',
-    dataCleanup: data.dataCleanup?.trim() ?? '',
-    earlySign: data.earlySign?.trim() ?? '',
+    reason,
+    detail,
+    churnType,
+    dataCleanup,
+    earlySign,
     feeAmount: data.feeAmount ?? existing.feeSummary ?? null,
     churnedAt,
     recordedByUserId,
@@ -639,23 +659,85 @@ export async function churnClient(
   return existing;
 }
 
+function clientClosureHintFromRow(row: {
+  clientId: string | null;
+  clientIntakeData?: Record<string, unknown> | null;
+  clientNtsStatusCode?: string | null;
+  clientNtsClosedDate?: string | null;
+}): ChurnClientClosureHint | null {
+  if (!row.clientId) return null;
+  return {
+    intakeData: row.clientIntakeData ?? undefined,
+    ntsStatusCode: row.clientNtsStatusCode,
+    ntsClosedDate: row.clientNtsClosedDate,
+  };
+}
+
+function churnRecordRowToView(row: {
+  id: string;
+  clientId: string | null;
+  companyName: string;
+  manager: string;
+  reason: string;
+  detail: string;
+  churnType: string;
+  dataCleanup: string;
+  earlySign: string;
+  feeAmount: number | null;
+  churnedAt: Date;
+  recordedByName: string | null;
+  clientIntakeData?: Record<string, unknown> | null;
+  clientNtsStatusCode?: string | null;
+  clientNtsClosedDate?: string | null;
+}) {
+  const { dataCleanup, churnType } = normalizeChurnClosureFields(
+    row.dataCleanup,
+    row.churnType,
+    {
+      reason: row.reason,
+      detail: row.detail,
+      earlySign: row.earlySign,
+    },
+    clientClosureHintFromRow(row),
+  );
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    companyName: row.companyName,
+    manager: row.manager,
+    reason: row.reason,
+    detail: row.detail,
+    churnType,
+    dataCleanup,
+    earlySign: row.earlySign,
+    feeAmount: row.feeAmount,
+    churnedAt: row.churnedAt.toISOString(),
+    recordedByName: row.recordedByName,
+  };
+}
+
+const churnRecordSelect = {
+  id: churnRecords.id,
+  clientId: churnRecords.clientId,
+  companyName: sql<string>`coalesce(${clients.companyName}, ${churnRecords.companyName})`,
+  manager: churnRecords.manager,
+  reason: churnRecords.reason,
+  detail: churnRecords.detail,
+  churnType: churnRecords.churnType,
+  dataCleanup: churnRecords.dataCleanup,
+  earlySign: churnRecords.earlySign,
+  feeAmount: churnRecords.feeAmount,
+  churnedAt: churnRecords.churnedAt,
+  recordedByName: users.name,
+  clientIntakeData: clients.intakeData,
+  clientNtsStatusCode: clients.ntsStatusCode,
+  clientNtsClosedDate: clients.ntsClosedDate,
+};
+
 export async function getChurnRecordByClientId(clientId: string) {
   const db = getDb();
   const [row] = await db
-    .select({
-      id: churnRecords.id,
-      clientId: churnRecords.clientId,
-      companyName: sql<string>`coalesce(${clients.companyName}, ${churnRecords.companyName})`,
-      manager: churnRecords.manager,
-      reason: churnRecords.reason,
-      detail: churnRecords.detail,
-      churnType: churnRecords.churnType,
-      dataCleanup: churnRecords.dataCleanup,
-      earlySign: churnRecords.earlySign,
-      feeAmount: churnRecords.feeAmount,
-      churnedAt: churnRecords.churnedAt,
-      recordedByName: users.name,
-    })
+    .select(churnRecordSelect)
     .from(churnRecords)
     .leftJoin(clients, eq(churnRecords.clientId, clients.id))
     .leftJoin(users, eq(churnRecords.recordedByUserId, users.id))
@@ -664,23 +746,131 @@ export async function getChurnRecordByClientId(clientId: string) {
     .limit(1);
 
   if (!row) return null;
-  return {
-    id: row.id,
-    clientId: row.clientId,
-    companyName: row.companyName,
-    manager: row.manager,
-    reason: row.reason,
-    detail: row.detail,
-    churnType: row.churnType,
-    dataCleanup: row.dataCleanup,
-    earlySign: row.earlySign,
-    feeAmount: row.feeAmount,
-    churnedAt: row.churnedAt.toISOString(),
-    recordedByName: row.recordedByName,
-  };
+  return churnRecordRowToView(row);
+}
+
+/** clientId 또는 상호로 연결된 유출 이력 (엑셀 import 등 clientId 미연결 포함) */
+export async function getChurnRecordForClient(clientId: string, companyName: string) {
+  const byId = await getChurnRecordByClientId(clientId);
+  if (byId) return byId;
+
+  const name = companyName.trim();
+  if (!name) return null;
+
+  const db = getDb();
+  const [row] = await db
+    .select(churnRecordSelect)
+    .from(churnRecords)
+    .leftJoin(clients, eq(churnRecords.clientId, clients.id))
+    .leftJoin(users, eq(churnRecords.recordedByUserId, users.id))
+    .where(sql`trim(${churnRecords.companyName}) = ${name}`)
+    .orderBy(desc(churnRecords.churnedAt))
+    .limit(1);
+
+  if (!row) return null;
+  return churnRecordRowToView(row);
+}
+
+export async function syncChurnClosureFromClients(): Promise<number> {
+  const db = getDb();
+  const companyKey = (name: string) =>
+    name.trim().normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+
+  const rows = await db
+    .select({
+      id: churnRecords.id,
+      dataCleanup: churnRecords.dataCleanup,
+      churnType: churnRecords.churnType,
+      reason: churnRecords.reason,
+      detail: churnRecords.detail,
+      earlySign: churnRecords.earlySign,
+      clientIntakeData: clients.intakeData,
+      clientNtsStatusCode: clients.ntsStatusCode,
+      clientNtsClosedDate: clients.ntsClosedDate,
+    })
+    .from(churnRecords)
+    .innerJoin(clients, eq(churnRecords.clientId, clients.id));
+
+  let updated = 0;
+  for (const row of rows) {
+    const clientHint: ChurnClientClosureHint = {
+      intakeData: row.clientIntakeData,
+      ntsStatusCode: row.clientNtsStatusCode,
+      ntsClosedDate: row.clientNtsClosedDate,
+    };
+    const { dataCleanup, churnType } = normalizeChurnClosureFields(
+      row.dataCleanup,
+      row.churnType,
+      { reason: row.reason, detail: row.detail, earlySign: row.earlySign },
+      clientHint,
+    );
+    if (dataCleanup === row.dataCleanup && churnType === row.churnType) continue;
+    await db
+      .update(churnRecords)
+      .set({ dataCleanup, churnType })
+      .where(eq(churnRecords.id, row.id));
+    updated += 1;
+  }
+
+  const closureClients = await db
+    .select({
+      companyName: clients.companyName,
+      intakeData: clients.intakeData,
+      ntsStatusCode: clients.ntsStatusCode,
+      ntsClosedDate: clients.ntsClosedDate,
+    })
+    .from(clients);
+
+  const closureByName = new Map<string, ChurnClientClosureHint>();
+  for (const c of closureClients) {
+    const hint: ChurnClientClosureHint = {
+      intakeData: c.intakeData,
+      ntsStatusCode: c.ntsStatusCode,
+      ntsClosedDate: c.ntsClosedDate,
+    };
+    if (!clientIndicatesBusinessClosure(hint)) continue;
+    const key = companyKey(c.companyName);
+    if (key && !closureByName.has(key)) closureByName.set(key, hint);
+  }
+
+  if (closureByName.size > 0) {
+    const orphans = await db
+      .select({
+        id: churnRecords.id,
+        companyName: churnRecords.companyName,
+        dataCleanup: churnRecords.dataCleanup,
+        churnType: churnRecords.churnType,
+        reason: churnRecords.reason,
+        detail: churnRecords.detail,
+        earlySign: churnRecords.earlySign,
+      })
+      .from(churnRecords)
+      .where(isNull(churnRecords.clientId));
+
+    for (const row of orphans) {
+      const clientHint = closureByName.get(companyKey(row.companyName));
+      if (!clientHint) continue;
+      const { dataCleanup, churnType } = normalizeChurnClosureFields(
+        row.dataCleanup,
+        row.churnType,
+        { reason: row.reason, detail: row.detail, earlySign: row.earlySign },
+        clientHint,
+      );
+      if (dataCleanup === row.dataCleanup && churnType === row.churnType) continue;
+      await db
+        .update(churnRecords)
+        .set({ dataCleanup, churnType })
+        .where(eq(churnRecords.id, row.id));
+      updated += 1;
+    }
+  }
+
+  return updated;
 }
 
 export async function listChurnRecords(filters?: { mineOnly?: boolean; userId?: string; userName?: string }) {
+  await syncChurnClosureFromClients();
+
   const db = getDb();
   const conditions: SQL[] = [];
   if (filters?.mineOnly && filters.userId) {
@@ -702,6 +892,9 @@ export async function listChurnRecords(filters?: { mineOnly?: boolean; userId?: 
       feeAmount: churnRecords.feeAmount,
       churnedAt: churnRecords.churnedAt,
       recordedByName: users.name,
+      clientIntakeData: clients.intakeData,
+      clientNtsStatusCode: clients.ntsStatusCode,
+      clientNtsClosedDate: clients.ntsClosedDate,
     })
     .from(churnRecords)
     .leftJoin(clients, eq(churnRecords.clientId, clients.id))
@@ -709,25 +902,25 @@ export async function listChurnRecords(filters?: { mineOnly?: boolean; userId?: 
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(sql`${churnRecords.churnedAt} desc`);
 
-  return rows.map(r => ({
-    id: r.id,
-    clientId: r.clientId,
-    companyName: r.companyName,
-    manager: r.manager,
-    reason: r.reason,
-    detail: r.detail,
-    churnType: r.churnType,
-    dataCleanup: r.dataCleanup,
-    earlySign: r.earlySign,
-    feeAmount: r.feeAmount,
-    churnedAt: r.churnedAt.toISOString(),
-    recordedByName: r.recordedByName,
-  }));
+  return rows.map(r => churnRecordRowToView(r));
 }
 
 export async function listChurnedClientsWithoutRecord(filters?: { mineOnly?: boolean; userId?: string; userName?: string }) {
   const db = getDb();
-  const conditions = [eq(clients.status, 'churned'), isNull(churnRecords.id)];
+  const conditions: SQL[] = [
+    eq(clients.status, 'churned'),
+    notExists(
+      db
+        .select({ id: churnRecords.id })
+        .from(churnRecords)
+        .where(
+          or(
+            eq(churnRecords.clientId, clients.id),
+            sql`trim(${churnRecords.companyName}) = trim(${clients.companyName})`,
+          ),
+        ),
+    ),
+  ];
   if (filters?.mineOnly && filters.userId) {
     const mineCond = buildMineOnlyClientCondition(filters.userId, filters.userName ?? '');
     if (mineCond) conditions.push(mineCond);
@@ -736,7 +929,6 @@ export async function listChurnedClientsWithoutRecord(filters?: { mineOnly?: boo
   const rows = await db
     .select({ client: clients })
     .from(clients)
-    .leftJoin(churnRecords, eq(churnRecords.clientId, clients.id))
     .where(and(...conditions))
     .orderBy(clients.companyName);
 
@@ -758,6 +950,30 @@ export async function updateChurnRecord(
   },
 ) {
   const db = getDb();
+  const [existing] = await db.select().from(churnRecords).where(eq(churnRecords.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+
+  let clientHint: ChurnClientClosureHint | null = null;
+  const linkId = data.clientId !== undefined ? data.clientId : existing.clientId;
+  if (linkId) {
+    const [clientRow] = await db
+      .select({
+        intakeData: clients.intakeData,
+        ntsStatusCode: clients.ntsStatusCode,
+        ntsClosedDate: clients.ntsClosedDate,
+      })
+      .from(clients)
+      .where(eq(clients.id, linkId))
+      .limit(1);
+    if (clientRow) {
+      clientHint = {
+        intakeData: clientRow.intakeData,
+        ntsStatusCode: clientRow.ntsStatusCode,
+        ntsClosedDate: clientRow.ntsClosedDate,
+      };
+    }
+  }
+
   const patch: Record<string, unknown> = {};
   if (data.clientId !== undefined) patch.clientId = data.clientId;
   if (data.reason !== undefined) patch.reason = data.reason.trim();
@@ -770,6 +986,18 @@ export async function updateChurnRecord(
   if (data.churnedAt !== undefined && data.churnedAt.trim()) {
     patch.churnedAt = new Date(data.churnedAt.trim());
   }
+
+  const reason = (patch.reason as string | undefined) ?? existing.reason;
+  const detail = (patch.detail as string | undefined) ?? existing.detail;
+  const earlySign = (patch.earlySign as string | undefined) ?? existing.earlySign;
+  const { dataCleanup, churnType } = normalizeChurnClosureFields(
+    (patch.dataCleanup as string | undefined) ?? existing.dataCleanup,
+    (patch.churnType as string | undefined) ?? existing.churnType,
+    { reason, detail, earlySign },
+    clientHint,
+  );
+  patch.dataCleanup = dataCleanup;
+  patch.churnType = churnType;
 
   const [row] = await db
     .update(churnRecords)
@@ -793,6 +1021,9 @@ export async function updateChurnRecord(
       feeAmount: churnRecords.feeAmount,
       churnedAt: churnRecords.churnedAt,
       recordedByName: users.name,
+      clientIntakeData: clients.intakeData,
+      clientNtsStatusCode: clients.ntsStatusCode,
+      clientNtsClosedDate: clients.ntsClosedDate,
     })
     .from(churnRecords)
     .leftJoin(clients, eq(churnRecords.clientId, clients.id))
@@ -801,20 +1032,7 @@ export async function updateChurnRecord(
     .limit(1);
 
   const r = full[0];
-  return {
-    id: r.id,
-    clientId: r.clientId,
-    companyName: r.companyName,
-    manager: r.manager,
-    reason: r.reason,
-    detail: r.detail,
-    churnType: r.churnType,
-    dataCleanup: r.dataCleanup,
-    earlySign: r.earlySign,
-    feeAmount: r.feeAmount,
-    churnedAt: r.churnedAt.toISOString(),
-    recordedByName: r.recordedByName,
-  };
+  return churnRecordRowToView(r);
 }
 
 export async function getChurnRecordById(id: string) {
