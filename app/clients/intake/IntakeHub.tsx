@@ -26,10 +26,8 @@ import {
   getPortalClients,
   getPortalInquiries,
   getPortalProcesses,
-  hydratePortal,
+  patchPortalIntake,
   patchPortalProcess,
-  prefetchPortal,
-  refreshPortalBootstrap,
   subscribePortal,
 } from '@/app/utils/portalStore';
 
@@ -148,6 +146,9 @@ export default function IntakeHub() {
     getPortalProcesses().map(r => normalizeProcess(r)),
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(
+    () => getPortalInquiries().length === 0 && getPortalProcesses().length === 0,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
 
   const clientRefs = useMemo<ClientNameRef[]>(() => {
@@ -198,18 +199,46 @@ export default function IntakeHub() {
   }, [urlInquiry, urlProcessId, urlQ, inquiries, processes, clientRefs]);
 
   const load = useCallback(async () => {
-    await prefetchPortal(true);
-    setInquiries(getPortalInquiries().map(r => normalizeInquiry(r)));
-    setProcesses(getPortalProcesses().map(r => normalizeProcess(r)));
+    const hasCache = getPortalInquiries().length > 0 || getPortalProcesses().length > 0;
+    if (!hasCache) setListLoading(true);
+
+    try {
+      const [iRes, pRes] = await Promise.all([
+        fetch('/api/intake/inquiries', { credentials: 'same-origin' }),
+        fetch('/api/intake/processes', { credentials: 'same-origin' }),
+      ]);
+
+      let inqRaw = getPortalInquiries();
+      let procRaw = getPortalProcesses();
+
+      if (iRes.ok) {
+        const d = (await iRes.json()) as { items?: Record<string, unknown>[] };
+        inqRaw = d.items ?? [];
+      }
+      if (pRes.ok) {
+        const d = (await pRes.json()) as { items?: Record<string, unknown>[] };
+        procRaw = d.items ?? [];
+      }
+
+      if (inqRaw.length > 0 || procRaw.length > 0) {
+        patchPortalIntake(inqRaw, procRaw);
+      }
+
+      setInquiries(inqRaw.map(r => normalizeInquiry(r)));
+      setProcesses(procRaw.map(r => normalizeProcess(r)));
+    } catch {
+      if (!hasCache) {
+        setInquiries([]);
+        setProcesses([]);
+      }
+    } finally {
+      setListLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (urlInquiry || urlProcessId) {
-      void load();
-    } else if (!inquiries.length && !processes.length) {
-      hydratePortal();
-    }
-  }, [urlInquiry, urlProcessId, load, inquiries.length, processes.length]);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     return subscribePortal(() => {
@@ -272,7 +301,6 @@ export default function IntakeHub() {
 
   const syncChecklistToPortal = useCallback((row: ProcessRow) => {
     patchPortalProcess(row.id, row as unknown as Record<string, unknown>);
-    void refreshPortalBootstrap();
   }, []);
 
   const toggleCheck = useCallback(async (process: ProcessRow, key: string) => {
@@ -453,6 +481,8 @@ export default function IntakeHub() {
             router.push(buildIntakeDeepLink({ inquiryId, processId }));
           }}
         />
+      ) : listLoading ? (
+        <p className="portal-meta py-12 text-center">유입·유입프로세스를 불러오는 중…</p>
       ) : (
         <IntakeSplitView
           inquiries={filteredInquiries}

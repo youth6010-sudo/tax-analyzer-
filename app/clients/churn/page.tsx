@@ -19,9 +19,7 @@ import {
 import {
   getPortalChurnMissingClients,
   getPortalChurnRecords,
-  hydratePortal,
   patchPortalChurn,
-  prefetchPortal,
   subscribePortal,
 } from '@/app/utils/portalStore';
 
@@ -74,22 +72,10 @@ function ChurnPageInner() {
   }, []);
 
   useEffect(() => {
-    hydratePortal();
     syncFromPortal();
     void loadHistory({ silent: hasChurnCache() });
     return subscribePortal(syncFromPortal);
   }, [syncFromPortal, loadHistory]);
-
-  useEffect(() => {
-    if (tab === 'register') void loadHistory({ silent: true });
-  }, [tab, loadHistory]);
-
-  useEffect(() => {
-    void prefetchPortal().then(() => {
-      syncFromPortal();
-      setHistoryLoading(false);
-    });
-  }, [syncFromPortal]);
 
   useEffect(() => {
     if (searchParams.get('clientId') || searchParams.get('tab') === 'history') {

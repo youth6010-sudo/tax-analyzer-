@@ -26,7 +26,7 @@ export type PortalBootstrap = {
   churnMissingClients: ClientRecord[];
 };
 
-const STORAGE_KEY = 'portalBootstrap:v8';
+const STORAGE_KEY = 'portalBootstrap:v9';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
@@ -62,7 +62,14 @@ function writeStorage(data: PortalBootstrap): void {
     localStorage.setItem(STORAGE_KEY, raw);
     sessionStorage.setItem(STORAGE_KEY, raw);
   } catch {
-    /* quota */
+    try {
+      const slim: PortalBootstrap = { ...data, clients: [], searchIndex: [] };
+      const raw = JSON.stringify(slim);
+      localStorage.setItem(STORAGE_KEY, raw);
+      sessionStorage.setItem(STORAGE_KEY, raw);
+    } catch {
+      /* quota */
+    }
   }
 }
 
@@ -263,8 +270,29 @@ export function clearPortal(): void {
   notify();
 }
 
+export function patchPortalIntake(
+  inquiries: Record<string, unknown>[],
+  processes: Record<string, unknown>[],
+): void {
+  if (!memory) memory = readStorage();
+  if (!memory) return;
+  memory = { ...memory, inquiries, processes, fetchedAt: Date.now() };
+  writeStorage(memory);
+  notify();
+}
+
 export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
-  if (!force && memory && Date.now() - memory.fetchedAt < FRESH_MS) {
+  const intakeLikelyStale =
+    memory &&
+    memory.clients.length > 0 &&
+    !(memory.inquiries?.length) &&
+    !(memory.processes?.length);
+  if (
+    !force &&
+    !intakeLikelyStale &&
+    memory &&
+    Date.now() - memory.fetchedAt < FRESH_MS
+  ) {
     return Promise.resolve(memory);
   }
   if (inflight) return inflight;

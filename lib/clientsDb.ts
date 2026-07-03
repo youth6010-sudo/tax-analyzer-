@@ -869,8 +869,6 @@ export async function syncChurnClosureFromClients(): Promise<number> {
 }
 
 export async function listChurnRecords(filters?: { mineOnly?: boolean; userId?: string; userName?: string }) {
-  await syncChurnClosureFromClients();
-
   const db = getDb();
   const conditions: SQL[] = [];
   if (filters?.mineOnly && filters.userId) {

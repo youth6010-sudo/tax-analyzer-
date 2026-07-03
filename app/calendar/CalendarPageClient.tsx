@@ -345,7 +345,7 @@ export default function CalendarPageClient() {
           />
         )}
 
-        {selectedDate && (
+        {selectedDate && selectedDate !== todayIso && (
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900 mb-3">
               {formatCalendarDateLabel(selectedDate)} 일정
