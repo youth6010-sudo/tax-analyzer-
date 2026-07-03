@@ -1,12 +1,14 @@
 'use client';
 
-import { managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
+import { COMPANY_CHIP_COLOR, managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
 
 type Props = {
   members: string[];
   currentUser: string;
   selected: string[];
   onChange: (names: string[]) => void;
+  showCompany: boolean;
+  onShowCompanyChange: (show: boolean) => void;
 };
 
 function sortMembers(names: string[]): string[] {
@@ -25,6 +27,8 @@ export default function CalendarTeamFilter({
   currentUser,
   selected,
   onChange,
+  showCompany,
+  onShowCompanyChange,
 }: Props) {
   const toggle = (name: string) => {
     if (selected.includes(name)) {
@@ -40,7 +44,7 @@ export default function CalendarTeamFilter({
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm mb-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <p className="text-sm font-bold text-slate-800">담당자 일정 표시</p>
+        <p className="text-sm font-bold text-slate-800">업무구분</p>
         <div className="flex gap-2">
           <button
             type="button"
@@ -59,6 +63,19 @@ export default function CalendarTeamFilter({
         </div>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showCompany}
+            onChange={() => onShowCompanyChange(!showCompany)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          <span
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10 ${COMPANY_CHIP_COLOR}`}
+            aria-hidden
+          />
+          <span className="font-medium text-slate-900">사내</span>
+        </label>
         {sortMembers(members).map(name => (
           <label
             key={name}

@@ -57,6 +57,12 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
           <path d="M9 21v-4h6v4" />
         </svg>
       );
+    case 'clients-directory':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2z" />
+        </svg>
+      );
     case 'intake':
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -161,6 +167,7 @@ const HREF_ICON: Record<string, string> = {
   '/calendar': 'calendar',
   '/youth-ids': 'youth-id',
   '/clients': 'clients',
+  '/clients/directory': 'clients-directory',
   '/clients/intake': 'intake',
   '/clients/churn': 'churn',
   '/clients/nts-monitor': 'nts-monitor',

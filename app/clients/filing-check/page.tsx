@@ -16,7 +16,20 @@ import {
   MANAGER_DISPLAY_ORDER,
   UNCategorized,
 } from '@/app/utils/clientsGrouping';
+import {
+  applyFilingCheckClientOrder,
+  applyManagerScopedClientOrder,
+  CLIENT_SORT_STORAGE_KEY,
+  commitFilingCheckClientReorder,
+  FILING_CHECK_CLIENT_ORDER_STORAGE_KEY,
+  MANAGER_ORDER_STORAGE_KEY,
+  compareManagersByOrder,
+  type ClientSortKey,
+} from '@/app/utils/clientListPrefs';
+import { useTriangleListReorder } from '@/app/utils/useTriangleListReorder';
+import { managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
+import ScopeToggle from '@/app/components/portal/ScopeToggle';
 import {
   FILING_TAXES,
   VAT_PHASES,
@@ -267,6 +280,55 @@ export default function FilingCheckPage() {
   );
 }
 
+function FilingReorderIndexCell({
+  index,
+  enabled,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+}: {
+  index: number;
+  enabled: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  if (!enabled) {
+    return <span className="text-xs tabular-nums text-slate-400">{index + 1}</span>;
+  }
+  return (
+    <div className="flex flex-col items-center justify-center gap-0 leading-none">
+      <button
+        type="button"
+        disabled={!canMoveUp}
+        onClick={e => {
+          e.stopPropagation();
+          onMoveUp();
+        }}
+        className="flex h-3.5 w-4 items-center justify-center text-[9px] leading-none text-slate-400 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-25"
+        aria-label="위로"
+      >
+        ▲
+      </button>
+      <span className="text-xs tabular-nums text-slate-400">{index + 1}</span>
+      <button
+        type="button"
+        disabled={!canMoveDown}
+        onClick={e => {
+          e.stopPropagation();
+          onMoveDown();
+        }}
+        className="flex h-3.5 w-4 items-center justify-center text-[9px] leading-none text-slate-400 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-25"
+        aria-label="아래로"
+      >
+        ▼
+      </button>
+    </div>
+  );
+}
+
 function FilingCheckPageInner() {
   const searchParams = useSearchParams();
   const cachedClients = usePortalClients();
@@ -315,9 +377,13 @@ function FilingCheckPageInner() {
   const [incomeUploadTotal, setIncomeUploadTotal] = useState(0);
   const [incomeUploadExtra, setIncomeUploadExtra] = useState(0);
   const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
+  const [clientListSort] = useLocalStorage<ClientSortKey>(CLIENT_SORT_STORAGE_KEY, 'code');
+  const [managerOrder] = useLocalStorage<string[]>(MANAGER_ORDER_STORAGE_KEY, [...MANAGER_DISPLAY_ORDER]);
+  const [clientOrderVersion, setClientOrderVersion] = useState(0);
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
   const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [statFilter, setStatFilter] = useState<IncomeStatFilter>('all');
+  const [listScope, setListScope] = useState<'targets' | 'all'>('targets');
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
 
   const cycle = getCycle(tax);
@@ -328,7 +394,15 @@ function FilingCheckPageInner() {
 
   useEffect(() => {
     setStatFilter('all');
+    setListScope('targets');
   }, [tax, period.year, period.month, period.vatPhase, selManager]);
+
+  useEffect(() => {
+    const onStorage = () => setClientOrderVersion(v => v + 1);
+    window.addEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
+    return () =>
+      window.removeEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
+  }, []);
 
   const persistSession = useCallback(
     async (data: CheckRecord) => {
@@ -588,38 +662,27 @@ function FilingCheckPageInner() {
   const managerOptions = useMemo(() => {
     const set = new Set<string>();
     for (const c of clients) set.add(c.manager?.trim() || UNCategorized);
-    return [...set].sort((a, b) => {
-      if (a === UNCategorized) return 1;
-      if (b === UNCategorized) return -1;
-      const ia = MANAGER_DISPLAY_ORDER.indexOf(a);
-      const ib = MANAGER_DISPLAY_ORDER.indexOf(b);
-      const ra = ia >= 0 ? ia : Number.MAX_SAFE_INTEGER;
-      const rb = ib >= 0 ? ib : Number.MAX_SAFE_INTEGER;
-      if (ra !== rb) return ra - rb;
-      return a.localeCompare(b, 'ko');
-    });
-  }, [clients]);
+    return [...set].sort((a, b) => compareManagersByOrder(a, b, managerOrder, UNCategorized));
+  }, [clients, managerOrder]);
 
   const targets = useMemo(() => {
     const scoped =
       selManager === ALL_MANAGERS
         ? taxTargetsAll
         : taxTargetsAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager);
+    const ordered =
+      selManager === ALL_MANAGERS
+        ? applyManagerScopedClientOrder(
+            scoped,
+            clientListSort,
+            selManager,
+            ALL_MANAGERS,
+            managerOrder,
+          )
+        : applyFilingCheckClientOrder(scoped, clientListSort, selManager, tax);
     const manual = record.extraClients.map(manualToClient);
-    return [...scoped, ...manual].sort((a, b) => {
-      const ca = getClientDouzoneCode(a);
-      const cb = getClientDouzoneCode(b);
-      if (ca && cb) {
-        const da = ca.replace(/\D/g, '');
-        const db = cb.replace(/\D/g, '');
-        if (da && db) return parseInt(da, 10) - parseInt(db, 10);
-        return ca.localeCompare(cb, 'ko', { numeric: true });
-      }
-      if (ca) return -1;
-      if (cb) return 1;
-      return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
-    });
-  }, [taxTargetsAll, selManager, record.extraClients]);
+    return [...ordered, ...manual];
+  }, [taxTargetsAll, selManager, record.extraClients, clientListSort, managerOrder, tax, clientOrderVersion]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const isReceived = (id: string, bizNo: string) =>
@@ -710,6 +773,11 @@ function FilingCheckPageInner() {
     [targets, record.excluded, tax, withheld],
   );
 
+  const orderedTargets = useMemo(
+    () => [...activeTargets, ...excludedTargets],
+    [activeTargets, excludedTargets],
+  );
+
   const isGroupReceived = (g: ComprehensiveFilingGroup) => isGroupFilingReceived(g);
 
   const activeComprehensiveGroups = useMemo(
@@ -761,8 +829,9 @@ function FilingCheckPageInner() {
   }, [comprehensiveGroups, statFilter, record.excluded, tax, withheld]);
 
   const displayedTargets = useMemo(() => {
-    if (statFilter === 'all') return targets;
-    return targets.filter(c => {
+    const base = listScope === 'all' ? orderedTargets : activeTargets;
+    if (statFilter === 'all') return base;
+    return base.filter(c => {
       const excluded = excludeReasonOf(c) !== null;
       if (statFilter === 'target') return !excluded;
       const received = isReceived(c.id, c.businessNo);
@@ -771,7 +840,7 @@ function FilingCheckPageInner() {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targets, statFilter, record.excluded, record.overrides, excelSet, tax, withheld]);
+  }, [orderedTargets, activeTargets, listScope, statFilter, record.excluded, record.overrides, excelSet, tax, withheld]);
 
   const statFilterBanner =
     statFilter !== 'all' ? (
@@ -804,6 +873,52 @@ function FilingCheckPageInner() {
   const setRowNote = (id: string, note: string) => {
     patchRecord({ rowNotes: { ...record.rowNotes, [id]: note } });
   };
+
+  const managerScopedClients = useMemo(
+    () =>
+      selManager === ALL_MANAGERS
+        ? []
+        : taxTargetsAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager),
+    [taxTargetsAll, selManager],
+  );
+
+  const canReorderTargets = !locked && selManager !== ALL_MANAGERS;
+  const reorderableTargetIds = useMemo(() => {
+    if (!canReorderTargets) return [];
+    if (tax === 'comprehensive') {
+      return displayedComprehensiveGroups.map(g => g.primaryClientId);
+    }
+    return displayedTargets.filter(c => !isManualId(c.id)).map(c => c.id);
+  }, [canReorderTargets, tax, displayedComprehensiveGroups, displayedTargets]);
+  const handleTargetOrderCommit = useCallback(
+    (nextIds: string[]) => {
+      if (!canReorderTargets) return;
+      commitFilingCheckClientReorder(selManager, tax, nextIds, managerScopedClients, clientListSort);
+      setClientOrderVersion(v => v + 1);
+    },
+    [canReorderTargets, selManager, tax, managerScopedClients, clientListSort],
+  );
+  const { orderedIds: reorderableOrderedIds, moveUp, moveDown } =
+    useTriangleListReorder(reorderableTargetIds, handleTargetOrderCommit);
+
+  const displayedComprehensiveGroupsOrdered = useMemo(() => {
+    if (!canReorderTargets || tax !== 'comprehensive') return displayedComprehensiveGroups;
+    const byPrimary = new Map(displayedComprehensiveGroups.map(g => [g.primaryClientId, g]));
+    return reorderableOrderedIds
+      .map(id => byPrimary.get(id))
+      .filter((g): g is ComprehensiveFilingGroup => !!g);
+  }, [canReorderTargets, tax, displayedComprehensiveGroups, reorderableOrderedIds]);
+
+  const displayedTargetsForTable = useMemo(() => {
+    if (!canReorderTargets || tax === 'comprehensive') return displayedTargets;
+    const reorderable = displayedTargets.filter(c => !isManualId(c.id));
+    const manual = displayedTargets.filter(c => isManualId(c.id));
+    const byId = new Map(reorderable.map(c => [c.id, c]));
+    const ordered = reorderableOrderedIds
+      .map(id => byId.get(id))
+      .filter((c): c is ClientRecord => !!c);
+    return [...ordered, ...manual];
+  }, [canReorderTargets, tax, displayedTargets, reorderableOrderedIds]);
 
   const setClientFilingType = async (c: ClientRecord, value: '당월' | '전월') => {
     if (isManualId(c.id) || locked) return;
@@ -1167,6 +1282,12 @@ function FilingCheckPageInner() {
                     : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
                 ].join(' ')}
               >
+                {!isAll && (
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-black/10 ${managerChipColor(name, MANAGER_LEGEND_ORDER)}`}
+                    aria-hidden
+                  />
+                )}
                 {name}
                 {self && <span className="text-[9px] font-bold text-blue-500">나</span>}
                 <span
@@ -1438,6 +1559,25 @@ function FilingCheckPageInner() {
 
       {statFilterBanner}
 
+      {!isIncomeTypeTax && tax !== 'comprehensive' && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <ScopeToggle
+            value={listScope === 'targets' ? 'mine' : 'all'}
+            onChange={v => setListScope(v === 'mine' ? 'targets' : 'all')}
+            mineLabel="신고대상"
+            allLabel="전체"
+          />
+          {canReorderTargets && (
+            <span className="text-[11px] text-slate-400">순번 ▲▼ 순서 변경</span>
+          )}
+          {listScope === 'all' && excludedTargets.length > 0 && (
+            <span className="text-xs text-slate-500">
+              제외 {excludedTargets.length}곳은 목록 하단에 취소선으로 표시됩니다
+            </span>
+          )}
+        </div>
+      )}
+
       {excelSet.size > 0 && (
         <p className={`${portalAlertInfo} mb-4`}>
           접수목록 {excelSet.size}건을 사업자번호로 대조했습니다.
@@ -1501,6 +1641,12 @@ function FilingCheckPageInner() {
       {/* 대상 목록 */}
       <div className={`${portalCard} overflow-hidden`}>
         {tax === 'comprehensive' ? (
+        <>
+          {canReorderTargets && (
+            <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-400">
+              순번 ▲▼ 으로 순서 변경 (담당자·세목별 전용 — 수임처 관리와 별도)
+            </p>
+          )}
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
@@ -1523,7 +1669,7 @@ function FilingCheckPageInner() {
               </tr>
             ) : (
               <>
-                {displayedComprehensiveGroups.map((g, i) => {
+                {displayedComprehensiveGroupsOrdered.map((g, i) => {
                   const primary = g.clients[0];
                   const manualExcluded = isManualExcluded(g.primaryClientId);
                   const reason = excludeReasonOf(primary);
@@ -1532,6 +1678,7 @@ function FilingCheckPageInner() {
                   const siteState = groupSiteDoneState(g);
                   const restCount = g.clients.length - 1;
                   const siteLabel = g.displayCompanyLabel;
+                  const groupCount = displayedComprehensiveGroupsOrdered.length;
                   return (
                     <tr
                       key={g.groupKey}
@@ -1549,7 +1696,16 @@ function FilingCheckPageInner() {
                           title="홈택스 접수목록(엑셀) 대조"
                         />
                       </td>
-                      <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{i + 1}</td>
+                      <td className="px-2 py-2 text-center">
+                        <FilingReorderIndexCell
+                          index={i}
+                          enabled={canReorderTargets}
+                          canMoveUp={i > 0}
+                          canMoveDown={i < groupCount - 1}
+                          onMoveUp={() => moveUp(g.primaryClientId)}
+                          onMoveDown={() => moveDown(g.primaryClientId)}
+                        />
+                      </td>
                       <td className="px-2 py-2 tabular-nums text-slate-500">{g.douzoneCode || '-'}</td>
                       <td className="px-2 py-2 font-semibold text-slate-800">{g.representative}</td>
                       <td className="whitespace-nowrap px-2 py-2 tabular-nums text-slate-600">
@@ -1629,7 +1785,7 @@ function FilingCheckPageInner() {
                   const reason = excludeReasonOf(c);
                   const excluded = reason !== null;
                   const received = !excluded && isReceived(c.id, c.businessNo);
-                  const rowNo = displayedComprehensiveGroups.length + mi + 1;
+                  const rowNo = displayedComprehensiveGroupsOrdered.length + mi + 1;
                   return (
                     <tr
                       key={c.id}
@@ -1708,7 +1864,14 @@ function FilingCheckPageInner() {
             )}
           </tbody>
         </table>
+        </>
         ) : (
+        <>
+          {canReorderTargets && (
+            <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-400">
+              순번 ▲▼ 으로 순서 변경 (담당자·세목별 전용 — 수임처 관리와 별도)
+            </p>
+          )}
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
@@ -1732,12 +1895,17 @@ function FilingCheckPageInner() {
                 </td>
               </tr>
             ) : (
-              displayedTargets.map((c, i) => {
+              displayedTargetsForTable.map((c, i) => {
                 const manualExcluded = isManualExcluded(c.id);
                 const reason = excludeReasonOf(c);
                 const excluded = reason !== null;
                 const autoExcluded = excluded && !manualExcluded; // 연말정산: 원천세 이력 없음
                 const received = !excluded && isReceived(c.id, c.businessNo);
+                const reorderableCount = displayedTargetsForTable.filter(x => !isManualId(x.id)).length;
+                const reorderIndex = displayedTargetsForTable
+                  .slice(0, i + 1)
+                  .filter(x => !isManualId(x.id)).length - 1;
+                const canReorderRow = canReorderTargets && !isManualId(c.id);
                 return (
                   <tr
                     key={c.id}
@@ -1758,7 +1926,16 @@ function FilingCheckPageInner() {
                         className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                       />
                     </td>
-                    <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{i + 1}</td>
+                    <td className="px-2 py-2 text-center">
+                      <FilingReorderIndexCell
+                        index={canReorderRow ? reorderIndex : i}
+                        enabled={canReorderRow}
+                        canMoveUp={canReorderRow && reorderIndex > 0}
+                        canMoveDown={canReorderRow && reorderIndex < reorderableCount - 1}
+                        onMoveUp={() => moveUp(c.id)}
+                        onMoveDown={() => moveDown(c.id)}
+                      />
+                    </td>
                     <td className="px-2 py-2 tabular-nums text-slate-500">{getClientDouzoneCode(c) || '-'}</td>
                     <td className="px-2 py-2">
                       <div className="flex min-w-0 items-center gap-1.5">
@@ -1771,18 +1948,15 @@ function FilingCheckPageInner() {
                             {c.companyName || '(이름 없음)'}
                           </span>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => setIncomePanelClient(c)}
-                            className={`break-words text-left font-semibold hover:underline ${
+                          <span
+                            className={`break-words font-semibold ${
                               excluded
                                 ? 'text-slate-400 line-through decoration-slate-400'
-                                : 'text-slate-800 hover:text-blue-600'
+                                : 'text-slate-800'
                             }`}
-                            title="클릭 — 간이지급·연말정산지급명세서 신고대상 설정"
                           >
                             {c.companyName || '(이름 없음)'}
-                          </button>
+                          </span>
                         )}
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
@@ -1888,6 +2062,7 @@ function FilingCheckPageInner() {
             )}
           </tbody>
         </table>
+        </>
         )}
       </div>
 

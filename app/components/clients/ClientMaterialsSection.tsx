@@ -61,7 +61,9 @@ type Props = {
   canEdit?: boolean;
   compact?: boolean;
   embedded?: boolean;
+  hideSaveButton?: boolean;
   onSaved?: (intakeData: Record<string, unknown>) => void;
+  onSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 };
 
 export default function ClientMaterialsSection({
@@ -69,7 +71,9 @@ export default function ClientMaterialsSection({
   canEdit = true,
   compact = false,
   embedded = false,
+  hideSaveButton = false,
   onSaved,
+  onSaveRef,
 }: Props) {
   const isCorporate = isClientCorporateForMaterials(client);
   const placeholders = materialsPlaceholders(isCorporate);
@@ -101,6 +105,10 @@ export default function ClientMaterialsSection({
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (onSaveRef) onSaveRef.current = () => save();
+  });
 
   const incomeTaxTitle = isCorporate ? '법인세' : '소득세';
 
@@ -164,7 +172,7 @@ export default function ClientMaterialsSection({
       {!embedded && (
         <div className="mb-1 flex items-center justify-between gap-2">
           <h4 className="text-[10px] font-bold text-slate-500">필요자료 · 특이사항</h4>
-          {canEdit && (
+          {canEdit && !hideSaveButton && (
             <div className="flex items-center gap-2">
               {savedTick && <span className="text-[10px] font-medium text-emerald-600">저장됨</span>}
               <button
@@ -179,7 +187,7 @@ export default function ClientMaterialsSection({
           )}
         </div>
       )}
-      {embedded && canEdit && (
+      {embedded && canEdit && !hideSaveButton && (
         <div className="mb-2 flex items-center justify-end gap-2">
           {savedTick && <span className="text-[10px] font-medium text-emerald-600">저장됨</span>}
           <button

@@ -40,8 +40,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-function isDetailOnlyPatch(body: Partial<ClientPatch>): boolean {
-  return body.companyName === undefined && body.intakeData !== undefined;
+function isDetailOnlyPatch(body: Partial<ClientPatch> & Record<string, unknown>): boolean {
+  if (body.companyName !== undefined || body.intakeData === undefined) return false;
+  const keys = Object.keys(body);
+  const allowed = new Set(['intakeData', 'feeSummary', 'program', 'businessEntityType']);
+  return keys.length > 0 && keys.every(k => allowed.has(k));
 }
 
 function isFeeSummaryOnlyPatch(body: Record<string, unknown>): body is { feeSummary: number | null } {
@@ -101,6 +104,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           intakeData: body.intakeData!,
           feeSummary: body.feeSummary,
           program: body.program,
+          businessEntityType:
+            typeof body.businessEntityType === 'string' ? body.businessEntityType : undefined,
         })
       : await updateClient(id, body as ClientPatch);
 

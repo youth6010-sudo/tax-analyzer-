@@ -46,3 +46,26 @@ export function formatNtsDate(yyyymmdd: string): string {
   if (d.length !== 8) return yyyymmdd || '';
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
 }
+
+/** 국세청 과세유형 → 간이 / 일반 / 면세 */
+export function normalizeNtsTaxType(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  if (/간이/.test(t)) return '간이';
+  if (/면세/.test(t)) return '면세';
+  if (/일반|과세/.test(t)) return '일반';
+  return t;
+}
+
+export function ntsTaxTypeBadgeClass(label: string): string {
+  switch (label) {
+    case '간이':
+      return 'border-sky-200 bg-sky-50 text-sky-800';
+    case '일반':
+      return 'border-indigo-200 bg-indigo-50 text-indigo-800';
+    case '면세':
+      return 'border-violet-200 bg-violet-50 text-violet-800';
+    default:
+      return 'border-slate-200 bg-slate-50 text-slate-600';
+  }
+}

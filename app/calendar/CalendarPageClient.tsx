@@ -10,7 +10,7 @@ import CalendarTeamFilter from '@/app/components/calendar/CalendarTeamFilter';
 import { eventDisplayTitle } from '@/app/components/calendar/CalendarEventChip';
 import type { CalendarEventDto, CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
 import { formatCalendarCreatedAt } from '@/app/types/calendar';
-import { buildCalendarLegend, formatCalendarDateLabel, resolveEventChipColor } from '@/lib/calendarManagerColors';
+import { formatCalendarDateLabel, resolveEventChipColor } from '@/lib/calendarManagerColors';
 import {
   canDeleteCalendarEvent,
   companyEventFromCalendar,
@@ -21,6 +21,7 @@ import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklis
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
+const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
 
 function monthRange(year: number, month: number): { from: string; to: string } {
   const from = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -48,6 +49,16 @@ function expandRangeToIncludeDate(
     from: range.from < date ? range.from : date,
     to: range.to > date ? range.to : date,
   };
+}
+
+function readStoredShowCompany(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const raw = localStorage.getItem(SHOW_COMPANY_KEY);
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+  } catch { /* ignore */ }
+  return true;
 }
 
 function readStoredTeam(currentUser: string): string[] | null {
@@ -81,6 +92,7 @@ export default function CalendarPageClient() {
   const [members, setMembers] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState('');
   const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
+  const [showCompany, setShowCompany] = useState(true);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDto | null>(null);
@@ -105,6 +117,7 @@ export default function CalendarPageClient() {
         const me = (data as { currentUser?: string }).currentUser || '';
         setMembers(team);
         setCurrentUser(me);
+        setShowCompany(readStoredShowCompany());
         const stored = readStoredTeam(me);
         const valid = (stored || [me]).filter(n => team.includes(n));
         setSelectedOwners(valid.length > 0 ? valid : [me]);
@@ -115,6 +128,13 @@ export default function CalendarPageClient() {
       .then(d => setIsAdmin(!!(d as { isMaster?: boolean })?.isMaster))
       .catch(() => { /* ignore */ });
   }, []);
+
+  const handleShowCompanyChange = (show: boolean) => {
+    setShowCompany(show);
+    try {
+      localStorage.setItem(SHOW_COMPANY_KEY, show ? '1' : '0');
+    } catch { /* ignore */ }
+  };
 
   const handleOwnersChange = (names: string[]) => {
     setSelectedOwners(names);
@@ -178,20 +198,21 @@ export default function CalendarPageClient() {
     setSelectedDate(now.toISOString().slice(0, 10));
   };
 
-  const dayEvents = useMemo(
-    () => events.filter(ev => selectedDate >= ev.startDate && selectedDate <= ev.endDate),
-    [events, selectedDate],
+  const visibleEvents = useMemo(
+    () => events.filter(ev => ev.kind !== 'company' || showCompany),
+    [events, showCompany],
   );
 
-  const todayEvents = useMemo(
-    () => events.filter(ev => todayIso >= ev.startDate && todayIso <= ev.endDate),
-    [events, todayIso],
+  const scheduleEvents = useMemo(
+    () =>
+      visibleEvents.filter(ev => selectedDate >= ev.startDate && selectedDate <= ev.endDate),
+    [visibleEvents, selectedDate],
   );
 
-  const legend = useMemo(
-    () => buildCalendarLegend(members, selectedOwners),
-    [members, selectedOwners],
-  );
+  const scheduleTitle =
+    selectedDate === todayIso
+      ? `오늘의 일정 — ${formatCalendarDateLabel(todayIso)}`
+      : `${formatCalendarDateLabel(selectedDate)} 일정`;
 
   const openChecklistEdit = useCallback(async (event: CalendarEventDto) => {
     const id = personalChecklistId(event);
@@ -303,29 +324,20 @@ export default function CalendarPageClient() {
             currentUser={currentUser}
             selected={selectedOwners}
             onChange={handleOwnersChange}
+            showCompany={showCompany}
+            onShowCompanyChange={handleShowCompanyChange}
           />
         )}
 
-        <div className="flex flex-wrap gap-2 mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-          {legend.map(item => (
-            <span
-              key={item.key}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 shadow-sm"
-            >
-              <span className={`h-3 w-3 rounded-full ring-1 ring-black/10 ${item.color}`} />
-              {item.label}
-            </span>
-          ))}
-        </div>
-
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
-          <h2 className="text-base font-bold text-slate-900 mb-3">
-            오늘의 일정 — {formatCalendarDateLabel(todayIso)}
-          </h2>
+          <h2 className="text-base font-bold text-slate-900 mb-3">{scheduleTitle}</h2>
           {loading ? (
             <p className="text-sm text-slate-500">불러오는 중…</p>
           ) : (
-            renderEventList(todayEvents, '오늘 일정 없음')
+            renderEventList(
+              scheduleEvents,
+              selectedDate === todayIso ? '오늘 일정 없음' : '일정 없음',
+            )
           )}
         </div>
 
@@ -336,22 +348,13 @@ export default function CalendarPageClient() {
             year={year}
             month={month}
             mode={mode}
-            events={events}
+            events={visibleEvents}
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onEventDoubleClick={ev => void openChecklistEdit(ev)}
             currentUser={currentUser}
             members={members}
           />
-        )}
-
-        {selectedDate && selectedDate !== todayIso && (
-          <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-3">
-              {formatCalendarDateLabel(selectedDate)} 일정
-            </h2>
-            {renderEventList(dayEvents, '일정 없음')}
-          </div>
         )}
 
         {selectedEvent && (

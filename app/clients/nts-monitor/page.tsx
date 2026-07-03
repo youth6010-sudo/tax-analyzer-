@@ -12,6 +12,8 @@ import {
 } from '../../components/portal/uiClasses';
 import type { ClientRecord, NtsStatusCache } from '../../types/client';
 import { formatNtsDate, ntsBadgeClass, ntsStatusLabel } from '@/app/utils/ntsStatus';
+import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
+import { getPortalChurnRecords, hydratePortal } from '@/app/utils/portalStore';
 
 interface BatchResult {
   status?: string;
@@ -52,8 +54,11 @@ export default function NtsMonitorPage() {
   }, []);
 
   useEffect(() => {
+    hydratePortal();
     void load(mineOnly);
   }, [load, mineOnly]);
+
+  const churnRecords = useMemo(() => getPortalChurnRecords(), [clients]);
 
   const runCheck = useCallback(async () => {
     if (clients.length === 0) return;
@@ -108,6 +113,7 @@ export default function NtsMonitorPage() {
       const t = Date.parse(nts.checkedAt) || 0;
       if (t > last) last = t;
       if (isClosedCode(nts.statusCode)) {
+        if (clientHasChurnRegistration(c, churnRecords)) continue;
         flaggedList.push({ client: c, nts });
         if (nts.statusCode === '03') closed += 1;
         else resting += 1;
@@ -125,7 +131,7 @@ export default function NtsMonitorPage() {
       uncheckedCount: unchecked,
       lastCheckedAt: last ? new Date(last) : null,
     };
-  }, [clients, override]);
+  }, [clients, override, churnRecords]);
 
   return (
     <PortalPageShell>

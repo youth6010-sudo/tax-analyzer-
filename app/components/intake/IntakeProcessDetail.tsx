@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CHECKLIST_KEYS, CHECKLIST_LABEL_FULL, type ProcessRow } from './intakeUtils';
+import { CHECKLIST_KEYS, CHECKLIST_LABEL_FULL, intakeChecklistProgress, type ProcessRow } from './intakeUtils';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 
 const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
@@ -139,7 +139,10 @@ export default function IntakeProcessDetail({
           수정
         </button>
       </div>
-      <p className="text-[10px] font-bold text-gray-400 uppercase mt-3 mb-2">온보딩 체크 ({CHECKLIST_KEYS.filter(k => process.checklist?.[k]).length}/{CHECKLIST_KEYS.length})</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase mt-3 mb-2">
+        온보딩 체크 ({intakeChecklistProgress(process.checklist).done}/
+        {intakeChecklistProgress(process.checklist).total})
+      </p>
       <ul className="text-xs text-gray-600 space-y-0.5">
         {CHECKLIST_KEYS.filter(k => process.checklist?.[k]).map(k => (
           <li key={k}>✓ {CHECKLIST_LABEL_FULL[k]}</li>

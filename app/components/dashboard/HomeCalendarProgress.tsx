@@ -12,11 +12,11 @@ function ProgressRow({
   label: string;
   done: number;
   total: number;
-  accent: 'blue' | 'teal';
+  accent: 'blue' | 'navy';
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const fill = accent === 'blue' ? 'bg-[#4b6cb7]' : 'bg-teal-500';
-  const track = accent === 'blue' ? 'bg-blue-100' : 'bg-teal-100';
+  const fill = accent === 'navy' ? 'bg-[#1e3a8a]' : 'bg-[#4b6cb7]';
+  const track = accent === 'navy' ? 'bg-blue-100' : 'bg-blue-100';
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
@@ -71,7 +71,7 @@ export default function HomeCalendarProgress() {
           label="회사 업무"
           done={data.companyCompleted}
           total={data.companyTotal}
-          accent="teal"
+          accent="navy"
         />
       </div>
     </div>

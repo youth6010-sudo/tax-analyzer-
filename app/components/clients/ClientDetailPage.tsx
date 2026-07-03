@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ClientRecord } from '@/app/types/client';
+import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
+import { getPortalChurnRecords } from '@/app/utils/portalStore';
 import { clientRecordToContact } from '@/lib/clientMapper';
 import ContactDetailView from '@/app/components/ContactDetailView';
 import ClientRelatedLinks from '@/app/components/ClientRelatedLinks';
@@ -9,8 +11,10 @@ import ClientDouzoneSection from '@/app/components/ClientDouzoneSection';
 import ClientContactsPanel from '@/app/components/clients/ClientContactsPanel';
 import ClientMainMetaSection from '@/app/components/clients/ClientMainMetaSection';
 import ClientMaterialsSection from '@/app/components/clients/ClientMaterialsSection';
+import ClientBizNoDuplicatesPanel from '@/app/components/clients/ClientBizNoDuplicatesPanel';
 import ClientBlueholeCompact from '@/app/components/clients/ClientBlueholeCompact';
 import ClientNtsCompact from '@/app/components/clients/ClientNtsCompact';
+import { portalBtnPrimary, portalBtnSecondary } from '@/app/components/portal/uiClasses';
 
 function Section({
   title,
@@ -51,7 +55,28 @@ export default function ClientDetailPage({
   relatedSlot?: React.ReactNode;
 }) {
   const [intakeData, setIntakeData] = useState(client.intakeData ?? {});
+  const [unifiedEditing, setUnifiedEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const contactSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const metaSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const materialsSaveRef = useRef<(() => Promise<void>) | null>(null);
   const rosterClient = { ...client, intakeData };
+  const suppressChurnPrompt = useMemo(
+    () => clientHasChurnRegistration(rosterClient, getPortalChurnRecords()),
+    [rosterClient],
+  );
+
+  const handleUnifiedSave = async () => {
+    setSaving(true);
+    try {
+      await contactSaveRef.current?.();
+      await metaSaveRef.current?.();
+      await materialsSaveRef.current?.();
+      setUnifiedEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -61,21 +86,64 @@ export default function ClientDetailPage({
         </div>
       )}
 
+      {canEdit && (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {!unifiedEditing ? (
+            <button
+              type="button"
+              onClick={() => setUnifiedEditing(true)}
+              className={portalBtnPrimary}
+            >
+              수정
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setUnifiedEditing(false)}
+                disabled={saving}
+                className={portalBtnSecondary}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUnifiedSave()}
+                disabled={saving}
+                className={portalBtnPrimary}
+              >
+                {saving ? '저장 중…' : '저장'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <article className="rounded-lg border border-slate-200 bg-white">
         <ContactDetailView
           contact={clientRecordToContact(client)}
           primaryContactName={client.primaryContactName}
           canEdit={canEdit}
           variant="flat"
-          titleAside={<ClientContactsPanel clientId={client.id} canEdit={canEdit} inline />}
+          forcedEditing={unifiedEditing}
+          hideEditButton
+          onSaveRef={contactSaveRef}
+          titleAside={<ClientContactsPanel clientId={client.id} canEdit={canEdit && unifiedEditing} inline />}
         />
 
         <div className="border-t border-slate-200 px-4 pb-4">
+          <Section title="등록 · 중복 확인" accent="amber">
+            <ClientBizNoDuplicatesPanel client={rosterClient} canEdit={canEdit} />
+          </Section>
+
           <Section title="사업장 · 신고대상" accent="violet">
             <ClientMainMetaSection
               clientId={client.id}
               intakeData={intakeData}
               canEdit={canEdit}
+              forcedEditing={unifiedEditing}
+              hideEditControls
+              onSaveRef={metaSaveRef}
               onSaved={setIntakeData}
               embedded
             />
@@ -88,6 +156,7 @@ export default function ClientDetailPage({
                 clientId={client.id}
                 businessNumber={client.businessNo}
                 initialNts={client.nts ?? null}
+                suppressChurnPrompt={suppressChurnPrompt}
               />
             </div>
           </Section>
@@ -95,12 +164,13 @@ export default function ClientDetailPage({
           <Section title="필요자료 · 특이사항" accent="blue">
             <ClientMaterialsSection
               client={rosterClient}
-              canEdit={canEdit}
+              canEdit={canEdit && unifiedEditing}
+              hideSaveButton
+              onSaveRef={materialsSaveRef}
               embedded
               onSaved={setIntakeData}
             />
           </Section>
-
 
           {client.source === 'douzone_export' && (
             <Section title="기타 상세정보">
@@ -109,7 +179,7 @@ export default function ClientDetailPage({
                 intakeData={intakeData}
                 feeSummary={client.feeSummary}
                 program={client.program}
-                canEdit={canEdit}
+                canEdit={canEdit && unifiedEditing}
                 embedded
               />
             </Section>
@@ -122,6 +192,8 @@ export default function ClientDetailPage({
           )}
         </div>
       </article>
+
+      <ClientRelatedLinks clientId={client.id} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 
-/** 사내 일정 — 검은색 */
-export const COMPANY_CHIP_COLOR = 'bg-slate-900';
+/** 사내 일정 — 남색 */
+export const COMPANY_CHIP_COLOR = 'bg-[#1e3a8a]';
 
 /** 담당자 고정 색 (팀 닉네임 기준) — `app/globals.css` `.cal-mgr-*` */
 export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
@@ -13,6 +13,27 @@ export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
   찰리: 'cal-mgr-charlie',
   페리: 'cal-mgr-perry',
 };
+
+/** 담당자 accent 보더·dot용 hex (캘린더 칩과 동일) */
+export const MANAGER_HEX_BY_NAME: Record<string, string> = {
+  다야: '#e8c84a',
+  블루: '#9dcce8',
+  리아: '#c9b8e8',
+  윈터: '#e87898',
+  인디: '#64748b',
+  찰리: '#dc2626',
+  페리: '#22a55a',
+};
+
+const DEFAULT_MANAGER_HEX = '#cbd5e1';
+
+export function managerHexColor(name: string): string {
+  return MANAGER_HEX_BY_NAME[name.trim()] ?? DEFAULT_MANAGER_HEX;
+}
+
+export function managerAccentBorderStyle(name: string): { borderLeftColor: string } {
+  return { borderLeftColor: managerHexColor(name) };
+}
 
 /** 파스텔·밝은 칩 — 진한 글자 */
 const LIGHT_MANAGER_CHIP_COLORS = new Set([

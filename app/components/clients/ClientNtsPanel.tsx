@@ -13,7 +13,9 @@ import {
   formatNtsDate,
   isNtsAlert,
   ntsBadgeClass,
+  normalizeNtsTaxType,
   ntsStatusLabel,
+  ntsTaxTypeBadgeClass,
   type NtsStatusView,
 } from '@/app/utils/ntsStatus';
 
@@ -34,6 +36,7 @@ export default function ClientNtsPanel({
   canEdit,
   openDatePrefill = '',
   initialNts = null,
+  suppressChurnPrompt = false,
 }: {
   clientId: string;
   businessNumber?: string;
@@ -41,6 +44,7 @@ export default function ClientNtsPanel({
   canEdit: boolean;
   openDatePrefill?: string;
   initialNts?: NtsStatusView | null;
+  suppressChurnPrompt?: boolean;
 }) {
   const normalizedBiz = (businessNumber || '').replace(/\D/g, '');
   const [nts, setNts] = useState<NtsStatusView | null>(initialNts);
@@ -75,6 +79,7 @@ export default function ClientNtsPanel({
   }
 
   const alert = nts ? isNtsAlert(nts.statusCode) : false;
+  const taxLabel = nts ? normalizeNtsTaxType(nts.taxType) : '';
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3.5">
@@ -97,7 +102,13 @@ export default function ClientNtsPanel({
             >
               {ntsStatusLabel(nts)}
             </span>
-            {nts.taxType && <span className="text-xs text-gray-500">{nts.taxType}</span>}
+            {taxLabel && (
+              <span
+                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${ntsTaxTypeBadgeClass(taxLabel)}`}
+              >
+                {taxLabel}
+              </span>
+            )}
             {nts.closedDate && (
               <span className="text-xs text-gray-500">폐업일 {formatNtsDate(nts.closedDate)}</span>
             )}
@@ -107,7 +118,7 @@ export default function ClientNtsPanel({
               조회: {new Date(nts.checkedAt).toLocaleString('ko-KR')}
             </p>
           )}
-          {alert && (
+          {alert && !suppressChurnPrompt && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-relaxed text-red-900">
               <b>{ntsStatusLabel(nts)}</b> 상태로 확인됩니다. 내용을 확인 후 유출(폐업·휴업) 등록을 진행하세요.
               <Link

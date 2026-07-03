@@ -5,12 +5,22 @@ import type { ClientRecord } from '@/app/types/client';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
 import {
+  applyClientDisplayOrder,
   groupClientsByManager,
   MANAGER_DISPLAY_ORDER,
   splitManagerClientsByCategory,
   sumClientFees,
   SINGO_DAERI,
 } from '@/app/utils/clientsGrouping';
+import {
+  commitClientListReorder,
+  MANAGER_CLIENT_ORDER_STORAGE_KEY,
+  readManagerClientOrder,
+} from '@/app/utils/clientListPrefs';
+import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
+import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
+import { clientNeedsNtsChurnPrompt } from '@/app/utils/churnMatch';
+import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManagerColors';
 import { resolveClientRecordFee, readFeeBreakdown, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
@@ -68,8 +78,8 @@ function contactDisplay(c: ClientRecord): string {
   return mobile || phone || '—';
 }
 
-const ROW_GRID_FEE = 'grid grid-cols-[1.25rem_minmax(0,1fr)_4.25rem] gap-x-1.5 items-start';
-const ROW_GRID_NO_FEE = 'grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 items-start';
+const ROW_GRID_FEE = 'grid grid-cols-[2rem_minmax(0,1fr)_4.25rem] gap-x-1.5 items-start';
+const ROW_GRID_NO_FEE = 'grid grid-cols-[2rem_minmax(0,1fr)] gap-x-1.5 items-start';
 
 function CellValue({
   value,
@@ -158,6 +168,9 @@ function ClientRosterRow({
   returnTo,
   onFeeChange,
   feeRefreshKey,
+  reorderProps,
+  consumeReorderClick,
+  showNtsClosed,
 }: {
   client: ClientRecord;
   index: number;
@@ -169,6 +182,9 @@ function ClientRosterRow({
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKey?: number;
+  reorderProps?: React.HTMLAttributes<HTMLButtonElement>;
+  consumeReorderClick?: () => boolean;
+  showNtsClosed?: boolean;
 }) {
   const isChurned = c.status === 'churned';
   const rep = dash(c.representative);
@@ -178,7 +194,7 @@ function ClientRosterRow({
   const idLabel = panelIdLabel(variant);
   const entityBadge =
     panelCategory === SINGO_DAERI && c.businessEntityType === 'nonBusiness' ? '비사업자' : undefined;
-  const ntsClosed = c.nts?.statusCode === '02' || c.nts?.statusCode === '03';
+  const ntsClosed = showNtsClosed ?? false;
   const rowGrid = showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE;
   const { expanded, onNameClick, goToDetail, prefetchDetail, nameButtonClass } = useClientRowExpand(
     c.id,
@@ -194,7 +210,9 @@ function ClientRosterRow({
         isChurned ? 'opacity-45' : '',
       ].join(' ')}
     >
-      <span className="text-[11px] font-medium text-slate-500 tabular-nums text-center pt-px">{index + 1}</span>
+      <span className="text-[11px] font-medium text-slate-500 tabular-nums leading-none self-start pt-px">
+        {index + 1}
+      </span>
 
       <div className="min-w-0">
         <ClientRowHeading
@@ -207,6 +225,8 @@ function ClientRosterRow({
           onNameClick={onNameClick}
           onPrefetch={prefetchDetail}
           nameButtonClass={nameButtonClass}
+          reorderProps={reorderProps}
+          consumeReorderClick={consumeReorderClick}
         />
       </div>
 
@@ -243,18 +263,6 @@ function ClientRosterRow({
   );
 }
 
-const MANAGER_ACCENT: Record<string, string> = {
-  블루: 'border-l-sky-400',
-  다야: 'border-l-rose-400',
-  윈터: 'border-l-cyan-400',
-  리아: 'border-l-fuchsia-400',
-  페리: 'border-l-amber-400',
-  인디: 'border-l-emerald-400',
-  찰리: 'border-l-indigo-400',
-};
-
-const DEFAULT_ACCENT = 'border-l-slate-300';
-
 function EntityPanel({
   title,
   variant,
@@ -265,6 +273,10 @@ function EntityPanel({
   feeRefreshKeys,
   feeEditable = true,
   showFooter = false,
+  manager,
+  allManagerClients,
+  sort,
+  onClientOrderChange,
 }: {
   title: string;
   variant: 'personal' | 'corporate' | 'other';
@@ -275,12 +287,32 @@ function EntityPanel({
   feeRefreshKeys?: Record<string, number>;
   feeEditable?: boolean;
   showFooter?: boolean;
+  manager: string;
+  allManagerClients: ClientRecord[];
+  sort: 'name' | 'code';
+  onClientOrderChange?: () => void;
 }) {
   const feeSum = sumClientFees(clients);
   const s = variant === 'other' && title === SINGO_DAERI ? PANEL.singo : PANEL[variant];
   const showFee = variant !== 'other';
   const rowVariant = (c: ClientRecord): 'personal' | 'corporate' =>
     c.businessEntityType === 'corporate' ? 'corporate' : 'personal';
+
+  const ids = useMemo(() => clients.map(c => c.id), [clients]);
+  const handleCommit = useCallback(
+    (nextIds: string[]) => {
+      commitClientListReorder(manager, nextIds, allManagerClients, sort);
+      onClientOrderChange?.();
+    },
+    [manager, allManagerClients, sort, onClientOrderChange],
+  );
+  const { orderedIds, getItemProps, consumeClick } = useLongPressListReorder(ids, handleCommit);
+  const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
+  useEffect(() => subscribePortal(() => setChurnRecords(getPortalChurnRecords())), []);
+  const byId = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const displayClients = orderedIds
+    .map(id => byId.get(id))
+    .filter((c): c is ClientRecord => !!c);
 
   const panelHeight =
     variant === 'other'
@@ -317,7 +349,7 @@ function EntityPanel({
           <div className="w-full min-w-0">
             <RosterColumnHeader showFee={showFee} />
             <ul>
-              {clients.map((c, i) => (
+              {displayClients.map((c, i) => (
                 <ClientRosterRow
                   key={c.id}
                   client={c}
@@ -330,6 +362,9 @@ function EntityPanel({
                   returnTo={returnTo}
                   onFeeChange={onFeeChange}
                   feeRefreshKey={feeRefreshKeys?.[c.id]}
+                  reorderProps={getItemProps(c.id)}
+                  consumeReorderClick={consumeClick}
+                  showNtsClosed={clientNeedsNtsChurnPrompt(c, churnRecords)}
                 />
               ))}
             </ul>
@@ -391,6 +426,8 @@ function ManagerSection({
   visibleOptionalCategories,
   onFeeChange,
   feeRefreshKeys,
+  sort,
+  onClientOrderChange,
 }: {
   manager: string;
   clients: ClientRecord[];
@@ -401,26 +438,27 @@ function ManagerSection({
   visibleOptionalCategories: string[];
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  sort: 'name' | 'code';
+  onClientOrderChange?: () => void;
 }) {
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
   const visibleOptional = otherCategories.filter(({ category }) =>
     visibleOptionalCategories.includes(category),
   );
-  const accent = MANAGER_ACCENT[manager] ?? DEFAULT_ACCENT;
-
   return (
     <section
       className={[
         'flex flex-col w-full rounded-xl bg-white border border-slate-200 shadow-sm border-l-[3px]',
-        accent,
         isSelf ? 'ring-1 ring-blue-200' : '',
       ].join(' ')}
+      style={managerAccentBorderStyle(manager)}
     >
       <div className="px-2.5 py-1.5 border-b border-slate-100 bg-white">
         <div className="flex flex-wrap items-center gap-1.5">
           <div
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-semibold text-slate-600"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
+            style={{ backgroundColor: managerHexColor(manager) }}
             aria-hidden
           >
             {manager.slice(0, 1)}
@@ -459,6 +497,10 @@ function ManagerSection({
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
           feeEditable={feeEditable}
+          manager={manager}
+          allManagerClients={clients}
+          sort={sort}
+          onClientOrderChange={onClientOrderChange}
         />
         <EntityPanel
           title="개인"
@@ -469,6 +511,10 @@ function ManagerSection({
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
           feeEditable={feeEditable}
+          manager={manager}
+          allManagerClients={clients}
+          sort={sort}
+          onClientOrderChange={onClientOrderChange}
         />
         <MainCategorySummary personal={personal} corporate={corporate} />
         {visibleOptional.map(({ category, clients: catClients }) => (
@@ -482,6 +528,10 @@ function ManagerSection({
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
             feeEditable={feeEditable}
+            manager={manager}
+            allManagerClients={clients}
+            sort={sort}
+            onClientOrderChange={onClientOrderChange}
           />
         ))}
       </div>
@@ -679,6 +729,8 @@ export default function ManagerRosterGrid({
   isAdmin = false,
   onFeeChange,
   feeRefreshKeys,
+  orderVersion = 0,
+  onClientOrderChange,
 }: {
   clients: ClientRecord[];
   sort: 'name' | 'code';
@@ -690,6 +742,8 @@ export default function ManagerRosterGrid({
   isAdmin?: boolean;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  orderVersion?: number;
+  onClientOrderChange?: () => void;
 }) {
   // visibleManagers는 호출부에서 사용자가 지정한 순서대로 전달된다 → 그 순서를 그대로 유지
   const managerGroups = useMemo(() => {
@@ -698,9 +752,13 @@ export default function ManagerRosterGrid({
 
     return visibleManagers.map(manager => ({
       manager,
-      clients: byManager.get(manager) ?? [],
+      clients: applyClientDisplayOrder(
+        byManager.get(manager) ?? [],
+        sort,
+        readManagerClientOrder(manager),
+      ),
     }));
-  }, [clients, sort, visibleManagers]);
+  }, [clients, sort, visibleManagers, orderVersion]);
 
   // 수수료 수정 권한: 관리자는 전체, 그 외는 본인 담당만
   const myManagerNames = useMemo(
@@ -738,6 +796,8 @@ export default function ManagerRosterGrid({
             visibleOptionalCategories={visibleOptionalCategories}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
+            sort={sort}
+            onClientOrderChange={onClientOrderChange}
           />
         </div>
       ))}

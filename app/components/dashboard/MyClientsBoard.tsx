@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
-import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { applyClientDisplayOrder, getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import {
   formatClientClosureDate,
   getClientClosureKind,
@@ -14,9 +14,17 @@ import {
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
-import { getPortalClients, hydratePortal } from '@/app/utils/portalStore';
+import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
+import { getPortalChurnRecords, getPortalClients, hydratePortal } from '@/app/utils/portalStore';
+import { CLIENT_SORT_STORAGE_KEY, commitClientListReorder, MANAGER_CLIENT_ORDER_STORAGE_KEY, readManagerClientOrder, type ClientSortKey } from '@/app/utils/clientListPrefs';
+import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
+import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 
-type SortKey = 'name' | 'code';
+type SortKey = ClientSortKey;
+
+const SHOW_SINGO_KEY = 'dashboard.showSingoDaeri';
+const SHOW_JISUTAEK_KEY = 'dashboard.showJisutaek';
+const INCLUDE_CHURNED_KEY = 'dashboard.includeChurned';
 
 function compareByName(a: ClientRecord, b: ClientRecord): number {
   return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
@@ -42,6 +50,10 @@ function ClientList({
   ntsClosedIds,
   ntsOverride,
   showClosureMeta = false,
+  managerName,
+  allClients,
+  sort,
+  onOrderChange,
 }: {
   clients: ClientWithChurn[];
   excludedIds: Set<string>;
@@ -49,13 +61,32 @@ function ClientList({
   ntsClosedIds: Set<string>;
   ntsOverride: Record<string, string>;
   showClosureMeta?: boolean;
+  managerName: string | null;
+  allClients: ClientWithChurn[];
+  sort: SortKey;
+  onOrderChange: () => void;
 }) {
+  const ids = useMemo(() => clients.map(c => c.id), [clients]);
+  const handleCommit = useCallback(
+    (nextIds: string[]) => {
+      if (!managerName) return;
+      commitClientListReorder(managerName, nextIds, allClients, sort);
+      onOrderChange();
+    },
+    [managerName, allClients, sort, onOrderChange],
+  );
+  const { orderedIds, getItemProps, consumeClick } = useLongPressListReorder(ids, handleCommit);
+  const byId = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const displayClients = orderedIds
+    .map(id => byId.get(id))
+    .filter((c): c is ClientWithChurn => !!c);
+
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
   }
   return (
     <ol className="divide-y divide-slate-100">
-      {clients.map((c, i) => {
+      {displayClients.map((c, i) => {
         const excluded = excludedIds.has(c.id);
         const summary = summaryIds.has(c.id);
         const ntsClosed = ntsClosedIds.has(c.id);
@@ -63,10 +94,14 @@ function ClientList({
         const ntsCode = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
         const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
         const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
+        const nameProps = getItemProps(c.id);
         return (
           <li key={c.id}>
             <Link
               href={`/clients/${c.id}`}
+              onClick={e => {
+                if (consumeClick()) e.preventDefault();
+              }}
               className={`flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70 ${
                 excluded || isChurned ? 'opacity-60' : ''
               }`}
@@ -77,7 +112,9 @@ function ClientList({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">
                   <span
-                    className={`font-semibold ${
+                    {...nameProps}
+                    title="꾹 눌러 순서 변경"
+                    className={`font-semibold touch-none select-none ${nameProps.className ?? ''} ${
                       excluded || isChurned
                         ? 'text-slate-400 line-through decoration-slate-400'
                         : 'text-slate-800'
@@ -152,6 +189,10 @@ function SectionCard({
   ntsOverride,
   ready,
   showClosureMeta = false,
+  managerName,
+  allClients,
+  sort,
+  onOrderChange,
 }: {
   label: string;
   dotClass: string;
@@ -163,6 +204,10 @@ function SectionCard({
   ntsOverride: Record<string, string>;
   ready: boolean;
   showClosureMeta?: boolean;
+  managerName: string | null;
+  allClients: ClientWithChurn[];
+  sort: SortKey;
+  onOrderChange: () => void;
 }) {
   const total = clients.length;
   const excl = clients.reduce((n, c) => n + (excludedIds.has(c.id) ? 1 : 0), 0);
@@ -185,6 +230,10 @@ function SectionCard({
             ntsClosedIds={ntsClosedIds}
             ntsOverride={ntsOverride}
             showClosureMeta={showClosureMeta}
+            managerName={managerName}
+            allClients={allClients}
+            sort={sort}
+            onOrderChange={onOrderChange}
           />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
@@ -194,14 +243,12 @@ function SectionCard({
   );
 }
 
-const SHOW_SINGO_KEY = 'dashboard.showSingoDaeri';
-const SHOW_JISUTAEK_KEY = 'dashboard.showJisutaek';
-const INCLUDE_CHURNED_KEY = 'dashboard.includeChurned';
-
 export default function MyClientsBoard() {
   const [clients, setClients] = useState<ClientWithChurn[]>([]);
   const [ready, setReady] = useState(false);
-  const [sort, setSort] = useState<SortKey>('code');
+  const [managerName, setManagerName] = useState<string | null>(null);
+  const [orderVersion, setOrderVersion] = useState(0);
+  const [sort, setSort] = useLocalStorage<SortKey>(CLIENT_SORT_STORAGE_KEY, 'code');
   const [showSingo, setShowSingo] = useState(true);
   const [showJisutaek, setShowJisutaek] = useState(false);
   const [includeChurned, setIncludeChurned] = useState(false);
@@ -220,6 +267,19 @@ export default function MyClientsBoard() {
     } catch {
       /* ignore */
     }
+    fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.user?.name) setManagerName(String(data.user.name).trim());
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const key = `local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`;
+    const onStorage = () => setOrderVersion(v => v + 1);
+    window.addEventListener(key, onStorage);
+    return () => window.removeEventListener(key, onStorage);
   }, []);
 
   useEffect(() => {
@@ -293,10 +353,12 @@ export default function MyClientsBoard() {
     return s;
   }, [clients, taxFilter]);
 
-  // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합
+  // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합 (유출 이력 있으면 제외)
   const ntsClosedIds = useMemo(() => {
+    const churnRecords = getPortalChurnRecords();
     const s = new Set<string>();
     for (const c of clients) {
+      if (clientHasChurnRegistration(c, churnRecords)) continue;
       const code = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
       if (code === '02' || code === '03') s.add(c.id);
     }
@@ -334,7 +396,10 @@ export default function MyClientsBoard() {
   };
 
   const { corporate, personal, singoDaeri, jisutaek, closureByYear } = useMemo(() => {
-    const cmp = sort === 'name' ? compareByName : compareByCode;
+    const orderedAll = managerName
+      ? applyClientDisplayOrder(clients, sort, readManagerClientOrder(managerName))
+      : clients;
+    const orderIndex = new Map(orderedAll.map((c, i) => [c.id, i]));
     const corp: ClientWithChurn[] = [];
     const pers: ClientWithChurn[] = [];
     const singo: ClientWithChurn[] = [];
@@ -342,7 +407,7 @@ export default function MyClientsBoard() {
     const closure: ClientWithChurn[] = [];
     const ntsCode = (c: ClientWithChurn) => ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
 
-    for (const c of clients) {
+    for (const c of orderedAll) {
       if (includeChurned && isClosureReviewClient(c, ntsCode(c))) {
         closure.push(c);
         continue;
@@ -353,7 +418,6 @@ export default function MyClientsBoard() {
       else if (cat === '지주택') jisu.push(c);
       else pers.push(c);
     }
-    // 해임·제외 업체는 아래로 내려 정렬(대상 먼저 보기 쉽게), 그 안에서 선택 정렬 기준 적용
     const order = (a: ClientRecord, b: ClientRecord) => {
       const rank = (c: ClientRecord) => {
         if (excludedIds.has(c.id)) return 2;
@@ -363,13 +427,13 @@ export default function MyClientsBoard() {
       const ra = rank(a);
       const rb = rank(b);
       if (ra !== rb) return ra - rb;
-      return cmp(a, b);
+      return (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0);
     };
     corp.sort(order);
     pers.sort(order);
     singo.sort(order);
     jisu.sort(order);
-    closure.sort((a, b) => cmp(a, b));
+    closure.sort((a, b) => (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0));
     return {
       corporate: corp,
       personal: pers,
@@ -377,10 +441,20 @@ export default function MyClientsBoard() {
       jisutaek: jisu,
       closureByYear: groupClientsByClosureYear(closure).map(g => ({
         ...g,
-        clients: [...g.clients].sort(cmp),
+        clients: [...g.clients].sort(
+          (a, b) => (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0),
+        ),
       })),
     };
-  }, [clients, sort, excludedIds, includeChurned, ntsOverride]);
+  }, [clients, sort, excludedIds, includeChurned, ntsOverride, managerName, orderVersion]);
+
+  const bumpOrder = useCallback(() => setOrderVersion(v => v + 1), []);
+  const sectionProps = {
+    managerName,
+    allClients: clients,
+    sort,
+    onOrderChange: bumpOrder,
+  };
 
   const toggleBtn = (key: SortKey, text: string) => (
     <button
@@ -459,6 +533,7 @@ export default function MyClientsBoard() {
             ntsClosedIds={ntsClosedIds}
             ntsOverride={ntsOverride}
             ready={ready}
+            {...sectionProps}
           />
         </div>
 
@@ -473,6 +548,7 @@ export default function MyClientsBoard() {
             ntsClosedIds={ntsClosedIds}
             ntsOverride={ntsOverride}
             ready={ready}
+            {...sectionProps}
           />
           {showSingo && (
             <SectionCard
@@ -485,6 +561,7 @@ export default function MyClientsBoard() {
               ntsClosedIds={ntsClosedIds}
               ntsOverride={ntsOverride}
               ready={ready}
+              {...sectionProps}
             />
           )}
           {showJisutaek && jisutaek.length > 0 && (
@@ -498,6 +575,7 @@ export default function MyClientsBoard() {
               ntsClosedIds={ntsClosedIds}
               ntsOverride={ntsOverride}
               ready={ready}
+              {...sectionProps}
             />
           )}
         </div>
@@ -523,6 +601,7 @@ export default function MyClientsBoard() {
                 ntsOverride={ntsOverride}
                 ready={ready}
                 showClosureMeta
+                {...sectionProps}
               />
             ))}
           </div>

@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
+import { filterClientsForChurnRegistration } from '@/app/utils/churnMatch';
 import {
+  getPortalChurnRecords,
   getPortalSearchIndex,
   hydratePortal,
   prefetchSearchIndex,
   searchPortalClients,
+  subscribePortal,
 } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 
@@ -24,10 +27,12 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
   const rootRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
 
   useEffect(() => {
     hydratePortal();
     void prefetchSearchIndex();
+    return subscribePortal(() => setChurnRecords(getPortalChurnRecords()));
   }, []);
 
   useEffect(() => {
@@ -58,9 +63,10 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const local = getPortalSearchIndex().length > 0
+      const localRaw = getPortalSearchIndex().length > 0
         ? (searchPortalClients(q) as ClientRecord[])
         : [];
+      const local = filterClientsForChurnRegistration(localRaw, churnRecords);
       setResults(local);
       setLoading(true);
 
@@ -74,7 +80,8 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
         .then(r => (r.ok ? r.json() : { clients: [] }))
         .then(data => {
           const api = (data.clients ?? []) as ClientSearchResult[];
-          setResults(mergeClientSearchResults(local, api));
+          const merged = mergeClientSearchResults(local, api);
+          setResults(filterClientsForChurnRegistration(merged, churnRecords));
         })
         .catch(err => {
           if (err?.name !== 'AbortError') setResults(local);
@@ -85,7 +92,7 @@ export default function ChurnClientSearch({ value, onChange, disabled }: Props) 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, value]);
+  }, [query, value, churnRecords]);
 
   if (value) {
     return (

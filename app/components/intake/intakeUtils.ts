@@ -18,12 +18,62 @@ export const CHECKLIST_LABEL: Record<string, string> = {
 
 export const CHECKLIST_LABEL_FULL: Record<string, string> = CHECKLIST_LABEL;
 
-export function checklistDone(checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined) {
-  return CHECKLIST_KEYS.filter(k => Boolean(checklist?.[k])).length;
+export function hiddenChecklistKeys(
+  checklist: ProcessRow['checklist'] | undefined,
+): string[] {
+  const raw = checklist?._hidden;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((k): k is string => typeof k === 'string');
 }
 
-export function progressPct(checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined) {
-  return Math.round((checklistDone(checklist) / CHECKLIST_KEYS.length) * 100);
+/** 체크 완료 또는 ×로 숨김(해당 업체에 불필요) */
+export function isChecklistKeyComplete(
+  key: string,
+  checklist: ProcessRow['checklist'] | undefined,
+  inquiryBluehole = '',
+): boolean {
+  if (hiddenChecklistKeys(checklist).includes(key)) return true;
+  return isChecklistItemDone(key, checklist, inquiryBluehole);
+}
+
+export function isIntakeProcessComplete(
+  checklist: ProcessRow['checklist'] | undefined,
+  inquiryBluehole = '',
+): boolean {
+  return CHECKLIST_KEYS.every(k => isChecklistKeyComplete(k, checklist, inquiryBluehole));
+}
+
+/** 표시용 진행 — 숨긴 항목은 분모에서 제외, 남은 항목이 모두 체크되면 n/n */
+export function intakeChecklistProgress(
+  checklist: ProcessRow['checklist'] | undefined,
+  inquiryBluehole = '',
+): { done: number; total: number } {
+  const hidden = hiddenChecklistKeys(checklist);
+  const visibleKeys = CHECKLIST_KEYS.filter(k => !hidden.includes(k));
+  const done = visibleKeys.filter(k =>
+    isChecklistItemDone(k, checklist, inquiryBluehole),
+  ).length;
+  return { done, total: visibleKeys.length };
+}
+
+export function checklistDone(
+  checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined,
+  inquiryBluehole = '',
+) {
+  return CHECKLIST_KEYS.filter(k =>
+    isChecklistKeyComplete(k, checklist as ProcessRow['checklist'], inquiryBluehole),
+  ).length;
+}
+
+export function progressPct(
+  checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined,
+  inquiryBluehole = '',
+) {
+  const hidden = hiddenChecklistKeys(checklist as ProcessRow['checklist']);
+  const total = CHECKLIST_KEYS.length - hidden.length;
+  if (total <= 0) return 100;
+  const { done } = intakeChecklistProgress(checklist as ProcessRow['checklist'], inquiryBluehole);
+  return Math.round((done / total) * 100);
 }
 
 export type InquiryRow = {

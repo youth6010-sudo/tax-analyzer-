@@ -384,6 +384,11 @@ export default function HomeTasksPanel() {
                           <span className="min-w-0 flex-1 pr-4 font-semibold leading-snug text-slate-800">
                             {t.title}
                           </span>
+                          {t.type === 'onboarding_incomplete' && t.progress && (
+                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#4b6cb7] ring-1 ring-blue-100">
+                              {t.progress.done}/{t.progress.total}
+                            </span>
+                          )}
                           {t.subtitle && (
                             <span className="text-[10px] text-slate-400">{t.subtitle}</span>
                           )}

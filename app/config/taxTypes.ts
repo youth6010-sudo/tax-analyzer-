@@ -22,6 +22,7 @@ export const TAX_MENU = [
     label: '수임처',
     items: [
       { label: '수임처 관리', href: '/clients' },
+      { label: '수임처 목록', href: '/clients/directory' },
       { label: '유입', href: '/clients/intake' },
       { label: '유출', href: '/clients/churn' },
       { label: '폐업·휴업 점검', href: '/clients/nts-monitor' },

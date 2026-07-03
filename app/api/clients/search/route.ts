@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const scope = sp.get('scope') as RestrictedClientListScope | null;
     const requestedMineOnly = sp.get('mineOnly') === '1';
     const mineOnly = requestedMineOnly || shouldFilterClientsToMine(user, scope);
+    const forChurn = sp.get('forChurn') === '1';
     const clients = await searchClients(q, {
       activeOnly,
       includeChurned,
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       mineOnly,
       userId: user.id,
       userName: user.name,
+      forChurn,
     });
     return NextResponse.json({ clients });
   } catch (e) {

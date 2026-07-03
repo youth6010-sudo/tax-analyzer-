@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TAX_MENU } from '../config/taxTypes';
+import { isNavHrefActive } from '../utils/navActive';
 
 export default function TaxMenuButton() {
   const pathname = usePathname();
@@ -95,7 +96,7 @@ export default function TaxMenuButton() {
               {group.items.length > 0 && (
                 <ul role="none" className="mt-0.5 space-y-0.5">
                   {group.items.map(item => {
-                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const active = isNavHrefActive(pathname, item.href);
                     return (
                       <li key={item.href} role="none">
                         <Link

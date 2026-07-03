@@ -30,6 +30,8 @@ import {
   patchPortalProcess,
   subscribePortal,
 } from '@/app/utils/portalStore';
+import ScopeToggle from '@/app/components/portal/ScopeToggle';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 function pick(raw: Record<string, unknown>, camel: string, snake?: string): unknown {
   if (raw[camel] !== undefined && raw[camel] !== null) return raw[camel];
@@ -92,16 +94,21 @@ function normalizeProcess(raw: Record<string, unknown>): ProcessRow {
 function IntakeToolbar({
   search,
   sort,
+  scope,
   onSearchChange,
   onSortChange,
+  onScopeChange,
 }: {
   search: string;
   sort: IntakeSort;
+  scope: 'mine' | 'all';
   onSearchChange: (v: string) => void;
   onSortChange: (v: IntakeSort) => void;
+  onScopeChange: (v: 'mine' | 'all') => void;
 }) {
   return (
-    <div className={portalToolbar}>
+    <div className={`${portalToolbar} flex-wrap`}>
+      <ScopeToggle value={scope} onChange={onScopeChange} />
       <input
         type="search"
         value={search}
@@ -150,6 +157,23 @@ export default function IntakeHub() {
     () => getPortalInquiries().length === 0 && getPortalProcesses().length === 0,
   );
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
+  const [scope, setScope] = useState<'mine' | 'all'>('all');
+  const [currentUserName, setCurrentUserName] = useState('');
+
+  useEffect(() => {
+    void fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setCurrentUserName(String((d as { user?: { name?: string } })?.user?.name ?? '').trim()))
+      .catch(() => {});
+  }, []);
+
+  const clientManagerById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of getPortalClients()) {
+      m.set(c.id, c.manager?.trim() ?? '');
+    }
+    return m;
+  }, [inquiries, processes]);
 
   const clientRefs = useMemo<ClientNameRef[]>(() => {
     const byId = new Map<string, string>();
@@ -262,9 +286,31 @@ export default function IntakeHub() {
   }, [urlInquiry, inquiries]);
 
   const filterText = search.trim().toLowerCase();
+
+  const inquiryMatchesMine = useCallback(
+    (inq: InquiryRow) => {
+      if (!currentUserName) return true;
+      const names = getManagerMatchNames(currentUserName);
+      if (names.includes(inq.consultant?.trim() ?? '')) return true;
+      if (inq.clientId) {
+        const mgr = clientManagerById.get(inq.clientId);
+        if (mgr && names.includes(mgr)) return true;
+      }
+      const proc = findProcessForInquiry(inq, processes, clientRefs);
+      if (proc?.clientId) {
+        const mgr = clientManagerById.get(proc.clientId);
+        if (mgr && names.includes(mgr)) return true;
+      }
+      return false;
+    },
+    [currentUserName, clientManagerById, processes, clientRefs],
+  );
+
   const filterFn = (list: InquiryRow[]) => {
-    if (!filterText) return list;
-    return list.filter(i => i.companyName.toLowerCase().includes(filterText));
+    let out = list;
+    if (scope === 'mine') out = out.filter(inquiryMatchesMine);
+    if (!filterText) return out;
+    return out.filter(i => i.companyName.toLowerCase().includes(filterText));
   };
 
   const pinInquiryId = urlInquiry || selectedId;
@@ -276,15 +322,28 @@ export default function IntakeHub() {
     const pinned = inquiries.find(i => i.id === pinInquiryId);
     if (!pinned) return base;
     return sortInquiries([pinned, ...base], sort);
-  }, [inquiries, filterText, sort, pinInquiryId]);
+  }, [inquiries, filterText, sort, pinInquiryId, scope, inquiryMatchesMine]);
   const filteredProcesses = useMemo(
-    () => sortProcesses(
-      filterText
-        ? processes.filter(x => x.companyName.toLowerCase().includes(filterText))
-        : processes,
-      sort,
-    ),
-    [processes, filterText, sort],
+    () => {
+      let list = processes;
+      if (scope === 'mine') {
+        const mineInquiryIds = new Set(inquiries.filter(inquiryMatchesMine).map(i => i.id));
+        list = list.filter(p => {
+          const inq = findInquiryForProcess(p, inquiries, [], clientRefs);
+          if (inq && mineInquiryIds.has(inq.id)) return true;
+          if (p.clientId) {
+            const mgr = clientManagerById.get(p.clientId);
+            return mgr ? getManagerMatchNames(currentUserName).includes(mgr) : false;
+          }
+          return false;
+        });
+      }
+      return sortProcesses(
+        filterText ? list.filter(x => x.companyName.toLowerCase().includes(filterText)) : list,
+        sort,
+      );
+    },
+    [processes, inquiries, filterText, sort, scope, inquiryMatchesMine, clientRefs, clientManagerById, currentUserName],
   );
 
   const onInquiryUpdated = useCallback((row: InquiryRow) => {
@@ -408,6 +467,24 @@ export default function IntakeHub() {
     return clientId;
   }, []);
 
+  const linkClient = useCallback(async (inquiryId: string, processId: string | null, clientId: string) => {
+    const res = await fetch('/api/intake/link-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inquiryId, processId, clientId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? '연결 실패');
+    if (data.inquiry) {
+      const row = normalizeInquiry(data.inquiry as Record<string, unknown>);
+      setInquiries(prev => prev.map(q => (q.id === inquiryId ? row : q)));
+    }
+    if (data.process && processId) {
+      const proc = normalizeProcess(data.process as Record<string, unknown>);
+      setProcesses(prev => prev.map(p => (p.id === processId ? proc : p)));
+    }
+  }, []);
+
   const onSearchChange = (v: string) => {
     setSearch(v);
     const p = new URLSearchParams(searchParams.toString());
@@ -467,8 +544,10 @@ export default function IntakeHub() {
         <IntakeToolbar
           search={search}
           sort={sort}
+          scope={scope}
           onSearchChange={onSearchChange}
           onSortChange={onSortChange}
+          onScopeChange={setScope}
         />
       )}
 
@@ -499,6 +578,7 @@ export default function IntakeHub() {
           onHideChecklistItem={hideChecklistItem}
           onRestoreChecklist={restoreChecklist}
           onRegisterClient={registerClient}
+          onLinkClient={linkClient}
           onDeleteInquiry={deleteInquiry}
           deletingId={deletingId}
         />

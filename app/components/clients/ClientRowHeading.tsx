@@ -10,6 +10,8 @@ type Props = {
   onNameClick: (e: React.MouseEvent) => void;
   onPrefetch?: () => void;
   nameButtonClass: string;
+  reorderProps?: React.HTMLAttributes<HTMLButtonElement>;
+  consumeReorderClick?: () => boolean;
 };
 
 export default function ClientRowHeading({
@@ -22,18 +24,33 @@ export default function ClientRowHeading({
   onNameClick,
   onPrefetch,
   nameButtonClass,
+  reorderProps,
+  consumeReorderClick,
 }: Props) {
   return (
     <button
       type="button"
-      onClick={onNameClick}
+      onClick={e => {
+        if (consumeReorderClick?.()) {
+          e.preventDefault();
+          return;
+        }
+        onNameClick(e);
+      }}
       onMouseEnter={onPrefetch}
+      {...reorderProps}
       className={[
         nameButtonClass,
         'w-full text-xs text-left min-w-0 flex items-center gap-1',
         isChurned ? 'line-through decoration-red-300/80 text-slate-500' : '',
       ].join(' ')}
-      title={expanded ? `${companyTitle} — 클릭하면 접기` : `${companyTitle} — 클릭하면 정보 표시`}
+      title={
+        reorderProps
+          ? '꾹 눌러 순서 변경 · 짧게 누르면 정보 표시'
+          : expanded
+            ? `${companyTitle} — 클릭하면 접기`
+            : `${companyTitle} — 클릭하면 정보 표시`
+      }
     >
       <span className="min-w-0 truncate">{companyName}</span>
       {ntsClosed && (

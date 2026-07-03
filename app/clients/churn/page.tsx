@@ -22,6 +22,8 @@ import {
   patchPortalChurn,
   subscribePortal,
 } from '@/app/utils/portalStore';
+import ScopeToggle from '@/app/components/portal/ScopeToggle';
+import { portalInput } from '../../components/portal/uiClasses';
 
 function hasChurnCache(): boolean {
   return getPortalChurnRecords().length > 0 || getPortalChurnMissingClients().length > 0;
@@ -42,6 +44,8 @@ function ChurnPageInner() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scope, setScope] = useState<'mine' | 'all'>('all');
+  const [historySearch, setHistorySearch] = useState('');
 
   const syncFromPortal = useCallback(() => {
     setHistory(getPortalChurnRecords());
@@ -52,7 +56,8 @@ function ChurnPageInner() {
     if (!opts?.silent && !hasChurnCache()) setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const historyRes = await fetch('/api/churn');
+      const q = scope === 'mine' ? '?mine=1' : '';
+      const historyRes = await fetch(`/api/churn${q}`);
       const historyData = await historyRes.json();
       if (!historyRes.ok) throw new Error(historyData.error ?? '이력을 불러오지 못했습니다.');
       const records = historyData.records ?? [];
@@ -69,13 +74,34 @@ function ChurnPageInner() {
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [scope]);
+
+  const filteredHistory = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return history;
+    return history.filter(r => {
+      const hay = [
+        r.companyName,
+        r.manager,
+        r.reason,
+        r.detail,
+        r.earlySign,
+        r.churnType,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [history, historySearch]);
 
   useEffect(() => {
     syncFromPortal();
-    void loadHistory({ silent: hasChurnCache() });
     return subscribePortal(syncFromPortal);
-  }, [syncFromPortal, loadHistory]);
+  }, [syncFromPortal]);
+
+  useEffect(() => {
+    void loadHistory({ silent: hasChurnCache() });
+  }, [scope, loadHistory]);
 
   useEffect(() => {
     if (searchParams.get('clientId') || searchParams.get('tab') === 'history') {
@@ -274,12 +300,23 @@ function ChurnPageInner() {
         <div className="space-y-6">
           {historyError && <div className={portalAlertError}>{historyError}</div>}
 
+          <div className="flex flex-wrap items-center gap-3">
+            <ScopeToggle value={scope} onChange={setScope} />
+            <input
+              type="search"
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              placeholder="상호·담당·사유 검색…"
+              className={`${portalInput} max-w-sm flex-1 min-w-[12rem]`}
+            />
+          </div>
+
           {historyLoading ? (
             <p className="portal-meta">유출 이력 불러오는 중…</p>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] gap-4 items-start">
               <ChurnHistoryTable
-                records={history}
+                records={filteredHistory}
                 selectedId={selectedRecordId}
                 onSelect={setSelectedRecordId}
               />

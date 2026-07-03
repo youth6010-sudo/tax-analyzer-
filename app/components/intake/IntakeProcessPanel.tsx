@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import ProcessChecklistPanel from './ProcessChecklistPanel';
 import BlueholeRegisterCopyButton from './BlueholeRegisterCopyButton';
+import IntakeClientLink from './IntakeClientLink';
 import {
   inquiryBlueholeCase,
   processRowFromApi,
@@ -60,6 +61,7 @@ export default function IntakeProcessPanel({
   onProcessUpdated,
   onProcessCreated,
   onRegisterClient,
+  onLinkClient,
   onToggleCheck,
   onSyncBlueholeCheck,
   onHideChecklistItem,
@@ -71,6 +73,7 @@ export default function IntakeProcessPanel({
   onProcessUpdated: (row: ProcessRow) => void;
   onProcessCreated: (row: ProcessRow) => void;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
+  onLinkClient?: (inquiryId: string, processId: string | null, clientId: string) => Promise<void>;
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
   onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
   onHideChecklistItem?: (process: ProcessRow, key: string) => void | Promise<void>;
@@ -80,6 +83,7 @@ export default function IntakeProcessPanel({
   const [form, setForm] = useState(() => formFrom(inquiry, process));
   const [saving, setSaving] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [error, setError] = useState('');
   const [registeredClientId, setRegisteredClientId] = useState<string | null>(inquiry.clientId);
 
@@ -146,6 +150,21 @@ export default function IntakeProcessPanel({
       setError(e instanceof Error ? e.message : '수임처 등록 실패');
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handleLink = async (clientId: string) => {
+    if (!onLinkClient) return;
+    setLinking(true);
+    setError('');
+    try {
+      const proc = process ?? (await ensureProcess());
+      await onLinkClient(inquiry.id, proc.id, clientId);
+      setRegisteredClientId(clientId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '수임처 연결 실패');
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -235,23 +254,26 @@ export default function IntakeProcessPanel({
           >
             수임처 →
           </Link>
-        ) : allowRegister && inquiry.id ? (
-          <button
-            type="button"
-            disabled={registering || !canRegister(inquiry, process)}
-            onClick={() => void handleRegister()}
-            className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
-          >
-            {registering ? '…' : '수임처 등록'}
-          </button>
-        ) : process?.clientId ? (
-          <Link
-            href={`/clients/${process.clientId}`}
-            className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700"
-          >
-            수임처 →
-          </Link>
-        ) : null}
+        ) : (
+          <>
+            {allowRegister && inquiry.id && (
+              <button
+                type="button"
+                disabled={registering || !canRegister(inquiry, process)}
+                onClick={() => void handleRegister()}
+                className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white font-bold hover:bg-slate-900 disabled:opacity-50"
+              >
+                {registering ? '…' : '수임처 등록'}
+              </button>
+            )}
+            {onLinkClient && inquiry.id && (
+              <IntakeClientLink
+                disabled={linking || registering}
+                onLinked={c => void handleLink(c.id)}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

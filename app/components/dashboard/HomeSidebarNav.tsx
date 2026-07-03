@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { TAX_MENU } from '@/app/config/taxTypes';
+import { isNavHrefActive } from '@/app/utils/navActive';
 import SidebarNavIcon, { iconForHref } from './SidebarNavIcon';
 
 const linkBase = 'flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors';
@@ -16,7 +17,7 @@ function isActive(pathname: string, href: string): boolean {
     return pathname === path;
   }
   if (path === '/') return pathname === '/';
-  return pathname === path || pathname.startsWith(`${path}/`);
+  return isNavHrefActive(pathname, href);
 }
 
 export default function HomeSidebarNav() {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
   BusinessEntityType,
   ContactRecord,
@@ -42,6 +42,10 @@ interface ContactDetailViewProps {
   variant?: 'card' | 'flat';
   /** flat 모드에서 상호 옆에 배치 (연락처 등) */
   titleAside?: React.ReactNode;
+  /** 페이지 통합 수정 모드 */
+  forcedEditing?: boolean;
+  hideEditButton?: boolean;
+  onSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -92,10 +96,13 @@ export default function ContactDetailView({
   canEdit = true,
   variant = 'card',
   titleAside,
+  forcedEditing,
+  hideEditButton = false,
+  onSaveRef,
 }: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
-  const [editing, setEditing] = useState(false);
+  const [internalEditing, setInternalEditing] = useState(false);
   const [form, setForm] = useState<ContactUpdatePayload>(() => toFormState(initial));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -104,13 +111,13 @@ export default function ContactDetailView({
   const startEdit = useCallback(() => {
     setForm(toFormState(contact));
     setError(null);
-    setEditing(true);
+    setInternalEditing(true);
   }, [contact]);
 
   const cancelEdit = useCallback(() => {
     setForm(toFormState(contact));
     setError(null);
-    setEditing(false);
+    setInternalEditing(false);
   }, [contact]);
 
   const updateField = useCallback((key: keyof ContactUpdatePayload, value: string) => {
@@ -158,7 +165,7 @@ export default function ContactDetailView({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '저장 실패');
       setContact((data.contact ?? data.client) as ContactRecord);
-      setEditing(false);
+      setInternalEditing(false);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
@@ -166,6 +173,12 @@ export default function ContactDetailView({
       setSaving(false);
     }
   }, [contact.id, form, router]);
+
+  useEffect(() => {
+    if (onSaveRef) onSaveRef.current = () => handleSave();
+  }, [handleSave, onSaveRef]);
+
+  const isEditing = forcedEditing ?? internalEditing;
 
   const handleDelete = useCallback(async () => {
     if (
@@ -201,22 +214,22 @@ export default function ContactDetailView({
       <div className={`flex items-center justify-between gap-3 ${flat ? 'px-4 pt-3' : ''}`}>
         <div className="flex min-w-0 items-center gap-2">
           <BackButton />
-          {flat && (editing ? form.businessEntityType : contact.businessEntityType) && (
+          {flat && (isEditing ? form.businessEntityType : contact.businessEntityType) && (
             <span
               className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${
-                (editing ? form.businessEntityType : contact.businessEntityType) === 'corporate'
+                (isEditing ? form.businessEntityType : contact.businessEntityType) === 'corporate'
                   ? 'bg-indigo-100 text-indigo-800'
-                  : (editing ? form.businessEntityType : contact.businessEntityType) === 'individual'
+                  : (isEditing ? form.businessEntityType : contact.businessEntityType) === 'individual'
                     ? 'bg-teal-100 text-teal-800'
                     : 'bg-slate-100 text-slate-700'
               }`}
             >
-              {BUSINESS_ENTITY_LABEL[(editing ? form.businessEntityType : contact.businessEntityType) as BusinessEntityType]}
+              {BUSINESS_ENTITY_LABEL[(isEditing ? form.businessEntityType : contact.businessEntityType) as BusinessEntityType]}
             </span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-        {!canEdit ? null : !editing ? (
+        {!canEdit || hideEditButton ? null : !isEditing ? (
           <div className="flex gap-2">
             <button
               type="button"
@@ -261,11 +274,43 @@ export default function ContactDetailView({
       {error && <div className={`${portalAlertError} ${flat ? 'mx-4' : ''}`}>{error}</div>}
 
       <article className={flat ? '' : `${portalCard} overflow-hidden`}>
+        {flat && isEditing ? (
+          <div className="border-b border-slate-200 px-4 py-4">
+            <h1 className="mb-4 text-lg font-bold leading-snug text-slate-900">{contact.companyName}</h1>
+            <CategorySection title="기업구분" compact>
+              <div className="flex flex-wrap gap-2">
+                {BUSINESS_ENTITY_TYPES.map(t => {
+                  const checked = form.businessEntityType === t.id;
+                  return (
+                    <label
+                      key={t.id}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        checked
+                          ? 'border-slate-700 bg-slate-700 text-white'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-slate-400'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="businessEntityType"
+                        checked={checked}
+                        onChange={() => setBusinessEntityType(t.id)}
+                        className="sr-only"
+                      />
+                      {t.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </CategorySection>
+          </div>
+        ) : (
+        <>
         <div className={`${flat ? 'border-b border-slate-200 px-4 py-3' : 'px-5 py-4 bg-slate-50 border-b border-slate-100'}`}>
           {!flat && <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">거래처</p>}
           <div className={`${flat ? 'flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5' : ''}`}>
             <div className={flat ? 'min-w-0 shrink-0 sm:max-w-[38%]' : ''}>
-          {editing ? (
+          {isEditing ? (
             <input
               type="text"
               value={form.companyName}
@@ -277,7 +322,7 @@ export default function ContactDetailView({
             <h1 className={`font-bold text-slate-900 leading-snug ${flat ? 'text-lg' : 'text-2xl'}`}>{contact.companyName}</h1>
             )}
 
-            {flat && !editing ? (
+            {flat && !isEditing ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {contact.serviceTypes.map(t => (
                   <span key={t} className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
@@ -293,7 +338,7 @@ export default function ContactDetailView({
             ) : (
               <>
             <CategorySection title="기업구분" compact={flat}>
-              {editing ? (
+              {isEditing ? (
                 <div className="flex flex-wrap gap-2">
                   {BUSINESS_ENTITY_TYPES.map(t => {
                     const checked = form.businessEntityType === t.id;
@@ -332,7 +377,7 @@ export default function ContactDetailView({
             </CategorySection>
 
             <CategorySection title="서비스 유형" compact={flat}>
-              {editing ? (
+              {isEditing ? (
                 <div className="flex flex-wrap gap-2">
                   {SERVICE_TYPES.map(t => {
                     const checked = form.serviceTypes.includes(t.id);
@@ -372,7 +417,7 @@ export default function ContactDetailView({
             </CategorySection>
 
             <CategorySection title="세목" compact={flat}>
-              {editing ? (
+              {isEditing ? (
                 <div className="flex flex-wrap gap-2">
                   {TAX_TYPES.map(t => {
                     const checked = form.taxTypes.includes(t.id);
@@ -419,13 +464,13 @@ export default function ContactDetailView({
               </div>
             )}
           </div>
-          </div>
+        </div>
 
           <div className={flat ? 'px-4 py-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3' : 'p-5 grid gap-3 sm:grid-cols-2'}>
             {viewFields.map(({ key, label, mono }) => (
               <div key={key} className={flat ? 'min-w-0' : 'rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3'}>
                 <p className={`font-medium text-slate-400 ${flat ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</p>
-                {editing ? (
+                {isEditing ? (
                   <input
                     type="text"
                     value={form[key] as string}
@@ -444,6 +489,8 @@ export default function ContactDetailView({
               </div>
             ))}
           </div>
+        </>
+        )}
         </article>
     </div>
   );

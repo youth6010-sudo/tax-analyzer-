@@ -45,6 +45,7 @@ export default function IntakeInquirySheet({
   onHideChecklistItem,
   onRestoreChecklist,
   onRegisterClient,
+  onLinkClient,
   onDeleteInquiry,
   deletingId,
 }: {
@@ -62,6 +63,7 @@ export default function IntakeInquirySheet({
   onHideChecklistItem?: (process: ProcessRow, key: string) => void | Promise<void>;
   onRestoreChecklist?: (process: ProcessRow) => void | Promise<void>;
   onRegisterClient: (inquiryId: string, processId: string | null) => Promise<string | null>;
+  onLinkClient?: (inquiryId: string, processId: string | null, clientId: string) => Promise<void>;
   onDeleteInquiry: (inquiry: InquiryRow, process: ProcessRow | null) => void | Promise<void>;
   deletingId: string | null;
 }) {
@@ -204,6 +206,7 @@ export default function IntakeInquirySheet({
                     onProcessCreated(row);
                   }}
                   onRegisterClient={onRegisterClient}
+                  onLinkClient={onLinkClient}
                   onToggleCheck={onToggleCheck}
                   onSyncBlueholeCheck={onSyncBlueholeCheck}
                   onHideChecklistItem={onHideChecklistItem}
@@ -236,13 +239,14 @@ export default function IntakeInquirySheet({
                 <IntakeProcessPanel
                   inquiry={stubInquiryFromProcess(selectedProcess)}
                   process={selectedProcess}
-                  allowRegister={false}
+                  allowRegister
                   onProcessUpdated={onProcessUpdated}
                   onProcessCreated={row => {
                     setLinkedProcessId(row.id);
                     onProcessCreated(row);
                   }}
                   onRegisterClient={onRegisterClient}
+                  onLinkClient={onLinkClient}
                   onToggleCheck={onToggleCheck}
                   onSyncBlueholeCheck={onSyncBlueholeCheck}
                   onHideChecklistItem={onHideChecklistItem}

@@ -3,14 +3,11 @@
 import {
   CHECKLIST_KEYS,
   CHECKLIST_LABEL,
+  hiddenChecklistKeys,
+  intakeChecklistProgress,
   isChecklistItemDone,
   type ProcessRow,
 } from './intakeUtils';
-
-function hiddenKeysOf(checklist: ProcessRow['checklist'] | undefined): string[] {
-  const raw = checklist?._hidden;
-  return Array.isArray(raw) ? (raw as string[]) : [];
-}
 
 export default function ProcessChecklistPanel({
   process,
@@ -29,12 +26,10 @@ export default function ProcessChecklistPanel({
   onHideItem?: (process: ProcessRow, key: string) => void | Promise<void>;
   onRestoreHidden?: (process: ProcessRow) => void | Promise<void>;
 }) {
-  const hidden = hiddenKeysOf(process?.checklist);
+  const hidden = hiddenChecklistKeys(process?.checklist);
   const visibleKeys = CHECKLIST_KEYS.filter(k => !hidden.includes(k));
   const blueholeCode = inquiryBluehole.trim();
-  const done = process
-    ? visibleKeys.filter(k => isChecklistItemDone(k, process.checklist, inquiryBluehole)).length
-    : 0;
+  const { done, total } = intakeChecklistProgress(process?.checklist, inquiryBluehole);
 
   const handleToggle = async (key: string) => {
     const proc = process ?? (await onEnsureProcess());
@@ -77,7 +72,7 @@ export default function ProcessChecklistPanel({
             </button>
           )}
           <span className="text-xs font-semibold text-indigo-700 tabular-nums">
-            {done}/{visibleKeys.length}
+            {done}/{total}
           </span>
         </div>
       </div>
@@ -110,7 +105,7 @@ export default function ProcessChecklistPanel({
                 <button
                   type="button"
                   onClick={() => void handleHide(key)}
-                  title="이 업체 체크리스트에서 항목 삭제"
+                  title="이 업체에는 해당 없음 (완료 처리)"
                   aria-label={`${CHECKLIST_LABEL[key]} 삭제`}
                   className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded text-gray-300 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
                 >

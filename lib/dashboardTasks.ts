@@ -1,11 +1,14 @@
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { intakeInquiries, intakeProcesses, clients } from '@/db/schema';
-import { CHECKLIST_KEYS } from '@/app/types/intake';
+import { churnRecords, intakeInquiries, intakeProcesses, clients } from '@/db/schema';
+import { compactSearchText } from '@/app/utils/searchNormalize';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
+  inquiryBlueholeCase,
+  intakeChecklistProgress,
+  isIntakeProcessComplete,
   resolveClientIdByName,
   type ClientNameRef,
   type InquiryRow,
@@ -19,6 +22,7 @@ export type DashboardTask = {
   subtitle?: string;
   href: string;
   priority: number;
+  progress?: { done: number; total: number };
 };
 
 export type DashboardTaskUser = {
@@ -35,16 +39,6 @@ function visibleToUser(manager: string, user: DashboardTaskUser): boolean {
   const mgr = (manager || '').trim();
   if (mgr) return getManagerMatchNames(user.name).includes(mgr);
   return user.isAdmin;
-}
-
-function checklistVisibleKeys(checklist: Record<string, unknown> | null | undefined): string[] {
-  const hidden = Array.isArray(checklist?._hidden) ? (checklist._hidden as string[]) : [];
-  return CHECKLIST_KEYS.filter(k => !hidden.includes(k));
-}
-
-function checklistDoneCount(checklist: Record<string, boolean> | null | undefined): number {
-  const c = checklist ?? {};
-  return checklistVisibleKeys(c).filter(k => Boolean(c[k])).length;
 }
 
 function toInquiryRow(row: {
@@ -195,38 +189,48 @@ export async function listDashboardTasks(
 
   for (const raw of processRows) {
     const process = toProcessRow(raw);
-    const visibleTotal = checklistVisibleKeys(process.checklist as Record<string, boolean>).length;
-    const done = checklistDoneCount(process.checklist as Record<string, boolean>);
-    if (visibleTotal === 0 || done >= visibleTotal) continue;
-
-    // 담당자: 연결된 수임처(clientId) → 없으면 상호로 매칭한 수임처
     const resolvedClientId =
       raw.clientId ?? resolveClientIdByName(raw.companyName, clientRefs, raw.excelKey ?? undefined);
-    // 유입 프로세스 할 일 — 찰리(관리자)에게만
-    if (!user.isAdmin) continue;
-
     const company = (raw.clientCompanyName?.trim() || raw.companyName.trim() || '업체명 미정');
     const manager = (raw.clientManager ?? (resolvedClientId ? managerByClientId.get(resolvedClientId) : '') ?? '').trim();
+
+    if (!user.isAdmin && !visibleToUser(manager, user)) continue;
+
     const altNames = [raw.clientCompanyName, raw.companyName].filter(
       (n): n is string => Boolean(n?.trim()),
     );
     const inquiry = findInquiryForProcess(process, inquiries, altNames, clientRefs);
+    const inquiryBluehole = inquiry ? inquiryBlueholeCase(inquiry.extra) : '';
+    if (isIntakeProcessComplete(process.checklist, inquiryBluehole)) continue;
+
+    const { done, total } = intakeChecklistProgress(process.checklist, inquiryBluehole);
 
     tasks.push({
       id: `onboard-${process.id}`,
       type: 'onboarding_incomplete',
-      title: `${company} - 프로세스 (${done}/${visibleTotal})`,
-      subtitle: manager ? undefined : '담당 미지정',
+      title: company,
       href: buildIntakeDeepLink({
         inquiryId: inquiry?.id,
         processId: process.id,
         companyName: company,
       }),
       priority: 2,
+      progress: { done, total },
     });
   }
 
-  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일
+  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일 (유출 이력 있으면 제외)
+  const churnLinks = await db
+    .select({ clientId: churnRecords.clientId, companyName: churnRecords.companyName })
+    .from(churnRecords);
+  const churnClientIds = new Set<string>();
+  const churnCompanyNames = new Set<string>();
+  for (const row of churnLinks) {
+    if (row.clientId) churnClientIds.add(row.clientId);
+    const nameKey = compactSearchText(row.companyName);
+    if (nameKey) churnCompanyNames.add(nameKey);
+  }
+
   const ntsRows = await db
     .select({
       id: clients.id,
@@ -242,6 +246,9 @@ export async function listDashboardTasks(
     ));
 
   for (const c of ntsRows) {
+    if (churnClientIds.has(c.id)) continue;
+    const nameKey = compactSearchText(c.companyName);
+    if (nameKey && churnCompanyNames.has(nameKey)) continue;
     const manager = (c.manager || '').trim();
     if (!visibleToUser(manager, user)) continue;
     const label = c.ntsStatusCode === '03' ? '폐업' : '휴업';

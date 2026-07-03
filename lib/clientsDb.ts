@@ -12,6 +12,10 @@ import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
 import { computeFeeSummary, readFeeBreakdown } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
+import {
+  dedupeClientsForChurnSearch,
+  filterClientsForChurnRegistration,
+} from '@/app/utils/churnMatch';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -210,6 +214,7 @@ export async function searchClients(
     mineOnly?: boolean;
     userId?: string;
     userName?: string;
+    forChurn?: boolean;
   },
 ) {
   const q = query.trim();
@@ -342,12 +347,34 @@ export async function searchClients(
     }
   }
 
-  return sliced.map(r => ({
+  const mapped = sliced.map(r => ({
     ...clientToRecord(r),
     churn: churnByClient.get(r.id) ?? null,
     primaryContactName: primaryNames.get(r.id),
     matchedContactName: matchedContactByClient.get(r.id),
   }));
+
+  if (!options?.forChurn) return mapped;
+
+  const churnLinks = await db
+    .select({ clientId: churnRecords.clientId, companyName: churnRecords.companyName })
+    .from(churnRecords);
+  const churnRecordViews = churnLinks.map((row, i) => ({
+    id: `search-churn-${i}`,
+    clientId: row.clientId,
+    companyName: row.companyName,
+    manager: '',
+    reason: '',
+    detail: '',
+    churnType: '',
+    dataCleanup: '',
+    earlySign: '',
+    feeAmount: null,
+    churnedAt: '',
+    recordedByName: null,
+  }));
+
+  return filterClientsForChurnRegistration(dedupeClientsForChurnSearch(mapped), churnRecordViews);
 }
 
 export async function createIntakeClient(assignedUserId: string, managerName: string) {
@@ -467,18 +494,28 @@ export async function updateClient(id: string, payload: ClientPatch) {
 
 export async function updateClientDetail(
   id: string,
-  patch: { intakeData: Record<string, unknown>; feeSummary?: number | null; program?: string },
+  patch: {
+    intakeData: Record<string, unknown>;
+    feeSummary?: number | null;
+    program?: string;
+    businessEntityType?: string;
+  },
 ) {
   const db = getDb();
   const existing = await getClientById(id);
   if (!existing) throw new Error('NOT_FOUND');
 
+  const mergedIntake = mergeIntakeDataPatch(existing.intakeData, patch.intakeData);
+
   const [row] = await db
     .update(clients)
     .set({
-      intakeData: { ...(existing.intakeData ?? {}), ...patch.intakeData },
+      intakeData: mergedIntake,
       ...(patch.feeSummary !== undefined ? { feeSummary: patch.feeSummary } : {}),
       ...(patch.program !== undefined ? { program: patch.program.trim() } : {}),
+      ...(patch.businessEntityType !== undefined
+        ? { businessEntityType: patch.businessEntityType || '' }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(clients.id, id))
@@ -486,6 +523,18 @@ export async function updateClientDetail(
 
   if (!row) throw new Error('NOT_FOUND');
   return clientToRecord(row);
+}
+
+function mergeIntakeDataPatch(
+  existing: Record<string, unknown> | undefined,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...(existing ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === undefined || v === '') delete merged[k];
+    else merged[k] = v;
+  }
+  return merged;
 }
 
 export async function getClientFeeChanges(clientId: string, limit = 50): Promise<ClientFeeChange[]> {
@@ -1080,6 +1129,50 @@ async function detachClientLinks(clientId: string) {
   await db.update(clientMeetings).set({ clientId: null }).where(eq(clientMeetings.clientId, clientId));
   await db.update(reportDeliveries).set({ clientId: null }).where(eq(reportDeliveries.clientId, clientId));
   await db.update(settlementVisits).set({ clientId: null }).where(eq(settlementVisits.clientId, clientId));
+}
+
+/** 동일 사업자번호·식별번호 쌍 수임처 조회 — 중복 확인용 */
+export async function findClientsByBusinessNo(
+  businessNo: string,
+  opts?: {
+    corporateNo?: string;
+    residentNo?: string;
+    businessEntityType?: string;
+    category?: string;
+  },
+) {
+  const digits = String(businessNo || '').replace(/\D/g, '').slice(0, 10);
+  if (digits.length !== 10) return [];
+
+  const isCorporate =
+    opts?.businessEntityType === 'corporate' || opts?.category === '법인';
+  const corpDigits = String(opts?.corporateNo ?? '').replace(/\D/g, '').slice(0, 13);
+  const resDigits = String(opts?.residentNo ?? '').replace(/\D/g, '').slice(0, 13);
+
+  const db = getDb();
+  if (isCorporate) {
+    if (corpDigits.length !== 13) return [];
+    const rows = await db
+      .select()
+      .from(clients)
+      .where(
+        sql`regexp_replace(${clients.businessNo}, '[^0-9]', '', 'g') = ${digits}
+          AND regexp_replace(${clients.corporateNo}, '[^0-9]', '', 'g') = ${corpDigits}`,
+      )
+      .orderBy(asc(clients.createdAt));
+    return rows.map(clientToListRecord);
+  }
+
+  if (resDigits.length !== 13) return [];
+  const rows = await db
+    .select()
+    .from(clients)
+    .where(
+      sql`regexp_replace(${clients.businessNo}, '[^0-9]', '', 'g') = ${digits}
+        AND regexp_replace(${clients.residentNo}, '[^0-9]', '', 'g') = ${resDigits}`,
+    )
+    .orderBy(asc(clients.createdAt));
+  return rows.map(clientToListRecord);
 }
 
 export async function deleteClientById(id: string) {

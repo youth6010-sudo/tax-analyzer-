@@ -12,6 +12,72 @@ export const UNCategorized = '미분류';
 export const SINGO_DAERI = '신고대리';
 export const NON_BUSINESS_CATEGORY = '비사업자';
 export const UNUSED_CATEGORY = '미사용';
+export const JISUTAEK_CATEGORY = '지주택';
+
+/** 수임처 대분류 필터·편집 선택지 */
+export const CLIENT_MAIN_CATEGORIES = [
+  '개인',
+  '법인',
+  SINGO_DAERI,
+  JISUTAEK_CATEGORY,
+  UNUSED_CATEGORY,
+] as const;
+
+export type ClientMainCategory = (typeof CLIENT_MAIN_CATEGORIES)[number];
+
+/** import 시 빈 대분류로 취급하는 레거시 프로그램명 */
+const LEGACY_EMPTY_CATEGORY_ALIASES = new Set(['세무사랑', '더존']);
+
+function categoryFromEntityType(entityType: BusinessEntityType | '' | undefined): ClientMainCategory | null {
+  if (entityType === 'corporate') return '법인';
+  if (entityType === 'individual') return '개인';
+  if (entityType === 'nonBusiness') return '개인';
+  return null;
+}
+
+/**
+ * 대분류 필터 칩용 버킷 — intakeData.category 원값 우선, 비어 있으면 구분(businessEntityType) fallback.
+ * 표시용 getClientCategory()와 달리 필터·집계에만 사용한다.
+ */
+export function getClientCategoryForFilter(client: ClientRecord): ClientMainCategory | null {
+  const s = getClientCategory(client);
+
+  if ((CLIENT_MAIN_CATEGORIES as readonly string[]).includes(s)) {
+    return s as ClientMainCategory;
+  }
+
+  if (s === NON_BUSINESS_CATEGORY) return '개인';
+
+  if (s !== UNCategorized && s && !LEGACY_EMPTY_CATEGORY_ALIASES.has(s)) {
+    return null;
+  }
+
+  return categoryFromEntityType(client.businessEntityType);
+}
+
+function isAllCategoryFiltersSelected(filters: readonly string[]): boolean {
+  return (
+    filters.length >= CLIENT_MAIN_CATEGORIES.length &&
+    CLIENT_MAIN_CATEGORIES.every(c => filters.includes(c))
+  );
+}
+
+export function matchesCategoryFilter(client: ClientRecord, filters: readonly string[]): boolean {
+  if (filters.length === 0 || isAllCategoryFiltersSelected(filters)) return true;
+  const cat = getClientCategoryForFilter(client);
+  if (!cat) return false;
+  return filters.includes(cat);
+}
+
+export function countClientsByMainCategory(clients: ClientRecord[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const cat of CLIENT_MAIN_CATEGORIES) counts.set(cat, 0);
+  for (const c of clients) {
+    const cat = getClientCategoryForFilter(c);
+    if (cat) counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  return counts;
+}
 
 /** 구분·대분류 공통 표시 순서 */
 export const GROUP_DISPLAY_ORDER = ['개인', '법인', SINGO_DAERI, UNUSED_CATEGORY, '비사업자'] as const;
@@ -30,7 +96,7 @@ export type OtherCategoryGroup = {
   clients: ClientRecord[];
 };
 
-/** 담당자 컬럼: 대분류 === 개인 | 법인 | 그 외(분류별) */
+/** 담당자 컬럼: 대분류 === 개인 | 법인 | 그 외(분류별) — 필터와 동일한 버킷 기준 */
 export function splitManagerClientsByCategory(clients: ClientRecord[]): {
   personal: ClientRecord[];
   corporate: ClientRecord[];
@@ -41,10 +107,31 @@ export function splitManagerClientsByCategory(clients: ClientRecord[]): {
   const otherMap = new Map<string, ClientRecord[]>();
 
   for (const c of clients) {
-    const cat = getClientCategory(c);
-    if (cat === '개인') personal.push(c);
-    else if (cat === '법인') corporate.push(c);
-    else {
+    const raw = getClientCategory(c);
+    let filterCat: ClientMainCategory | null = null;
+
+    if ((CLIENT_MAIN_CATEGORIES as readonly string[]).includes(raw)) {
+      filterCat = raw as ClientMainCategory;
+    } else if (raw === NON_BUSINESS_CATEGORY) {
+      filterCat = '개인';
+    } else if (raw === UNCategorized || !raw || LEGACY_EMPTY_CATEGORY_ALIASES.has(raw)) {
+      filterCat = categoryFromEntityType(c.businessEntityType);
+    }
+
+    if (filterCat === '개인') {
+      personal.push(c);
+    } else if (filterCat === '법인') {
+      corporate.push(c);
+    } else if (
+      filterCat === SINGO_DAERI ||
+      filterCat === JISUTAEK_CATEGORY ||
+      filterCat === UNUSED_CATEGORY
+    ) {
+      const arr = otherMap.get(filterCat) ?? [];
+      arr.push(c);
+      otherMap.set(filterCat, arr);
+    } else {
+      const cat = getClientCategory(c);
       const arr = otherMap.get(cat) ?? [];
       arr.push(c);
       otherMap.set(cat, arr);
@@ -186,7 +273,7 @@ function compareClientsByDouzoneCode(a: ClientRecord, b: ClientRecord): number {
   return ca.localeCompare(cb, 'ko', { numeric: true });
 }
 
-function sortClients(clients: ClientRecord[], sort: 'name' | 'code'): ClientRecord[] {
+export function sortClientRecords(clients: ClientRecord[], sort: 'name' | 'code'): ClientRecord[] {
   const list = [...clients];
   if (sort === 'name') {
     list.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
@@ -194,6 +281,33 @@ function sortClients(clients: ClientRecord[], sort: 'name' | 'code'): ClientReco
     list.sort(compareClientsByDouzoneCode);
   }
   return list;
+}
+
+function sortClients(clients: ClientRecord[], sort: 'name' | 'code'): ClientRecord[] {
+  return sortClientRecords(clients, sort);
+}
+
+/** 신고대상확인 등 — 세션 커스텀 순서 + 기본 정렬 병합 */
+export function applyClientDisplayOrder(
+  clients: ClientRecord[],
+  sort: 'name' | 'code',
+  customOrder?: string[] | null,
+): ClientRecord[] {
+  const sorted = sortClientRecords(clients, sort);
+  if (!customOrder?.length) return sorted;
+  const byId = new Map(sorted.map(c => [c.id, c]));
+  const result: ClientRecord[] = [];
+  for (const id of customOrder) {
+    const c = byId.get(id);
+    if (c) {
+      result.push(c);
+      byId.delete(id);
+    }
+  }
+  for (const c of sorted) {
+    if (byId.has(c.id)) result.push(c);
+  }
+  return result;
 }
 
 /** 신고대리 대분류 안에서만 개인·비사업자 entity를 한 묶음으로 */
@@ -291,7 +405,7 @@ export function countMainCategoryClients(clients: ClientRecord[]): {
   let personal = 0;
   let corporate = 0;
   for (const c of clients) {
-    const cat = getClientCategory(c);
+    const cat = getClientCategoryForFilter(c);
     if (cat === '개인') personal++;
     else if (cat === '법인') corporate++;
   }

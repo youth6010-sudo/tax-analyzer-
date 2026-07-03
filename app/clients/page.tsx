@@ -16,15 +16,19 @@ import {
   hydratePortal,
   markPortalClientsFresh,
   patchPortalClient,
+  subscribePortal,
   usePortalClients,
 } from '@/app/utils/portalStore';
 import {
   MANAGER_DISPLAY_ORDER,
   UNCategorized,
-  ALWAYS_VISIBLE_CATEGORIES,
-  collectOptionalCategories,
+  CLIENT_MAIN_CATEGORIES,
+  countClientsByMainCategory,
   countMainCategoryClients,
-  getClientCategory,
+  matchesCategoryFilter,
+  SINGO_DAERI,
+  JISUTAEK_CATEGORY,
+  UNUSED_CATEGORY,
 } from '@/app/utils/clientsGrouping';
 import type { FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import {
@@ -33,6 +37,7 @@ import {
   type ClientsListState,
 } from '@/app/utils/clientsListState';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
+import { writeClientSort, MANAGER_CLIENT_ORDER_STORAGE_KEY } from '@/app/utils/clientListPrefs';
 
 export default function ClientsPage() {
   return (
@@ -59,6 +64,7 @@ function ClientsPageContent() {
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [feeRefreshKeys, setFeeRefreshKeys] = useState<Record<string, number>>({});
+  const [clientOrderVersion, setClientOrderVersion] = useState(0);
   // 담당자 표시 순서(사용자가 자유롭게 변경 · 브라우저에 저장)
   const [managerOrder, setManagerOrder] = useLocalStorage<string[]>(
     'clients.managerOrder.v1',
@@ -72,6 +78,26 @@ function ClientsPageContent() {
 
   useEffect(() => {
     hydratePortal();
+  }, []);
+
+  useEffect(() => {
+    return subscribePortal(() => {
+      setFetchedClients(prev => {
+        if (!prev) return prev;
+        const portalById = new Map(getPortalClients().map(c => [c.id, c]));
+        return prev.map(c => {
+          const patched = portalById.get(c.id);
+          return patched ? { ...c, ...patched } : c;
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const key = `local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`;
+    const onStorage = () => setClientOrderVersion(v => v + 1);
+    window.addEventListener(key, onStorage);
+    return () => window.removeEventListener(key, onStorage);
   }, []);
 
   useEffect(() => {
@@ -106,7 +132,17 @@ function ClientsPageContent() {
             old.feeSummary !== c.feeSummary ||
             old.intakeData?.bookkeepingFee !== c.intakeData?.bookkeepingFee ||
             old.intakeData?.adjustmentFee !== c.intakeData?.adjustmentFee;
-          return feeChangedLocally ? old : c;
+          if (!feeChangedLocally) return c;
+          return {
+            ...c,
+            feeSummary: old.feeSummary,
+            intakeData: {
+              ...c.intakeData,
+              bookkeepingFee: old.intakeData?.bookkeepingFee,
+              adjustmentFee: old.intakeData?.adjustmentFee,
+            },
+            updatedAt: old.updatedAt,
+          };
         });
       });
     } finally {
@@ -116,6 +152,18 @@ function ClientsPageContent() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
 
   const handleFeeChange = useCallback(async (id: string, payload: FeeBreakdownSave) => {
@@ -179,11 +227,16 @@ function ClientsPageContent() {
 
   const updateState = useCallback(
     (patch: Partial<ClientsListState>, opts?: { includeScroll?: boolean }) => {
+      if (patch.sort) writeClientSort(patch.sort);
       const next = { ...state, ...patch, scroll: opts?.includeScroll ? window.scrollY : 0 };
       router.replace(buildClientsListUrl(next, { includeScroll: opts?.includeScroll }), { scroll: false });
     },
     [router, state],
   );
+
+  useEffect(() => {
+    writeClientSort(state.sort);
+  }, [state.sort]);
 
   /** URL에 mgr 없을 때 로그인 담당자 기본 선택 */
   useEffect(() => {
@@ -202,7 +255,7 @@ function ClientsPageContent() {
     });
   }, [state.scroll]);
 
-  const filtered = useMemo(() => {
+  const listBeforeCategoryFilter = useMemo(() => {
     const q = state.q.trim();
     let list: ClientRecord[];
 
@@ -242,7 +295,12 @@ function ClientsPageContent() {
     }
 
     return list;
-  }, [clients, state]);
+  }, [clients, state.q, state.manager]);
+
+  const filtered = useMemo(() => {
+    if (state.categoryFilters.length === 0) return listBeforeCategoryFilter;
+    return listBeforeCategoryFilter.filter(c => matchesCategoryFilter(c, state.categoryFilters));
+  }, [listBeforeCategoryFilter, state.categoryFilters]);
 
   const compareByOrder = useCallback(
     (a: string, b: string) => {
@@ -311,38 +369,33 @@ function ClientsPageContent() {
     state.visibleManagers.length === 1 &&
     state.visibleManagers[0] === currentUserName;
 
-  const optionalCategoryOptions = useMemo(
-    () => collectOptionalCategories(filtered),
-    [filtered],
+  const categoryCounts = useMemo(
+    () => countClientsByMainCategory(listBeforeCategoryFilter),
+    [listBeforeCategoryFilter],
   );
 
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const c of filtered) {
-      const cat = getClientCategory(c);
-      if (ALWAYS_VISIBLE_CATEGORIES.has(cat)) continue;
-      counts.set(cat, (counts.get(cat) ?? 0) + 1);
-    }
-    return counts;
-  }, [filtered]);
-
-  const toggleOptionalCategory = useCallback(
+  const toggleCategoryFilter = useCallback(
     (category: string, checked: boolean) => {
       const next = checked
-        ? [...new Set([...state.visibleOptionalCategories, category])]
-        : state.visibleOptionalCategories.filter(c => c !== category);
-      updateState({ visibleOptionalCategories: next });
+        ? [...new Set([...state.categoryFilters, category])]
+        : state.categoryFilters.filter(c => c !== category);
+      updateState({ categoryFilters: next });
     },
-    [state.visibleOptionalCategories, updateState],
+    [state.categoryFilters, updateState],
   );
 
-  const selectAllOptionalCategories = useCallback(() => {
-    updateState({ visibleOptionalCategories: [...optionalCategoryOptions] });
-  }, [optionalCategoryOptions, updateState]);
-
-  const clearOptionalCategories = useCallback(() => {
-    updateState({ visibleOptionalCategories: [] });
+  const selectAllCategoryFilters = useCallback(() => {
+    updateState({ categoryFilters: [...CLIENT_MAIN_CATEGORIES] });
   }, [updateState]);
+
+  const clearCategoryFilters = useCallback(() => {
+    updateState({ categoryFilters: [] });
+  }, [updateState]);
+
+  const rosterOptionalCategories = useMemo(
+    () => [SINGO_DAERI, JISUTAEK_CATEGORY, UNUSED_CATEGORY],
+    [],
+  );
 
   const mainStats = useMemo(() => countMainCategoryClients(filtered), [filtered]);
   const returnTo = buildClientsListUrl({ ...state, scroll: 0 });
@@ -369,7 +422,7 @@ function ClientsPageContent() {
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/60 pb-3">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">수임처 관리</h1>
-          <p className="text-xs text-slate-500 mt-0.5">← → 버튼 또는 가로 스크롤 · 업체명 클릭으로 정보 표시</p>
+          <p className="text-xs text-slate-500 mt-0.5">← → 버튼 또는 가로 스크롤 · 상호 꾹 눌러 순서 변경 · 업체명 클릭으로 정보 표시</p>
         </div>
         <p className="text-xs text-slate-500 tabular-nums shrink-0">
           {fetching && clients.length > 0 ? '새로고침 중… · ' : ''}
@@ -447,45 +500,45 @@ function ClientsPageContent() {
             onReorder={setManagerOrder}
           />
         </div>
-        {optionalCategoryOptions.length > 0 && (
-            <div>
-              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                <span className="text-xs font-semibold text-slate-500">대분류</span>
-                <span className="text-[10px] text-slate-400">개인·법인 항상 표시</span>
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className="text-xs font-semibold text-slate-500">대분류</span>
+            <span className="text-[10px] text-slate-400">선택한 분류만 표시 · 비어 있으면 전체</span>
+            <button
+              type="button"
+              onClick={selectAllCategoryFilters}
+              className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px] ml-auto`}
+            >
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={clearCategoryFilters}
+              className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px]`}
+            >
+              해제
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {CLIENT_MAIN_CATEGORIES.map(cat => {
+              const count = categoryCounts.get(cat) ?? 0;
+              const active =
+                state.categoryFilters.length > 0 && state.categoryFilters.includes(cat);
+              const highlight = state.categoryFilters.length === 0 || active;
+              return (
                 <button
+                  key={cat}
                   type="button"
-                  onClick={selectAllOptionalCategories}
-                  className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px] ml-auto`}
+                  onClick={() => toggleCategoryFilter(cat, !active)}
+                  className={[compactChip(highlight), count === 0 && !highlight ? 'opacity-40' : ''].join(' ')}
                 >
-                  전체
+                  {cat}
+                  <span className={compactChipCount(highlight)}>{count}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={clearOptionalCategories}
-                  className={`${portalBtnSecondary} !px-2 !py-0.5 text-[11px]`}
-                >
-                  해제
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {optionalCategoryOptions.map(cat => {
-                  const count = categoryCounts.get(cat) ?? 0;
-                  const checked = state.visibleOptionalCategories.includes(cat);
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => toggleOptionalCategory(cat, !checked)}
-                      className={[compactChip(checked), count === 0 && !checked ? 'opacity-40' : ''].join(' ')}
-                    >
-                      {cat}
-                      <span className={compactChipCount(checked)}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              );
+            })}
+          </div>
+        </div>
       </div>
       </div>
 
@@ -500,11 +553,13 @@ function ClientsPageContent() {
             query={state.q}
             returnTo={returnTo}
             visibleManagers={orderedVisibleManagers}
-            visibleOptionalCategories={state.visibleOptionalCategories}
+            visibleOptionalCategories={rosterOptionalCategories}
             currentUserName={currentUserName}
             isAdmin={isAdmin}
             onFeeChange={handleFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          orderVersion={clientOrderVersion}
+          onClientOrderChange={() => setClientOrderVersion(v => v + 1)}
         />
       )}
     </PortalPageShell>

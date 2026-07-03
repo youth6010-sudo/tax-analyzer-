@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ClientRecord } from '@/app/types/client';
 import { DOUZONE_TAX_FLAG_LABELS } from '@/app/config/douzoneFields';
+import { CLIENT_MAIN_CATEGORIES } from '@/app/utils/clientsGrouping';
+import { businessEntityTypeForCategory } from '@/app/utils/clientBizNo';
+import { markPortalClientsFresh, patchPortalClient } from '@/app/utils/portalStore';
 import { portalBtnPrimary, portalBtnSecondary } from '@/app/components/portal/uiClasses';
 import { MAIN_META_INTAKE_KEYS, MAIN_META_LABELS, TAX_FLAG_KEYS } from '@/lib/clientDouzoneLayout';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
@@ -28,6 +31,9 @@ type Props = {
   onSaved?: (intakeData: Record<string, unknown>) => void;
   /** 상세 통합 레이아웃 — 섹션 제목·테두리 생략 */
   embedded?: boolean;
+  forcedEditing?: boolean;
+  hideEditControls?: boolean;
+  onSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 };
 
 export default function ClientMainMetaSection({
@@ -36,9 +42,12 @@ export default function ClientMainMetaSection({
   canEdit = true,
   onSaved,
   embedded = false,
+  forcedEditing,
+  hideEditControls = false,
+  onSaveRef,
 }: Props) {
   const [intake, setIntake] = useState(initialIntake);
-  const [editing, setEditing] = useState(false);
+  const [internalEditing, setInternalEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState(() => buildForm(initialIntake));
@@ -55,6 +64,8 @@ export default function ClientMainMetaSection({
 
   if (!metaVisible && !flagsVisible && !canEdit) return null;
 
+  const editing = forcedEditing ?? internalEditing;
+
   const save = async () => {
     setSaving(true);
     setError('');
@@ -62,35 +73,45 @@ export default function ClientMainMetaSection({
       const taxFlags: Record<string, boolean> = {};
       for (const k of TAX_FLAG_KEYS) taxFlags[k] = !!form.flags[k];
 
-      const nextIntake: Record<string, unknown> = { ...intake };
+      const intakePatch: Record<string, unknown> = {};
       for (const k of MAIN_META_INTAKE_KEYS) {
-        const v = form.meta[k]?.trim() ?? '';
-        if (v) nextIntake[k] = v;
-        else delete nextIntake[k];
+        intakePatch[k] = form.meta[k]?.trim() || null;
       }
-      if (Object.values(taxFlags).some(Boolean)) nextIntake.taxFlags = taxFlags;
-      else delete nextIntake.taxFlags;
+      if (Object.values(taxFlags).some(Boolean)) intakePatch.taxFlags = taxFlags;
+      else intakePatch.taxFlags = null;
 
       if (form.semiAnnualTarget || form.semiAnnualMonthlyDisplay) {
-        nextIntake.withholdingSettings = {
+        intakePatch.withholdingSettings = {
           semiAnnualTarget: form.semiAnnualTarget,
           semiAnnualMonthlyDisplay: form.semiAnnualMonthlyDisplay,
         };
       } else {
-        delete nextIntake.withholdingSettings;
+        intakePatch.withholdingSettings = null;
       }
+
+      const category = form.meta.category?.trim() ?? '';
+      const syncedEntity = businessEntityTypeForCategory(category);
 
       const res = await fetch(`/api/clients/${clientId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intakeData: nextIntake }),
+        body: JSON.stringify({
+          intakeData: intakePatch,
+          ...(syncedEntity ? { businessEntityType: syncedEntity } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '저장 실패');
-      const saved = (data.client?.intakeData ?? nextIntake) as Record<string, unknown>;
+      const saved = (data.client?.intakeData ?? {}) as Record<string, unknown>;
+      if (data.client) {
+        patchPortalClient(clientId, data.client);
+      } else {
+        patchPortalClient(clientId, { intakeData: saved });
+      }
+      markPortalClientsFresh();
       setIntake(saved);
       setForm(buildForm(saved));
-      setEditing(false);
+      setInternalEditing(false);
       onSaved?.(saved);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
@@ -99,34 +120,40 @@ export default function ClientMainMetaSection({
     }
   };
 
+  useEffect(() => {
+    if (onSaveRef) onSaveRef.current = () => save();
+  });
+
+  const showEditControls = canEdit && !hideEditControls;
+
   return (
     <section className={embedded ? '' : 'border-b border-slate-200 pb-3'}>
       {!embedded && (
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <h3 className="text-xs font-bold text-slate-600">사업장 · 신고대상</h3>
-        {canEdit && (
+        {showEditControls && (
           <div className="flex gap-1.5">
             {editing ? (
               <>
-                <button type="button" onClick={() => { setEditing(false); setForm(buildForm(intake)); }} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>취소</button>
+                <button type="button" onClick={() => { setInternalEditing(false); setForm(buildForm(intake)); }} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>취소</button>
                 <button type="button" disabled={saving} onClick={() => void save()} className={`${portalBtnPrimary} !px-2 !py-0.5 !text-[10px]`}>{saving ? '저장…' : '저장'}</button>
               </>
             ) : (
-              <button type="button" onClick={() => setEditing(true)} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>수정</button>
+              <button type="button" onClick={() => setInternalEditing(true)} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>수정</button>
             )}
           </div>
         )}
       </div>
       )}
-      {embedded && canEdit && (
+      {embedded && showEditControls && (
         <div className="mb-1.5 flex justify-end gap-1.5">
           {editing ? (
             <>
-              <button type="button" onClick={() => { setEditing(false); setForm(buildForm(intake)); }} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>취소</button>
+              <button type="button" onClick={() => { setInternalEditing(false); setForm(buildForm(intake)); }} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>취소</button>
               <button type="button" disabled={saving} onClick={() => void save()} className={`${portalBtnPrimary} !px-2 !py-0.5 !text-[10px]`}>{saving ? '저장…' : '저장'}</button>
             </>
           ) : (
-            <button type="button" onClick={() => setEditing(true)} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>수정</button>
+            <button type="button" onClick={() => setInternalEditing(true)} className={`${portalBtnSecondary} !px-2 !py-0.5 !text-[10px]`}>수정</button>
           )}
         </div>
       )}
@@ -142,10 +169,16 @@ export default function ClientMainMetaSection({
                   value={form.meta[key] ?? ''}
                   onChange={e => setForm(f => ({ ...f, meta: { ...f.meta, [key]: e.target.value } }))}
                   className={`${inputCls} flex-1`}
+                  list={key === 'category' ? 'client-main-category-options' : undefined}
                 />
               </label>
             ))}
           </div>
+          <datalist id="client-main-category-options">
+            {CLIENT_MAIN_CATEGORIES.map(cat => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
           <div className="flex flex-wrap gap-2 rounded-lg border border-slate-100 bg-slate-50/80 p-2">
             {TAX_FLAG_KEYS.map(key => {
               const checked = !!form.flags[key];

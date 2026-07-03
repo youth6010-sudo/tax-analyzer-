@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
 
 type Props = {
   /** 표시 순서대로 정렬된 담당자 전체 목록 */
@@ -140,6 +141,10 @@ export default function ManagerChips({
                   : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
             ].join(' ')}
           >
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-black/10 ${managerChipColor(mgr, MANAGER_LEGEND_ORDER)}`}
+              aria-hidden
+            />
             {mgr}
             {isSelf && <span className="text-[9px] font-bold text-blue-600">나</span>}
             <span

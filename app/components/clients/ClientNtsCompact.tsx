@@ -6,7 +6,9 @@ import {
   formatNtsDate,
   isNtsAlert,
   ntsBadgeClass,
+  normalizeNtsTaxType,
   ntsStatusLabel,
+  ntsTaxTypeBadgeClass,
   type NtsStatusView,
 } from '@/app/utils/ntsStatus';
 
@@ -14,10 +16,12 @@ export default function ClientNtsCompact({
   clientId,
   businessNumber,
   initialNts = null,
+  suppressChurnPrompt = false,
 }: {
   clientId: string;
   businessNumber?: string;
   initialNts?: NtsStatusView | null;
+  suppressChurnPrompt?: boolean;
 }) {
   const normalizedBiz = (businessNumber || '').replace(/\D/g, '');
   const [nts, setNts] = useState<NtsStatusView | null>(initialNts);
@@ -44,10 +48,9 @@ export default function ClientNtsCompact({
   }
 
   const alert = nts ? isNtsAlert(nts.statusCode) : false;
+  const taxLabel = nts ? normalizeNtsTaxType(nts.taxType) : '';
   const summary = nts
     ? [
-        ntsStatusLabel(nts),
-        nts.taxType,
         nts.closedDate && `폐업 ${formatNtsDate(nts.closedDate)}`,
         nts.checkedAt && `조회 ${new Date(nts.checkedAt).toLocaleDateString('ko-KR')}`,
       ]
@@ -76,9 +79,16 @@ export default function ClientNtsCompact({
             {ntsStatusLabel(nts)}
           </span>
         )}
+        {taxLabel && (
+          <span
+            className={`inline-flex rounded border px-1 py-0 text-[10px] font-semibold ${ntsTaxTypeBadgeClass(taxLabel)}`}
+          >
+            {taxLabel}
+          </span>
+        )}
         <p className="text-[11px] leading-snug text-slate-700 break-words min-w-0 flex-1">{summary}</p>
       </div>
-      {alert && (
+      {alert && !suppressChurnPrompt && (
         <Link
           href={`/clients/churn?prefillClientId=${clientId}`}
           className="mt-0.5 inline-block text-[10px] font-semibold text-rose-600 hover:underline"
