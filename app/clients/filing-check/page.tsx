@@ -64,7 +64,10 @@ import {
 import { prevWithholdingPeriodKey } from '@/lib/periodUtils';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
+  mergeFilingRecords,
+  readLocalFilingCheckSession,
   resetReceiptOnly,
+  writeLocalFilingCheckSession,
 } from '@/app/utils/filingCheckStorage';
 import FilingCheckSessionPanel from '@/app/components/clients/FilingCheckSessionPanel';
 import ClientFilingSettingsModal from '@/app/components/clients/ClientFilingSettingsModal';
@@ -383,6 +386,7 @@ function FilingCheckPageInner() {
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
   const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [statFilter, setStatFilter] = useState<IncomeStatFilter>('all');
+  /** 신고대상 = 활성 대상만 · 전체 = 제외 업체 포함(하단 취소선) */
   const [listScope, setListScope] = useState<'targets' | 'all'>('targets');
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
 
@@ -391,6 +395,7 @@ function FilingCheckPageInner() {
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
+  const sessionReadyRef = useRef(false);
 
   useEffect(() => {
     setStatFilter('all');
@@ -406,6 +411,9 @@ function FilingCheckPageInner() {
 
   const persistSession = useCallback(
     async (data: CheckRecord) => {
+      if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) return;
+      const pk = periodKey(tax, period);
+      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, data);
       try {
         const res = await fetch('/api/filing-check/session', {
           method: 'PUT',
@@ -434,7 +442,7 @@ function FilingCheckPageInner() {
         );
       }
     },
-    [selManager, tax, period],
+    [selManager, tax, period, keyId],
   );
 
   useEffect(() => {
@@ -472,6 +480,7 @@ function FilingCheckPageInner() {
     if (!selManager) return;
     let cancelled = false;
     const pk = periodKey(tax, period);
+    sessionReadyRef.current = false;
 
     const loadFromServer = async () => {
       try {
@@ -494,10 +503,12 @@ function FilingCheckPageInner() {
     };
 
     void (async () => {
+      const localRec = readLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk);
       const { data: serverRec, carriedFromPeriodKey } = await loadFromServer();
       if (cancelled) return;
 
-      let merged: CheckRecord = serverRec ? { ...EMPTY_RECORD, ...serverRec } : { ...EMPTY_RECORD };
+      const serverMerged: CheckRecord = serverRec ? { ...EMPTY_RECORD, ...serverRec } : { ...EMPTY_RECORD };
+      const merged = mergeFilingRecords(localRec, serverMerged) ?? serverMerged;
 
       if (carriedFromPeriodKey) {
         setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, carriedFromPeriodKey)));
@@ -506,9 +517,10 @@ function FilingCheckPageInner() {
       }
 
       setRecord(merged);
+      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, merged);
+      loadedKeyRef.current = keyId;
+      sessionReadyRef.current = true;
     })();
-
-    loadedKeyRef.current = keyId;
     setParseError('');
     setCopied(false);
     if (fileRef.current) fileRef.current.value = '';
@@ -516,7 +528,7 @@ function FilingCheckPageInner() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyId, persistSession]);
+  }, [keyId, selManager, tax, period]);
 
   // 기록 변경 시 즉시 저장. 완료(done) 상태에서는 완료 취소만 허용.
   const patchRecord = (patch: Partial<CheckRecord>) => {
@@ -815,9 +827,15 @@ function FilingCheckPageInner() {
     setStatFilter(prev => (prev === filter ? 'all' : filter));
   }, []);
 
+  const orderedComprehensiveGroups = useMemo(
+    () => [...activeComprehensiveGroups, ...excludedComprehensiveGroups],
+    [activeComprehensiveGroups, excludedComprehensiveGroups],
+  );
+
   const displayedComprehensiveGroups = useMemo(() => {
-    if (statFilter === 'all') return comprehensiveGroups;
-    return comprehensiveGroups.filter(g => {
+    const base = listScope === 'all' ? orderedComprehensiveGroups : activeComprehensiveGroups;
+    if (statFilter === 'all') return base;
+    return base.filter(g => {
       const excluded = excludeReasonOf(g.clients[0]) !== null;
       if (statFilter === 'target') return !excluded;
       const received = isGroupReceived(g);
@@ -826,7 +844,7 @@ function FilingCheckPageInner() {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comprehensiveGroups, statFilter, record.excluded, tax, withheld]);
+  }, [orderedComprehensiveGroups, activeComprehensiveGroups, listScope, statFilter, record.excluded, tax, withheld]);
 
   const displayedTargets = useMemo(() => {
     const base = listScope === 'all' ? orderedTargets : activeTargets;
@@ -1559,7 +1577,7 @@ function FilingCheckPageInner() {
 
       {statFilterBanner}
 
-      {!isIncomeTypeTax && tax !== 'comprehensive' && (
+      {!isIncomeTypeTax && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <ScopeToggle
             value={listScope === 'targets' ? 'mine' : 'all'}
@@ -1568,7 +1586,12 @@ function FilingCheckPageInner() {
             allLabel="전체"
           />
           {canReorderTargets && (
-            <span className="text-[11px] text-slate-400">순번 ▲▼ 순서 변경</span>
+            <span className="text-[11px] text-slate-400">순번 ▲▼ 순서 변경 (담당자·세목별 전용)</span>
+          )}
+          {listScope === 'targets' && excludedTargets.length > 0 && (
+            <span className="text-xs text-slate-500">
+              제외 {excludedTargets.length}곳 · 「전체」에서 제외사유 확인·수정
+            </span>
           )}
           {listScope === 'all' && excludedTargets.length > 0 && (
             <span className="text-xs text-slate-500">

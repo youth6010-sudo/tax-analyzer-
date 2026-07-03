@@ -101,6 +101,51 @@ export function carryFieldsFromRecord(
   };
 }
 
+export function filingCheckSessionStorageKey(
+  storagePrefix: string,
+  manager: string,
+  taxType: string,
+  currentPeriodKey: string,
+): string {
+  return `${storagePrefix}${manager}:${taxType}:${currentPeriodKey}`;
+}
+
+export function readLocalFilingCheckSession(
+  storagePrefix: string,
+  manager: string,
+  taxType: string,
+  currentPeriodKey: string,
+): CheckRecord | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(
+      filingCheckSessionStorageKey(storagePrefix, manager, taxType, currentPeriodKey),
+    );
+    if (!raw) return null;
+    return { ...EMPTY_CHECK_RECORD, ...(JSON.parse(raw) as Partial<CheckRecord>) };
+  } catch {
+    return null;
+  }
+}
+
+export function writeLocalFilingCheckSession(
+  storagePrefix: string,
+  manager: string,
+  taxType: string,
+  currentPeriodKey: string,
+  rec: CheckRecord,
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      filingCheckSessionStorageKey(storagePrefix, manager, taxType, currentPeriodKey),
+      JSON.stringify(rec),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 /** 직전 완료(done) 신고분 — localStorage 스캔 (readRecord/writeRecord와 동일 키 규칙) */
 export function findPreviousCompletedLocal(
   storagePrefix: string,
