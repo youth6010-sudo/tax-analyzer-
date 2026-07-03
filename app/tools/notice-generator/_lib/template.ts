@@ -112,7 +112,8 @@ export type TemplateSource = 'default' | 'custom';
 export const VAT_REPORT_TOKENS: TemplateToken[] = [
   { token: '{귀속}', desc: '과세기간 표기' },
   { token: '{세목}', desc: '세목명 (부가가치세)' },
-  { token: '{신고결과요약표}', desc: '매출·매입·최종세액 요약 표' },
+  { token: '{신고결과요약표}', desc: '매출·매입·불공제·경감·가산·최종세액 요약 표' },
+  { token: '{신고결과부가정보}', desc: '부가율·직원·차량·종이계산서·환급사유·특이사항 (입력된 항목만)' },
   { token: '{분납안내}', desc: '납부 세액 발생 시 분납 권장 일정 (없으면 자동 제거)' },
 ];
 
@@ -125,6 +126,8 @@ export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.8;">
 <br>
 [신고 결과 요약]<br>
 {신고결과요약표}
+<br>
+{신고결과부가정보}
 <br>
 ✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.<br>
 {분납안내}

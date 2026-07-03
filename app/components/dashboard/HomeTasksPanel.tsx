@@ -231,7 +231,7 @@ export default function HomeTasksPanel() {
                 <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
             </span>
-            <h2 className="text-sm font-bold text-slate-800">TO Do List</h2>
+            <h2 className="text-sm font-bold text-slate-800">To Do List</h2>
             <CountBadge count={totalPending} />
           </div>
         </div>

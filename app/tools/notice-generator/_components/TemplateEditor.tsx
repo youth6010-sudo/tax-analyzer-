@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { TOKENS, type TemplateSource, type TemplateToken } from '../_lib/template';
 import { sanitizeNoticeHtml } from '../_lib/templates';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
+import {
+  noticeBtnSecondary,
+  noticeSectionCompact,
+  noticeSectionTitle,
+  noticeTextarea,
+} from './noticeUi';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -32,7 +38,7 @@ export default function TemplateEditor({
   tokens = TOKENS,
   hint,
 }: Props) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const isCustom = source === 'custom';
   const displayHtml = isCustom ? html : defaultHtml;
@@ -86,23 +92,18 @@ export default function TemplateEditor({
   };
 
   return (
-    <section className="rounded-3xl border border-white bg-white/75 p-4 shadow-[0_10px_30px_-12px_rgba(167,139,250,0.35)] backdrop-blur-sm sm:p-5">
+    <section className={noticeSectionCompact}>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
         className="flex w-full items-center justify-between text-left"
       >
-        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-purple-200 text-sm">
-            ✏️
-          </span>
-          {title}
-        </h2>
-        <span className="text-xs text-slate-400">{open ? '접기 ▲' : '펼치기 ▼'}</span>
+        <h3 className={noticeSectionTitle}>{title}</h3>
+        <span className="text-xs text-slate-500">{open ? '접기' : '펼치기'}</span>
       </button>
 
       {open && (
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
           <TemplateSourceToggle
             source={source}
             onSourceChange={onSourceChange}
@@ -126,7 +127,7 @@ export default function TemplateEditor({
                   type="button"
                   title={t.desc}
                   onClick={() => insertToken(t.token)}
-                  className="rounded-full border border-violet-100 bg-violet-50 px-2.5 py-1 font-mono text-[11px] text-violet-600 transition hover:border-violet-300 hover:bg-white active:scale-95"
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-blue-700 transition hover:bg-white"
                 >
                   {t.token}
                 </button>
@@ -142,11 +143,11 @@ export default function TemplateEditor({
               onInput={emit}
               onBlur={emit}
               onPaste={handlePaste}
-              className="min-h-[180px] w-full resize-y overflow-auto rounded-2xl border border-rose-100 bg-white/70 p-3 text-sm leading-relaxed text-slate-800 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+              className={`${noticeTextarea} min-h-[120px] !text-sm`}
             />
           ) : (
             <div
-              className="notice-preview min-h-[120px] w-full overflow-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-700"
+              className="notice-preview min-h-[100px] w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-700"
               dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
           )}
@@ -161,7 +162,7 @@ export default function TemplateEditor({
               <button
                 type="button"
                 onClick={loadDefaultIntoCustom}
-                className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 active:scale-95"
+                className={`${noticeBtnSecondary} !px-2.5 !py-1 text-xs`}
               >
                 기본 서식 불러오기
               </button>

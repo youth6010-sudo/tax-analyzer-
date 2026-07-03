@@ -5,6 +5,7 @@ import type { ClientRecord, ClientSearchResult } from '@/app/types/client';
 import { hydratePortal, prefetchSearchIndex } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
+import { noticeBtnSecondary, noticeInput } from './noticeUi';
 
 export type PickedClient = { id: string; companyName: string };
 
@@ -74,18 +75,15 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/70 px-3 py-2.5">
-        <span className="text-base" aria-hidden>
-          🔗
-        </span>
+      <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-800">{value.companyName}</p>
-          <p className="text-[11px] text-rose-500">수임처 연결됨 · 세목별 자동 저장</p>
+          <p className="truncate text-sm font-semibold text-slate-800">{value.companyName}</p>
+          <p className="text-[11px] text-slate-500">수임처 연결 · 세목별 자동 저장</p>
         </div>
         <button
           type="button"
           onClick={() => onSelect(null)}
-          className="shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 active:scale-95"
+          className={`${noticeBtnSecondary} !px-2 !py-1 text-xs`}
         >
           해제
         </button>
@@ -95,7 +93,7 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
 
   const searchPlaceholder = isMaster
     ? '수임처 검색 (업체명·사업자번호·대표자)'
-    : '내 담당 수임처 검색 (업체명·사업자번호·대표자)';
+    : '내 담당 수임처 검색';
 
   return (
     <div ref={rootRef} className="relative">
@@ -113,15 +111,15 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
         }}
         onFocus={() => setOpen(true)}
         placeholder={searchPlaceholder}
-        className="w-full rounded-2xl border border-rose-100 bg-white/70 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
+        className={`${noticeInput} w-full !py-1.5 text-xs`}
       />
 
       {open && query.trim() && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-2xl border border-rose-100 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {isMaster === null || (loading && results.length === 0) ? (
-            <p className="px-3 py-4 text-center text-sm text-slate-400">검색 중…</p>
+            <p className="px-3 py-3 text-center text-sm text-slate-400">검색 중…</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-slate-500">검색 결과 없음</p>
+            <p className="px-3 py-3 text-center text-sm text-slate-500">검색 결과 없음</p>
           ) : (
             results.map(client => (
               <button
@@ -132,9 +130,9 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
                   setQuery('');
                   setOpen(false);
                 }}
-                className="w-full border-b border-rose-50 px-3 py-2.5 text-left transition last:border-0 hover:bg-rose-50"
+                className="w-full border-b border-slate-100 px-3 py-2 text-left transition last:border-0 hover:bg-slate-50"
               >
-                <p className="text-sm font-bold text-slate-800">{client.companyName}</p>
+                <p className="text-sm font-semibold text-slate-800">{client.companyName}</p>
                 <p className="text-xs text-slate-500">
                   {[client.manager, client.businessNo, client.representative]
                     .filter(Boolean)

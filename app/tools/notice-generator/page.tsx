@@ -1,17 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import NoticeHeader from './_components/NoticeHeader';
+import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
+import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
+import { portalFooterMeta } from '@/app/components/portal/uiClasses';
 import NoticeClientPicker, { type PickedClient } from './_components/NoticeClientPicker';
+import NoticeSetupBar from './_components/NoticeSetupBar';
+import NoticeCollapsibleSection from './_components/NoticeCollapsibleSection';
+import NoticeResultTabs from './_components/NoticeResultTabs';
 import CompanyNotesField from './_components/CompanyNotesField';
-import TaxTypeSelector from './_components/TaxTypeSelector';
-import PeriodSelector from './_components/PeriodSelector';
-import MaterialDeadlineField from './_components/MaterialDeadlineField';
 import PaymentNoticeField from './_components/PaymentNoticeField';
 import VatReportField from './_components/VatReportField';
 import TemplateEditor from './_components/TemplateEditor';
-import DeadlineCard from './_components/DeadlineCard';
-import ResultBox from './_components/ResultBox';
 import { TAX_TYPES, TAX_TYPE_META } from './_lib/taxTypes';
 import { SELECTABLE_YEARS } from './_lib/holidays';
 import {
@@ -55,19 +55,7 @@ import type {
   TaxTypeKey,
   VatReport,
 } from './_lib/types';
-
-const EMPTY_VAT_REPORT: VatReport = {
-  salesSupply: 0,
-  salesVat: 0,
-  taxInvoiceSupply: 0,
-  taxInvoiceVat: 0,
-  fixedAssetSupply: 0,
-  fixedAssetVat: 0,
-  cardCashSupply: 0,
-  cardCashVat: 0,
-  reductionLabel: '',
-  reductionAmount: 0,
-};
+import { EMPTY_VAT_REPORT } from './_lib/types';
 
 function getDefaultYear() {
   const now = new Date().getFullYear();
@@ -569,126 +557,133 @@ export default function NoticeGeneratorPage() {
   const meta = TAX_TYPE_META[taxType];
 
   return (
-    <div className="notice-bg flex-1 text-slate-900">
-      <NoticeHeader />
+    <div className="space-y-3">
+      <PortalPageHeader
+        title="안내문 생성기"
+        description="세목·기간별 신고 안내·납부 문구를 생성합니다."
+        icon={<PageHeaderIcon name="notice-generator" />}
+      />
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {/* 좌측: 입력 영역 */}
-          <div className="space-y-5">
-            <CompanyNotesField
-              companyName={effectiveCompanyName}
-              onCompanyNameChange={handleCompanyNameChange}
-              materials={effectiveMaterials}
-              onMaterialsChange={handleMaterialsChange}
-              materialsPlaceholder={DEFAULT_MATERIALS_BY_TAX[taxType]}
-              notes={effectiveNotes}
-              onNotesChange={handleNotesChange}
-              notesPlaceholder={NOTES_EXAMPLE_BY_TAX[taxType]}
-              clientLinked={inClientMode}
-              saveState={saveState}
-              showPayroll={isWithholding}
-              payrollByUs={effectivePayrollByUs}
-              onPayrollChange={handlePayrollChange}
-              onSave={() => void handleSaveClient()}
-              clientPicker={
-                <NoticeClientPicker
-                  value={
-                    selectedClient
-                      ? { id: selectedClient.id, companyName: clientCompanyName }
-                      : null
-                  }
-                  onSelect={client => void handleSelectClient(client)}
-                />
+      <div className="space-y-3">
+        <NoticeSetupBar
+          taxType={taxType}
+          onSelectTax={handleSelectTax}
+          params={params}
+          onParamChange={handleParamChange}
+          deadline={deadline}
+          taxLabel={meta.name}
+          materialDeadline={materialDeadline}
+          onMaterialDeadlineChange={handleMaterialDeadlineChange}
+          clientPicker={
+            <NoticeClientPicker
+              value={
+                selectedClient
+                  ? { id: selectedClient.id, companyName: clientCompanyName }
+                  : null
               }
+              onSelect={client => void handleSelectClient(client)}
             />
-            <TaxTypeSelector selected={taxType} onSelect={handleSelectTax} />
-            <PeriodSelector taxType={taxType} params={params} onChange={handleParamChange} />
-            <MaterialDeadlineField
-              value={materialDeadline}
-              onChange={handleMaterialDeadlineChange}
-            />
-            {templateLoaded && (
-              <TemplateEditor
-                key={scenario}
-                html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
-                onChange={handleNoticeTemplateChange}
-                source={noticeSource}
-                onSourceChange={handleNoticeSourceChange}
-                onSave={handleNoticeTemplateSave}
-                hasCustomSaved={hasNoticeCustom}
-                saveState={templateSaveState}
-                title={SCENARIO_LABEL[scenario]}
-                defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
-              />
-            )}
-            {templateLoaded && isVat && (
-              <TemplateEditor
-                key="vat-report-template"
-                html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
-                onChange={handleVatReportTemplateChange}
-                source={vatReportSource}
-                onSourceChange={handleVatReportSourceChange}
-                onSave={handleVatReportTemplateSave}
-                hasCustomSaved={hasVatReportCustom}
-                saveState={vatTemplateSaveState}
-                title="신고 결과 보고 및 검토 서식 (부가세)"
-                defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
-                tokens={VAT_REPORT_TOKENS}
-                hint="부가세 신고 결과 보고 문구 서식입니다. {신고결과요약표}·{분납안내} 토큰으로 입력값이 자동 반영됩니다."
-              />
-            )}
-            {templateLoaded && (
-              <TemplateEditor
-                key="payment-notice-template"
-                html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
-                onChange={handlePaymentNoticeTemplateChange}
-                source={paymentNoticeSource}
-                onSourceChange={handlePaymentNoticeSourceChange}
-                onSave={handlePaymentNoticeTemplateSave}
-                hasCustomSaved={hasPaymentNoticeCustom}
-                saveState={paymentTemplateSaveState}
-                title="신고 결과 안내 서식 (납부세액)"
-                defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
-                tokens={PAYMENT_NOTICE_TOKENS}
-                hint="납부·환급·분납 안내 문구 서식입니다. {안내본문} 또는 세부 토큰으로 금액·기한이 자동 반영됩니다."
-              />
-            )}
-          </div>
+          }
+        />
 
-          {/* 우측: 결과 영역 */}
-          <div className="space-y-5">
-            <DeadlineCard meta={meta} deadline={deadline} />
-            <ResultBox messageHtml={messageHtml} editable />
-            {isVat && (
-              <>
-                <VatReportField value={vatReport} onChange={setVatReport} />
-                <ResultBox messageHtml={vatReportHtml} title="신고 결과 보고 및 검토 안내 문구" editable />
-              </>
-            )}
-            <PaymentNoticeField
-              value={payment}
-              onChange={setPayment}
-              taxTypeName={meta.name}
-              hasLocalTax={hasLocalIncomeTax(taxType)}
-              isWithholding={taxType === TAX_TYPES.WITHHOLDING}
-              showInstallments={isVat}
-              vatAmountLinked={isVat && vatPaymentLinked}
-              onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
-              onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
-            />
-            <ResultBox messageHtml={paymentHtml} title="신고 결과 안내 문구 (납부세액)" editable />
-          </div>
-        </div>
+        <CompanyNotesField
+          materials={effectiveMaterials}
+          onMaterialsChange={handleMaterialsChange}
+          materialsPlaceholder={DEFAULT_MATERIALS_BY_TAX[taxType]}
+          notes={effectiveNotes}
+          onNotesChange={handleNotesChange}
+          notesPlaceholder={NOTES_EXAMPLE_BY_TAX[taxType]}
+          clientLinked={inClientMode}
+          saveState={saveState}
+          showPayroll={isWithholding}
+          payrollByUs={effectivePayrollByUs}
+          onPayrollChange={handlePayrollChange}
+          onSave={() => void handleSaveClient()}
+        />
+      </div>
 
-        <footer className="mt-8 text-center text-xs text-slate-400">
-          🌷 마감일은 일반적인 법정기한 기준입니다. 반기납부 특례·기한연장 등 개별
-          사정은 별도 확인이 필요합니다. 공휴일 데이터: 2025~2035년. 선택 가능 연도:{' '}
-          {SELECTABLE_YEARS[0]}~{SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]}년. 안내문 서식은
-          담당자 계정별·유형별로 서버에 자동 저장됩니다. 수임처 연결 시 &lsquo;수임처에 저장&rsquo;
-          버튼으로 세목별 필요자료·특이사항이 저장되며, 미연결 시 입력값은 이 브라우저에 저장됩니다.
-        </footer>
-      </main>
+      {isVat && (
+        <NoticeCollapsibleSection title="신고 결과 보고 (부가세)">
+          <VatReportField value={vatReport} onChange={setVatReport} embedded />
+        </NoticeCollapsibleSection>
+      )}
+
+      <NoticeCollapsibleSection title="신고 결과 안내 (납부세액)">
+        <PaymentNoticeField
+          value={payment}
+          onChange={setPayment}
+          taxTypeName={meta.name}
+          hasLocalTax={hasLocalIncomeTax(taxType)}
+          isWithholding={taxType === TAX_TYPES.WITHHOLDING}
+          showInstallments={isVat}
+          vatAmountLinked={isVat && vatPaymentLinked}
+          onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
+          onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
+          embedded
+        />
+      </NoticeCollapsibleSection>
+
+      {templateLoaded && (
+        <NoticeCollapsibleSection title="담당자 서식 설정">
+          <TemplateEditor
+            key={scenario}
+            html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+            onChange={handleNoticeTemplateChange}
+            source={noticeSource}
+            onSourceChange={handleNoticeSourceChange}
+            onSave={handleNoticeTemplateSave}
+            hasCustomSaved={hasNoticeCustom}
+            saveState={templateSaveState}
+            title={SCENARIO_LABEL[scenario]}
+            defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+          />
+          {isVat && (
+            <TemplateEditor
+              key="vat-report-template"
+              html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
+              onChange={handleVatReportTemplateChange}
+              source={vatReportSource}
+              onSourceChange={handleVatReportSourceChange}
+              onSave={handleVatReportTemplateSave}
+              hasCustomSaved={hasVatReportCustom}
+              saveState={vatTemplateSaveState}
+              title="신고 결과 보고 서식 (부가세)"
+              defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
+              tokens={VAT_REPORT_TOKENS}
+              hint="부가세 신고 결과 보고 문구 서식입니다."
+            />
+          )}
+          <TemplateEditor
+            key="payment-notice-template"
+            html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+            onChange={handlePaymentNoticeTemplateChange}
+            source={paymentNoticeSource}
+            onSourceChange={handlePaymentNoticeSourceChange}
+            onSave={handlePaymentNoticeTemplateSave}
+            hasCustomSaved={hasPaymentNoticeCustom}
+            saveState={paymentTemplateSaveState}
+            title="신고 결과 안내 서식 (납부세액)"
+            defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+            tokens={PAYMENT_NOTICE_TOKENS}
+            hint="납부·환급·분납 안내 문구 서식입니다."
+          />
+        </NoticeCollapsibleSection>
+      )}
+
+      <NoticeCollapsibleSection title="생성된 안내 문구">
+        <NoticeResultTabs
+          mainHtml={messageHtml}
+          paymentHtml={paymentHtml}
+          vatHtml={vatReportHtml}
+          showVat={isVat}
+          embedded
+        />
+      </NoticeCollapsibleSection>
+
+      <p className={portalFooterMeta}>
+        마감일은 법정기한 기준입니다. 공휴일: 2025~2035년 · 연도: {SELECTABLE_YEARS[0]}~
+        {SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]}년. 서식은 담당자별 저장 · 미연결 시 브라우저 저장.
+      </p>
     </div>
   );
 }

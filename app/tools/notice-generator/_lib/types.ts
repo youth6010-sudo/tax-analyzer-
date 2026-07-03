@@ -54,18 +54,62 @@ export type PaymentNotice = {
   installments: PaymentInstallment[];
 };
 
+// 부가세 매입세액 불공제 (사유별)
+export type VatNonDeductibleItem = {
+  reason: string;
+  vat: number;
+};
+
 // 부가세 신고 결과 보고 및 검토 입력값
 export type VatReport = {
-  salesSupply: number; // 매출 공급가
-  salesVat: number; // 매출 부가세
-  taxInvoiceSupply: number; // 매입-세금계산서 공급가
-  taxInvoiceVat: number; // 매입-세금계산서 부가세
-  fixedAssetSupply: number; // 매입-고정자산 취득 공급가
-  fixedAssetVat: number; // 매입-고정자산 취득 부가세
-  cardCashSupply: number; // 매입-카드/현금영수증 공급가
-  cardCashVat: number; // 매입-카드/현금영수증 부가세
-  reductionLabel: string; // 경감세액 명칭
-  reductionAmount: number; // 경감세액 금액
+  salesSupply: number;
+  salesVat: number;
+  taxInvoiceSupply: number;
+  taxInvoiceVat: number;
+  fixedAssetSupply: number;
+  fixedAssetVat: number;
+  cardCashSupply: number;
+  cardCashVat: number;
+  reductionLabel: string;
+  reductionAmount: number;
+  /** 매입세액 불공제 — 사유별 금액 */
+  nonDeductibleItems: VatNonDeductibleItem[];
+  penaltyLabel: string;
+  penaltyAmount: number;
+  /** 직원 여부 (예: 있음 / 없음) */
+  employeeStatus: string;
+  /** 차량 관련 — 공제 차량 */
+  vehicleDeductible: string;
+  /** 차량 관련 — 불공제 차량 */
+  vehicleNonDeductible: string;
+  /** 종이 세금계산서 해당 시 */
+  paperTaxInvoice: string;
+  /** 환급 사유 (환급 해당 시) */
+  refundReason: string;
+  /** 신고 결과 보고 특이사항 */
+  vatSpecialNotes: string;
+};
+
+export const EMPTY_VAT_REPORT: VatReport = {
+  salesSupply: 0,
+  salesVat: 0,
+  taxInvoiceSupply: 0,
+  taxInvoiceVat: 0,
+  fixedAssetSupply: 0,
+  fixedAssetVat: 0,
+  cardCashSupply: 0,
+  cardCashVat: 0,
+  reductionLabel: '',
+  reductionAmount: 0,
+  nonDeductibleItems: [],
+  penaltyLabel: '',
+  penaltyAmount: 0,
+  employeeStatus: '',
+  vehicleDeductible: '',
+  vehicleNonDeductible: '',
+  paperTaxInvoice: '',
+  refundReason: '',
+  vatSpecialNotes: '',
 };
 
 export type TaxTypeMeta = {

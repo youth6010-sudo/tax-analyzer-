@@ -28,7 +28,7 @@ export function TemplateSourceToggle({
     [
       'rounded-lg px-2.5 py-1 text-xs font-semibold border transition-colors',
       active
-        ? 'border-violet-300 bg-violet-50 text-violet-900 shadow-sm'
+        ? 'border-blue-300 bg-blue-50 text-blue-900 shadow-sm'
         : 'border-transparent bg-slate-100 text-slate-600 hover:bg-slate-200/80',
     ].join(' ');
 
@@ -52,7 +52,7 @@ export function TemplateSourceToggle({
           type="button"
           onClick={onSave}
           disabled={saveState === 'saving'}
-          className="rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-50 disabled:opacity-60"
+          className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-60"
         >
           {saveLabel}
         </button>

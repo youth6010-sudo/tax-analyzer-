@@ -506,10 +506,40 @@ export function calcVatReport(report: VatReport) {
   const buyVat = Math.round(
     (report.taxInvoiceVat || 0) + (report.fixedAssetVat || 0) + (report.cardCashVat || 0),
   );
+  const nonDeductibleVat = Math.round(
+    (report.nonDeductibleItems ?? [])
+      .filter(it => Math.round(it.vat || 0) !== 0)
+      .reduce((s, it) => s + Math.round(it.vat || 0), 0),
+  );
+  const deductibleBuyVat = buyVat - nonDeductibleVat;
   const reduction = Math.round(report.reductionAmount || 0);
-  // 납부세액 = 매출세액 - 매입세액 - 경감세액 (+ 납부 / - 환급)
-  const finalTax = salesVat - buyVat - reduction;
-  return { salesSupply, salesVat, buySupply, buyVat, reduction, finalTax };
+  const penalty = Math.round(report.penaltyAmount || 0);
+  // 납부세액 = 매출세액 − 공제매입세액 − 경감세액 + 가산세액
+  const finalTax = salesVat - deductibleBuyVat - reduction + penalty;
+
+  const buySupplyExFixed = Math.round(
+    (report.taxInvoiceSupply || 0) + (report.cardCashSupply || 0),
+  );
+  const buyVatExFixed = Math.round((report.taxInvoiceVat || 0) + (report.cardCashVat || 0));
+  const salesVatRate = salesSupply > 0 ? (salesVat / salesSupply) * 100 : null;
+  const buyVatRateExFixed =
+    buySupplyExFixed > 0 ? (buyVatExFixed / buySupplyExFixed) * 100 : null;
+
+  return {
+    salesSupply,
+    salesVat,
+    buySupply,
+    buyVat,
+    nonDeductibleVat,
+    deductibleBuyVat,
+    reduction,
+    penalty,
+    finalTax,
+    salesVatRate,
+    buyVatRateExFixed,
+    buySupplyExFixed,
+    buyVatExFixed,
+  };
 }
 
 // 입력값을 그대로 보여주는 신고 결과 요약 표(HTML).
@@ -571,6 +601,38 @@ function vatSummaryTable(
         )
       : '';
 
+  const nonDeductibleRows = (report.nonDeductibleItems ?? [])
+    .filter(it => Math.round(it.vat || 0) !== 0)
+    .map(it => {
+      const reason = (it.reason || '').trim();
+      const label = reason
+        ? `매입세액 불공제 (${reason} 사유로 제외)`
+        : '매입세액 불공제';
+      return row(label, '-', num(it.vat), { bg: '#fef3c7', color: '#b45309', indent: true });
+    })
+    .join('');
+
+  const deductibleBuyRow =
+    calc.nonDeductibleVat > 0
+      ? row('공제 매입세액 합계', '-', numZero(calc.deductibleBuyVat), {
+          bg: '#ffedd5',
+          color: '#c2410c',
+          bold: true,
+          indent: true,
+        })
+      : '';
+
+  const penaltyName = (report.penaltyLabel || '').trim();
+  const penaltyRow =
+    Math.round(report.penaltyAmount || 0) !== 0
+      ? row(
+          `가산세${penaltyName ? ` (${penaltyName})` : ''}`,
+          '-',
+          num(report.penaltyAmount),
+          { bg: '#fee2e2', color: '#b91c1c' },
+        )
+      : '';
+
   return (
     `<table style="border-collapse:collapse;table-layout:fixed;width:420px;margin:6px 0;font-size:13px;">` +
     `<colgroup><col style="width:160px;"><col style="width:130px;"><col style="width:130px;"></colgroup>` +
@@ -587,7 +649,10 @@ function vatSummaryTable(
       bold: true,
     }) +
     buySubRows +
+    nonDeductibleRows +
+    deductibleBuyRow +
     reductionRow +
+    penaltyRow +
     row(`최종 세액 (${taxLabel})`, '-', Math.abs(calc.finalTax).toLocaleString('ko-KR'), {
       bg: finalBg,
       color: finalColor,
@@ -639,6 +704,50 @@ function buildVatInstallmentBlock(
   return parts.join('');
 }
 
+function fmtVatRate(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return '';
+  return `${n.toFixed(1)}%`;
+}
+
+function buildVatSupplementBlock(
+  report: VatReport,
+  calc: ReturnType<typeof calcVatReport>,
+): string {
+  const lines: string[] = [];
+
+  if (calc.salesVatRate != null) {
+    lines.push(`매출 부가율: ${fmtVatRate(calc.salesVatRate)}`);
+  }
+  if (calc.buyVatRateExFixed != null) {
+    lines.push(`매입 부가율(고정자산 제외): ${fmtVatRate(calc.buyVatRateExFixed)}`);
+  }
+
+  const employee = (report.employeeStatus || '').trim();
+  if (employee) lines.push(`직원 여부: ${employee}`);
+
+  const vehDed = (report.vehicleDeductible || '').trim();
+  if (vehDed) lines.push(`차량 관련(공제 차량): ${vehDed}`);
+
+  const vehNon = (report.vehicleNonDeductible || '').trim();
+  if (vehNon) lines.push(`차량 관련(불공제 차량): ${vehNon}`);
+
+  const paper = (report.paperTaxInvoice || '').trim();
+  if (paper) lines.push(`종이 세금계산서: ${paper}`);
+
+  if (calc.finalTax < 0) {
+    const refund = (report.refundReason || '').trim();
+    if (refund) lines.push(`환급 사유: ${refund}`);
+  }
+
+  const special = (report.vatSpecialNotes || '').trim();
+  if (special) lines.push(`특이사항: ${special}`);
+
+  if (lines.length === 0) return '';
+
+  const body = lines.map(l => noticeDash(escapeHtml(l))).join('');
+  return `${noticeBlank()}${noticeLine('📌 [검토 사항]')}${body}`;
+}
+
 // 사용자 서식(토큰)으로 부가세 신고 결과 보고 문구 생성
 export function renderVatReportTemplate({
   template,
@@ -657,10 +766,12 @@ export function renderVatReportTemplate({
   const isPay = r.finalTax >= 0;
   const taxLabel = isPay ? '납부' : '환급';
   const summaryTable = vatSummaryTable(report, r, taxLabel);
+  const supplementBlock = buildVatSupplementBlock(report, r);
   const installmentBlock = buildVatInstallmentBlock(deadline, isPay, r.finalTax);
 
   const map: [string, string][] = [
     ['{신고결과요약표}', summaryTable],
+    ['{신고결과부가정보}', supplementBlock],
     ['{분납안내}', installmentBlock],
     ['{귀속}', belong],
     ['{세목}', escapeHtml(name)],
@@ -673,6 +784,9 @@ export function renderVatReportTemplate({
   if (!installmentBlock) {
     out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
     out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
+  }
+  if (!supplementBlock) {
+    out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
   }
   return out;
 }
