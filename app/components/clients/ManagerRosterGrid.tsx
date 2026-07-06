@@ -21,7 +21,7 @@ import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
 import { clientNeedsNtsChurnPrompt } from '@/app/utils/churnMatch';
 import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManagerColors';
-import { resolveClientRecordFee, readFeeBreakdown, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
+import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
 import { useClientRowExpand } from '@/app/components/clients/useClientRowExpand';
@@ -164,6 +164,7 @@ function ClientRosterRow({
   panelCategory,
   showFee,
   feeEditable = true,
+  feeVisible = true,
   query,
   returnTo,
   onFeeChange,
@@ -178,6 +179,7 @@ function ClientRosterRow({
   panelCategory?: string;
   showFee: boolean;
   feeEditable?: boolean;
+  feeVisible?: boolean;
   query: string;
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
@@ -237,6 +239,7 @@ function ClientRosterRow({
           intakeData={c.intakeData}
           onSave={onFeeChange}
           readOnly={!feeEditable}
+          hidden={!feeVisible}
           className="pt-px"
         />
       )}
@@ -248,8 +251,8 @@ function ClientRosterRow({
             feeRefreshKey={feeRefreshKey}
             onDetailClick={goToDetail}
             onPrefetch={prefetchDetail}
-            feeBreakdown={showFee ? readFeeBreakdown(c.intakeData) : undefined}
-            showFeeHistory={showFee}
+            feeItems={showFee && feeVisible ? readFeeItems(c.intakeData) : undefined}
+            showFeeHistory={showFee && feeVisible}
             fields={[
               { label: CLIENT_FIELD_LABELS.representative, value: <CellValue value={rep} query={query} /> },
               { label: CLIENT_FIELD_LABELS.businessNo, value: <CellValue value={biz} mono query={query} /> },
@@ -272,6 +275,7 @@ function EntityPanel({
   onFeeChange,
   feeRefreshKeys,
   feeEditable = true,
+  feeVisible = true,
   showFooter = false,
   manager,
   allManagerClients,
@@ -286,6 +290,7 @@ function EntityPanel({
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
   feeEditable?: boolean;
+  feeVisible?: boolean;
   showFooter?: boolean;
   manager: string;
   allManagerClients: ClientRecord[];
@@ -358,6 +363,7 @@ function EntityPanel({
                   panelCategory={variant === 'other' ? title : undefined}
                   showFee={showFee}
                   feeEditable={feeEditable}
+                  feeVisible={feeVisible}
                   query={query}
                   returnTo={returnTo}
                   onFeeChange={onFeeChange}
@@ -376,7 +382,8 @@ function EntityPanel({
         <div className={`shrink-0 flex items-center justify-between gap-1.5 px-2 py-1.5 border-t text-xs ${s.footer}`}>
           <span className="font-medium opacity-80">{title} 합계</span>
           <span className="tabular-nums font-semibold whitespace-nowrap">
-            {clients.length}건 · {formatFee(feeSum)}
+            {clients.length}건
+            {feeVisible ? ` · ${formatFee(feeSum)}` : ''}
           </span>
         </div>
       )}
@@ -387,29 +394,35 @@ function EntityPanel({
 function MainCategorySummary({
   personal,
   corporate,
+  feeVisible = true,
 }: {
   personal: ClientRecord[];
   corporate: ClientRecord[];
+  feeVisible?: boolean;
 }) {
   const personalFee = sumClientFees(personal);
   const corporateFee = sumClientFees(corporate);
   const mainCount = personal.length + corporate.length;
   const mainFee = personalFee + corporateFee;
+  const feeSuffix = (n: number | null) => (feeVisible ? ` · ${formatFee(n)}` : '');
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 shadow-sm">
       <div className="flex flex-wrap gap-1.5 text-[11px]">
         <span className="rounded bg-sky-50 px-1.5 py-0.5 font-medium tabular-nums text-sky-800 ring-1 ring-sky-100">
-          법인 {corporate.length} · {formatFee(corporateFee)}
+          법인 {corporate.length}
+          {feeSuffix(corporateFee)}
         </span>
         <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium tabular-nums text-emerald-800 ring-1 ring-emerald-100">
-          개인 {personal.length} · {formatFee(personalFee)}
+          개인 {personal.length}
+          {feeSuffix(personalFee)}
         </span>
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-1.5 text-xs text-slate-700 border-t border-slate-200/80 pt-1.5">
         <span className="font-semibold">개인·법인 합계</span>
         <span className="tabular-nums font-bold text-slate-900 whitespace-nowrap">
-          {mainCount}건 · {formatFee(mainFee)}
+          {mainCount}건
+          {feeSuffix(mainFee)}
         </span>
       </div>
     </div>
@@ -423,6 +436,7 @@ function ManagerSection({
   returnTo,
   isSelf,
   feeEditable = true,
+  feeVisible = true,
   visibleOptionalCategories,
   onFeeChange,
   feeRefreshKeys,
@@ -435,6 +449,7 @@ function ManagerSection({
   returnTo: string;
   isSelf?: boolean;
   feeEditable?: boolean;
+  feeVisible?: boolean;
   visibleOptionalCategories: string[];
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
@@ -497,6 +512,7 @@ function ManagerSection({
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
           feeEditable={feeEditable}
+          feeVisible={feeVisible}
           manager={manager}
           allManagerClients={clients}
           sort={sort}
@@ -511,12 +527,13 @@ function ManagerSection({
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
           feeEditable={feeEditable}
+          feeVisible={feeVisible}
           manager={manager}
           allManagerClients={clients}
           sort={sort}
           onClientOrderChange={onClientOrderChange}
         />
-        <MainCategorySummary personal={personal} corporate={corporate} />
+        <MainCategorySummary personal={personal} corporate={corporate} feeVisible={feeVisible} />
         {visibleOptional.map(({ category, clients: catClients }) => (
           <EntityPanel
             key={category}
@@ -528,6 +545,7 @@ function ManagerSection({
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
             feeEditable={feeEditable}
+            feeVisible={feeVisible}
             manager={manager}
             allManagerClients={clients}
             sort={sort}
@@ -824,6 +842,7 @@ export default function ManagerRosterGrid({
             returnTo={returnTo}
             isSelf={Boolean(currentUserName && mgr.manager === currentUserName)}
             feeEditable={isAdmin || myManagerNames.has(mgr.manager)}
+            feeVisible={isAdmin || myManagerNames.has(mgr.manager)}
             visibleOptionalCategories={visibleOptionalCategories}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}

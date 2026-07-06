@@ -69,6 +69,8 @@ export type PaymentNotice = {
   installments: PaymentInstallment[];
   /** 원천세 납부서 3장 이상 — 항목별 금액 (지방소득세는 localAmount) */
   withholdingItems: WithholdingItem[];
+  /** 첨부 서류 설명 (비우면 납부서 N장으로 표기) */
+  attachNote: string;
 };
 
 // 부가세 매입세액 불공제 (사유별)

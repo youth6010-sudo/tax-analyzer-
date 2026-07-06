@@ -112,6 +112,7 @@ export default function NoticeGeneratorPage() {
     refundClaimed: false,
     installments: [],
     withholdingItems: [],
+    attachNote: '',
   }));
 
   // 부가세 신고 결과 보고 및 검토 입력값 (세션 전용)
@@ -145,6 +146,7 @@ export default function NoticeGeneratorPage() {
     setClientMaterials(entry?.materials ?? '');
     setClientNotes(entry?.notes ?? '');
     setClientPayrollByUs(entry?.payrollByUs ?? false);
+    setPayment(prev => ({ ...prev, attachNote: entry?.attachNote ?? '' }));
   };
 
   const handleSelectClient = async (picked: PickedClient | null) => {
@@ -171,8 +173,7 @@ export default function NoticeGeneratorPage() {
     }
   };
 
-  // 수임처 데이터 명시적 저장 (저장 버튼) — 현재 세목의 필요자료·특이사항·급여대장 여부 저장.
-  // 저장 시 업체별 필요자료가 수임처관리 "세목별 특이사항"에도 자동 반영된다.
+  // 수임처 데이터 명시적 저장 — 필요자료·특이사항·급여대장·첨부 서류 문구(세목별)
   const handleSaveClient = async () => {
     if (!selectedClient) return;
     const client = selectedClient;
@@ -182,6 +183,7 @@ export default function NoticeGeneratorPage() {
         materials: clientMaterials,
         notes: clientNotes,
         payrollByUs: clientPayrollByUs,
+        attachNote: payment.attachNote,
       });
       setSelectedClient(prev =>
         prev && prev.id === client.id
@@ -200,6 +202,7 @@ export default function NoticeGeneratorPage() {
 
   const handleSelectTax = (next: TaxTypeKey) => {
     setTaxType(next);
+    const savedAttach = selectedClient?.noticeMap[next]?.attachNote ?? '';
     // 세목별 납부서 기본 장수 적용 + 금액 초기화(세목마다 금액이 다르므로)
     setPayment({
       slips: defaultPaymentSlips(next),
@@ -208,6 +211,7 @@ export default function NoticeGeneratorPage() {
       refundClaimed: false,
       installments: [],
       withholdingItems: [],
+      attachNote: savedAttach,
     });
     setVatPaymentLinked(next === TAX_TYPES.VAT);
     // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경
@@ -622,6 +626,7 @@ export default function NoticeGeneratorPage() {
               vatAmountLinked={isVat && vatPaymentLinked}
               onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
               onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
+              clientLinked={inClientMode}
               embedded
             />
           </NoticeCollapsibleSection>

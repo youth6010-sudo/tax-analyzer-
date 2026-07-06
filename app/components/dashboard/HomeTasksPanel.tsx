@@ -6,7 +6,7 @@ import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
 import { formatCompanyEventSchedule, formatChecklistDueDate, getChecklistTypeLabel, isChecklistPastDue } from '@/app/types/calendar';
 import type { ChecklistTaxType } from '@/app/types/calendar';
-import { prefetchPortal, usePortalTasks } from '@/app/utils/portalStore';
+import { prefetchPortal, usePortalTasks, getPortalChurnRecords, getPortalClients, filterNtsTasksForHandledChurn, refreshPortalBootstrap } from '@/app/utils/portalStore';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
@@ -91,7 +91,11 @@ function SectionCard({
 }
 
 export default function HomeTasksPanel() {
-  const clientTasks = usePortalTasks();
+  const rawClientTasks = usePortalTasks();
+  const clientTasks = useMemo(
+    () => filterNtsTasksForHandledChurn(rawClientTasks, getPortalChurnRecords(), getPortalClients()),
+    [rawClientTasks],
+  );
   const [sections, setSections] = useState<SectionState>(readSectionState);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);

@@ -7,6 +7,34 @@ type ChurnClientRef = Pick<ClientRecord, 'id' | 'companyName' | 'status'> & {
   nts?: ClientRecord['nts'];
 };
 /** 수임처에 연결된 유출 이력 — clientId 또는 상호(엑셀 import 등 clientId 미연결) */
+export type ChurnRegistrationIndex = {
+  clientIds: Set<string>;
+  companyNames: Set<string>;
+};
+
+export function buildChurnRegistrationIndex(
+  records: Array<{ clientId?: string | null; companyName?: string | null }>,
+): ChurnRegistrationIndex {
+  const clientIds = new Set<string>();
+  const companyNames = new Set<string>();
+  for (const r of records) {
+    if (r.clientId) clientIds.add(r.clientId);
+    const key = compactSearchText(r.companyName ?? '');
+    if (key) companyNames.add(key);
+  }
+  return { clientIds, companyNames };
+}
+
+export function clientMatchesChurnRegistration(
+  client: Pick<ClientRecord, 'id' | 'companyName' | 'status'>,
+  index: ChurnRegistrationIndex,
+): boolean {
+  if (client.status === 'churned') return true;
+  if (index.clientIds.has(client.id)) return true;
+  const key = compactSearchText(client.companyName);
+  return key ? index.companyNames.has(key) : false;
+}
+
 export function matchChurnRecordForClient(
   client: Pick<ClientRecord, 'id' | 'companyName'>,
   records: ChurnRecordView[],
@@ -61,8 +89,8 @@ export function clientHasChurnRegistration(
   records: ChurnRecordView[],
 ): boolean {
   if (client.churn) return true;
-  if (matchChurnRecordForClient(client, records)) return true;
-  return client.status === 'churned';
+  if (client.status === 'churned') return true;
+  return clientMatchesChurnRegistration(client, buildChurnRegistrationIndex(records));
 }
 
 /** 국세청 폐업·휴업 안내(유출 등록 링크)가 필요한지 */

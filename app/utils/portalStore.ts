@@ -3,7 +3,31 @@
 import { useSyncExternalStore } from 'react';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { ChurnRecordView, ClientRecord, ClientSearchResult } from '@/app/types/client';
+import {
+  buildChurnRegistrationIndex,
+  clientMatchesChurnRegistration,
+} from '@/app/utils/churnMatch';
 import { filterClientSearchIndex } from '@/app/utils/searchFilter';
+
+/** 유출 처리된 업체의 국세청 할 일을 목록에서 제거 */
+export function filterNtsTasksForHandledChurn(
+  tasks: DashboardTask[],
+  churnRecords: ChurnRecordView[],
+  clients: ClientRecord[],
+): DashboardTask[] {
+  if (!tasks.some(t => t.type === 'nts_alert')) return tasks;
+  const index = buildChurnRegistrationIndex(churnRecords);
+  const clientById = new Map(clients.map(c => [c.id, c]));
+
+  return tasks.filter(t => {
+    if (t.type !== 'nts_alert') return true;
+    const m = /^nts-(.+)$/.exec(t.id);
+    if (!m) return true;
+    const client = clientById.get(m[1]);
+    if (!client) return false;
+    return !clientMatchesChurnRegistration(client, index);
+  });
+}
 
 export type PortalHomeStats = {
   count: number;
@@ -183,10 +207,16 @@ export function patchPortalChurn(
   churnMissingClients: ClientRecord[],
 ): void {
   if (!memory) return;
+  const tasks = filterNtsTasksForHandledChurn(
+    memory.tasks ?? [],
+    churnRecords,
+    memory.clients ?? [],
+  );
   memory = {
     ...memory,
     churnRecords,
     churnMissingClients,
+    tasks,
     fetchedAt: Date.now(),
   };
   writeStorage(memory);
@@ -318,6 +348,11 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
         ...data,
         churnRecords: data.churnRecords ?? [],
         churnMissingClients: data.churnMissingClients ?? [],
+        tasks: filterNtsTasksForHandledChurn(
+          data.tasks ?? [],
+          data.churnRecords ?? [],
+          data.clients ?? [],
+        ),
       };
       writeStorage(memory);
       notify();

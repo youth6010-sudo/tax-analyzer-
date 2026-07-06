@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerRosterGrid from '../components/clients/ManagerRosterGrid';
 import ManagerChips from '../components/clients/ManagerChips';
+import FeeInvoiceImportButton, { type FeeImportMatch } from '../components/clients/FeeInvoiceImportButton';
+import FeeExportButton from '../components/clients/FeeExportButton';
 import PortalPageShell, { PortalLoading } from '../components/portal/PortalPageShell';
 import {
   portalBtnSecondary,
@@ -31,6 +33,7 @@ import {
   UNUSED_CATEGORY,
 } from '@/app/utils/clientsGrouping';
 import type { FeeBreakdownSave } from '@/app/utils/feeBreakdown';
+import { feeItemsEqual, readFeeItems } from '@/app/utils/feeBreakdown';
 import {
   buildClientsListUrl,
   parseClientsListState,
@@ -38,6 +41,7 @@ import {
 } from '@/app/utils/clientsListState';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import { writeClientSort, MANAGER_CLIENT_ORDER_STORAGE_KEY } from '@/app/utils/clientListPrefs';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 export default function ClientsPage() {
   return (
@@ -130,8 +134,7 @@ function ClientsPageContent() {
           if (serverTime >= localTime) return c;
           const feeChangedLocally =
             old.feeSummary !== c.feeSummary ||
-            old.intakeData?.bookkeepingFee !== c.intakeData?.bookkeepingFee ||
-            old.intakeData?.adjustmentFee !== c.intakeData?.adjustmentFee;
+            !feeItemsEqual(readFeeItems(old.intakeData), readFeeItems(c.intakeData));
           if (!feeChangedLocally) return c;
           return {
             ...c,
@@ -166,6 +169,42 @@ function ClientsPageContent() {
     };
   }, [load]);
 
+  const handleFeeImported = useCallback(
+    (matched: FeeImportMatch[]) => {
+      if (matched.length > 0) {
+        const byId = new Map(matched.map(m => [m.clientId, m]));
+        setFetchedClients(list => {
+          const base = list ?? getPortalClients();
+          return base.map(c => {
+            const hit = byId.get(c.id);
+            if (!hit) return c;
+            const patched: ClientRecord = {
+              ...c,
+              feeSummary: hit.feeSummary,
+              intakeData: {
+                ...c.intakeData,
+                feeItems: hit.feeItems,
+                bookkeepingFee: null,
+                adjustmentFee: null,
+                feeItemsBaselineAt: new Date().toISOString(),
+              },
+            };
+            patchPortalClient(c.id, patched);
+            return patched;
+          });
+        });
+        setFeeRefreshKeys(k => {
+          const next = { ...k };
+          for (const m of matched) next[m.clientId] = (next[m.clientId] ?? 0) + 1;
+          return next;
+        });
+        markPortalClientsFresh();
+      }
+      void load();
+    },
+    [load],
+  );
+
   const handleFeeChange = useCallback(async (id: string, payload: FeeBreakdownSave) => {
     let prevClient: ClientRecord | undefined;
 
@@ -174,8 +213,9 @@ function ClientsPageContent() {
       feeSummary: payload.feeSummary,
       intakeData: {
         ...c.intakeData,
-        bookkeepingFee: payload.bookkeepingFee,
-        adjustmentFee: payload.adjustmentFee,
+        feeItems: payload.feeItems,
+        bookkeepingFee: null,
+        adjustmentFee: null,
       },
     });
 
@@ -196,8 +236,7 @@ function ClientsPageContent() {
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
         body: JSON.stringify({
-          bookkeepingFee: payload.bookkeepingFee,
-          adjustmentFee: payload.adjustmentFee,
+          feeItems: payload.feeItems,
         }),
       });
       const data = await res.json();
@@ -398,6 +437,11 @@ function ClientsPageContent() {
   );
 
   const mainStats = useMemo(() => countMainCategoryClients(filtered), [filtered]);
+  const feeExportClients = useMemo(() => {
+    if (canEditAll || !currentUserName) return filtered;
+    const mine = new Set(getManagerMatchNames(currentUserName));
+    return filtered.filter(c => mine.has((c.manager ?? '').trim()));
+  }, [filtered, canEditAll, currentUserName]);
   const returnTo = buildClientsListUrl({ ...state, scroll: 0 });
 
   const compactChip = (active: boolean, self?: boolean) =>
@@ -422,7 +466,7 @@ function ClientsPageContent() {
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/60 pb-3">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">수임처 관리</h1>
-          <p className="text-xs text-slate-500 mt-0.5">← → 버튼 또는 가로 스크롤 · 상호 꾹 눌러 순서 변경 · 업체명 클릭으로 정보 표시</p>
+          <p className="text-xs text-slate-500 mt-0.5">← → 버튼 또는 가로 스크롤 · 상호 꾹 눌러 순서 변경 · 업체명 클릭으로 정보 표시 · 수수료 더블클릭으로 수정</p>
         </div>
         <p className="text-xs text-slate-500 tabular-nums shrink-0">
           {fetching && clients.length > 0 ? '새로고침 중… · ' : ''}
@@ -540,6 +584,11 @@ function ClientsPageContent() {
           </div>
         </div>
       </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <FeeInvoiceImportButton allowed={canEditAll} onImported={handleFeeImported} />
+        <FeeExportButton clients={feeExportClients} />
       </div>
 
       {loading && clients.length === 0 ? (

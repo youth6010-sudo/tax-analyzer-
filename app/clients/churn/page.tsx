@@ -20,6 +20,7 @@ import {
   getPortalChurnMissingClients,
   getPortalChurnRecords,
   patchPortalChurn,
+  refreshPortalBootstrap,
   subscribePortal,
 } from '@/app/utils/portalStore';
 import ScopeToggle from '@/app/components/portal/ScopeToggle';
@@ -220,6 +221,7 @@ function ChurnPageInner() {
       setFormValues(defaultChurnFormValues());
       setTab('history');
       await loadHistory({ silent: true });
+      void refreshPortalBootstrap();
     } catch (err) {
       setError(err instanceof Error ? err.message : '등록하지 못했습니다.');
     } finally {

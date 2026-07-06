@@ -1,12 +1,14 @@
 import type { TaxTypeKey } from './types';
 
 // 수임처(클라이언트)에 세목별로 저장하는 안내문 입력값.
-// clients.intakeData.noticeData[taxType] = { materials, notes, payrollByUs? }
+// clients.intakeData.noticeData[taxType] = { materials, notes, payrollByUs?, attachNote? }
 export type NoticeClientData = {
   materials: string;
   notes: string;
   // 원천세 전용: 급여대장을 우리가 작성하는 대상이면 true (체크 시 신고안내, 미체크 시 자료요청)
   payrollByUs?: boolean;
+  /** 신고 결과 안내 — 첨부 서류 문구 (납부서 장수는 안내문 생성 시 자동 부착) */
+  attachNote?: string;
 };
 
 export type ClientNoticeMap = Partial<Record<TaxTypeKey, NoticeClientData>>;
@@ -79,6 +81,7 @@ export function readNoticeMap(intakeData: Record<string, unknown> | null | undef
         materials: typeof e.materials === 'string' ? e.materials : '',
         notes: typeof e.notes === 'string' ? e.notes : '',
         payrollByUs: typeof e.payrollByUs === 'boolean' ? e.payrollByUs : false,
+        attachNote: typeof e.attachNote === 'string' ? e.attachNote : '',
       };
     }
   }

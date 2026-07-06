@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { portalBtnSecondary } from '@/app/components/portal/uiClasses';
 import type { ClientFeeChange } from '@/app/types/client';
-import type { FeeBreakdown } from '@/app/utils/feeBreakdown';
+import type { FeeLineItem } from '@/app/utils/feeBreakdown';
+import { feeItemAnnualAmount, isMonthlyAnnualFeeItem } from '@/app/utils/feeBreakdown';
 
 export type ExpandField = {
   label: string;
@@ -36,7 +37,7 @@ export default function ClientRowExpandPanel({
   onDetailClick,
   onPrefetch,
   feeRefreshKey = 0,
-  feeBreakdown,
+  feeItems,
   showFeeHistory = true,
   extraContent,
 }: {
@@ -45,7 +46,7 @@ export default function ClientRowExpandPanel({
   onDetailClick: (e: React.MouseEvent) => void;
   onPrefetch?: () => void;
   feeRefreshKey?: number;
-  feeBreakdown?: FeeBreakdown;
+  feeItems?: FeeLineItem[];
   showFeeHistory?: boolean;
   extraContent?: React.ReactNode;
 }) {
@@ -106,11 +107,18 @@ export default function ClientRowExpandPanel({
         {extraContent}
       </dl>
 
-      {(feeBreakdown?.bookkeepingFee != null || feeBreakdown?.adjustmentFee != null) && (
-        <p className="mt-1.5 text-[11px] text-slate-500 tabular-nums">
-          {CLIENT_FIELD_LABELS.bookkeepingFee} {formatFee(feeBreakdown.bookkeepingFee)} ×12 +{' '}
-          {CLIENT_FIELD_LABELS.adjustmentFee} {formatFee(feeBreakdown.adjustmentFee)}
-        </p>
+      {feeItems && feeItems.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-500 tabular-nums">
+          {feeItems.map((item, i) => (
+            <li key={`${item.itemName}-${i}`} className="flex justify-between gap-2">
+              <span className="min-w-0 truncate">
+                {item.itemName}
+                {isMonthlyAnnualFeeItem(item.itemName) ? ' ×12' : ''}
+              </span>
+              <span className="shrink-0">{formatFee(feeItemAnnualAmount(item))}</span>
+            </li>
+          ))}
+        </ul>
       )}
 
       {showFeeHistory && (
@@ -119,7 +127,7 @@ export default function ClientRowExpandPanel({
         {loading ? (
           <p className="text-[11px] text-slate-400">불러오는 중…</p>
         ) : changes.length === 0 ? (
-          <p className="text-[11px] text-slate-400">변경 이력 없음</p>
+          <p className="text-[11px] text-slate-400">변경 이력 없음 (엑셀 반영 이후 수정 시 기록)</p>
         ) : (
           <ul className="space-y-0.5">
             {changes.map(c => (

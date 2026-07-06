@@ -90,6 +90,8 @@ type Props = {
   onManualAmountEdit?: () => void;
   /** 부가세 신고결과보고 금액 다시 연동 */
   onReLinkVatAmount?: () => void;
+  /** 수임처 연결 시 첨부 서류 문구가 세목별로 저장됨 */
+  clientLinked?: boolean;
   embedded?: boolean;
 };
 
@@ -103,6 +105,7 @@ export default function PaymentNoticeField({
   vatAmountLinked = false,
   onManualAmountEdit,
   onReLinkVatAmount,
+  clientLinked = false,
   embedded = false,
 }: Props) {
   const update = (patch: Partial<PaymentNotice>) => onChange({ ...value, ...patch });
@@ -176,6 +179,31 @@ export default function PaymentNoticeField({
           장
         </label>
       </div>
+
+      <label className="mt-3 block min-w-0">
+        <span className={`${noticeLabel} mb-1 block`}>첨부 서류</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <input
+            type="text"
+            value={value.attachNote}
+            onChange={e => update({ attachNote: e.target.value })}
+            placeholder="예) 6월 급여대장 및 급여명세서"
+            className={`${inputClass} min-w-0 flex-1`}
+          />
+          {value.slips > 0 && (
+            <span className="shrink-0 text-sm text-slate-600">, 납부서 {value.slips}장</span>
+          )}
+        </div>
+        <p className="mt-1 text-[11px] text-slate-400">
+          납부서 장수는 위 납부서 입력값에 따라 자동으로 붙습니다.
+          {clientLinked && (
+            <span className="text-slate-500">
+              {' '}
+              수임처 연결 시 이 문구는 세목별로 저장되며, 수정 후 위 「수임처에 저장」을 눌러 주세요.
+            </span>
+          )}
+        </p>
+      </label>
 
       {vatAmountLinked && (
         <p className="mt-2 text-[11px] font-medium text-blue-600">

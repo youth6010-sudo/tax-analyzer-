@@ -282,21 +282,38 @@ function isoToDottedDate(iso: string): string {
   return formatDottedDate(new Date(y, m - 1, d));
 }
 
+function formatAttachText(payment: PaymentNotice): string {
+  const slips = Math.max(0, Math.round(payment.slips || 0));
+  const note = (payment.attachNote ?? '').trim();
+  const slipPart = slips > 0 ? `납부서 ${slips}장` : '';
+  if (note && slipPart) return `${note}, ${slipPart}`;
+  if (note) return note;
+  return slipPart;
+}
+
+function formatAttachLine(payment: PaymentNotice): string {
+  const text = formatAttachText(payment);
+  if (!text) return '';
+  return noticeLine(`첨부 서류: ${escapeHtml(text)}`);
+}
+
 // 부가세 분납 안내문구 — 납부서(회차)별 날짜·금액 나열 (본문만)
 function buildVatInstallmentBody({
   belong,
   name,
-  slips,
-  installments,
+  payment,
+  dueDate,
 }: {
   belong: string;
   name: string;
-  slips: number;
-  installments: { date: string; amount: number }[];
+  payment: PaymentNotice;
+  dueDate: string;
 }): string {
   const line = noticeLine;
   const blank = noticeBlank;
   const dash = noticeDash;
+  const installments = payment.installments;
+  const attachText = formatAttachText(payment);
   const total = installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
 
   const parts: string[] = [];
@@ -304,12 +321,13 @@ function buildVatInstallmentBody({
     line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`),
   );
   parts.push(blank());
+  if (attachText) parts.push(line(`첨부 서류: ${escapeHtml(attachText)}`));
   parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`));
   installments.forEach((it, i) => {
     const dateText = isoToDottedDate(it.date) || '(일자 미입력)';
     parts.push(dash(`${i + 1}차: ${escapeHtml(dateText)} · ${escapeHtml(formatWon(it.amount))}`));
   });
-  parts.push(line(`첨부 서류: 납부서 ${slips}장`));
+  if (dueDate) parts.push(line(`납부 기한: ${escapeHtml(dueDate)}`));
   parts.push(line(OVERDUE_NOTE));
   return parts.join('');
 }
@@ -317,8 +335,8 @@ function buildVatInstallmentBody({
 function buildVatInstallmentHtml(params: {
   belong: string;
   name: string;
-  slips: number;
-  installments: { date: string; amount: number }[];
+  payment: PaymentNotice;
+  dueDate: string;
 }): string {
   return wrapNoticeHtml(buildVatInstallmentBody(params));
 }
@@ -354,6 +372,7 @@ export function buildPaymentNoticeTokens({
     '{납부요약}': '',
     '{납부내역}': '',
     '{첨부안내}': '',
+    '{첨부서류상세}': '',
     '{납부기한줄}': '',
     '{환급요약}': '',
     '{환급내역}': '',
@@ -364,7 +383,8 @@ export function buildPaymentNoticeTokens({
   };
 
   if (taxType === TAX_TYPES.VAT && slips >= 2 && payment.installments.length >= 2) {
-    const body = buildVatInstallmentBody({ belong, name, slips, installments: payment.installments });
+    const attachText = formatAttachText(payment);
+    const body = buildVatInstallmentBody({ belong, name, payment, dueDate });
     const total = payment.installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
     const 회차 = payment.installments
       .map((it, i) => {
@@ -380,7 +400,9 @@ export function buildPaymentNoticeTokens({
       ),
       '{납부요약}': noticeLine(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`),
       '{분납회차목록}': 회차,
-      '{첨부안내}': noticeLine(`첨부 서류: 납부서 ${slips}장`),
+      '{첨부안내}': attachText ? noticeLine(`첨부 서류: ${escapeHtml(attachText)}`) : '',
+      '{첨부서류상세}': attachText ? escapeHtml(attachText) : '',
+      '{납부기한줄}': dueDate ? noticeLine(`납부 기한: ${dueDate}`) : '',
       '{연체안내}': noticeLine(OVERDUE_NOTE),
       '{안내본문}': body,
     };
@@ -415,7 +437,8 @@ export function buildPaymentNoticeTokens({
     hasLocal ? list.map(i => dash(`${escapeHtml(i.name)} ${escapeHtml(formatWon(i.amount))}`)).join('') : '';
   const refundTiming = noticeLine(refundTimingLine(taxType, payment.refundClaimed));
   const overdue = noticeLine(OVERDUE_NOTE);
-  const attach = noticeLine(`첨부 서류: 납부서 ${slips}장`);
+  const attachText = formatAttachText(payment);
+  const attach = formatAttachLine(payment);
   const dueLine = noticeLine(`납부 기한: ${dueDate}`);
 
   const anyPay = payItems.length > 0;
@@ -444,15 +467,15 @@ export function buildPaymentNoticeTokens({
     parts.push(
       서두,
       blank(),
+      attach,
       납부요약,
       납부내역,
-      attach,
       dueLine,
+      overdue,
       blank(),
       환급요약,
       환급내역,
       refundTiming,
-      overdue,
     );
   } else {
     const listForBreakdown = payItems.length > 0 ? payItems : items;
@@ -461,7 +484,7 @@ export function buildPaymentNoticeTokens({
     );
     납부요약 = line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`);
     납부내역 = breakdown(listForBreakdown);
-    parts.push(서두, blank(), 납부요약, 납부내역, attach, dueLine, overdue);
+    parts.push(서두, blank(), attach, 납부요약, 납부내역, dueLine, overdue);
   }
 
   return {
@@ -472,6 +495,7 @@ export function buildPaymentNoticeTokens({
     '{납부요약}': 납부요약,
     '{납부내역}': 납부내역,
     '{첨부안내}': anyPay ? attach : '',
+    '{첨부서류상세}': anyPay && attachText ? escapeHtml(attachText) : '',
     '{납부기한줄}': anyPay ? dueLine : '',
     '{환급요약}': 환급요약,
     '{환급내역}': 환급내역,

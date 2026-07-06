@@ -11,6 +11,7 @@ const LIST_INTAKE_KEYS = [
   'closedDate',
   'bookkeepingFee',
   'adjustmentFee',
+  'feeItems',
   'taxKind',
   /** 간이지급·연말정산 그리드 활성화 */
   'incomeTypes',

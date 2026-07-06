@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload } from '@/app/types/contact';
@@ -9,7 +9,7 @@ import {
   type ChurnClientClosureHint,
 } from '@/app/config/churnOptions';
 import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
-import { computeFeeSummary, readFeeBreakdown } from '@/app/utils/feeBreakdown';
+import { computeFeeSummaryFromItems, feeItemsEqual, readFeeItems, type FeeLineItem } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 import {
@@ -539,6 +539,25 @@ function mergeIntakeDataPatch(
 
 export async function getClientFeeChanges(clientId: string, limit = 50): Promise<ClientFeeChange[]> {
   const db = getDb();
+  const client = await getClientById(clientId);
+  const baselineRaw = client?.intakeData?.feeItemsBaselineAt;
+  const baseline =
+    typeof baselineRaw === 'string' && baselineRaw.trim()
+      ? new Date(baselineRaw)
+      : null;
+  const baselineValid = baseline && !Number.isNaN(baseline.getTime());
+  const hasFeeItems = readFeeItems(client?.intakeData).length > 0;
+
+  // 엑셀 품목만 있고 기준일 없으면 구 이력 숨김 (엑셀 반영 = 최초)
+  if (hasFeeItems && !baselineValid) {
+    return [];
+  }
+
+  const conditions = [eq(clientFeeChanges.clientId, clientId)];
+  if (baselineValid) {
+    conditions.push(gt(clientFeeChanges.changedAt, baseline!));
+  }
+
   const rows = await db
     .select({
       id: clientFeeChanges.id,
@@ -549,7 +568,7 @@ export async function getClientFeeChanges(clientId: string, limit = 50): Promise
     })
     .from(clientFeeChanges)
     .innerJoin(users, eq(clientFeeChanges.changedByUserId, users.id))
-    .where(eq(clientFeeChanges.clientId, clientId))
+    .where(and(...conditions))
     .orderBy(desc(clientFeeChanges.changedAt))
     .limit(limit);
 
@@ -593,34 +612,39 @@ export async function updateClientFeeSummary(
   });
 }
 
-export async function updateClientFeeBreakdown(
+export async function updateClientFeeItems(
   id: string,
-  data: { bookkeepingFee: number | null; adjustmentFee: number | null },
+  feeItems: FeeLineItem[],
   changedByUserId: string,
+  opts?: { resetHistory?: boolean },
 ) {
   const db = getDb();
   const existing = await getClientById(id);
   if (!existing) throw new Error('NOT_FOUND');
 
-  const feeSummary = computeFeeSummary(data.bookkeepingFee, data.adjustmentFee);
+  const feeSummary = computeFeeSummaryFromItems(feeItems);
   const previousFee = existing.feeSummary ?? null;
-  const prevBreakdown = readFeeBreakdown(existing.intakeData);
-  const breakdownChanged =
-    (prevBreakdown.bookkeepingFee ?? null) !== (data.bookkeepingFee ?? null) ||
-    (prevBreakdown.adjustmentFee ?? null) !== (data.adjustmentFee ?? null);
+  const prevItems = readFeeItems(existing.intakeData);
+  const itemsChanged = !feeItemsEqual(prevItems, feeItems);
 
-  if (!breakdownChanged && previousFee === feeSummary) return existing;
+  if (!itemsChanged && previousFee === feeSummary && !opts?.resetHistory) return existing;
 
   const intakeData = {
     ...(existing.intakeData ?? {}),
-    bookkeepingFee: data.bookkeepingFee,
-    adjustmentFee: data.adjustmentFee,
+    feeItems,
+    bookkeepingFee: null,
+    adjustmentFee: null,
+    ...(opts?.resetHistory
+      ? { feeItemsBaselineAt: new Date().toISOString() }
+      : {}),
   };
 
-  const logHistory = previousFee !== feeSummary || breakdownChanged;
+  const logHistory = !opts?.resetHistory && (previousFee !== feeSummary || itemsChanged);
 
   return db.transaction(async tx => {
-    if (logHistory) {
+    if (opts?.resetHistory) {
+      await tx.delete(clientFeeChanges).where(eq(clientFeeChanges.clientId, id));
+    } else if (logHistory) {
       await tx.insert(clientFeeChanges).values({
         clientId: id,
         previousFee,
@@ -638,6 +662,18 @@ export async function updateClientFeeBreakdown(
     if (!row) throw new Error('NOT_FOUND');
     return clientToRecord(row);
   });
+}
+
+/** @deprecated updateClientFeeItems 사용 */
+export async function updateClientFeeBreakdown(
+  id: string,
+  data: { bookkeepingFee: number | null; adjustmentFee: number | null },
+  changedByUserId: string,
+) {
+  const items: FeeLineItem[] = [];
+  if (data.bookkeepingFee != null) items.push({ itemName: '기장수수료', supplyAmount: data.bookkeepingFee });
+  if (data.adjustmentFee != null) items.push({ itemName: '조정료', supplyAmount: data.adjustmentFee });
+  return updateClientFeeItems(id, items, changedByUserId);
 }
 
 export async function churnClient(

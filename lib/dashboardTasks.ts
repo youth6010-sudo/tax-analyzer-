@@ -1,8 +1,11 @@
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, intakeInquiries, intakeProcesses, clients } from '@/db/schema';
-import { compactSearchText } from '@/app/utils/searchNormalize';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import {
+  buildChurnRegistrationIndex,
+  clientMatchesChurnRegistration,
+} from '@/app/utils/churnMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
@@ -219,23 +222,18 @@ export async function listDashboardTasks(
     });
   }
 
-  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일 (유출 이력 있으면 제외)
-  const churnLinks = await db
+  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일 (유출·유출상태면 제외)
+  const churnRows = await db
     .select({ clientId: churnRecords.clientId, companyName: churnRecords.companyName })
     .from(churnRecords);
-  const churnClientIds = new Set<string>();
-  const churnCompanyNames = new Set<string>();
-  for (const row of churnLinks) {
-    if (row.clientId) churnClientIds.add(row.clientId);
-    const nameKey = compactSearchText(row.companyName);
-    if (nameKey) churnCompanyNames.add(nameKey);
-  }
+  const churnIndex = buildChurnRegistrationIndex(churnRows);
 
   const ntsRows = await db
     .select({
       id: clients.id,
       companyName: clients.companyName,
       manager: clients.manager,
+      status: clients.status,
       ntsStatus: clients.ntsStatus,
       ntsStatusCode: clients.ntsStatusCode,
     })
@@ -246,9 +244,7 @@ export async function listDashboardTasks(
     ));
 
   for (const c of ntsRows) {
-    if (churnClientIds.has(c.id)) continue;
-    const nameKey = compactSearchText(c.companyName);
-    if (nameKey && churnCompanyNames.has(nameKey)) continue;
+    if (clientMatchesChurnRegistration(c, churnIndex)) continue;
     const manager = (c.manager || '').trim();
     if (!visibleToUser(manager, user)) continue;
     const label = c.ntsStatusCode === '03' ? '폐업' : '휴업';

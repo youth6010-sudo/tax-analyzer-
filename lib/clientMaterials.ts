@@ -75,10 +75,12 @@ export async function saveMaterialsBundle(
       materials: bundle.withholdingMaterials,
       notes: bundle.withholdingNotes,
       payrollByUs: currentMap.withholding?.payrollByUs ?? false,
+      attachNote: currentMap.withholding?.attachNote,
     },
     vat: {
       materials: bundle.vatMaterials,
       notes: bundle.vatNotes,
+      attachNote: currentMap.vat?.attachNote,
     },
   };
 
@@ -86,11 +88,13 @@ export async function saveMaterialsBundle(
     nextMap.corporate = {
       materials: bundle.corporateMaterials,
       notes: bundle.corporateNotes,
+      attachNote: currentMap.corporate?.attachNote,
     };
   } else {
     nextMap.income = {
       materials: bundle.incomeMaterials,
       notes: bundle.incomeNotes,
+      attachNote: currentMap.income?.attachNote,
     };
   }
 

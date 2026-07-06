@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { handleApiError } from '@/lib/apiError';
-import { assertCanAccessClient, assertClientExists } from '@/lib/clientAccess';
+import { assertCanAccessClient, assertCanEditClient, assertClientExists } from '@/lib/clientAccess';
 import { requireUser } from '@/lib/auth';
 import { shouldFilterClientsToMine, type RestrictedClientListScope } from '@/lib/masterAccess';
 
@@ -13,6 +13,7 @@ import {
   updateClientDetail,
   updateClientFeeSummary,
   updateClientFeeBreakdown,
+  updateClientFeeItems,
   type ClientPatch,
 } from '@/lib/clientsDb';
 
@@ -51,6 +52,17 @@ function isFeeSummaryOnlyPatch(body: Record<string, unknown>): body is { feeSumm
   return Object.keys(body).length === 1 && 'feeSummary' in body && (body.feeSummary === null || typeof body.feeSummary === 'number');
 }
 
+function isFeeItemsPatch(body: Record<string, unknown>): body is { feeItems: { itemName: string; supplyAmount: number }[] } {
+  if (!('feeItems' in body) || !Array.isArray(body.feeItems)) return false;
+  return body.feeItems.every(
+    item =>
+      item &&
+      typeof item === 'object' &&
+      typeof (item as { itemName?: unknown }).itemName === 'string' &&
+      typeof (item as { supplyAmount?: unknown }).supplyAmount === 'number',
+  );
+}
+
 function isFeeBreakdownPatch(body: Record<string, unknown>): body is {
   bookkeepingFee: number | null;
   adjustmentFee: number | null;
@@ -73,7 +85,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const body = (await request.json()) as Partial<ClientPatch> & Record<string, unknown>;
 
+    if (isFeeItemsPatch(body)) {
+      assertCanEditClient(user, existing);
+      const feeItems = body.feeItems.map(item => ({
+        itemName: item.itemName.trim(),
+        supplyAmount: Math.round(item.supplyAmount),
+      }));
+      const client = clientRecordToListRecord(await updateClientFeeItems(id, feeItems, user.id));
+      const feeChanges = await getClientFeeChanges(id);
+      return NextResponse.json(
+        { client, contact: clientRecordToContact(client), feeChanges },
+        NO_STORE,
+      );
+    }
+
     if (isFeeBreakdownPatch(body)) {
+      assertCanEditClient(user, existing);
       const client = clientRecordToListRecord(
         await updateClientFeeBreakdown(
           id,
@@ -89,6 +116,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     if (isFeeSummaryOnlyPatch(body)) {
+      assertCanEditClient(user, existing);
       const client = clientRecordToListRecord(
         await updateClientFeeSummary(id, body.feeSummary, user.id),
       );
