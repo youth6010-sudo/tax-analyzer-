@@ -15,6 +15,11 @@ import type {
   TaxTypeKey,
   VatReport,
 } from './types';
+import {
+  ensureWithholdingItems,
+  usesWithholdingBreakdown,
+  WITHHOLDING_ITEM_LABELS,
+} from './withholdingItems';
 
 const NAME: Record<TaxTypeKey, string> = {
   [TAX_TYPES.VAT]: '부가가치세',
@@ -381,12 +386,25 @@ export function buildPaymentNoticeTokens({
     };
   }
 
-  const items: PayItem[] = hasLocal
-    ? [
+  const items: PayItem[] = (() => {
+    if (taxType === TAX_TYPES.WITHHOLDING && usesWithholdingBreakdown(slips)) {
+      const whItems = ensureWithholdingItems(payment.withholdingItems)
+        .filter(i => i.enabled)
+        .map(i => ({
+          name: WITHHOLDING_ITEM_LABELS[i.key],
+          amount: Math.round(i.amount || 0),
+        }));
+      whItems.push({ name: '지방소득세', amount: local });
+      return whItems;
+    }
+    if (hasLocal) {
+      return [
         { name, amount: main },
         { name: '지방소득세', amount: local },
-      ]
-    : [{ name, amount: main }];
+      ];
+    }
+    return [{ name, amount: main }];
+  })();
 
   const payItems = items.filter(i => i.amount > 0);
   const refundItems = items.filter(i => i.amount < 0);

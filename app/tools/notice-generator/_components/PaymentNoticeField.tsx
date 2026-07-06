@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { PaymentNotice } from '../_lib/types';
+import {
+  defaultWithholdingItems,
+  ensureWithholdingItems,
+  usesWithholdingBreakdown,
+  WITHHOLDING_ITEM_LABELS,
+} from '../_lib/withholdingItems';
 import { noticeInput, noticeLabel, noticeSection, noticeSectionTitle } from './noticeUi';
 
 const inputClass = `${noticeInput} w-full min-w-0 max-w-full box-border`;
@@ -101,17 +107,30 @@ export default function PaymentNoticeField({
 }: Props) {
   const update = (patch: Partial<PaymentNotice>) => onChange({ ...value, ...patch });
 
+  const handleSlipsChange = (raw: number) => {
+    const slips = Math.max(0, raw || 0);
+    const patch: Partial<PaymentNotice> = { slips };
+    if (isWithholding && usesWithholdingBreakdown(slips) && !value.withholdingItems?.length) {
+      patch.withholdingItems = defaultWithholdingItems();
+    }
+    update(patch);
+  };
+
   const patchAmount = (patch: Partial<PaymentNotice>) => {
     if (onManualAmountEdit) onManualAmountEdit();
     update(patch);
   };
 
   const useInstallments = showInstallments && value.slips >= 2;
+  const useWhBreakdown = isWithholding && usesWithholdingBreakdown(value.slips);
+  const whItems = ensureWithholdingItems(value.withholdingItems);
 
   const local = hasLocalTax ? value.localAmount : 0;
-  const amounts = useInstallments
-    ? value.installments.map(i => i.amount)
-    : [value.amount, local];
+  const amounts = useWhBreakdown
+    ? [...whItems.filter(i => i.enabled).map(i => i.amount), local]
+    : useInstallments
+      ? value.installments.map(i => i.amount)
+      : [value.amount, local];
   const payTotal = amounts.filter(n => n > 0).reduce((s, n) => s + n, 0);
   const refundTotal = amounts.filter(n => n < 0).reduce((s, n) => s + Math.abs(n), 0);
   const hasRefund = refundTotal > 0;
@@ -150,7 +169,7 @@ export default function PaymentNoticeField({
             type="number"
             min={0}
             value={value.slips || ''}
-            onChange={e => update({ slips: Math.max(0, Number(e.target.value) || 0) })}
+            onChange={e => handleSlipsChange(Number(e.target.value) || 0)}
             placeholder="0"
             className={`${noticeInput} w-14 !py-1.5 text-center text-xs`}
           />
@@ -176,7 +195,7 @@ export default function PaymentNoticeField({
         </div>
       )}
 
-      {!useInstallments && (
+      {!useInstallments && !useWhBreakdown && (
         <div
           className={`mt-3 grid min-w-0 gap-3 ${
             hasLocalTax ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
@@ -201,6 +220,89 @@ export default function PaymentNoticeField({
 
           {hasLocalTax && (
             <div className="min-w-0">
+              <label className={`${noticeLabel} mb-1 block`}>지방소득세</label>
+              <div className="relative min-w-0">
+                <MoneyInput
+                  value={value.localAmount}
+                  onChange={n => update({ localAmount: n })}
+                  placeholder="예) 125,000"
+                  className={`${inputClass} pr-8`}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  원
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {useWhBreakdown && (
+        <div className="mt-3 min-w-0 space-y-3">
+          <div>
+            <p className={`${noticeLabel} mb-1.5`}>원천세 항목</p>
+            <p className="mb-2 text-[11px] text-slate-400">
+              납부서에 해당하는 항목만 선택하세요. 지방소득세는 아래에 별도 입력합니다.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {whItems.map(item => {
+                const label = WITHHOLDING_ITEM_LABELS[item.key];
+                const active = item.enabled;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      const next = whItems.map(row =>
+                        row.key === item.key ? { ...row, enabled: !row.enabled } : row,
+                      );
+                      update({ withholdingItems: next });
+                    }}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      active
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {whItems.some(i => i.enabled) && (
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+              {whItems
+                .filter(i => i.enabled)
+                .map(item => (
+                  <div key={item.key} className="min-w-0">
+                    <label className={`${noticeLabel} mb-1 block`}>
+                      {WITHHOLDING_ITEM_LABELS[item.key]}
+                    </label>
+                    <div className="relative min-w-0">
+                      <MoneyInput
+                        value={item.amount}
+                        onChange={n => {
+                          const next = whItems.map(row =>
+                            row.key === item.key ? { ...row, amount: n } : row,
+                          );
+                          update({ withholdingItems: next });
+                        }}
+                        placeholder="금액"
+                        className={`${inputClass} pr-8`}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                        원
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {hasLocalTax && (
+            <div className="min-w-0 max-w-md">
               <label className={`${noticeLabel} mb-1 block`}>지방소득세</label>
               <div className="relative min-w-0">
                 <MoneyInput
@@ -285,7 +387,8 @@ export default function PaymentNoticeField({
             <b className="text-emerald-600">{refundTotal.toLocaleString('ko-KR')} 원</b>
           </p>
         )}
-        {!useInstallments && <p>환급은 금액 앞에 &lsquo;-&rsquo;를 붙여 입력하세요. (예: -500,000)</p>}
+        {!useInstallments && !useWhBreakdown && <p>환급은 금액 앞에 &lsquo;-&rsquo;를 붙여 입력하세요. (예: -500,000)</p>}
+        {useWhBreakdown && <p>선택한 항목만 안내문 납부 내역에 표시됩니다. 환급은 금액 앞에 &lsquo;-&rsquo;를 붙이세요.</p>}
       </div>
     </>
   );

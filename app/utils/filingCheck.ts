@@ -27,7 +27,7 @@ export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle;
 export const VAT_PHASES = ['1기 예정', '1기 확정', '2기 예정', '2기 확정'] as const;
 export type VatPhase = (typeof VAT_PHASES)[number];
 
-import { defaultSimplePayrollHalf } from '@/lib/periodUtils';
+import { defaultSimplePayrollHalf, currentMonthlyFilingMonth } from '@/lib/periodUtils';
 
 export type FilingPeriod = {
   year: number;
@@ -41,10 +41,9 @@ export function getCycle(taxId: FilingTaxId): FilingCycle {
 }
 
 export function defaultPeriod(): FilingPeriod {
-  const now = new Date();
-  const month = now.getMonth() + 1;
+  const { year, month } = currentMonthlyFilingMonth();
   return {
-    year: now.getFullYear(),
+    year,
     month,
     vatPhase: '1기 확정',
     half: defaultSimplePayrollHalf(month),

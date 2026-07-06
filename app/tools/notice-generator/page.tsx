@@ -111,6 +111,7 @@ export default function NoticeGeneratorPage() {
     localAmount: 0,
     refundClaimed: false,
     installments: [],
+    withholdingItems: [],
   }));
 
   // 부가세 신고 결과 보고 및 검토 입력값 (세션 전용)
@@ -206,6 +207,7 @@ export default function NoticeGeneratorPage() {
       localAmount: 0,
       refundClaimed: false,
       installments: [],
+      withholdingItems: [],
     });
     setVatPaymentLinked(next === TAX_TYPES.VAT);
     // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경

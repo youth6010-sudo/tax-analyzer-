@@ -2,6 +2,7 @@ import { TAX_TYPES, VAT_PERIODS, INCOME_FILING_TYPES } from './taxTypes';
 import {
   addDays,
   adjustToNextBusinessDay,
+  formatDottedDate,
   lastDayOfMonth,
   formatKoreanDate,
   toISODate,
@@ -39,15 +40,29 @@ function buildResult({
   };
 }
 
-// 원천세: 귀속 연월의 다음 달 10일
+// 원천세: 귀속 연월의 다음 달 10일 신고·납부
+// 대상 기간: 전월 신고 마감일(휴일 보정 후) 다음날 ~ 해당 신고 마감일(휴일 보정 후)
+// 예) 2026년 6월 지급 → 2026.06.11 ~ 2026.07.10
 function calcWithholding({ year, month }: DeadlineParams): DeadlineResult {
-  // 다음 달 10일 (12월 귀속 → 다음 해 1월 10일)
-  const dueDate = new Date(year, month, 10); // month는 1~12, month 인덱스가 곧 "다음 달"
+  const statutory = new Date(year, month, 10);
+
+  let prevYear = year;
+  let prevMonth = month - 1;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  const prevStatutory = new Date(prevYear, prevMonth, 10);
+  const prevFinal = adjustToNextBusinessDay(prevStatutory).adjusted;
+  const coverageStart = addDays(prevFinal, 1);
+  const coverageEnd = adjustToNextBusinessDay(statutory).adjusted;
+
   return buildResult({
     periodLabel: `${year}년 ${month}월 지급`,
-    coverageStart: new Date(year, month - 1, 1),
-    coverageEnd: lastDayOfMonth(year, month),
-    statutory: dueDate,
+    coverage: `${formatDottedDate(coverageStart, { withWeekday: false })} ~ ${formatDottedDate(coverageEnd, { withWeekday: false })}`,
+    coverageStart,
+    coverageEnd,
+    statutory,
   });
 }
 

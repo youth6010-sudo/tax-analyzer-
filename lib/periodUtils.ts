@@ -66,6 +66,27 @@ export function defaultSimplePayrollHalf(month: number): SimplePayrollHalf {
   return month <= 6 ? 'H1' : 'H2';
 }
 
+/**
+ * 원천세·간이지급 등 익월 10일 마감 신고분의 기본 귀속 연월.
+ * 해당 신고 마감일(10일) 이전이면 전월, 이후면 당월을 신고대상 기본 기간으로 본다.
+ * 예) 2026-07-06 → 6월분, 2026-07-15 → 7월분
+ */
+export function currentMonthlyFilingMonth(now = new Date()): { year: number; month: number } {
+  const day = now.getDate();
+  let year = now.getFullYear();
+  let month = now.getMonth() + 1;
+
+  if (day <= 10) {
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+
+  return { year, month };
+}
+
 /** 간이지급 월별 period_key (일용·사업·기타·근로내용확인) */
 export function simplePayrollMonthlyPeriodKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`;
