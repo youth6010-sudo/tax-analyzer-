@@ -47,7 +47,9 @@ import {
   NOTES_EXAMPLE_BY_TAX,
   fetchClientNotice,
   saveClientNotice,
+  TAX_TO_DOUZONE_NOTE_KEY,
   type ClientNoticeMap,
+  type NoticeClientData,
 } from './_lib/clientNotice';
 import type {
   DeadlineParams,
@@ -72,6 +74,24 @@ type SelectedClient = {
 };
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+function currentTaxEntry(
+  materials: string,
+  notes: string,
+  payrollByUs: boolean,
+  attachNote: string,
+): NoticeClientData {
+  return { materials, notes, payrollByUs, attachNote };
+}
+
+function withTaxEntry(
+  client: SelectedClient,
+  tax: TaxTypeKey,
+  entry: NoticeClientData,
+): SelectedClient {
+  const noticeMap = { ...client.noticeMap, [tax]: entry };
+  return { ...client, noticeMap };
+}
 
 export default function NoticeGeneratorPage() {
   // 세션 입력값 (수임처 미연결 시 전역 스크래치 — localStorage)
@@ -134,6 +154,13 @@ export default function NoticeGeneratorPage() {
   const [clientMaterials, setClientMaterials] = useState('');
   const [clientNotes, setClientNotes] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [clientDirty, setClientDirty] = useState(false);
+  const clientLoadGen = useRef(0);
+  const clientSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedClientRef = useRef<SelectedClient | null>(null);
+  const taxTypeRef = useRef(taxType);
+  selectedClientRef.current = selectedClient;
+  taxTypeRef.current = taxType;
 
   const inClientMode = selectedClient !== null;
   const effectiveCompanyName = inClientMode ? clientCompanyName : companyName;
@@ -147,53 +174,92 @@ export default function NoticeGeneratorPage() {
     setClientNotes(entry?.notes ?? '');
     setClientPayrollByUs(entry?.payrollByUs ?? false);
     setPayment(prev => ({ ...prev, attachNote: entry?.attachNote ?? '' }));
+    setClientDirty(false);
   };
 
+  const persistCurrentClient = useCallback(
+    async (client: SelectedClient, tax: TaxTypeKey, entry: NoticeClientData) => {
+      const nextMap = await saveClientNotice(client.id, client.intakeData, tax, entry);
+      const douzoneKey = TAX_TO_DOUZONE_NOTE_KEY[tax];
+      const prevNotes =
+        client.intakeData.notes && typeof client.intakeData.notes === 'object'
+          ? (client.intakeData.notes as Record<string, string>)
+          : {};
+      const nextIntake = {
+        ...client.intakeData,
+        noticeData: nextMap,
+        notes: { ...prevNotes, [douzoneKey]: entry.materials },
+      };
+      const updated: SelectedClient = {
+        id: client.id,
+        intakeData: nextIntake,
+        noticeMap: nextMap,
+      };
+      setSelectedClient(prev => (prev && prev.id === client.id ? updated : prev));
+      return updated;
+    },
+    [],
+  );
+
   const handleSelectClient = async (picked: PickedClient | null) => {
+    const leaving = selectedClientRef.current;
+    if (leaving) {
+      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
+      const entry = currentTaxEntry(
+        clientMaterials,
+        clientNotes,
+        clientPayrollByUs,
+        payment.attachNote,
+      );
+      try {
+        await persistCurrentClient(leaving, taxTypeRef.current, entry);
+      } catch {
+        // 전환은 계속 — 실패 시 새 수임처 로드 후 다시 저장 가능
+      }
+    }
+
+    clientLoadGen.current += 1;
+    const loadGen = clientLoadGen.current;
+
     if (!picked) {
       setSelectedClient(null);
       setSaveState('idle');
+      setClientDirty(false);
       return;
     }
     setSaveState('idle');
     try {
       const fetched = await fetchClientNotice(picked.id);
+      if (loadGen !== clientLoadGen.current) return;
       setSelectedClient({
         id: fetched.id,
         intakeData: fetched.intakeData,
         noticeMap: fetched.noticeMap,
       });
       setClientCompanyName(fetched.companyName || picked.companyName);
-      loadForTax(fetched.noticeMap, taxType);
+      loadForTax(fetched.noticeMap, taxTypeRef.current);
     } catch {
+      if (loadGen !== clientLoadGen.current) return;
       setSelectedClient({ id: picked.id, intakeData: {}, noticeMap: {} });
       setClientCompanyName(picked.companyName);
-      loadForTax({}, taxType);
+      loadForTax({}, taxTypeRef.current);
       setSaveState('error');
     }
   };
 
-  // 수임처 데이터 명시적 저장 — 필요자료·특이사항·급여대장·첨부 서류 문구(세목별)
+  // 수임처 데이터 저장 — 필요자료·특이사항·급여대장·첨부 서류 문구(세목별)
   const handleSaveClient = async () => {
     if (!selectedClient) return;
     const client = selectedClient;
+    if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
     setSaveState('saving');
     try {
-      const nextMap = await saveClientNotice(client.id, client.intakeData, taxType, {
-        materials: clientMaterials,
-        notes: clientNotes,
-        payrollByUs: clientPayrollByUs,
-        attachNote: payment.attachNote,
-      });
-      setSelectedClient(prev =>
-        prev && prev.id === client.id
-          ? {
-              ...prev,
-              noticeMap: nextMap,
-              intakeData: { ...prev.intakeData, noticeData: nextMap },
-            }
-          : prev,
+      await persistCurrentClient(
+        client,
+        taxType,
+        currentTaxEntry(clientMaterials, clientNotes, clientPayrollByUs, payment.attachNote),
       );
+      setClientDirty(false);
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -201,8 +267,29 @@ export default function NoticeGeneratorPage() {
   };
 
   const handleSelectTax = (next: TaxTypeKey) => {
+    let noticeMap = selectedClient?.noticeMap ?? {};
+    if (selectedClient) {
+      const entry = currentTaxEntry(
+        clientMaterials,
+        clientNotes,
+        clientPayrollByUs,
+        payment.attachNote,
+      );
+      const updated = withTaxEntry(selectedClient, taxType, entry);
+      setSelectedClient(updated);
+      noticeMap = updated.noticeMap;
+      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
+      setSaveState('saving');
+      void persistCurrentClient(updated, taxType, entry)
+        .then(() => {
+          setClientDirty(false);
+          setSaveState('saved');
+        })
+        .catch(() => setSaveState('error'));
+    }
+
     setTaxType(next);
-    const savedAttach = selectedClient?.noticeMap[next]?.attachNote ?? '';
+    const savedAttach = noticeMap[next]?.attachNote ?? '';
     // 세목별 납부서 기본 장수 적용 + 금액 초기화(세목마다 금액이 다르므로)
     setPayment({
       slips: defaultPaymentSlips(next),
@@ -222,7 +309,7 @@ export default function NoticeGeneratorPage() {
       lastAutoMaterialDate.current = def;
       setMaterialDeadline(prev => ({ ...prev, enabled: true, date: def }));
     }
-    if (selectedClient) loadForTax(selectedClient.noticeMap, next);
+    if (selectedClient) loadForTax(noticeMap, next);
   };
 
   const handleCompanyNameChange = (value: string) => {
@@ -233,7 +320,17 @@ export default function NoticeGeneratorPage() {
   const handleMaterialsChange = (value: string) => {
     if (inClientMode) {
       setClientMaterials(value);
-      if (saveState !== 'idle') setSaveState('idle');
+      setSelectedClient(prev => {
+        if (!prev) return prev;
+        const base = prev.noticeMap[taxType] ?? {
+          materials: '',
+          notes: '',
+          payrollByUs: false,
+          attachNote: '',
+        };
+        return withTaxEntry(prev, taxType, { ...base, materials: value });
+      });
+      setClientDirty(true);
     } else {
       setMaterials(value);
     }
@@ -242,7 +339,17 @@ export default function NoticeGeneratorPage() {
   const handleNotesChange = (value: string) => {
     if (inClientMode) {
       setClientNotes(value);
-      if (saveState !== 'idle') setSaveState('idle');
+      setSelectedClient(prev => {
+        if (!prev) return prev;
+        const base = prev.noticeMap[taxType] ?? {
+          materials: '',
+          notes: '',
+          payrollByUs: false,
+          attachNote: '',
+        };
+        return withTaxEntry(prev, taxType, { ...base, notes: value });
+      });
+      setClientDirty(true);
     } else {
       setNotes(value);
     }
@@ -251,11 +358,80 @@ export default function NoticeGeneratorPage() {
   const handlePayrollChange = (value: boolean) => {
     if (inClientMode) {
       setClientPayrollByUs(value);
-      if (saveState !== 'idle') setSaveState('idle');
+      setSelectedClient(prev => {
+        if (!prev) return prev;
+        const base = prev.noticeMap[taxType] ?? {
+          materials: '',
+          notes: '',
+          payrollByUs: false,
+          attachNote: '',
+        };
+        return withTaxEntry(prev, taxType, { ...base, payrollByUs: value });
+      });
+      setClientDirty(true);
     } else {
       setLocalPayrollByUs(value);
     }
   };
+
+  const handlePaymentChange = (next: PaymentNotice | ((prev: PaymentNotice) => PaymentNotice)) => {
+    setPayment(prev => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      const sc = selectedClientRef.current;
+      if (sc && resolved.attachNote !== prev.attachNote) {
+        const tax = taxTypeRef.current;
+        const base = sc.noticeMap[tax] ?? {
+          materials: '',
+          notes: '',
+          payrollByUs: false,
+          attachNote: '',
+        };
+        setSelectedClient(withTaxEntry(sc, tax, { ...base, attachNote: resolved.attachNote }));
+        setClientDirty(true);
+      }
+      return resolved;
+    });
+  };
+
+  // 수임처 연결 시 입력 변경을 잠시 모아 서버에 자동 저장
+  useEffect(() => {
+    if (!selectedClient || !clientDirty) return;
+    const loadGen = clientLoadGen.current;
+    setSaveState('saving');
+    if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
+    clientSaveTimer.current = setTimeout(() => {
+      void (async () => {
+        const client = selectedClientRef.current;
+        if (!client || loadGen !== clientLoadGen.current) return;
+        const entry = currentTaxEntry(
+          clientMaterials,
+          clientNotes,
+          clientPayrollByUs,
+          payment.attachNote,
+        );
+        try {
+          await persistCurrentClient(client, taxTypeRef.current, entry);
+          if (loadGen !== clientLoadGen.current) return;
+          setClientDirty(false);
+          setSaveState('saved');
+        } catch {
+          if (loadGen !== clientLoadGen.current) return;
+          setSaveState('error');
+        }
+      })();
+    }, 800);
+    return () => {
+      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
+    };
+  }, [
+    selectedClient,
+    clientDirty,
+    clientMaterials,
+    clientNotes,
+    clientPayrollByUs,
+    payment.attachNote,
+    persistCurrentClient,
+  ]);
 
   const handleParamChange = (key: keyof DeadlineParams, value: string | number) => {
     setParams(prev => ({ ...prev, [key]: value }));
@@ -618,7 +794,7 @@ export default function NoticeGeneratorPage() {
           <NoticeCollapsibleSection title="신고 결과 안내 (납부세액)">
             <PaymentNoticeField
               value={payment}
-              onChange={setPayment}
+              onChange={handlePaymentChange}
               taxTypeName={meta.name}
               hasLocalTax={hasLocalIncomeTax(taxType)}
               isWithholding={taxType === TAX_TYPES.WITHHOLDING}

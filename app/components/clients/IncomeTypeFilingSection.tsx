@@ -25,7 +25,7 @@ import {
   employedSimplePayrollPeriodKey,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
-import { parseHometaxFile } from '@/app/utils/filingCheck';
+import { formatIncomeUploadNotice, parseHometaxFile, parseIncomeUploadResult, type IncomeUploadResult } from '@/app/utils/filingCheck';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { UNCategorized } from '@/app/utils/clientsGrouping';
 import type { ClientRecord } from '@/app/types/client';
@@ -59,7 +59,7 @@ export type IncomeStatFilter = 'all' | 'target' | 'received' | 'diff';
 
 export type IncomeTypeFilingHandle = {
   reload: () => Promise<void>;
-  uploadHometax: (file: File) => Promise<{ matched: number; total: number; extraCount: number }>;
+  uploadHometax: (file: File) => Promise<IncomeUploadResult>;
   resetReceipt: () => Promise<void>;
 };
 
@@ -486,28 +486,26 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       setParsing(true);
       if (!embedded) setMessage('');
       try {
-        const { bizNos } = await parseHometaxFile(file);
+        const { bizNos, filings } = await parseHometaxFile(file);
         const apiUrl = mode === 'simplePayroll' ? '/api/tax/simple-payroll' : '/api/tax/year-end';
-        const body = mode === 'simplePayroll' ? { periodKey, bizNos } : { year, bizNos };
+        const body =
+          mode === 'simplePayroll'
+            ? { periodKey, filings, bizNos, manager }
+            : { year, filings, bizNos, manager };
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error('매칭 실패');
-        const matched = Number(data.matched ?? 0);
-        const total = Number(data.total ?? 0);
-        const extraCount = Number(data.extraCount ?? 0);
-        if (!embedded) {
-          setMessage(
-            total > 0
-              ? `접수목록 ${total}건 중 ${matched}건을 자동 체크했습니다.`
-              : `접수목록 ${matched}건을 사업자번호로 대조해 자동 체크했습니다.`,
-          );
-        }
+        if (!res.ok) throw new Error((data as { error?: string }).error ?? '매칭 실패');
+        const result = parseIncomeUploadResult(data as Record<string, unknown>);
+        const taxLabel = mode === 'simplePayroll' ? '간이지급' : '연말정산';
+        const notice = formatIncomeUploadNotice(result, taxLabel);
+        if (embedded) onUploadNotice?.(notice);
+        else setMessage(notice);
         await load();
-        return { matched, total, extraCount };
+        return result;
       } catch (e) {
         const msg = e instanceof Error ? e.message : '엑셀 처리 실패';
         if (embedded) onUploadNotice?.(msg);
@@ -517,7 +515,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         setParsing(false);
       }
     },
-    [mode, periodKey, year, embedded, onUploadNotice, load],
+    [mode, periodKey, year, manager, embedded, onUploadNotice, load],
   );
 
   const resetReceipt = useCallback(async () => {

@@ -14,8 +14,14 @@ import {
   employedSimplePayrollPeriodKey,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
-import { buildSimplePayrollGrid, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
-import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
+import { buildSimplePayrollGrid, computeIncomeGridStats, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
+import {
+  buildSimplePayrollFilingTypeMap,
+  filingTargets,
+  filterSimplePayrollFilingTypes,
+  normalizeBizNo,
+  type HometaxFiling,
+} from '@/app/utils/filingCheck';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
 
 function apiError(e: unknown) {
@@ -119,9 +125,18 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser();
-    const body = (await request.json()) as { periodKey?: string; bizNos?: string[] };
-    if (!body.periodKey || !body.bizNos) {
-      return NextResponse.json({ error: 'periodKey, bizNos required' }, { status: 400 });
+    const body = (await request.json()) as {
+      periodKey?: string;
+      bizNos?: string[];
+      filings?: HometaxFiling[];
+      manager?: string;
+    };
+    if (!body.periodKey) {
+      return NextResponse.json({ error: 'periodKey required' }, { status: 400 });
+    }
+    const filings = body.filings ?? [];
+    if (filings.length === 0 && (!body.bizNos || body.bizNos.length === 0)) {
+      return NextResponse.json({ error: 'filings or bizNos required' }, { status: 400 });
     }
 
     const { year, month } = simplePayrollPeriodMeta(body.periodKey);
@@ -150,8 +165,11 @@ export async function POST(request: NextRequest) {
       if (types.employed && employedKey) employedTypesMap.set(c.id, ['employed']);
     }
 
+    const { map: filingTypeMap, unmappedRows, parsedRows } = buildSimplePayrollFilingTypeMap(filings);
     const fileBizSet = new Set(
-      body.bizNos.map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+      filings.length > 0
+        ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
+        : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
     );
     const targetBizSet = new Set(
       [...bizMap.values()].map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
@@ -161,27 +179,59 @@ export async function POST(request: NextRequest) {
       if (!targetBizSet.has(b)) extraCount += 1;
     }
 
-    let matched = 0;
-    if (monthlyTypesMap.size > 0) {
-      matched += await matchSimplePayrollFromExcel(
+    let checkedCells = 0;
+    let skippedInactive = 0;
+    if (monthlyTypesMap.size > 0 && filingTypeMap.size > 0) {
+      const monthlyFilingTypes = filterSimplePayrollFilingTypes(filingTypeMap, [
+        'daily',
+        'bizIncome',
+        'otherTax',
+      ]);
+      const monthlyResult = await matchSimplePayrollFromExcel(
         monthlyKey,
-        body.bizNos,
+        monthlyFilingTypes,
         bizMap,
         monthlyTypesMap,
         user.name,
       );
+      checkedCells += monthlyResult.checkedCells;
+      skippedInactive += monthlyResult.skippedInactive;
     }
-    if (employedKey && employedTypesMap.size > 0) {
-      matched += await matchSimplePayrollFromExcel(
+    if (employedKey && employedTypesMap.size > 0 && filingTypeMap.size > 0) {
+      const employedFilingTypes = filterSimplePayrollFilingTypes(filingTypeMap, ['employed']);
+      const employedResult = await matchSimplePayrollFromExcel(
         employedKey,
-        body.bizNos,
+        employedFilingTypes,
         bizMap,
         employedTypesMap,
         user.name,
       );
+      checkedCells += employedResult.checkedCells;
+      skippedInactive += employedResult.skippedInactive;
     }
 
-    return NextResponse.json({ matched, total: fileBizSet.size, extraCount });
+    const manager = body.manager ?? user.name;
+    const meta = simplePayrollPeriodMeta(body.periodKey);
+    const periodKeys = meta.employedPeriodKey
+      ? [meta.monthlyPeriodKey, meta.employedPeriodKey]
+      : [meta.monthlyPeriodKey];
+    const excluded = await getExcludedClientIds(manager, 'withholding', meta.monthlyPeriodKey);
+    const saved = await listSimplePayrollFilingsByKeys(periodKeys);
+    const { grid } = buildSimplePayrollGrid(clients, body.periodKey, saved, excluded);
+    const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);
+
+    return NextResponse.json({
+      matched: checkedCells,
+      checkedCells,
+      total: fileBizSet.size,
+      parsedRows: parsedRows || filings.length,
+      extraCount,
+      unmappedRows,
+      skippedInactive,
+      target: stats.target,
+      received: stats.received,
+      diff: stats.diff,
+    });
   } catch (e) {
     return apiError(e);
   }

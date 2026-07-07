@@ -8,15 +8,16 @@ import { downloadFeeExportExcel } from '@/app/utils/feeExport';
 
 type Props = {
   clients: ClientRecord[];
+  corpRevenueByClientId?: Record<string, number | null>;
 };
 
-export default function FeeExportButton({ clients }: Props) {
+export default function FeeExportButton({ clients, corpRevenueByClientId }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleDownload = async () => {
     setLoading(true);
     try {
-      await downloadFeeExportExcel(clients);
+      await downloadFeeExportExcel(clients, undefined, undefined, corpRevenueByClientId);
     } catch {
       alert('엑셀 내려받기에 실패했습니다.');
     } finally {
@@ -30,7 +31,7 @@ export default function FeeExportButton({ clients }: Props) {
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-slate-800">수수료 엑셀 내려받기</p>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            담당자·업체명·기장수수료·기타수수료·조정료·합계(연환산) 열 구조
+            담당자·업체명·기장수수료·기타수수료·조정료·올해 매출액·합계(연환산) 열 구조
           </p>
         </div>
         <button

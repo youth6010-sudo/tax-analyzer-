@@ -46,3 +46,12 @@ export async function requireAdmin() {
   }
   return user;
 }
+
+export async function requireCharlie() {
+  const user = await requireUser();
+  const loginId = user.loginId?.trim().toLowerCase() ?? '';
+  if (loginId !== 'charlie') {
+    throw new Error('FORBIDDEN');
+  }
+  return user;
+}

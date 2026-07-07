@@ -1,5 +1,6 @@
 import type { TaxTypeId } from '@/app/config/taxTypes';
 import type { ClientRecord } from '@/app/types/client';
+import type { IncomeTypeKey, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   getClientCategory,
   SINGO_DAERI,
@@ -210,6 +211,7 @@ export type HometaxFiling = {
   bizNo: string; // 사업자등록번호 10자리
   name: string; // 상호(성명)
   filingType: string; // 신고유형 (정기신고/수정신고/기한후신고/경정청구 등)
+  reportName?: string; // 신고서명·종류 (근로/사업 등 구분)
 };
 
 export type HometaxParseResult = {
@@ -238,7 +240,168 @@ function classifySpecialType(filingType: string): string | null {
   return null;
 }
 
-// 홈택스 접수목록 엑셀 파싱 (상호·사업자번호·신고유형)
+const REPORT_NAME_HEADER_PATTERNS = [
+  '자료명',
+  '신고서명',
+  '신고서종류',
+  '과세표준신고서',
+  '세목',
+  '신고서',
+];
+
+function findReportNameCol(cells: string[]): number {
+  for (const pattern of REPORT_NAME_HEADER_PATTERNS) {
+    const idx = cells.findIndex(s => s.includes(pattern));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+type HometaxHeaderCols = {
+  nameCol: number;
+  bizCol: number;
+  typeCol: number;
+  reportCol: number;
+};
+
+/** 홈택스 제출내역조회결과 (자료명·지급자·성명/상호) */
+function findSubmissionHistoryHeader(cells: string[]): HometaxHeaderCols | null {
+  const reportCol = cells.findIndex(s => s.includes('자료명'));
+  const bizCol = cells.findIndex(s => s.includes('지급자'));
+  if (reportCol < 0 || bizCol < 0) return null;
+  const nameCol = cells.findIndex(s => s.includes('상호') || s.includes('성명'));
+  const typeCol = cells.findIndex(s => s.includes('제출구분') || s.includes('신고유형'));
+  return {
+    nameCol: nameCol >= 0 ? nameCol : reportCol,
+    bizCol,
+    typeCol,
+    reportCol,
+  };
+}
+
+/** 홈택스 접수목록 (상호·등록번호·신고유형) */
+function findClassicHometaxHeader(cells: string[]): HometaxHeaderCols | null {
+  const nameCol = cells.findIndex(s => s.includes('상호') || s.includes('성명'));
+  const bizCol = cells.findIndex(s => s.includes('등록번호'));
+  if (nameCol < 0 || bizCol < 0) return null;
+  return {
+    nameCol,
+    bizCol,
+    typeCol: cells.findIndex(s => s.includes('신고유형')),
+    reportCol: findReportNameCol(cells),
+  };
+}
+
+function findHometaxHeader(cells: string[]): HometaxHeaderCols | null {
+  return findSubmissionHistoryHeader(cells) ?? findClassicHometaxHeader(cells);
+}
+
+function compactReportText(v: string): string {
+  return (v || '').replace(/\s/g, '');
+}
+
+/** 접수목록 신고서명 → 간이지급 소득유형 */
+export function inferSimplePayrollIncomeType(reportName: string): IncomeTypeKey | null {
+  const t = compactReportText(reportName);
+  if (!t) return null;
+  if (t.includes('근로내용확인')) return 'laborContentReport';
+  if (t.includes('일용')) return 'daily';
+  if (t.includes('사업')) return 'bizIncome';
+  if (t.includes('기타')) return 'otherTax';
+  if (t.includes('근로')) return 'employed';
+  return null;
+}
+
+/** 접수목록 신고서명 → 연말정산 소득유형 */
+export function inferYearEndIncomeType(reportName: string): YearEndIncomeKey | null {
+  const t = compactReportText(reportName);
+  if (!t) return null;
+  if (t.includes('퇴직')) return 'retirement';
+  if (t.includes('이자') || t.includes('배당')) return 'interestDividend';
+  if (t.includes('사업')) return 'bizIncome';
+  if (t.includes('기타')) return 'otherTax';
+  if (t.includes('근로')) return 'employed';
+  return null;
+}
+
+export type FilingTypeMapResult<T extends string> = {
+  map: Map<string, Set<T>>;
+  unmappedRows: number;
+  parsedRows: number;
+};
+
+/** 접수목록 행별 신고서명 → bizNo별 소득유형 집합 (간이지급) */
+export function buildSimplePayrollFilingTypeMap(
+  filings: HometaxFiling[],
+): FilingTypeMapResult<IncomeTypeKey> {
+  const map = new Map<string, Set<IncomeTypeKey>>();
+  let unmappedRows = 0;
+  for (const f of filings) {
+    const biz = normalizeBizNo(f.bizNo);
+    if (biz.length !== 10) continue;
+    const reportName = f.reportName || '';
+    const incomeType = inferSimplePayrollIncomeType(reportName);
+    if (!incomeType || incomeType === 'laborContentReport') {
+      unmappedRows += 1;
+      continue;
+    }
+    const set = map.get(biz) ?? new Set<IncomeTypeKey>();
+    set.add(incomeType);
+    map.set(biz, set);
+  }
+  return { map, unmappedRows, parsedRows: filings.length };
+}
+
+/** 접수목록 행별 신고서명 → bizNo별 소득유형 집합 (연말정산) */
+export function buildYearEndFilingTypeMap(
+  filings: HometaxFiling[],
+): FilingTypeMapResult<YearEndIncomeKey> {
+  const map = new Map<string, Set<YearEndIncomeKey>>();
+  let unmappedRows = 0;
+  for (const f of filings) {
+    const biz = normalizeBizNo(f.bizNo);
+    if (biz.length !== 10) continue;
+    const reportName = f.reportName || '';
+    const incomeType = inferYearEndIncomeType(reportName);
+    if (!incomeType) {
+      unmappedRows += 1;
+      continue;
+    }
+    const set = map.get(biz) ?? new Set<YearEndIncomeKey>();
+    set.add(incomeType);
+    map.set(biz, set);
+  }
+  return { map, unmappedRows, parsedRows: filings.length };
+}
+
+function filterTypeMap<T extends string>(
+  source: Map<string, Set<T>>,
+  allowed: T[],
+): Map<string, Set<T>> {
+  const allowedSet = new Set(allowed);
+  const out = new Map<string, Set<T>>();
+  for (const [biz, types] of source) {
+    const filtered = new Set([...types].filter(t => allowedSet.has(t)));
+    if (filtered.size > 0) out.set(biz, filtered);
+  }
+  return out;
+}
+
+export function filterSimplePayrollFilingTypes(
+  map: Map<string, Set<IncomeTypeKey>>,
+  keys: IncomeTypeKey[],
+): Map<string, Set<IncomeTypeKey>> {
+  return filterTypeMap(map, keys);
+}
+
+export function filterYearEndFilingTypes(
+  map: Map<string, Set<YearEndIncomeKey>>,
+  keys: YearEndIncomeKey[],
+): Map<string, Set<YearEndIncomeKey>> {
+  return filterTypeMap(map, keys);
+}
+
+// 홈택스 접수목록 엑셀 파싱 (상호·사업자번호·신고유형·신고서명)
 export async function parseHometaxFile(file: File): Promise<HometaxParseResult> {
   const XLSX = await import('xlsx');
   const buf = await file.arrayBuffer();
@@ -251,25 +414,24 @@ export async function parseHometaxFile(file: File): Promise<HometaxParseResult> 
     if (!ws) continue;
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false });
 
-    // 헤더 행 탐지 (상호 + 등록번호 컬럼이 있는 행)
+    // 헤더 행 탐지 — 제출내역조회결과(자료명·지급자) 또는 접수목록(상호·등록번호)
     let headerIdx = -1;
     let nameCol = -1;
     let bizCol = -1;
     let typeCol = -1;
+    let reportCol = -1;
     for (let i = 0; i < rows.length; i += 1) {
       const r = rows[i];
       if (!Array.isArray(r)) continue;
       const cells = r.map(c => String(c ?? '').replace(/\s/g, ''));
-      const ni = cells.findIndex(s => s.includes('상호') || s.includes('성명'));
-      const bi = cells.findIndex(s => s.includes('등록번호'));
-      const ti = cells.findIndex(s => s.includes('신고유형'));
-      if (ni >= 0 && bi >= 0) {
-        headerIdx = i;
-        nameCol = ni;
-        bizCol = bi;
-        typeCol = ti;
-        break;
-      }
+      const cols = findHometaxHeader(cells);
+      if (!cols) continue;
+      headerIdx = i;
+      nameCol = cols.nameCol;
+      bizCol = cols.bizCol;
+      typeCol = cols.typeCol;
+      reportCol = cols.reportCol;
+      break;
     }
 
     if (headerIdx < 0) {
@@ -294,6 +456,10 @@ export async function parseHometaxFile(file: File): Promise<HometaxParseResult> 
         bizNo: biz,
         name: String(r[nameCol] ?? '').trim(),
         filingType: typeCol >= 0 ? String(r[typeCol] ?? '').trim() : '',
+        reportName:
+          reportCol >= 0
+            ? String(r[reportCol] ?? '').trim()
+            : '',
       });
     }
   }
@@ -327,4 +493,65 @@ export function extractSpecialFilings(filings: HometaxFiling[]): SpecialFiling[]
 export async function parseHometaxBizNos(file: File): Promise<string[]> {
   const { bizNos } = await parseHometaxFile(file);
   return bizNos;
+}
+
+export type IncomeUploadResult = {
+  matched: number;
+  checkedCells: number;
+  total: number;
+  parsedRows: number;
+  extraCount: number;
+  unmappedRows: number;
+  skippedInactive: number;
+  target: number;
+  received: number;
+  diff: number;
+};
+
+export function parseIncomeUploadResult(data: Record<string, unknown>): IncomeUploadResult {
+  return {
+    matched: Number(data.matched ?? 0),
+    checkedCells: Number(data.checkedCells ?? data.matched ?? 0),
+    total: Number(data.total ?? 0),
+    parsedRows: Number(data.parsedRows ?? data.total ?? 0),
+    extraCount: Number(data.extraCount ?? 0),
+    unmappedRows: Number(data.unmappedRows ?? 0),
+    skippedInactive: Number(data.skippedInactive ?? 0),
+    target: Number(data.target ?? 0),
+    received: Number(data.received ?? 0),
+    diff: Number(data.diff ?? 0),
+  };
+}
+
+/** 간이지급·연말정산 접수목록 업로드 결과 안내 문구 */
+export function formatIncomeUploadNotice(result: IncomeUploadResult, taxLabel: string): string {
+  const lines: string[] = [];
+  lines.push(
+    `접수목록 ${result.parsedRows}건 파싱 · ${result.checkedCells}건 자동 체크했습니다.`,
+  );
+  if (result.target > 0) {
+    if (result.diff > 0) {
+      lines.push(
+        `신고대상 ${result.target}건 중 접수완료 ${result.received}건 — ${result.diff}건 차이가 있습니다.`,
+      );
+    } else {
+      lines.push(`신고대상 ${result.target}건 모두 접수완료되었습니다.`);
+    }
+  }
+  if (result.extraCount > 0) {
+    lines.push(
+      `접수목록 중 ${result.extraCount}건은 현재 ${taxLabel} 신고대상 수임처와 일치하지 않습니다.`,
+    );
+  }
+  if (result.unmappedRows > 0) {
+    lines.push(
+      `신고서 구분을 찾지 못해 ${result.unmappedRows}건은 자동 체크하지 않았습니다.`,
+    );
+  }
+  if (result.skippedInactive > 0) {
+    lines.push(
+      `접수는 있으나 비활성 소득유형 ${result.skippedInactive}건은 체크하지 않았습니다.`,
+    );
+  }
+  return lines.join(' ');
 }

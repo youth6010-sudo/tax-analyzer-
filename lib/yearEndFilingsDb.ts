@@ -76,29 +76,42 @@ export async function upsertYearEndFilings(
   }
 }
 
+export type MatchYearEndResult = {
+  checkedCells: number;
+  skippedInactive: number;
+};
+
 export async function matchYearEndFromExcel(
   year: number,
-  bizNos: string[],
+  filingTypes: Map<string, Set<YearEndIncomeType>>,
   clientBizMap: Map<string, string>,
   clientTypes: Map<string, YearEndIncomeType[]>,
   updatedBy: string,
-): Promise<number> {
-  const bizSet = new Set(bizNos.map(b => b.replace(/\D/g, '')));
-  let matched = 0;
+): Promise<MatchYearEndResult> {
+  let checkedCells = 0;
+  let skippedInactive = 0;
   const rows: YearEndRow[] = [];
 
   for (const [clientId, biz] of clientBizMap) {
     const norm = biz.replace(/\D/g, '');
-    if (norm.length !== 10 || !bizSet.has(norm)) continue;
-    const types = clientTypes.get(clientId) ?? [];
-    for (const incomeType of types) {
+    if (norm.length !== 10) continue;
+    const receiptTypes = filingTypes.get(norm);
+    if (!receiptTypes || receiptTypes.size === 0) continue;
+
+    const activeTypes = new Set(clientTypes.get(clientId) ?? []);
+
+    for (const incomeType of receiptTypes) {
+      if (!activeTypes.has(incomeType)) {
+        skippedInactive += 1;
+        continue;
+      }
       rows.push({ clientId, incomeType, filed: true, notes: '' });
-      matched += 1;
+      checkedCells += 1;
     }
   }
 
   if (rows.length > 0) await upsertYearEndFilings(year, rows, updatedBy);
-  return matched;
+  return { checkedCells, skippedInactive };
 }
 
 /** 접수(체크)만 초기화 — 소득유형 활성·제외는 유지 */

@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "node --max-old-space-size=8192 node_modules/next/dist/bin/next dev --webpack -H 0.0.0.0 -p 3000",
+    "dev:clean": "node scripts/dev-clean.mjs",
     "dev:lan": "node --max-old-space-size=8192 node_modules/next/dist/bin/next dev --webpack -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3000",
@@ -44,6 +45,12 @@
     "vercel:link": "npx vercel@latest link",
     "vercel:deploy": "npx vercel@latest deploy --prod",
     "vercel:sync-db": "node scripts/sync-supabase-vercel.mjs",
+    "db:ensure-review-tables": "node scripts/ensure-review-tables.mjs",
+    "import:review": "python scripts/import-review-grid.py --output public/data/review-grid.json",
+    "db:import-review-sheets": "node scripts/import-review-to-db.mjs",
+    "import:review:full": "npm run import:review && npm run db:import-review-sheets",
+    "sync:review-assets": "node scripts/sync-review-assets.mjs",
+    "verify:review": "node scripts/verify-review-integration.mjs",
     "db:compare-env": "node scripts/compare-db-env.mjs"
   },
   "dependencies": {

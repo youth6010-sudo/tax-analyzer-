@@ -12,8 +12,13 @@ import {
   type YearEndIncomeType,
 } from '@/lib/yearEndFilingsDb';
 import { YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
-import { buildYearEndGrid } from '@/lib/incomeTypeFilingGrid';
-import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
+import { buildYearEndGrid, computeIncomeGridStats } from '@/lib/incomeTypeFilingGrid';
+import {
+  buildYearEndFilingTypeMap,
+  filingTargets,
+  normalizeBizNo,
+  type HometaxFiling,
+} from '@/app/utils/filingCheck';
 import {
   getWithholdingExclusionsForYear,
   getWithholdingReceiptHistoryForYear,
@@ -116,9 +121,18 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser();
-    const body = (await request.json()) as { year?: number; bizNos?: string[] };
-    if (!body.year || !body.bizNos) {
-      return NextResponse.json({ error: 'year, bizNos required' }, { status: 400 });
+    const body = (await request.json()) as {
+      year?: number;
+      bizNos?: string[];
+      filings?: HometaxFiling[];
+      manager?: string;
+    };
+    if (!body.year) {
+      return NextResponse.json({ error: 'year required' }, { status: 400 });
+    }
+    const filings = body.filings ?? [];
+    if (filings.length === 0 && (!body.bizNos || body.bizNos.length === 0)) {
+      return NextResponse.json({ error: 'filings or bizNos required' }, { status: 400 });
     }
 
     const clients = await listClients({
@@ -140,8 +154,11 @@ export async function POST(request: NextRequest) {
       if (active.length) typesMap.set(c.id, active);
     }
 
+    const { map: filingTypeMap, unmappedRows, parsedRows } = buildYearEndFilingTypeMap(filings);
     const fileBizSet = new Set(
-      body.bizNos.map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+      filings.length > 0
+        ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
+        : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
     );
     const targetBizSet = new Set(
       [...bizMap.values()].map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
@@ -151,8 +168,43 @@ export async function POST(request: NextRequest) {
       if (!targetBizSet.has(b)) extraCount += 1;
     }
 
-    const matched = await matchYearEndFromExcel(body.year, body.bizNos, bizMap, typesMap, user.name);
-    return NextResponse.json({ matched, total: fileBizSet.size, extraCount });
+    let checkedCells = 0;
+    let skippedInactive = 0;
+    if (typesMap.size > 0 && filingTypeMap.size > 0) {
+      const result = await matchYearEndFromExcel(
+        body.year,
+        filingTypeMap,
+        bizMap,
+        typesMap,
+        user.name,
+      );
+      checkedCells = result.checkedCells;
+      skippedInactive = result.skippedInactive;
+    }
+
+    const manager = body.manager ?? user.name;
+    const yearExcluded = await getWithholdingExclusionsForYear(manager, body.year);
+    const { ids, bizNos } = await getWithholdingReceiptHistoryForYear(
+      manager,
+      body.year,
+      normalizeBizNo,
+    );
+    const saved = await listYearEndFilings(body.year);
+    const grid = buildYearEndGrid(clients, body.year, saved, yearExcluded, { ids, bizNos });
+    const stats = computeIncomeGridStats(grid, 'yearEnd', manager);
+
+    return NextResponse.json({
+      matched: checkedCells,
+      checkedCells,
+      total: fileBizSet.size,
+      parsedRows: parsedRows || filings.length,
+      extraCount,
+      unmappedRows,
+      skippedInactive,
+      target: stats.target,
+      received: stats.received,
+      diff: stats.diff,
+    });
   } catch (e) {
     return apiError(e);
   }

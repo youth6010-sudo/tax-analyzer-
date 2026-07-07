@@ -169,6 +169,7 @@ function ClientRosterRow({
   returnTo,
   onFeeChange,
   feeRefreshKey,
+  corpRevenueThisYear,
   reorderProps,
   consumeReorderClick,
   showNtsClosed,
@@ -184,6 +185,7 @@ function ClientRosterRow({
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKey?: number;
+  corpRevenueThisYear?: number | null;
   reorderProps?: React.HTMLAttributes<HTMLButtonElement>;
   consumeReorderClick?: () => boolean;
   showNtsClosed?: boolean;
@@ -237,6 +239,7 @@ function ClientRosterRow({
           clientId={c.id}
           value={resolveClientRecordFee(c)}
           intakeData={c.intakeData}
+          corpRevenueThisYear={corpRevenueThisYear}
           onSave={onFeeChange}
           readOnly={!feeEditable}
           hidden={!feeVisible}
@@ -274,6 +277,7 @@ function EntityPanel({
   returnTo,
   onFeeChange,
   feeRefreshKeys,
+  corpRevenueByClientId,
   feeEditable = true,
   feeVisible = true,
   showFooter = false,
@@ -289,6 +293,7 @@ function EntityPanel({
   returnTo: string;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  corpRevenueByClientId?: Record<string, number | null>;
   feeEditable?: boolean;
   feeVisible?: boolean;
   showFooter?: boolean;
@@ -368,6 +373,7 @@ function EntityPanel({
                   returnTo={returnTo}
                   onFeeChange={onFeeChange}
                   feeRefreshKey={feeRefreshKeys?.[c.id]}
+                  corpRevenueThisYear={corpRevenueByClientId?.[c.id]}
                   reorderProps={getItemProps(c.id)}
                   consumeReorderClick={consumeClick}
                   showNtsClosed={clientNeedsNtsChurnPrompt(c, churnRecords)}
@@ -440,6 +446,7 @@ function ManagerSection({
   visibleOptionalCategories,
   onFeeChange,
   feeRefreshKeys,
+  corpRevenueByClientId,
   sort,
   onClientOrderChange,
 }: {
@@ -453,6 +460,7 @@ function ManagerSection({
   visibleOptionalCategories: string[];
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  corpRevenueByClientId?: Record<string, number | null>;
   sort: 'name' | 'code';
   onClientOrderChange?: () => void;
 }) {
@@ -511,6 +519,7 @@ function ManagerSection({
           returnTo={returnTo}
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          corpRevenueByClientId={corpRevenueByClientId}
           feeEditable={feeEditable}
           feeVisible={feeVisible}
           manager={manager}
@@ -526,6 +535,7 @@ function ManagerSection({
           returnTo={returnTo}
           onFeeChange={onFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          corpRevenueByClientId={corpRevenueByClientId}
           feeEditable={feeEditable}
           feeVisible={feeVisible}
           manager={manager}
@@ -544,6 +554,7 @@ function ManagerSection({
             returnTo={returnTo}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
+            corpRevenueByClientId={corpRevenueByClientId}
             feeEditable={feeEditable}
             feeVisible={feeVisible}
             manager={manager}
@@ -774,6 +785,7 @@ export default function ManagerRosterGrid({
   isAdmin = false,
   onFeeChange,
   feeRefreshKeys,
+  corpRevenueByClientId,
   orderVersion = 0,
   onClientOrderChange,
 }: {
@@ -787,6 +799,7 @@ export default function ManagerRosterGrid({
   isAdmin?: boolean;
   onFeeChange?: (id: string, payload: FeeBreakdownSave) => void;
   feeRefreshKeys?: Record<string, number>;
+  corpRevenueByClientId?: Record<string, number | null>;
   orderVersion?: number;
   onClientOrderChange?: () => void;
 }) {
@@ -846,6 +859,7 @@ export default function ManagerRosterGrid({
             visibleOptionalCategories={visibleOptionalCategories}
             onFeeChange={onFeeChange}
             feeRefreshKeys={feeRefreshKeys}
+            corpRevenueByClientId={corpRevenueByClientId}
             sort={sort}
             onClientOrderChange={onClientOrderChange}
           />

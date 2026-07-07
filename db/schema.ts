@@ -370,6 +370,66 @@ export const companyEventCheckoffs = pgTable('company_event_checkoffs', {
   index('company_event_checkoffs_member_idx').on(t.memberName),
 ]);
 
+/** 검토표 셀 패치 (마스터 편집) */
+export const reviewGridPatches = pgTable(
+  'review_grid_patches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sheetName: text('sheet_name').notNull(),
+    r: integer('r').notNull(),
+    c: integer('c').notNull(),
+    value: text('value').notNull().default(''),
+    bg: text('bg'),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [uniqueIndex('review_grid_patches_sheet_rc_idx').on(t.sheetName, t.r, t.c)],
+);
+
+/** 검토표 신규 행 (마스터 추가) */
+export const reviewGridNewRows = pgTable(
+  'review_grid_new_rows',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull().default(''),
+    kind: text('kind').notNull().default(''),
+    sheetName: text('sheet_name').notNull().default(''),
+    payload: jsonb('payload').notNull().$type<Record<string, unknown>>().default({}),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [index('review_grid_new_rows_owner_idx').on(t.owner)],
+);
+
+/** 검토표 엑셀 시트 원본 (Supabase jsonb — 시트별 조회) */
+export const reviewGridSheets = pgTable('review_grid_sheets', {
+  sheetName: text('sheet_name').primaryKey(),
+  sheetData: jsonb('sheet_data').notNull().$type<Record<string, unknown>>(),
+  version: text('version'),
+  source: text('source'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 검토표 ↔ 수임처 수동 연결 (찰리 관리, 1:N) */
+export const reviewClientLinks = pgTable(
+  'review_client_links',
+  {
+    reviewKey: text('review_key').notNull(),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    reviewName: text('review_name').notNull().default(''),
+    sortOrder: integer('sort_order').notNull().default(0),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [
+    primaryKey({ columns: [t.reviewKey, t.clientId] }),
+    index('review_client_links_client_idx').on(t.clientId),
+    index('review_client_links_review_idx').on(t.reviewKey),
+  ],
+);
+
 /** 점심 맛집 추가 요청 큐 */
 export const lunchSpotRequests = pgTable('lunch_spot_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -395,3 +455,7 @@ export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
 export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
 export type CompanyEvent = typeof companyEvents.$inferSelect;
 export type CompanyEventCheckoff = typeof companyEventCheckoffs.$inferSelect;
+export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
+export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
+export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;
+export type ReviewGridSheet = typeof reviewGridSheets.$inferSelect;

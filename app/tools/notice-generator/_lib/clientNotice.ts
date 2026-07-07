@@ -136,7 +136,7 @@ export async function saveClientNotice(
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
     body: JSON.stringify({
-      intakeData: { ...intakeData, noticeData: nextMap, notes: nextNotes },
+      intakeData: { noticeData: nextMap, notes: nextNotes },
     }),
   });
   if (!res.ok) {

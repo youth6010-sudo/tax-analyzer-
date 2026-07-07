@@ -376,9 +376,6 @@ function FilingCheckPageInner() {
   });
   const [incomeParsing, setIncomeParsing] = useState(false);
   const [incomeNotice, setIncomeNotice] = useState('');
-  const [incomeUploadMatched, setIncomeUploadMatched] = useState(0);
-  const [incomeUploadTotal, setIncomeUploadTotal] = useState(0);
-  const [incomeUploadExtra, setIncomeUploadExtra] = useState(0);
   const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
   const [clientListSort] = useLocalStorage<ClientSortKey>(CLIENT_SORT_STORAGE_KEY, 'code');
   const [managerOrder] = useLocalStorage<string[]>(MANAGER_ORDER_STORAGE_KEY, [...MANAGER_DISPLAY_ORDER]);
@@ -400,6 +397,7 @@ function FilingCheckPageInner() {
   useEffect(() => {
     setStatFilter('all');
     setListScope('targets');
+    setIncomeNotice('');
   }, [tax, period.year, period.month, period.vatPhase, selManager]);
 
   useEffect(() => {
@@ -583,7 +581,6 @@ function FilingCheckPageInner() {
 
   useEffect(() => {
     setIncomeNotice('');
-    setIncomeUploadMatched(0);
     setEmployedFilingMonth(false);
   }, [tax, period.year, period.month, selManager]);
 
@@ -1180,7 +1177,9 @@ function FilingCheckPageInner() {
               완료 처리
             </button>
             {diffValue !== 0 && !record.diffReason.trim() && (
-              <span className="text-xs text-rose-500">차이가 있어요. 사유를 적으면 요약에 함께 들어갑니다.</span>
+              <span className="text-xs text-rose-500">
+                신고대상과 접수완료에 {diffValue}건 차이가 있습니다. 사유를 적으면 요약에 함께 들어갑니다.
+              </span>
             )}
           </>
         )}
@@ -1402,16 +1401,10 @@ function FilingCheckPageInner() {
                   return;
                 }
                 void upload
-                  .then(({ matched, total, extraCount }) => {
-                    setIncomeUploadMatched(matched);
-                    setIncomeUploadTotal(total);
-                    setIncomeUploadExtra(extraCount);
+                  .then(() => {
                     showIncomeSavedTick();
                   })
                   .catch(err => {
-                    setIncomeUploadMatched(0);
-                    setIncomeUploadTotal(0);
-                    setIncomeUploadExtra(0);
                     setIncomeNotice(err instanceof Error ? err.message : '엑셀 처리 실패');
                   })
                   .finally(() => {
@@ -1450,7 +1443,7 @@ function FilingCheckPageInner() {
           )}
           {isIncomeTypeTax &&
             !locked &&
-            (incomeStats.received > 0 || incomeUploadTotal > 0) && (
+            incomeStats.received > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -1458,9 +1451,6 @@ function FilingCheckPageInner() {
                 if (!reset) return;
                 void reset()
                   .then(() => {
-                    setIncomeUploadMatched(0);
-                    setIncomeUploadTotal(0);
-                    setIncomeUploadExtra(0);
                     setIncomeNotice('');
                     if (incomeFileRef.current) incomeFileRef.current.value = '';
                     showIncomeSavedTick();
@@ -1511,11 +1501,9 @@ function FilingCheckPageInner() {
               onClick={() => toggleStatFilter('diff')}
             />
           </div>
-          {incomeUploadTotal > 0 && (
-            <p className={`${portalAlertInfo} mb-4`}>
-              접수목록 {incomeUploadTotal}건을 사업자번호로 대조해 {incomeUploadMatched}건을 자동 체크했습니다.
-              {incomeUploadExtra > 0 &&
-                ` 이 중 ${incomeUploadExtra}건은 현재 ${taxLabel} 신고대상 수임처와 일치하지 않습니다.`}
+          {incomeStats.diff > 0 && (
+            <p className={`${portalAlertInfo} mb-4 border-rose-200 bg-rose-50 text-rose-800`}>
+              신고대상 {incomeStats.target}건 중 {incomeStats.diff}건이 아직 미접수입니다.
             </p>
           )}
           <IncomeTypeFilingSection
@@ -1535,8 +1523,7 @@ function FilingCheckPageInner() {
             onEmployedFilingMonth={setEmployedFilingMonth}
             onSaved={showIncomeSavedTick}
           />
-          {incomeStats.target > 0 &&
-            (incomeStats.received > 0 || incomeUploadMatched > 0) && (
+          {incomeStats.target > 0 && incomeStats.received > 0 && (
             <FilingBottomStats
               target={incomeStats.target}
               received={incomeStats.received}

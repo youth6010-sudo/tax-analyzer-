@@ -531,8 +531,31 @@ function mergeIntakeDataPatch(
 ): Record<string, unknown> {
   const merged = { ...(existing ?? {}) };
   for (const [k, v] of Object.entries(patch)) {
-    if (v === null || v === undefined || v === '') delete merged[k];
-    else merged[k] = v;
+    if (v === null || v === undefined || v === '') {
+      delete merged[k];
+      continue;
+    }
+    if (k === 'noticeData' && typeof v === 'object' && !Array.isArray(v)) {
+      const prev =
+        merged.noticeData && typeof merged.noticeData === 'object' && !Array.isArray(merged.noticeData)
+          ? (merged.noticeData as Record<string, unknown>)
+          : {};
+      merged.noticeData = { ...prev, ...(v as Record<string, unknown>) };
+      continue;
+    }
+    if (k === 'notes' && typeof v === 'object' && !Array.isArray(v)) {
+      const prev =
+        merged.notes && typeof merged.notes === 'object' && !Array.isArray(merged.notes)
+          ? (merged.notes as Record<string, unknown>)
+          : {};
+      const nextNotes = { ...prev, ...(v as Record<string, unknown>) };
+      for (const [nk, nv] of Object.entries(nextNotes)) {
+        if (nv === null || nv === undefined || nv === '') delete nextNotes[nk];
+      }
+      merged.notes = nextNotes;
+      continue;
+    }
+    merged[k] = v;
   }
   return merged;
 }

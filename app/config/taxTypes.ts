@@ -23,6 +23,7 @@ export const TAX_MENU = [
     items: [
       { label: '수임처 관리', href: '/clients' },
       { label: '수임처 목록', href: '/clients/directory' },
+      { label: '검토표', href: '/clients/review-sheet' },
       { label: '유입', href: '/clients/intake' },
       { label: '유출', href: '/clients/churn' },
       { label: '폐업·휴업 점검', href: '/clients/nts-monitor' },
@@ -58,6 +59,7 @@ export const TAX_MENU = [
     items: [
       { label: '데이터 백업', href: '/admin/backup' },
       { label: '블루홀 미연결', href: '/admin/bluehole-unlinked' },
+      { label: '검토표 연결', href: '/admin/review-client-links', charlieOnly: true },
       { label: '유입·유출 업로드', href: '/admin/data-import' },
       { label: '수임처 데이터 초기화', href: '/admin/data-reset' },
     ],

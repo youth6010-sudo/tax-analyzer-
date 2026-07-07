@@ -110,24 +110,37 @@ export async function upsertSimplePayrollFilings(
   }
 }
 
-/** 엑셀 접수 — 사업자번호 매칭 시 해당 소득유형 filed=true (laborContentReport 제외) */
+/** 엑셀 접수 — 접수목록 소득유형 ∩ 활성 유형만 filed=true (laborContentReport 제외) */
+export type MatchSimplePayrollResult = {
+  checkedCells: number;
+  skippedInactive: number;
+};
+
 export async function matchSimplePayrollFromExcel(
   periodKey: string,
-  bizNos: string[],
+  filingTypes: Map<string, Set<IncomeTypeKey>>,
   clientBizMap: Map<string, string>,
   clientIncomeTypes: Map<string, IncomeTypeKey[]>,
   updatedBy: string,
-): Promise<number> {
-  const bizSet = new Set(bizNos.map(b => b.replace(/\D/g, '')));
-  let matched = 0;
+): Promise<MatchSimplePayrollResult> {
+  let checkedCells = 0;
+  let skippedInactive = 0;
   const rows: SimplePayrollRow[] = [];
 
   for (const [clientId, biz] of clientBizMap) {
     const norm = biz.replace(/\D/g, '');
-    if (norm.length !== 10 || !bizSet.has(norm)) continue;
-    const types = clientIncomeTypes.get(clientId) ?? [];
-    for (const incomeType of types) {
+    if (norm.length !== 10) continue;
+    const receiptTypes = filingTypes.get(norm);
+    if (!receiptTypes || receiptTypes.size === 0) continue;
+
+    const activeTypes = new Set(clientIncomeTypes.get(clientId) ?? []);
+
+    for (const incomeType of receiptTypes) {
       if (incomeType === 'laborContentReport') continue;
+      if (!activeTypes.has(incomeType)) {
+        skippedInactive += 1;
+        continue;
+      }
       rows.push({
         periodKey,
         clientId,
@@ -137,12 +150,12 @@ export async function matchSimplePayrollFromExcel(
         acceptanceMethod: '',
         notes: '',
       });
-      matched += 1;
+      checkedCells += 1;
     }
   }
 
   if (rows.length > 0) await upsertSimplePayrollFilings(periodKey, rows, updatedBy);
-  return matched;
+  return { checkedCells, skippedInactive };
 }
 
 /** 접수(체크·근로내용확인 입력)만 초기화 — 소득유형 활성·제외는 유지 */

@@ -42,6 +42,12 @@ import {
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import { writeClientSort, MANAGER_CLIENT_ORDER_STORAGE_KEY } from '@/app/utils/clientListPrefs';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import {
+  readCorpFeeClientCache,
+  writeCorpFeeClientCache,
+} from '@/app/utils/corpFeeClientCache';
+import type { CorpFeeEntry } from '@/lib/review/corpFeeTypes';
+import { buildCorpRevenueByClientId } from '@/lib/review/corpFeeTypes';
 
 export default function ClientsPage() {
   return (
@@ -63,11 +69,23 @@ function ClientsPageContent() {
   const defaultMgrApplied = useRef(false);
 
   const cachedClients = usePortalClients();
-  const [fetchedClients, setFetchedClients] = useState<ClientRecord[] | null>(null);
+  const [fetchedClients, setFetchedClients] = useState<ClientRecord[] | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const portal = getPortalClients();
+    return portal.length > 0 ? portal : null;
+  });
   const [fetching, setFetching] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [canEditAll, setCanEditAll] = useState(false);
   const [feeRefreshKeys, setFeeRefreshKeys] = useState<Record<string, number>>({});
+  const [corpFeeByKey, setCorpFeeByKey] = useState<Record<string, CorpFeeEntry>>(() => {
+    const cached = readCorpFeeClientCache();
+    return cached?.byKey ?? {};
+  });
+  const [primaryLinksByKey, setPrimaryLinksByKey] = useState<Record<string, string>>(() => {
+    const cached = readCorpFeeClientCache();
+    return cached?.primaryLinksByKey ?? {};
+  });
   const [clientOrderVersion, setClientOrderVersion] = useState(0);
   // 담당자 표시 순서(사용자가 자유롭게 변경 · 브라우저에 저장)
   const [managerOrder, setManagerOrder] = useLocalStorage<string[]>(
@@ -114,6 +132,27 @@ function ClientsPageContent() {
       .catch(() => {});
   }, []);
 
+  const loadCorpFeeIndex = useCallback(async () => {
+    const cached = readCorpFeeClientCache();
+    if (cached) {
+      setCorpFeeByKey(cached.byKey);
+      setPrimaryLinksByKey(cached.primaryLinksByKey);
+      return;
+    }
+    try {
+      const res = await fetch('/api/review/corp-fee-index', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const byKey = (data.byKey ?? {}) as Record<string, CorpFeeEntry>;
+      const primary = (data.primaryLinksByKey ?? {}) as Record<string, string>;
+      setCorpFeeByKey(byKey);
+      setPrimaryLinksByKey(primary);
+      writeCorpFeeClientCache(byKey, primary);
+    } catch {
+      /* 검토표 미배포 시 무시 */
+    }
+  }, []);
+
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (state.mineOnly) params.set('mine', '1');
@@ -155,19 +194,8 @@ function ClientsPageContent() {
 
   useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    window.addEventListener('focus', onVisible);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', onVisible);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [load]);
+    void loadCorpFeeIndex();
+  }, [load, loadCorpFeeIndex]);
 
   const handleFeeImported = useCallback(
     (matched: FeeImportMatch[]) => {
@@ -442,6 +470,10 @@ function ClientsPageContent() {
     const mine = new Set(getManagerMatchNames(currentUserName));
     return filtered.filter(c => mine.has((c.manager ?? '').trim()));
   }, [filtered, canEditAll, currentUserName]);
+  const corpRevenueByClientId = useMemo(
+    () => buildCorpRevenueByClientId(clients, corpFeeByKey, primaryLinksByKey),
+    [clients, corpFeeByKey, primaryLinksByKey],
+  );
   const returnTo = buildClientsListUrl({ ...state, scroll: 0 });
 
   const compactChip = (active: boolean, self?: boolean) =>
@@ -588,7 +620,7 @@ function ClientsPageContent() {
 
       <div className="grid gap-2 sm:grid-cols-2">
         <FeeInvoiceImportButton allowed={canEditAll} onImported={handleFeeImported} />
-        <FeeExportButton clients={feeExportClients} />
+        <FeeExportButton clients={feeExportClients} corpRevenueByClientId={corpRevenueByClientId} />
       </div>
 
       {loading && clients.length === 0 ? (
@@ -607,6 +639,7 @@ function ClientsPageContent() {
             isAdmin={canEditAll}
             onFeeChange={handleFeeChange}
           feeRefreshKeys={feeRefreshKeys}
+          corpRevenueByClientId={corpRevenueByClientId}
           orderVersion={clientOrderVersion}
           onClientOrderChange={() => setClientOrderVersion(v => v + 1)}
         />

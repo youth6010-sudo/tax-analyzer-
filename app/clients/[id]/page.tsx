@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import ClientDetailPage from '../../components/clients/ClientDetailPage';
 import ClientRelatedLinks from '../../components/ClientRelatedLinks';
@@ -10,23 +9,6 @@ import { getClientRelatedCounts } from '@/lib/workbookDb';
 import { listPersonalChecklistForClient } from '@/lib/personalChecklist';
 
 export const dynamic = 'force-dynamic';
-
-async function RelatedLinksAsync({ clientId, companyName }: { clientId: string; companyName: string }) {
-  const related = await getClientRelatedCounts(clientId, companyName);
-  let checklistItems: Awaited<ReturnType<typeof listPersonalChecklistForClient>> = [];
-  try {
-    checklistItems = await listPersonalChecklistForClient(clientId, { includeCompleted: false });
-  } catch (e) {
-    console.error('[client-detail] checklist load failed', e);
-  }
-  return (
-    <ClientRelatedLinks
-      clientId={clientId}
-      initial={related}
-      checklistItems={checklistItems}
-    />
-  );
-}
 
 export default async function ClientDetailRoute({
   params,
@@ -40,15 +22,25 @@ export default async function ClientDetailRoute({
 
   const canEdit = canEditClient(user, client);
 
+  const [related, checklistItems] = await Promise.all([
+    getClientRelatedCounts(client.id, client.companyName),
+    listPersonalChecklistForClient(client.id, { includeCompleted: false }).catch(e => {
+      console.error('[client-detail] checklist load failed', e);
+      return [] as Awaited<ReturnType<typeof listPersonalChecklistForClient>>;
+    }),
+  ]);
+
   return (
     <PortalPageShell className="!py-4">
       <ClientDetailPage
         client={client}
         canEdit={canEdit}
         relatedSlot={
-          <Suspense fallback={null}>
-            <RelatedLinksAsync clientId={client.id} companyName={client.companyName} />
-          </Suspense>
+          <ClientRelatedLinks
+            clientId={client.id}
+            initial={related}
+            checklistItems={checklistItems}
+          />
         }
       />
     </PortalPageShell>

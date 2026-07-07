@@ -53,6 +53,11 @@ export function isAlwaysAdminModeLogin(loginId: string): boolean {
   return loginId.trim().toLowerCase() === 'charlie';
 }
 
+/** 검토표 연결 관리 등 찰리 전용 기능 */
+export function isCharlieLogin(user: AccessUser): boolean {
+  return normalizeLoginId(user) === 'charlie';
+}
+
 /** @deprecated — isDataViewer 와 동일 */
 export function isMasterUser(user: AccessUser): boolean {
   return isDataViewer(user);

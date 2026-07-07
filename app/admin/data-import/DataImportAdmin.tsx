@@ -118,6 +118,35 @@ export default function DataImportAdmin() {
           청년들 ID.xlsx의 <b>유입관리·유입프로세스·유출</b> 시트를 업로드해 미리 확인한 뒤 반영합니다. 수임처 명단(roster)은 변경되지 않으며, 동일 항목은 중복 없이 갱신(upsert)됩니다.
         </p>
 
+        <article className={`${portalCard} mt-4 p-5`}>
+          <h2 className="text-sm font-bold text-slate-800">업로드 대상과 반영 항목</h2>
+          <div className="mt-3 space-y-3 text-sm text-slate-600">
+            <div>
+              <p className="font-semibold text-slate-700">유입관리</p>
+              <p>
+                문의일자, 업체명, 전화번호, 유입채널, 초회상담자, 문의내용, 블루홀케이스, 특이사항,
+                제안금액, 업종, 사업자번호, 대표자, 대표 연락처, 관리자, 관리자 연락처, 주소,
+                이메일, 계약유무
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">유입프로세스</p>
+              <p>
+                업체명, 수수료 발생일, 월 수수료, 유입 경로와 체크리스트 10개 항목을 반영합니다.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">유출</p>
+              <p>업체명, 계약 종료일, 수수료, 자료 정리, 유형, 전조증상, 유출 사유, 담당자를 반영합니다.</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-500">
+              시트명은 반드시 <b>유입관리</b>, <b>유입프로세스</b>, <b>유출</b>이어야 합니다. 날짜는
+              가능하면 <b>YYYY-MM-DD</b> 형식으로 맞춰 주세요. 업체명 표기가 시트마다 다르면
+              자동 연결이 실패할 수 있습니다.
+            </div>
+          </div>
+        </article>
+
         <article className={`${portalCard} mt-6 p-5`}>
           <input
             ref={inputRef}

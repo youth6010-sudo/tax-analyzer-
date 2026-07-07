@@ -171,7 +171,7 @@ export default function HomeTasksPanel() {
       void refresh();
     }, 400);
     const onFocus = () => {
-      void prefetchPortal(true);
+      void prefetchPortal();
       void refresh();
     };
     window.addEventListener('focus', onFocus);

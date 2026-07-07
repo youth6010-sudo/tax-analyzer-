@@ -1,5 +1,5 @@
 import type { ClientRecord } from '@/app/types/client';
-import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
+import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS, SIMPLE_PAYROLL_COLUMNS } from '@/app/types/incomeTypes';
 import type { ClientIncomeTypes, IncomeTypeKey } from '@/app/types/incomeTypes';
 import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
@@ -219,4 +219,48 @@ export function buildYearEndGrid(
       };
     }),
   );
+}
+
+function isCellReceivedForStats(
+  cell: IncomeGridCell | undefined,
+  key: string,
+): boolean {
+  if (!cell?.active) return false;
+  if (key === 'laborContentReport') {
+    return (
+      cell.filed ||
+      !!(cell.acceptanceDate?.trim() || cell.acceptanceMethod?.trim())
+    );
+  }
+  return cell.filed;
+}
+
+/** 신고대상·접수완료 건수 — 열(체크 칸) 단위 합산 */
+export function computeIncomeGridStats(
+  grid: IncomeTypeGridRow[],
+  mode: 'simplePayroll' | 'yearEnd',
+  manager?: string,
+): { target: number; received: number; diff: number } {
+  const rows =
+    manager && manager !== '전체'
+      ? grid.filter(r => r.manager === manager)
+      : grid;
+
+  const columnKeys =
+    mode === 'simplePayroll'
+      ? SIMPLE_PAYROLL_COLUMNS.map(c => c.key)
+      : YEAR_END_COLUMNS.map(c => c.key);
+
+  let target = 0;
+  let received = 0;
+  for (const row of rows) {
+    if (row.excludeReason != null && row.excludeReason !== undefined) continue;
+    for (const key of columnKeys) {
+      const cell = row.cells[key];
+      if (!cell?.active) continue;
+      target += 1;
+      if (isCellReceivedForStats(cell, key)) received += 1;
+    }
+  }
+  return { target, received, diff: target - received };
 }

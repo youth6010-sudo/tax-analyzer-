@@ -78,7 +78,7 @@ export default function NoticeClientPicker({ value, onSelect }: Props) {
       <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-800">{value.companyName}</p>
-          <p className="text-[11px] text-slate-500">수임처 연결 · 세목별 자동 저장</p>
+          <p className="text-[11px] text-slate-500">수임처 연결 · 세목별 입력 자동 저장</p>
         </div>
         <button
           type="button"

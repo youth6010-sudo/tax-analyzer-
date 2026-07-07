@@ -42,6 +42,7 @@ export default function ClientFeeCell({
   clientId,
   value,
   intakeData,
+  corpRevenueThisYear,
   onSave,
   className = '',
   readOnly = false,
@@ -50,6 +51,8 @@ export default function ClientFeeCell({
   clientId: string;
   value: number | null;
   intakeData?: Record<string, unknown>;
+  /** 법인세 검토표 올해 매출액 (열 9) */
+  corpRevenueThisYear?: number | null;
   onSave?: (id: string, payload: FeeBreakdownSave) => void;
   className?: string;
   readOnly?: boolean;
@@ -123,6 +126,17 @@ export default function ClientFeeCell({
           <p className="text-[11px] text-slate-500 mb-4">
             기장수수료·기타수수료는 공급가액×12, 그 외 품목은 공급가액 그대로 합산합니다.
           </p>
+
+          {!hidden && (
+            <div className="mb-4 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2.5 text-sm">
+              <p className="text-[11px] font-medium text-sky-800 mb-0.5">올해 매출액 (법인세 검토표)</p>
+              <p className="text-base font-bold tabular-nums text-slate-900">
+                {corpRevenueThisYear != null && Number.isFinite(corpRevenueThisYear)
+                  ? formatAmount(corpRevenueThisYear)
+                  : '검토표에 없음'}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             {drafts.map((row, idx) => (
