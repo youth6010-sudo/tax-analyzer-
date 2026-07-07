@@ -1,18 +1,17 @@
 import type { ClientRecord } from '@/app/types/client';
 import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS, SIMPLE_PAYROLL_COLUMNS } from '@/app/types/incomeTypes';
-import type { ClientIncomeTypes, IncomeTypeKey } from '@/app/types/incomeTypes';
-import { filingTargets, normalizeBizNo } from '@/app/utils/filingCheck';
+import type { ClientIncomeTypes, IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
+import { filingTargets, simplePayrollTargetsForPeriod } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
-import { readIncomeTypes, readYearEndTypes, yearEndTypeTargets, isLaborContentReportActive } from '@/lib/incomeTypes';
+import { readIncomeTypes, readYearEndTypes, isLaborContentReportActive } from '@/lib/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
+  isEmployedColumnApplicable,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
-import type { YearEndIncomeKey } from '@/app/types/incomeTypes';
 
-export const AUTO_NO_WH = '원천세 신고내역 없음';
 
 export type IncomeGridCell = {
   active: boolean;
@@ -30,6 +29,8 @@ export type IncomeTypeGridRow = {
   douzoneCode: string;
   manager: string;
   excludeReason: string | null;
+  /** 원천세 세션에서 가져온 신고 특이사항 */
+  rowNote?: string;
   cells: Record<string, IncomeGridCell>;
 };
 
@@ -74,6 +75,7 @@ export function buildSimplePayrollGrid(
   periodKey: string,
   filed: SimplePayrollFilingRecord[],
   excluded: Record<string, string> = {},
+  rowNotes: Record<string, string> = {},
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
@@ -82,8 +84,9 @@ export function buildSimplePayrollGrid(
   );
 
   const grid = sortIncomeGridRows(
-    filingTargets(clients, 'simplePayroll').map(c => {
+    simplePayrollTargetsForPeriod(clients, meta.month).map(c => {
       const types = readIncomeTypes(c.intakeData);
+      const intakeData = c.intakeData ?? {};
       const cells: Record<string, IncomeGridCell> = {};
 
       for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
@@ -93,7 +96,7 @@ export function buildSimplePayrollGrid(
         const storageKey = isEmployed && employedPeriodKey ? employedPeriodKey : monthlyPeriodKey;
         const saved = filedMap.get(`${storageKey}|${c.id}|${key}`);
         const typeOn = types[key as IncomeTypeKey];
-        const applicable = isEmployed ? employedFilingMonth : true;
+        const applicable = isEmployed ? isEmployedColumnApplicable(meta.month, intakeData) : true;
         cells[key] = {
           applicable,
           active: typeOn && applicable,
@@ -120,6 +123,7 @@ export function buildSimplePayrollGrid(
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
         excludeReason: excluded[c.id] ?? null,
+        rowNote: rowNotes[c.id] ?? '',
         cells,
       };
     }),
@@ -132,7 +136,8 @@ export function buildSimplePayrollGrid(
 export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
   row: T,
   types: ClientIncomeTypes,
-  employedFilingMonth: boolean,
+  month: number,
+  intakeData: Record<string, unknown> = {},
 ): T {
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
 
@@ -140,7 +145,7 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
     if (col.kind === 'laborDate' || col.kind === 'laborMethod') continue;
     const key = col.key;
     const isEmployed = key === 'employed';
-    const applicable = isEmployed ? employedFilingMonth : true;
+    const applicable = isEmployed ? isEmployedColumnApplicable(month, intakeData) : true;
     const typeOn = types[key as IncomeTypeKey];
     const prev = cells[key] ?? { active: false, filed: false };
     cells[key] = {
@@ -163,14 +168,26 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
   return { ...row, cells };
 }
 
+/** 연말정산 열 활성 — 근로·사업·기타는 간이지급(incomeTypes), 퇴직·이자배당은 yearEndTypes */
+export function yearEndColumnActive(
+  key: YearEndIncomeKey,
+  incomeTypes: ClientIncomeTypes,
+  yearEndTypes: YearEndClientTypes,
+): boolean {
+  if (key === 'employed' || key === 'bizIncome' || key === 'otherTax') {
+    return Boolean(incomeTypes[key]);
+  }
+  return Boolean(yearEndTypes[key]);
+}
+
 export function patchYearEndRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
   row: T,
-  types: ReturnType<typeof yearEndTypeTargets>,
+  incomeTypes: ClientIncomeTypes,
+  yearEndTypes: YearEndClientTypes,
 ): T {
-  const yearEnd = yearEndTypeTargets(types);
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
   for (const col of YEAR_END_COLUMNS) {
-    const active = yearEnd[col.key as YearEndIncomeKey];
+    const active = yearEndColumnActive(col.key, incomeTypes, yearEndTypes);
     const prev = cells[col.key] ?? { active: false, filed: false };
     cells[col.key] = { ...prev, active, ...(active ? {} : { filed: false }) };
   }
@@ -182,24 +199,18 @@ export function buildYearEndGrid(
   year: number,
   filed: YearEndFilingRecord[],
   excluded: Record<string, string> = {},
-  withholdingHistory?: { ids: Set<string>; bizNos: Set<string> },
+  rowNotes: Record<string, string> = {},
 ): IncomeTypeGridRow[] {
   const filedMap = new Map(filed.map(r => [`${r.clientId}|${r.incomeType}`, r]));
 
   return sortIncomeGridRows(
     filingTargets(clients, 'yearEnd').map(c => {
-      const biz = normalizeBizNo(c.businessNo);
-      const hasWithholdingHistory =
-        !withholdingHistory ||
-        withholdingHistory.ids.has(c.id) ||
-        (biz !== '' && withholdingHistory.bizNos.has(biz));
-      const types = yearEndTypeTargets(readYearEndTypes(c.intakeData));
-      const excludeReason =
-        excluded[c.id] ?? (withholdingHistory && !hasWithholdingHistory ? AUTO_NO_WH : null);
+      const incomeTypes = readIncomeTypes(c.intakeData);
+      const yearEndTypes = readYearEndTypes(c.intakeData);
       const cells: Record<string, IncomeGridCell> = {};
 
       for (const col of YEAR_END_COLUMNS) {
-        const active = types[col.key as YearEndIncomeKey];
+        const active = yearEndColumnActive(col.key, incomeTypes, yearEndTypes);
         const savedRow = filedMap.get(`${c.id}|${col.key}`);
         cells[col.key] = {
           active,
@@ -214,7 +225,8 @@ export function buildYearEndGrid(
         businessNo: c.businessNo,
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
-        excludeReason,
+        excludeReason: excluded[c.id] ?? null,
+        rowNote: rowNotes[c.id] ?? '',
         cells,
       };
     }),

@@ -1,0 +1,467 @@
+/* 공문양식(PDF·엑셀) 전용 + 준비서류 화면 확대 */
+
+
+
+.official-letter-editor.layout-formal {
+
+  padding: 8px 0 24px;
+
+}
+
+
+
+.official-letter-editor.layout-formal .a4-page::before,
+.official-letter-editor.layout-formal .a4-page::after {
+  display: none;
+}
+
+
+
+.official-letter-editor.layout-formal .a4-page {
+
+  width: min(100%, 794px);
+
+  min-height: 1123px;
+
+  height: auto;
+
+  padding: 38px 24px 32px 40px;
+
+  font-size: 14px;
+
+  line-height: 1.65;
+
+  box-sizing: border-box;
+
+  display: flex;
+
+  flex-direction: column;
+
+}
+
+
+
+.official-letter-editor .formal-doc {
+
+  color: #1e293b;
+
+  display: flex;
+
+  flex-direction: column;
+
+  min-height: 100%;
+
+  height: 100%;
+
+  flex: 1;
+
+}
+
+
+
+.official-letter-editor .formal-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.official-letter-editor .formal-header-logo {
+  width: 218px;
+  max-height: 63px;
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
+.official-letter-editor .formal-brand {
+
+  text-align: right;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  color: #64748b;
+
+  margin-top: 8px;
+
+  flex: 1;
+
+}
+
+
+
+.official-letter-editor .formal-address {
+
+  font-size: 14px;
+
+  font-weight: 600;
+
+  margin-bottom: 6px;
+
+}
+
+
+
+.official-letter-editor .formal-contact {
+
+  font-size: 14px;
+
+  margin-bottom: 0;
+
+  padding-bottom: 10px;
+
+  border-bottom: 1px solid #000;
+
+}
+
+
+
+.official-letter-editor .formal-contact-gap {
+
+  display: inline-block;
+
+  width: 28px;
+
+}
+
+
+
+.official-letter-editor .formal-meta-block {
+
+  padding-top: 18px;
+
+  padding-bottom: 14px;
+
+  margin-bottom: 20px;
+
+  border-bottom: 1px solid #000;
+
+}
+
+
+
+.official-letter-editor .formal-meta-row {
+
+  margin: 0 0 6px;
+
+  font-size: 14px;
+
+  line-height: 1.6;
+
+}
+
+
+
+.official-letter-editor .formal-meta-label {
+
+  font-weight: 600;
+
+}
+
+
+
+.official-letter-editor .formal-meta-colon {
+
+  font-weight: 600;
+
+}
+
+
+
+.official-letter-editor .formal-meta-value {
+
+  font-weight: 400;
+
+}
+
+
+
+.official-letter-editor .formal-subject-row {
+
+  margin-top: 10px;
+
+  margin-bottom: 0;
+
+}
+
+
+
+.official-letter-editor .formal-subject-text {
+
+  font-weight: 700;
+
+}
+
+
+
+.official-letter-editor .formal-line {
+
+  margin: 0;
+
+  font-size: 15px;
+
+  line-height: 1.75;
+
+}
+
+
+
+.official-letter-editor .formal-blank {
+
+  min-height: 0.75em;
+
+}
+
+
+
+.official-letter-editor .formal-period {
+
+  font-weight: 700;
+
+}
+
+
+
+.official-letter-editor .formal-body {
+  margin: 8px 0 0;
+}
+
+.official-letter-editor .formal-body .formal-section-mark {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.official-letter-editor .formal-body .formal-items {
+  margin: 0 0 4px;
+}
+
+.official-letter-editor .formal-body .formal-item-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.official-letter-editor .formal-body .formal-li-num {
+  display: inline-block;
+  min-width: 24px;
+  font-weight: 700;
+}
+
+.official-letter-editor .formal-embedded-prep {
+
+  margin: 8px 0 20px;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .content-grid {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 12px;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .section-box {
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 8px;
+
+  overflow: hidden;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .section-header {
+
+  background: #f8fafc;
+
+  padding: 9px 16px;
+
+  border-bottom: 2px solid #002d62;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .section-header h3 {
+
+  margin: 0;
+
+  font-size: 15px;
+
+  color: #002d62;
+
+  font-weight: 700;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep table {
+
+  width: 100%;
+
+  border-collapse: collapse;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep td {
+
+  padding: 8px 14px;
+
+  font-size: 14px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  vertical-align: middle;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .item-name {
+
+  font-weight: 700;
+
+  color: #334155;
+
+  width: 34%;
+
+}
+
+
+
+.official-letter-editor .formal-embedded-prep .item-desc {
+
+  color: #64748b;
+
+}
+
+
+
+.official-letter-editor .formal-footer {
+
+  margin-top: auto;
+
+  padding-top: 24px;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+}
+
+
+
+.official-letter-editor .formal-footer-logo {
+
+  width: 157px;
+
+  max-height: 45px;
+
+  object-fit: contain;
+
+}
+
+
+
+.official-letter-editor.layout-prep .a4-page {
+  width: min(100%, 794px);
+  min-height: 1123px;
+  height: auto;
+  padding: 34px 38px 28px;
+}
+
+
+
+.official-letter-editor.layout-prep .main-title {
+  font-size: 34px;
+}
+
+
+
+.official-letter-editor.layout-prep .guide-msg {
+  font-size: 14px;
+  padding: 9px 12px;
+  width: 100%;
+  display: block;
+}
+
+
+
+.official-letter-editor.layout-prep .section-header h3 {
+  font-size: 16px;
+}
+
+
+
+.official-letter-editor.layout-prep td {
+  font-size: 13.5px;
+  padding: 8px 12px;
+  line-height: 1.45;
+}
+
+
+
+.official-letter-editor.layout-prep .num-badge {
+
+  width: 22px;
+
+  height: 22px;
+
+  line-height: 22px;
+
+  font-size: 10px;
+
+}
+
+
+
+.official-letter-editor.layout-prep .contact-item {
+  font-size: 12.5px;
+}
+
+
+
+.official-letter-editor.layout-prep .brand-logo {
+  width: 220px;
+  max-height: 64px;
+}
+
+
+
+.official-letter-editor.layout-prep .content-grid {
+  flex: 1;
+  gap: 12px;
+}
+
+
+
+.official-letter-editor.layout-prep footer {
+  margin-top: auto;
+  padding-top: 18px;
+}
+

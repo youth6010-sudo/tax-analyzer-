@@ -161,17 +161,25 @@ export const DEFAULT_PAYMENT_NOTICE_TEMPLATE = `<div style="line-height:1.8;">
 {안내본문}
 </div>`;
 
+import type { OfficialLetterKind } from './officialLetter';
+
 /** 담당자(로그인 계정)별 서식 저장 구조 — users.notice_template JSON */
+export type { OfficialLetterKind };
+
 export type NoticeTemplateStore = {
-  version: 2;
+  version: 3;
   templates: TemplateMap;
   sources: Partial<Record<TemplateScenario, TemplateSource>>;
   vatReportTemplate?: string;
   vatReportSource?: TemplateSource;
   paymentNoticeTemplate?: string;
   paymentNoticeSource?: TemplateSource;
+  officialLetters?: Partial<Record<OfficialLetterKind, string>>;
+  officialLetterSources?: Partial<Record<OfficialLetterKind, TemplateSource>>;
+  officialFormTemplates?: Partial<Record<string, string>>;
+  officialFormSources?: Partial<Record<string, TemplateSource>>;
 };
 
 export function emptyNoticeTemplateStore(): NoticeTemplateStore {
-  return { version: 2, templates: {}, sources: {} };
+  return { version: 3, templates: {}, sources: {} };
 }

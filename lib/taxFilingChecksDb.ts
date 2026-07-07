@@ -227,6 +227,31 @@ export async function getExcludedClientIds(
   return session?.excluded ?? {};
 }
 
+/** 원천세 세션 특이사항 — 간이지급·연말정산 표시용 */
+export async function getWithholdingRowNotesForPeriod(
+  manager: string,
+  periodKey: string,
+): Promise<Record<string, string>> {
+  const session = await getFilingCheckSession(manager, 'withholding', periodKey);
+  return session?.rowNotes ?? {};
+}
+
+/** 해당 연도 원천세 세션 특이사항 합집합 (최근 월 우선) */
+export async function getWithholdingRowNotesForYear(
+  manager: string,
+  year: number,
+): Promise<Record<string, string>> {
+  const merged: Record<string, string> = {};
+  for (let m = 1; m <= 12; m += 1) {
+    const pk = `${year}-${String(m).padStart(2, '0')}`;
+    const notes = await getWithholdingRowNotesForPeriod(manager, pk);
+    for (const [id, note] of Object.entries(notes)) {
+      if (note.trim()) merged[id] = note;
+    }
+  }
+  return merged;
+}
+
 /** 간이지급 반기 — 해당 반기 원천세 세션의 제외 업체 합집합 */
 export async function getWithholdingExclusionsForHalf(
   manager: string,

@@ -28,6 +28,11 @@ export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle;
 export const VAT_PHASES = ['1기 예정', '1기 확정', '2기 예정', '2기 확정'] as const;
 export type VatPhase = (typeof VAT_PHASES)[number];
 
+/** 부가세 예정 기간 — 예정신고·예정고지 구분 대상 */
+export type VatObligation = '예정신고' | '예정고지' | '확정신고';
+
+export const VAT_OBLIGATIONS: VatObligation[] = ['예정신고', '예정고지', '확정신고'];
+
 import { defaultSimplePayrollHalf, currentMonthlyFilingMonth } from '@/lib/periodUtils';
 
 export type FilingPeriod = {
@@ -147,10 +152,113 @@ export function isTaxExemptClient(c: ClientRecord): boolean {
   return k.includes('면세') && !k.includes('과세');
 }
 
+/** 간이과세자 — taxKind·국세청 과세유형 */
+export function isSimplifiedVatClient(c: ClientRecord): boolean {
+  const k = String(c.intakeData?.taxKind ?? '').replace(/\s/g, '');
+  if (/간이/.test(k)) return true;
+  const nts = String(c.intakeData?.ntsTaxType ?? c.intakeData?.taxType ?? '').replace(/\s/g, '');
+  return /간이/.test(nts);
+}
+
+export function isVatProvisionalPhase(phase: VatPhase): boolean {
+  return phase === '1기 예정' || phase === '2기 예정';
+}
+
+export const VAT_PROVISIONAL_PHASES: readonly VatPhase[] = ['1기 예정', '2기 예정'];
+export const VAT_CONFIRMED_PHASES: readonly VatPhase[] = ['1기 확정', '2기 확정'];
+
+export type VatObligationBucket = 'provisional' | 'confirmed';
+
+export function vatObligationBucket(phase: VatPhase): VatObligationBucket {
+  return isVatProvisionalPhase(phase) ? 'provisional' : 'confirmed';
+}
+
+function readVatObligationFromMap(
+  map: Record<string, string>,
+  bucket: VatObligationBucket,
+): VatObligation | null {
+  const bucketVal = String(map[bucket] ?? '').trim();
+  if (bucket === 'provisional') {
+    if (bucketVal === '예정고지' || bucketVal === '예정신고') return bucketVal;
+    for (const ph of VAT_PROVISIONAL_PHASES) {
+      const v = String(map[ph] ?? '').trim();
+      if (v === '예정고지' || v === '예정신고') return v;
+    }
+    return null;
+  }
+  if (bucketVal === '확정신고') return bucketVal;
+  for (const ph of VAT_CONFIRMED_PHASES) {
+    const v = String(map[ph] ?? '').trim();
+    if (v === '확정신고') return v;
+  }
+  return null;
+}
+
+/** 해당 부가세 기간에 신고·고지 대상인지 (간이=2기 확정만, 법인=4회, 개인 일반=예정+반기 확정) */
+export function clientAppliesToVatPhase(c: ClientRecord, phase: VatPhase): boolean {
+  if (isSimplifiedVatClient(c)) return phase === '2기 확정';
+  if (isCorporateClient(c)) return true;
+  // 개인 일반과세 — 예정·반기 확정
+  return (
+    phase === '1기 예정' ||
+    phase === '2기 예정' ||
+    phase === '1기 확정' ||
+    phase === '2기 확정'
+  );
+}
+
+/** 부가세 신고·고지 구분 — 예정/확정 버킷별 저장값 승계 (1기→2기) */
+export function readVatObligation(c: ClientRecord, phase: VatPhase): VatObligation {
+  const bucket = vatObligationBucket(phase);
+  const byPhase = c.intakeData?.vatObligationByPhase;
+  if (byPhase && typeof byPhase === 'object' && !Array.isArray(byPhase)) {
+    const found = readVatObligationFromMap(byPhase as Record<string, string>, bucket);
+    if (found) return found;
+  }
+
+  if (bucket === 'confirmed') return '확정신고';
+
+  const raw = String(c.intakeData?.vatObligation ?? '').trim();
+  if (raw === '예정고지' || raw === '예정신고') return raw;
+
+  return isCorporateClient(c) ? '예정신고' : '예정고지';
+}
+
+/** 담당자별 신고·예정고지 대상 수 (예정 기간 전용) */
+export function vatObligationManagerCounts(
+  clients: ClientRecord[],
+  phase: VatPhase,
+): { filing: Map<string, number>; notice: Map<string, number> } {
+  const filing = new Map<string, number>();
+  const notice = new Map<string, number>();
+  for (const c of clients) {
+    const obligation = readVatObligation(c, phase);
+    const k = c.manager?.trim() || '미분류';
+    if (isVatFilingObligation(obligation)) {
+      filing.set(k, (filing.get(k) ?? 0) + 1);
+    } else if (isVatNoticeObligation(obligation)) {
+      notice.set(k, (notice.get(k) ?? 0) + 1);
+    }
+  }
+  return { filing, notice };
+}
+
+export function isVatFilingObligation(obligation: VatObligation): boolean {
+  return obligation === '예정신고' || obligation === '확정신고';
+}
+
+export function isVatNoticeObligation(obligation: VatObligation): boolean {
+  return obligation === '예정고지';
+}
+
 // 법인 면세 — 부가세 기간에 계산서합계표만 제출(부가세 목록에 '합계표제출'로 표시)
 export function isVatSummaryOnlyClient(c: ClientRecord): boolean {
   return isCorporateClient(c) && isTaxExemptClient(c);
 }
+
+export type FilingTargetOptions = {
+  vatPhase?: VatPhase;
+};
 
 // 세목별 최초 신고대상 산출
 // 공통: 미사용 대분류 제외, 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
@@ -158,7 +266,11 @@ export function isVatSummaryOnlyClient(c: ClientRecord): boolean {
 // 부가세: 비사업자·(개인)면세 제외 — 단 법인 면세는 합계표 제출 위해 포함
 // 면세(사업장현황): 개인 면세사업자
 // 법인세: 법인 / 종소세: 개인(법인 아님) — 신고대리·비사업자 개인형은 코드 있을 때 포함
-export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): ClientRecord[] {
+export function filingTargets(
+  clients: ClientRecord[],
+  taxId: FilingTaxId,
+  options?: FilingTargetOptions,
+): ClientRecord[] {
   const active = clients.filter(c => getClientCategory(c) !== UNUSED_CATEGORY);
 
   if (taxId === 'comprehensive') {
@@ -180,9 +292,14 @@ export function filingTargets(clients: ClientRecord[], taxId: FilingTaxId): Clie
   }
   if (taxId === 'vat') {
     // 과세 + 법인면세(합계표) 포함, 비사업자·개인면세 제외
-    return withBizNo.filter(
+    let list = withBizNo.filter(
       c => !isNonBusinessClient(c) && (!isTaxExemptClient(c) || isCorporateClient(c)),
     );
+    const phase = options?.vatPhase;
+    if (phase) {
+      list = list.filter(c => clientAppliesToVatPhase(c, phase));
+    }
+    return list;
   }
   if (taxId === 'businessStatus') {
     return withBizNo.filter(c => isTaxExemptClient(c) && !isCorporateClient(c));
@@ -204,6 +321,14 @@ export function withholdingTargetsForPeriod(
   return filingTargets(clients, 'withholding').filter(c =>
     shouldShowInWithholdingPeriod(c.intakeData ?? {}, month),
   );
+}
+
+/** 간이지급 — 원천세와 동일한 업체·반기·매월 표시 규칙 */
+export function simplePayrollTargetsForPeriod(
+  clients: ClientRecord[],
+  month: number,
+): ClientRecord[] {
+  return withholdingTargetsForPeriod(clients, month);
 }
 
 // 홈택스 접수목록 한 행

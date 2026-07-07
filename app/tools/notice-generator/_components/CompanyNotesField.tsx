@@ -7,7 +7,7 @@ import {
   noticeTwoCol,
 } from './noticeUi';
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 type Props = {
   materials: string;

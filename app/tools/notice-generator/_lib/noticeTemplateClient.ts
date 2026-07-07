@@ -24,7 +24,39 @@ function migrateLegacyMap(map: TemplateMap): NoticeTemplateStore {
       sources[k] = 'custom';
     }
   }
-  return { version: 2, templates: map, sources };
+  return { version: 3, templates: map, sources };
+}
+
+function normalizeStore(store: Partial<NoticeTemplateStore>): NoticeTemplateStore {
+  return {
+    version: 3,
+    templates: { ...(store.templates ?? {}) },
+    sources: { ...(store.sources ?? {}) },
+    vatReportTemplate:
+      typeof store.vatReportTemplate === 'string' ? store.vatReportTemplate : undefined,
+    vatReportSource:
+      store.vatReportSource === 'custom' || store.vatReportSource === 'default'
+        ? store.vatReportSource
+        : store.vatReportTemplate?.trim()
+          ? 'custom'
+          : 'default',
+    paymentNoticeTemplate:
+      typeof store.paymentNoticeTemplate === 'string' ? store.paymentNoticeTemplate : undefined,
+    paymentNoticeSource:
+      store.paymentNoticeSource === 'custom' || store.paymentNoticeSource === 'default'
+        ? store.paymentNoticeSource
+        : store.paymentNoticeTemplate?.trim()
+          ? 'custom'
+          : 'default',
+    officialLetters: store.officialLetters ? { ...store.officialLetters } : undefined,
+    officialLetterSources: store.officialLetterSources
+      ? { ...store.officialLetterSources }
+      : undefined,
+    officialFormTemplates: store.officialFormTemplates
+      ? { ...store.officialFormTemplates }
+      : undefined,
+    officialFormSources: store.officialFormSources ? { ...store.officialFormSources } : undefined,
+  };
 }
 
 export function parseNoticeTemplateStore(raw: string): NoticeTemplateStore {
@@ -35,29 +67,12 @@ export function parseNoticeTemplateStore(raw: string): NoticeTemplateStore {
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
 
+      if (obj.version === 3 && typeof obj.templates === 'object' && obj.templates) {
+        return normalizeStore(obj as NoticeTemplateStore);
+      }
+
       if (obj.version === 2 && typeof obj.templates === 'object' && obj.templates) {
-        const store = obj as NoticeTemplateStore;
-        return {
-          version: 2,
-          templates: { ...(store.templates ?? {}) },
-          sources: { ...(store.sources ?? {}) },
-          vatReportTemplate:
-            typeof store.vatReportTemplate === 'string' ? store.vatReportTemplate : undefined,
-          vatReportSource:
-            store.vatReportSource === 'custom' || store.vatReportSource === 'default'
-              ? store.vatReportSource
-              : store.vatReportTemplate?.trim()
-                ? 'custom'
-                : 'default',
-          paymentNoticeTemplate:
-            typeof store.paymentNoticeTemplate === 'string' ? store.paymentNoticeTemplate : undefined,
-          paymentNoticeSource:
-            store.paymentNoticeSource === 'custom' || store.paymentNoticeSource === 'default'
-              ? store.paymentNoticeSource
-              : store.paymentNoticeTemplate?.trim()
-                ? 'custom'
-                : 'default',
-        };
+        return normalizeStore(obj as NoticeTemplateStore);
       }
 
       const hasScenarioKey = SCENARIO_KEYS.some(k => typeof obj[k] === 'string');

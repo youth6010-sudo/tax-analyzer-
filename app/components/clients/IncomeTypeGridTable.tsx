@@ -19,6 +19,7 @@ export type IncomeGridRow = {
   businessNo: string;
   douzoneCode?: string;
   excludeReason?: string | null;
+  rowNote?: string;
   cells: Record<string, GridCellState>;
 };
 
@@ -48,8 +49,28 @@ type Props = {
     clientId: string,
     patch: Partial<{ acceptanceDate: string; acceptanceMethod: string }>,
   ) => void;
+  onSetRowNote?: (clientId: string, note: string) => void;
+  onSetExcludeReason?: (clientId: string, reason: string) => void;
   locked?: boolean;
 };
+
+const COL_WIDTH = {
+  no: 48,
+  code: 80,
+  company: 256,
+  biz: 128,
+  income: 52,
+  labor: 88,
+  noteMin: 120,
+} as const;
+
+function colStyle(px: number) {
+  return { width: px, minWidth: px, maxWidth: px };
+}
+
+function noteColStyle() {
+  return { minWidth: COL_WIDTH.noteMin };
+}
 
 const defaultInputCls =
   'rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400';
@@ -91,7 +112,22 @@ function renderInactiveCell(
   );
 }
 
-function renderNaCell(colKey: string) {
+function renderExcludeBadgeCell(colKey: string, className?: string) {
+  return (
+    <td key={colKey} className={`px-1 py-2 text-center ${className ?? ''}`}>
+      <div className="flex min-h-9 items-center justify-center">
+        <span className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+          원천세 제외
+        </span>
+      </div>
+    </td>
+  );
+}
+
+function renderNaCell(colKey: string, excluded: boolean, showExcludeBadge: boolean) {
+  if (excluded && showExcludeBadge) {
+    return renderExcludeBadgeCell(colKey);
+  }
   return (
     <td key={colKey} className="px-2 py-2 text-center text-[11px] text-slate-300">
       해당없음
@@ -112,6 +148,8 @@ export default function IncomeTypeGridTable({
   onDeactivate,
   onToggleFiled,
   onPatchLabor,
+  onSetRowNote,
+  onSetExcludeReason,
   locked = false,
 }: Props) {
   const simpleCols = SIMPLE_PAYROLL_GRID_COLUMNS;
@@ -177,19 +215,22 @@ export default function IncomeTypeGridTable({
     return (
       <>
         <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
-          <th rowSpan={2} className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th rowSpan={2} style={colStyle(COL_WIDTH.no)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
             순번
           </th>
-          <th rowSpan={2} className="w-20 whitespace-nowrap px-2 py-2 text-left font-semibold">
+          <th rowSpan={2} style={colStyle(COL_WIDTH.code)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
             코드
           </th>
-          <th rowSpan={2} className="w-48 whitespace-nowrap px-2 py-2 text-left font-semibold">
+          <th rowSpan={2} style={colStyle(COL_WIDTH.company)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
             업체명
           </th>
-          <th rowSpan={2} className="w-32 whitespace-nowrap px-2 py-2 text-left font-semibold">
+          <th rowSpan={2} style={colStyle(COL_WIDTH.biz)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
             사업자번호
           </th>
           {row1}
+          <th rowSpan={2} style={noteColStyle()} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+            특이사항
+          </th>
         </tr>
         <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-500">{row2}</tr>
       </>
@@ -197,32 +238,36 @@ export default function IncomeTypeGridTable({
   };
 
   const incomeColCount = mode === 'simplePayroll' ? simpleCols.length : yearEndCols.length;
-  const colSpan = 4 + incomeColCount;
+  const colSpan = 5 + incomeColCount;
 
   const simpleColGroup = () => (
     <colgroup>
-      <col className="w-12" />
-      <col className="w-20" />
-      <col />
-      <col className="w-32" />
+      <col style={colStyle(COL_WIDTH.no)} />
+      <col style={colStyle(COL_WIDTH.code)} />
+      <col style={colStyle(COL_WIDTH.company)} />
+      <col style={colStyle(COL_WIDTH.biz)} />
       {simpleCols.map(col => (
         <col
           key={col.kind === 'filed' ? col.key : col.kind}
-          className={col.kind === 'laborDate' || col.kind === 'laborMethod' ? 'w-24' : 'w-14'}
+          style={colStyle(
+            col.kind === 'laborDate' || col.kind === 'laborMethod' ? COL_WIDTH.labor : COL_WIDTH.income,
+          )}
         />
       ))}
+      <col style={noteColStyle()} />
     </colgroup>
   );
 
   const yearEndColGroup = () => (
     <colgroup>
-      <col className="w-12" />
-      <col className="w-20" />
-      <col />
-      <col className="w-32" />
+      <col style={colStyle(COL_WIDTH.no)} />
+      <col style={colStyle(COL_WIDTH.code)} />
+      <col style={colStyle(COL_WIDTH.company)} />
+      <col style={colStyle(COL_WIDTH.biz)} />
       {yearEndCols.map(col => (
-        <col key={col.key} className="w-14" />
+        <col key={col.key} style={colStyle(COL_WIDTH.income)} />
       ))}
+      <col style={noteColStyle()} />
     </colgroup>
   );
 
@@ -234,16 +279,19 @@ export default function IncomeTypeGridTable({
           simpleHeader()
         ) : (
           <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-            <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
-            <th className="w-20 whitespace-nowrap px-2 py-2 text-left font-semibold">코드</th>
-            <th className="w-48 whitespace-nowrap px-2 py-2 text-left font-semibold">업체명</th>
-            <th className="w-32 whitespace-nowrap px-2 py-2 text-left font-semibold">사업자번호</th>
+            <th style={colStyle(COL_WIDTH.no)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
+            <th style={colStyle(COL_WIDTH.code)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">코드</th>
+            <th style={colStyle(COL_WIDTH.company)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">업체명</th>
+            <th style={colStyle(COL_WIDTH.biz)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">사업자번호</th>
             {yearEndCols.map(col => (
               <th key={col.key} className="px-1 py-2 text-center font-semibold">
                 {col.label}
                 {renderColCount(col.key)}
               </th>
             ))}
+            <th style={noteColStyle()} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+              특이사항
+            </th>
           </tr>
         )}
       </thead>
@@ -271,56 +319,71 @@ export default function IncomeTypeGridTable({
                 <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">
                   {i + 1}
                 </td>
-                <td className="px-2 py-2 tabular-nums text-slate-500">{row.douzoneCode || '-'}</td>
+                <td className="px-2 py-2 text-center text-sm tabular-nums text-slate-500">
+                  {row.douzoneCode || '-'}
+                </td>
                 <td className="max-w-0 px-2 py-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenSettings(row.clientId, row.companyName)}
-                    onDoubleClick={e => {
-                      e.preventDefault();
-                      if (!locked) onToggleExclude(row.clientId);
-                    }}
-                    className={`block w-full min-w-0 truncate whitespace-nowrap text-left font-semibold hover:underline ${
-                      excluded
-                        ? 'text-slate-400 line-through decoration-slate-400'
-                        : 'text-slate-800 hover:text-blue-600'
-                    }`}
-                    title={
-                      excluded
-                        ? locked
-                          ? '원천세 제외'
-                          : '더블클릭 — 원천세 제외 해제(복구)'
-                        : locked
-                          ? row.representative
-                            ? `${row.companyName || '(이름 없음)'} · ${row.representative}`
-                            : row.companyName || '(이름 없음)'
-                          : '클릭 — 설정 · 더블클릭 — 원천세 제외'
-                    }
-                  >
-                    {row.companyName || '(이름 없음)'}
-                    {row.representative ? ` · ${row.representative}` : ''}
-                    {excluded && (
-                      <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                        원천세 제외
-                      </span>
-                    )}
-                  </button>
+                  <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => onOpenSettings(row.clientId, row.companyName)}
+                      onDoubleClick={e => {
+                        e.preventDefault();
+                        if (!locked) onToggleExclude(row.clientId);
+                      }}
+                      className={`shrink-0 text-left text-sm font-semibold hover:underline ${
+                        excluded
+                          ? 'text-slate-400 line-through decoration-slate-400'
+                          : 'text-slate-800 hover:text-blue-600'
+                      }`}
+                      title={
+                        excluded
+                          ? locked
+                            ? '원천세 제외'
+                            : '더블클릭 — 원천세 제외 해제(복구)'
+                          : locked
+                            ? [row.companyName, row.representative].filter(Boolean).join(' · ') ||
+                              '(이름 없음)'
+                            : '클릭 — 설정 · 더블클릭 — 원천세 제외'
+                      }
+                    >
+                      {row.companyName || '(이름 없음)'}
+                    </button>
+                    {row.representative ? (
+                      <span className="shrink-0 text-xs text-slate-400">{row.representative}</span>
+                    ) : null}
+                  </div>
                 </td>
                 <td
-                  className={`whitespace-nowrap px-2 py-2 tabular-nums ${
+                  className={`whitespace-nowrap px-2 py-2 text-center text-sm tabular-nums ${
                     excluded ? 'text-slate-400' : 'text-slate-600'
                   }`}
                 >
                   {row.businessNo || '-'}
                 </td>
 
-                {mode === 'simplePayroll'
-                  ? simpleCols.map(col => {
+                {excluded ? (
+                  <td colSpan={incomeColCount} className="px-2 py-2 text-center">
+                    <div className="flex min-h-9 items-center justify-center">
+                      <span className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        원천세 제외
+                      </span>
+                    </div>
+                  </td>
+                ) : mode === 'simplePayroll'
+                  ? simpleCols.map((col, colIdx) => {
+                      const showExcludeBadge = excluded && colIdx === 0;
                       if (col.kind === 'laborDate' || col.kind === 'laborMethod') {
                         const labor = row.cells.laborContentReport ?? {
                           active: false,
                           filed: false,
                         };
+                        if (showExcludeBadge) {
+                          return renderExcludeBadgeCell(
+                            col.kind,
+                            col.kind === 'laborDate' ? 'border-l border-slate-50' : undefined,
+                          );
+                        }
                         if (!labor.active) {
                           return renderInactiveCell(
                             row,
@@ -367,8 +430,11 @@ export default function IncomeTypeGridTable({
                       }
 
                       const cell = row.cells[col.key] ?? { active: false, filed: false };
-                      if (col.semiAnnual && !employedFilingMonth) {
-                        return renderNaCell(col.key);
+                      if (col.semiAnnual && cell.applicable === false) {
+                        return renderNaCell(col.key, excluded, showExcludeBadge);
+                      }
+                      if (showExcludeBadge) {
+                        return renderExcludeBadgeCell(col.key);
                       }
                       if (!cell.active) {
                         return renderInactiveCell(
@@ -403,7 +469,11 @@ export default function IncomeTypeGridTable({
                         </td>
                       );
                     })
-                  : yearEndCols.map(col => {
+                  : yearEndCols.map((col, colIdx) => {
+                      const showExcludeBadge = excluded && colIdx === 0;
+                      if (showExcludeBadge) {
+                        return renderExcludeBadgeCell(col.key);
+                      }
                       const cell = row.cells[col.key] ?? { active: false, filed: false };
                       if (!cell.active) {
                         return renderInactiveCell(row, col.key, onActivate, col.label, excluded, locked);
@@ -421,14 +491,32 @@ export default function IncomeTypeGridTable({
                             }
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                             title={
-                              excluded
-                                ? '원천세 제외'
-                                : '더블클릭 — 소득유형 비활성화'
+                              excluded ? '원천세 제외' : '더블클릭 — 소득유형 비활성화'
                             }
                           />
                         </td>
                       );
                     })}
+
+                <td className="px-2 py-2">
+                  <input
+                    value={excluded ? (row.excludeReason ?? '') : (row.rowNote ?? '')}
+                    onChange={e =>
+                      excluded
+                        ? onSetExcludeReason?.(row.clientId, e.target.value)
+                        : onSetRowNote?.(row.clientId, e.target.value)
+                    }
+                    readOnly={locked || (excluded ? !onSetExcludeReason : !onSetRowNote)}
+                    placeholder={excluded ? '제외 사유 (예: 폐업·무실적)' : '신고 특이사항'}
+                    className={`${inputCls} box-border w-full min-w-0 text-slate-700 ${
+                      locked || (excluded ? !onSetExcludeReason : !onSetRowNote)
+                        ? 'cursor-default opacity-80'
+                        : excluded
+                          ? 'border-slate-300 focus:border-slate-400'
+                          : ''
+                    }`}
+                  />
+                </td>
               </tr>
             );
           })

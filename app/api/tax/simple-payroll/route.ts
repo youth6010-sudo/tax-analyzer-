@@ -9,7 +9,7 @@ import {
   resetSimplePayrollReceipt,
   upsertSimplePayrollFilings,
 } from '@/lib/simplePayrollFilingsDb';
-import { getExcludedClientIds } from '@/lib/taxFilingChecksDb';
+import { getExcludedClientIds, getWithholdingRowNotesForPeriod } from '@/lib/taxFilingChecksDb';
 import {
   employedSimplePayrollPeriodKey,
   simplePayrollMonthlyPeriodKey,
@@ -17,9 +17,9 @@ import {
 import { buildSimplePayrollGrid, computeIncomeGridStats, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
 import {
   buildSimplePayrollFilingTypeMap,
-  filingTargets,
   filterSimplePayrollFilingTypes,
   normalizeBizNo,
+  simplePayrollTargetsForPeriod,
   type HometaxFiling,
 } from '@/app/utils/filingCheck';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
@@ -54,9 +54,10 @@ export async function GET(request: NextRequest) {
     });
 
     const excluded = await getExcludedClientIds(manager, 'withholding', monthlyPeriodKey);
+    const rowNotes = await getWithholdingRowNotesForPeriod(manager, monthlyPeriodKey);
     const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const { grid } = buildSimplePayrollGrid(clients, periodKey, saved, excluded);
+    const { grid } = buildSimplePayrollGrid(clients, periodKey, saved, excluded, rowNotes);
 
     return NextResponse.json({
       year: meta.year,
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
     const monthlyTypesMap = new Map<string, IncomeTypeKey[]>();
     const employedTypesMap = new Map<string, IncomeTypeKey[]>();
 
-    for (const c of filingTargets(clients, 'simplePayroll')) {
+    for (const c of simplePayrollTargetsForPeriod(clients, month)) {
       const biz = normalizeBizNo(c.businessNo);
       if (biz) bizMap.set(c.id, biz);
       const types = readIncomeTypes(c.intakeData);
@@ -216,8 +217,9 @@ export async function POST(request: NextRequest) {
       ? [meta.monthlyPeriodKey, meta.employedPeriodKey]
       : [meta.monthlyPeriodKey];
     const excluded = await getExcludedClientIds(manager, 'withholding', meta.monthlyPeriodKey);
+    const rowNotes = await getWithholdingRowNotesForPeriod(manager, meta.monthlyPeriodKey);
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const { grid } = buildSimplePayrollGrid(clients, body.periodKey, saved, excluded);
+    const { grid } = buildSimplePayrollGrid(clients, body.periodKey, saved, excluded, rowNotes);
     const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);
 
     return NextResponse.json({

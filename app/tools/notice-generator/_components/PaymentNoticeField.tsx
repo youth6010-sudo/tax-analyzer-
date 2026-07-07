@@ -199,7 +199,7 @@ export default function PaymentNoticeField({
           {clientLinked && (
             <span className="text-slate-500">
               {' '}
-              수임처 연결 시 이 문구는 세목별로 저장되며, 수정 후 위 「수임처에 저장」을 눌러 주세요.
+              수임처 연결 시 납부·분납·첨부 문구는 세목별로 자동 저장됩니다.
             </span>
           )}
         </p>

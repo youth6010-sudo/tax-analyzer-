@@ -8,6 +8,7 @@
     agent: "신고",
     transfer: "이관/폐업",
     consult: "상담",
+    excluded: "이관/폐업/상담",
   };
 
   const FULL_KEY = "reviewIncomeFullView";
@@ -19,9 +20,10 @@
     { key: "sincere", label: "성실" },
     { key: "corp_client", label: "업체" },
     { key: "agent", label: "신고" },
-    { key: "transfer", label: "이관/폐업" },
-    { key: "consult", label: "상담" },
+    { key: "excluded", label: "이관/폐업/상담" },
   ];
+
+  const EXCLUDED_VISIBLE_KEY = "reviewIncomeExcludedVisible";
 
   const MARKER_COL = 2;
 
@@ -232,13 +234,17 @@
     return { parent: null, section: null };
   }
 
+  function hasExcludedSection(sections) {
+    return sections.some(function (sec) {
+      return sec.kind === "transfer" || sec.kind === "consult";
+    });
+  }
+
   function getAvailableFilterKinds(sections) {
     const keys = new Set();
     sections.forEach(function (sec) {
-      if (sec.kind === "transfer") {
-        if (sec.children && sec.children.length) keys.add("transfer");
-      } else if (sec.kind === "consult") {
-        keys.add("consult");
+      if (sec.kind === "transfer" || sec.kind === "consult") {
+        keys.add("excluded");
       } else if (FILTER_KINDS.some(function (f) {
         return f.key === sec.kind;
       })) {
@@ -252,8 +258,20 @@
 
   function getIncomeMainFilterKinds(sections) {
     return getAvailableFilterKinds(sections).filter(function (f) {
-      return f.key !== "consult";
+      return f.key !== "excluded";
     });
+  }
+
+  function getIncomeExcludedVisible(owner) {
+    try {
+      return sessionStorage.getItem(storageKey(EXCLUDED_VISIBLE_KEY, owner)) !== "0";
+    } catch {
+      return true;
+    }
+  }
+
+  function setIncomeExcludedVisible(owner, on) {
+    sessionStorage.setItem(storageKey(EXCLUDED_VISIBLE_KEY, owner), on ? "1" : "0");
   }
 
   function getIncomeMainFilters(owner, sections) {
@@ -523,6 +541,9 @@
     getIncomeMainFilters,
     getIncomeFilters,
     setIncomeFilters,
+    hasExcludedSection,
+    getIncomeExcludedVisible,
+    setIncomeExcludedVisible,
     FILTER_KINDS,
     defaultSectionId,
   };

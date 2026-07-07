@@ -1,14 +1,29 @@
-import type { TaxTypeKey } from './types';
+import { defaultPaymentSlips } from './templates';
+import type {
+  PaymentInstallment,
+  PaymentNotice,
+  TaxTypeKey,
+  VatNonDeductibleItem,
+  VatReport,
+} from './types';
+import { EMPTY_VAT_REPORT } from './types';
+import { ensureWithholdingItems } from './withholdingItems';
 
 // 수임처(클라이언트)에 세목별로 저장하는 안내문 입력값.
-// clients.intakeData.noticeData[taxType] = { materials, notes, payrollByUs?, attachNote? }
+// clients.intakeData.noticeData[taxType] = { materials, notes, payrollByUs?, payment?, vatReport?, ... }
 export type NoticeClientData = {
   materials: string;
   notes: string;
   // 원천세 전용: 급여대장을 우리가 작성하는 대상이면 true (체크 시 신고안내, 미체크 시 자료요청)
   payrollByUs?: boolean;
-  /** 신고 결과 안내 — 첨부 서류 문구 (납부서 장수는 안내문 생성 시 자동 부착) */
+  /** @deprecated payment.attachNote 사용 — 하위 호환용 */
   attachNote?: string;
+  /** 신고 결과 안내(납부세액·분납 등) */
+  payment?: PaymentNotice;
+  /** 부가세 신고 결과 보고 및 검토 */
+  vatReport?: VatReport;
+  /** 부가세: 신고결과 최종세액 ↔ 납부금액 자동 연동 여부 */
+  vatPaymentLinked?: boolean;
 };
 
 export type ClientNoticeMap = Partial<Record<TaxTypeKey, NoticeClientData>>;
@@ -68,6 +83,152 @@ export function clientTaxToKey(id: string): TaxTypeKey | null {
 
 const VALID_KEYS: TaxTypeKey[] = ['vat', 'withholding', 'corporate', 'income'];
 
+function parseInstallments(raw: unknown): PaymentInstallment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const o = item as Record<string, unknown>;
+      if (typeof o.date !== 'string') return null;
+      return { date: o.date, amount: typeof o.amount === 'number' ? o.amount : 0 };
+    })
+    .filter((x): x is PaymentInstallment => x !== null);
+}
+
+function parsePaymentNotice(
+  raw: unknown,
+  tax: TaxTypeKey,
+  legacyAttachNote = '',
+): PaymentNotice | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const e = raw as Record<string, unknown>;
+  const slips =
+    typeof e.slips === 'number' && Number.isFinite(e.slips)
+      ? Math.max(0, Math.round(e.slips))
+      : defaultPaymentSlips(tax);
+  return {
+    slips,
+    amount: typeof e.amount === 'number' ? e.amount : 0,
+    localAmount: typeof e.localAmount === 'number' ? e.localAmount : 0,
+    refundClaimed: typeof e.refundClaimed === 'boolean' ? e.refundClaimed : false,
+    installments: parseInstallments(e.installments),
+    withholdingItems: ensureWithholdingItems(
+      Array.isArray(e.withholdingItems) ? (e.withholdingItems as PaymentNotice['withholdingItems']) : undefined,
+    ),
+    attachNote:
+      typeof e.attachNote === 'string' ? e.attachNote : legacyAttachNote,
+  };
+}
+
+function parseVatNonDeductibleItem(raw: unknown): VatNonDeductibleItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.reason !== 'string') return null;
+  return { reason: o.reason, vat: typeof o.vat === 'number' ? o.vat : 0 };
+}
+
+function parseVatReport(raw: unknown): VatReport | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const e = raw as Record<string, unknown>;
+  const num = (k: keyof VatReport) =>
+    typeof e[k] === 'number' ? (e[k] as number) : 0;
+  const str = (k: keyof VatReport) =>
+    typeof e[k] === 'string' ? (e[k] as string) : '';
+  return {
+    salesSupply: num('salesSupply'),
+    salesVat: num('salesVat'),
+    taxInvoiceSupply: num('taxInvoiceSupply'),
+    taxInvoiceVat: num('taxInvoiceVat'),
+    fixedAssetSupply: num('fixedAssetSupply'),
+    fixedAssetVat: num('fixedAssetVat'),
+    cardCashSupply: num('cardCashSupply'),
+    cardCashVat: num('cardCashVat'),
+    reductionLabel: str('reductionLabel'),
+    reductionAmount: num('reductionAmount'),
+    nonDeductibleItems: Array.isArray(e.nonDeductibleItems)
+      ? e.nonDeductibleItems
+          .map(parseVatNonDeductibleItem)
+          .filter((x): x is VatNonDeductibleItem => x !== null)
+      : [],
+    penaltyLabel: str('penaltyLabel'),
+    penaltyAmount: num('penaltyAmount'),
+    employeeStatus: str('employeeStatus'),
+    vehicleDeductible: str('vehicleDeductible'),
+    vehicleNonDeductible: str('vehicleNonDeductible'),
+    paperTaxInvoice: str('paperTaxInvoice'),
+    refundReason: str('refundReason'),
+    vatSpecialNotes: str('vatSpecialNotes'),
+  };
+}
+
+function readNoticeEntry(e: Record<string, unknown>, tax: TaxTypeKey): NoticeClientData {
+  const legacyAttach = typeof e.attachNote === 'string' ? e.attachNote : '';
+  const payment = parsePaymentNotice(e.payment, tax, legacyAttach);
+  const vatReport = parseVatReport(e.vatReport);
+  return {
+    materials: typeof e.materials === 'string' ? e.materials : '',
+    notes: typeof e.notes === 'string' ? e.notes : '',
+    payrollByUs: typeof e.payrollByUs === 'boolean' ? e.payrollByUs : false,
+    attachNote: payment?.attachNote ?? legacyAttach,
+    payment,
+    vatReport,
+    vatPaymentLinked:
+      typeof e.vatPaymentLinked === 'boolean' ? e.vatPaymentLinked : undefined,
+  };
+}
+
+export function emptyPaymentForTax(tax: TaxTypeKey): PaymentNotice {
+  return {
+    slips: defaultPaymentSlips(tax),
+    amount: 0,
+    localAmount: 0,
+    refundClaimed: false,
+    installments: [],
+    withholdingItems: [],
+    attachNote: '',
+  };
+}
+
+/** 저장된 세목 데이터에서 납부 안내 입력값 복원 */
+export function paymentFromNoticeEntry(
+  entry: NoticeClientData | undefined,
+  tax: TaxTypeKey,
+): PaymentNotice {
+  if (entry?.payment) return entry.payment;
+  const base = emptyPaymentForTax(tax);
+  if (entry?.attachNote) return { ...base, attachNote: entry.attachNote };
+  return base;
+}
+
+/** 저장된 세목 데이터에서 부가세 신고결과 복원 */
+export function vatReportFromNoticeEntry(entry: NoticeClientData | undefined): VatReport {
+  return entry?.vatReport ?? EMPTY_VAT_REPORT;
+}
+
+/** 화면 입력값을 수임처 noticeData 항목으로 직렬화 */
+export function buildNoticeClientEntry(
+  materials: string,
+  notes: string,
+  payrollByUs: boolean,
+  payment: PaymentNotice,
+  vatReport: VatReport,
+  vatPaymentLinked: boolean,
+  tax: TaxTypeKey,
+): NoticeClientData {
+  const normalizedPayment: PaymentNotice = {
+    ...payment,
+    withholdingItems: ensureWithholdingItems(payment.withholdingItems),
+  };
+  return {
+    materials,
+    notes,
+    payrollByUs,
+    attachNote: normalizedPayment.attachNote,
+    payment: normalizedPayment,
+    ...(tax === 'vat' ? { vatReport, vatPaymentLinked } : {}),
+  };
+}
+
 // intakeData에서 noticeData 맵을 안전하게 읽기
 export function readNoticeMap(intakeData: Record<string, unknown> | null | undefined): ClientNoticeMap {
   const raw = (intakeData ?? {})['noticeData'];
@@ -76,13 +237,7 @@ export function readNoticeMap(intakeData: Record<string, unknown> | null | undef
   for (const key of VALID_KEYS) {
     const entry = (raw as Record<string, unknown>)[key];
     if (entry && typeof entry === 'object') {
-      const e = entry as Record<string, unknown>;
-      out[key] = {
-        materials: typeof e.materials === 'string' ? e.materials : '',
-        notes: typeof e.notes === 'string' ? e.notes : '',
-        payrollByUs: typeof e.payrollByUs === 'boolean' ? e.payrollByUs : false,
-        attachNote: typeof e.attachNote === 'string' ? e.attachNote : '',
-      };
+      out[key] = readNoticeEntry(entry as Record<string, unknown>, key);
     }
   }
   return out;

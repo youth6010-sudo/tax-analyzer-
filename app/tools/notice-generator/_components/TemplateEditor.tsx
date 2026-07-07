@@ -9,7 +9,7 @@ import {
   noticeTextarea,
 } from './noticeUi';
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 type Props = {
   html: string;
@@ -40,37 +40,44 @@ export default function TemplateEditor({
 }: Props) {
   const [open, setOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
+  const internalChangeRef = useRef(false);
   const isCustom = source === 'custom';
   const displayHtml = isCustom ? html : defaultHtml;
 
   useEffect(() => {
     if (!ref.current || !isCustom) return;
+    if (internalChangeRef.current) {
+      internalChangeRef.current = false;
+      return;
+    }
     const sanitized = sanitizeNoticeHtml(html || '');
     if (ref.current.innerHTML !== sanitized) {
       ref.current.innerHTML = sanitized;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, html]);
+  }, [source, html, isCustom]);
 
-  const emit = () => {
+  const emit = (syncDom = false) => {
     if (!ref.current || !isCustom) return;
-    const sanitized = sanitizeNoticeHtml(ref.current.innerHTML);
-    if (ref.current.innerHTML !== sanitized) {
+    const raw = ref.current.innerHTML;
+    const sanitized = sanitizeNoticeHtml(raw);
+    if (syncDom && ref.current.innerHTML !== sanitized) {
       ref.current.innerHTML = sanitized;
     }
+    internalChangeRef.current = true;
     onChange(sanitized);
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     if (!isCustom) return;
     e.preventDefault();
-    const html = e.clipboardData.getData('text/html');
+    const pastedHtml = e.clipboardData.getData('text/html');
     const text = e.clipboardData.getData('text/plain');
-    const next = html
-      ? sanitizeNoticeHtml(html)
+    const next = pastedHtml
+      ? sanitizeNoticeHtml(pastedHtml)
       : sanitizeNoticeHtml(text.replace(/\n/g, '<br>'));
     document.execCommand('insertHTML', false, next);
-    emit();
+    emit(true);
   };
 
   const insertToken = (token: string) => {
@@ -82,11 +89,12 @@ export default function TemplateEditor({
     if (!ok) {
       el.innerHTML += token;
     }
-    emit();
+    emit(false);
   };
 
   const loadDefaultIntoCustom = () => {
     if (ref.current) ref.current.innerHTML = defaultHtml;
+    internalChangeRef.current = true;
     onChange(defaultHtml);
     onSourceChange('custom');
   };
@@ -140,8 +148,8 @@ export default function TemplateEditor({
               ref={ref}
               contentEditable
               suppressContentEditableWarning
-              onInput={emit}
-              onBlur={emit}
+              onInput={() => emit(false)}
+              onBlur={() => emit(true)}
               onPaste={handlePaste}
               className={`${noticeTextarea} min-h-[120px] !text-sm`}
             />
@@ -155,7 +163,7 @@ export default function TemplateEditor({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] text-slate-400">
               {isCustom
-                ? '※ 붙여넣을 때 서식이 함께 들어옵니다 (Ctrl+Shift+V는 서식 제거).'
+                ? '※ 붙여넣을 때 서식이 함께 들어옵니다 (Ctrl+Shift+V는 서식 제거). Ctrl+Z 되돌리기를 사용할 수 있습니다.'
                 : '※ 기본 서식은 읽기 전용입니다.'}
             </span>
             {isCustom && (

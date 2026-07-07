@@ -161,7 +161,7 @@
   const INCOME_TOGGLEABLE_COLS = [
     { c: 3, label: "성명", defaultVisible: true, sticky: true },
     { c: 4, label: "상호", defaultVisible: true, sticky: true, companyLink: true },
-    { c: 5, label: "연락처", defaultVisible: true },
+    { c: 5, label: "미팅일정 및 연락처", defaultVisible: true },
     { c: 6, label: "고용" },
     { c: 7, label: "감면" },
     { c: 8, label: "유형" },
@@ -943,8 +943,11 @@
       sectionLabel: nr.sectionLabel || "",
       sectionId: nr.sectionId || nr.filterKey,
       isTransfer: !!nr.isTransfer,
-      isConsult: nr.filterKey === "consult",
-      filterKey: nr.isTransfer ? "transfer" : nr.filterKey,
+      isConsult: nr.filterKey === "consult" || nr.filterKey === "excluded",
+      filterKey:
+        nr.filterKey === "excluded" || nr.filterKey === "consult" || nr.isTransfer || nr.filterKey === "transfer"
+          ? "excluded"
+          : nr.filterKey,
       emphasisOffList: nr.emphasisOffList || [],
     };
     Object.keys(cells).forEach(function (key) {
@@ -1103,7 +1106,7 @@
       item.isConsult = isConsult;
       if (isTransfer) item.transferHint = buildTransferHint(sheet, r);
       item.consultHeaderR = isConsult ? consultHeaderR : null;
-      item.filterKey = isConsult ? "consult" : isTransfer ? "transfer" : sec.kind;
+      item.filterKey = isConsult || isTransfer ? "excluded" : sec.kind;
 
       const unpaid = item.cells[18] && item.cells[18].v;
       const noteCell = cellAt(sheet, r, 21);

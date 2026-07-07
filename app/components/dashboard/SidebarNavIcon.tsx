@@ -191,10 +191,10 @@ export function iconForHref(href: string): string {
 export function PageHeaderIcon({ name }: { name: string }) {
   return (
     <span
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white text-[#4b6cb7] shadow-sm shadow-blue-100/60"
+      className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-100/70 bg-blue-50/45 text-[#4b6cb7] shadow-none"
       aria-hidden
     >
-      <SidebarNavIcon name={name} className="h-6 w-6" />
+      <SidebarNavIcon name={name} className="h-5 w-5" />
     </span>
   );
 }

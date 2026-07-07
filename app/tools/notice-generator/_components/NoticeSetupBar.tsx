@@ -10,6 +10,12 @@ import {
 } from '../_lib/taxTypes';
 import { SELECTABLE_YEARS } from '../_lib/holidays';
 import type { DeadlineParams, DeadlineResult, MaterialDeadline, TaxTypeKey } from '../_lib/types';
+import type { NoticeOutputMode, OfficialLetterKind } from '../_lib/officialLetter';
+import { taxTypeForOfficialKind } from '../_lib/officialLetter';
+import NoticeOutputModeSelector from './NoticeOutputModeSelector';
+import OfficialTaxKindSelector from './OfficialTaxKindSelector';
+import VatBusinessTypeToggle from './VatBusinessTypeToggle';
+import type { VatBusinessType } from '../_lib/vatBusinessItems';
 import {
   noticeHalfRow,
   noticeInput,
@@ -47,6 +53,10 @@ function digitsToIso(digits: string): string | null {
 }
 
 type Props = {
+  outputMode: NoticeOutputMode;
+  onOutputModeChange: (mode: NoticeOutputMode) => void;
+  officialTaxKind: OfficialLetterKind;
+  onOfficialTaxKindChange: (kind: OfficialLetterKind) => void;
   taxType: TaxTypeKey;
   onSelectTax: (key: TaxTypeKey) => void;
   params: DeadlineParams;
@@ -56,6 +66,8 @@ type Props = {
   materialDeadline: MaterialDeadline;
   onMaterialDeadlineChange: (next: MaterialDeadline) => void;
   clientPicker?: ReactNode;
+  vatBusinessType?: VatBusinessType;
+  onVatBusinessTypeChange?: (value: VatBusinessType) => void;
 };
 
 function PeriodSecondField({
@@ -138,6 +150,10 @@ function PeriodSecondField({
 }
 
 export default function NoticeSetupBar({
+  outputMode,
+  onOutputModeChange,
+  officialTaxKind,
+  onOfficialTaxKindChange,
   taxType,
   onSelectTax,
   params,
@@ -147,6 +163,8 @@ export default function NoticeSetupBar({
   materialDeadline,
   onMaterialDeadlineChange,
   clientPicker,
+  vatBusinessType = 'individual',
+  onVatBusinessTypeChange,
 }: Props) {
   const updateMaterial = (patch: Partial<MaterialDeadline>) =>
     onMaterialDeadlineChange({ ...materialDeadline, ...patch });
@@ -164,35 +182,58 @@ export default function NoticeSetupBar({
     if (iso) updateMaterial({ date: iso });
   };
 
+  const isMessageMode = outputMode === 'message';
+  const isOfficialNav = outputMode === 'official';
+  const periodTaxType = isOfficialNav ? taxTypeForOfficialKind(officialTaxKind) : taxType;
+  const showVatBusiness =
+    onVatBusinessTypeChange && officialTaxKind === 'vat' && isOfficialNav;
+
   return (
     <div className={`${noticeSection} space-y-3`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={noticeLabel}>세목</span>
-        <div className="flex flex-wrap gap-1.5">
-          {TAX_TYPE_LIST.map(tax => (
-            <button
-              key={tax.key}
-              type="button"
-              onClick={() => onSelectTax(tax.key)}
-              className={[
-                'rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors',
-                taxType === tax.key
-                  ? 'border-blue-300 bg-blue-50 text-blue-900'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-              ].join(' ')}
-            >
-              {tax.name}
-            </button>
-          ))}
+      <NoticeOutputModeSelector mode={outputMode} onSelect={onOutputModeChange} />
+
+      {isMessageMode && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={noticeLabel}>세목</span>
+          <div className="flex flex-wrap gap-1.5">
+            {TAX_TYPE_LIST.map(tax => (
+              <button
+                key={tax.key}
+                type="button"
+                onClick={() => onSelectTax(tax.key)}
+                className={[
+                  'rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors',
+                  taxType === tax.key
+                    ? 'border-blue-300 bg-blue-50 text-blue-900'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {tax.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {isOfficialNav && (
+        <>
+          <div className="flex flex-wrap items-start gap-3">
+            <OfficialTaxKindSelector value={officialTaxKind} onChange={onOfficialTaxKindChange} />
+            <div className="min-h-[34px] min-w-[220px]">
+              {showVatBusiness && (
+                <VatBusinessTypeToggle value={vatBusinessType} onChange={onVatBusinessTypeChange} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className={noticeTwoCol}>
         <div className="flex min-w-0 flex-col gap-3">
           <div className={noticeHalfRow}>
             <label className="block min-w-0">
               <span className={noticeLabel}>
-                {taxType === TAX_TYPES.INCOME ? '귀속 연도' : '기준 연도'}
+                {periodTaxType === TAX_TYPES.INCOME ? '귀속 연도' : '기준 연도'}
               </span>
               <select
                 className={selectClass}
@@ -206,7 +247,11 @@ export default function NoticeSetupBar({
                 ))}
               </select>
             </label>
-            <PeriodSecondField taxType={taxType} params={params} onParamChange={onParamChange} />
+            <PeriodSecondField
+              taxType={periodTaxType}
+              params={params}
+              onParamChange={onParamChange}
+            />
           </div>
 
           <div className={noticeHalfRow}>

@@ -40,6 +40,54 @@ import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400';
 
+function isGridRowExcluded(row: IncomeGridRow): boolean {
+  return row.excludeReason != null && row.excludeReason !== undefined;
+}
+
+/** 세션 진입 시 제외 업체를 맨 아래로 — 제외 토글 직후에는 순서 유지 */
+function splitStableDisplayOrder<T>(
+  items: T[],
+  idOf: (item: T) => string,
+  isExcluded: (item: T) => boolean,
+): string[] {
+  const active: string[] = [];
+  const excluded: string[] = [];
+  for (const item of items) {
+    const id = idOf(item);
+    if (isExcluded(item)) excluded.push(id);
+    else active.push(id);
+  }
+  return [...active, ...excluded];
+}
+
+function buildIncomeGridDisplayOrder(
+  items: ApiGridRow[],
+  withholdingOrderIds: string[],
+): string[] {
+  const ordered = withholdingOrderIds.length
+    ? orderByDisplayIds(items, withholdingOrderIds, r => r.clientId)
+    : items;
+  return splitStableDisplayOrder(ordered, r => r.clientId, isGridRowExcluded);
+}
+
+function orderByDisplayIds<T>(items: T[], orderIds: string[], idOf: (item: T) => string): T[] {
+  const map = new Map(items.map(item => [idOf(item), item]));
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const id of orderIds) {
+    const item = map.get(id);
+    if (item) {
+      out.push(item);
+      seen.add(id);
+    }
+  }
+  for (const item of items) {
+    const id = idOf(item);
+    if (!seen.has(id)) out.push(item);
+  }
+  return out;
+}
+
 export type IncomeColumnStat = {
   key: string;
   label: string;
@@ -52,6 +100,7 @@ export type IncomeFilingStats = {
   target: number;
   received: number;
   diff: number;
+  excludedRows: number;
   byColumn: IncomeColumnStat[];
 };
 
@@ -78,6 +127,13 @@ type Props = {
   onEmployedFilingMonth?: (active: boolean) => void;
   onSaved?: () => void;
   rowFilter?: IncomeStatFilter;
+  listScope?: 'targets' | 'all';
+  /** 원천세 신고대상확인 목록 순서(담당자·월 기준) */
+  withholdingOrderIds?: string[];
+  /** 원천세 세션 특이사항 저장 */
+  onSetRowNote?: (clientId: string, note: string) => void;
+  /** 원천세 세션 제외 사유 저장 */
+  onSetExcludeReason?: (clientId: string, reason: string) => void;
 };
 
 type ApiGridRow = IncomeGridRow & { manager?: string };
@@ -202,7 +258,9 @@ function computeStats(
     received += col.received;
   }
 
-  return { target, received, diff: target - received, byColumn };
+  const excludedRows = rows.filter(r => isGridRowExcluded(r)).length;
+
+  return { target, received, diff: target - received, excludedRows, byColumn };
 }
 
 const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(function IncomeTypeFilingSection(
@@ -221,6 +279,10 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     onEmployedFilingMonth,
     onSaved,
     rowFilter = 'all',
+    listScope = 'all',
+    withholdingOrderIds = [],
+    onSetRowNote,
+    onSetExcludeReason,
   },
   ref,
 ) {
@@ -232,6 +294,9 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState('');
+  const [displayOrderEpoch, setDisplayOrderEpoch] = useState(0);
+  const [rowDisplayOrder, setRowDisplayOrder] = useState<string[]>([]);
+  const displayOrderEpochAppliedRef = useRef(-1);
   const [settingsClient, setSettingsClient] = useState<{ id: string; companyName: string } | null>(
     null,
   );
@@ -252,11 +317,37 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     return Object.fromEntries(YEAR_END_COLUMNS.map(c => [c.key, c.label]));
   }, [mode]);
 
+  const orderedGrid = useMemo(
+    () => orderByDisplayIds(grid, rowDisplayOrder, r => r.clientId),
+    [grid, rowDisplayOrder],
+  );
+
   const filteredGrid = useMemo(() => {
-    const byManager = filterByManager(grid, manager);
-    if (rowFilter === 'all') return byManager;
-    return byManager.filter(row => matchesRowFilter(row, mode, rowFilter));
-  }, [grid, manager, mode, rowFilter]);
+    const byManager = filterByManager(orderedGrid, manager);
+    const scoped =
+      listScope === 'targets' ? byManager.filter(row => !isGridRowExcluded(row)) : byManager;
+    if (rowFilter === 'all') return scoped;
+    return scoped.filter(row => matchesRowFilter(row, mode, rowFilter));
+  }, [orderedGrid, manager, mode, rowFilter, listScope]);
+
+  // 세션(기간·담당자) 진입 시 원천세 순서 적용 + 제외 업체 하단 — 제외 토글 직후에는 순서 유지
+  useEffect(() => {
+    if (displayOrderEpochAppliedRef.current !== displayOrderEpoch) {
+      displayOrderEpochAppliedRef.current = displayOrderEpoch;
+      setRowDisplayOrder(buildIncomeGridDisplayOrder(grid, withholdingOrderIds));
+      return;
+    }
+
+    setRowDisplayOrder(prev => {
+      const known = new Set(prev);
+      const extra = grid.map(r => r.clientId).filter(id => !known.has(id));
+      if (!extra.length) return prev;
+      if (prev.length === 0 && grid.length > 0) {
+        return buildIncomeGridDisplayOrder(grid, withholdingOrderIds);
+      }
+      return [...prev, ...extra];
+    });
+  }, [displayOrderEpoch, grid, withholdingOrderIds]);
 
   const stats = useMemo(
     () => computeStats(grid, manager, mode),
@@ -274,30 +365,35 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       const data = (await res.json()) as {
         incomeTypes?: ClientIncomeTypes;
         yearEndTypes?: YearEndClientTypes;
+        withholdingSettings?: { semiAnnualTarget?: boolean; semiAnnualMonthlyDisplay?: boolean };
       };
       if (mode === 'simplePayroll') {
         if (!data.incomeTypes) return;
+        const intakePatch = {
+          withholdingSettings: data.withholdingSettings ?? {},
+        };
         setGrid(prev =>
           prev.map(row => {
             if (row.clientId !== clientId) return row;
             return patchSimplePayrollRowFromTypes(
               row,
               data.incomeTypes!,
-              spMeta?.employedFilingMonth ?? false,
+              month,
+              intakePatch,
             );
           }),
         );
       } else {
-        if (!data.yearEndTypes) return;
+        if (!data.incomeTypes || !data.yearEndTypes) return;
         setGrid(prev =>
           prev.map(row => {
             if (row.clientId !== clientId) return row;
-            return patchYearEndRowFromTypes(row, data.yearEndTypes!);
+            return patchYearEndRowFromTypes(row, data.incomeTypes!, data.yearEndTypes!);
           }),
         );
       }
     },
-    [mode, spMeta?.employedFilingMonth],
+    [mode, month],
   );
 
   const load = useCallback(async () => {
@@ -358,6 +454,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       }
     } finally {
       setLoading(false);
+      setDisplayOrderEpoch(e => e + 1);
     }
   }, [
     mode,
@@ -373,6 +470,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (withholdingOrderIds.length === 0) return;
+    setDisplayOrderEpoch(e => e + 1);
+  }, [withholdingOrderIds]);
 
   useEffect(() => {
     if (monthProp) setMonth(monthProp);
@@ -633,19 +735,32 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           if (row.clientId !== clientId) return row;
           return {
             ...row,
-            excludeReason: data.excluded ? row.excludeReason ?? '' : null,
+            excludeReason: data.excluded ? (row.excludeReason ?? '') : null,
           };
         }),
       );
       if (!embedded) {
         setMessage(data.excluded ? '원천세 제외 처리했습니다.' : '원천세 제외를 해제했습니다.');
       }
-      await load();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '제외 토글 실패';
       if (embedded) onUploadNotice?.(msg);
       else setMessage(msg);
     }
+  };
+
+  const handleSetRowNote = (clientId: string, note: string) => {
+    setGrid(prev =>
+      prev.map(row => (row.clientId === clientId ? { ...row, rowNote: note } : row)),
+    );
+    onSetRowNote?.(clientId, note);
+  };
+
+  const handleSetExcludeReason = (clientId: string, reason: string) => {
+    setGrid(prev =>
+      prev.map(row => (row.clientId === clientId ? { ...row, excludeReason: reason } : row)),
+    );
+    onSetExcludeReason?.(clientId, reason);
   };
 
   const years = Array.from({ length: 10 }, (_, i) => 2025 + i);
@@ -676,6 +791,8 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         onDeactivate={(id, key) => void handleDeactivate(id, key)}
         onToggleFiled={handleToggleFiled}
         onPatchLabor={mode === 'simplePayroll' ? handlePatchLabor : undefined}
+        onSetRowNote={onSetRowNote ? handleSetRowNote : undefined}
+        onSetExcludeReason={onSetExcludeReason ? handleSetExcludeReason : undefined}
       />
     </div>
   );
@@ -730,7 +847,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         )}
         {mode === 'simplePayroll' && spMeta?.employedFilingMonth && (
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-            근로 반기 신고월
+            근로 반기 신고월 (6·12월)
           </span>
         )}
         <button type="button" className={portalBtnSecondary} onClick={() => void load()}>

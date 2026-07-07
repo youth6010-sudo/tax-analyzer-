@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { isMasterUser } from '@/lib/clientAccess';
 import { listClients } from '@/lib/clientsDb';
-import { readYearEndTypes, yearEndTypeTargets } from '@/lib/incomeTypes';
+import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
 import {
   listYearEndFilings,
   matchYearEndFromExcel,
@@ -12,7 +12,7 @@ import {
   type YearEndIncomeType,
 } from '@/lib/yearEndFilingsDb';
 import { YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
-import { buildYearEndGrid, computeIncomeGridStats } from '@/lib/incomeTypeFilingGrid';
+import { buildYearEndGrid, computeIncomeGridStats, yearEndColumnActive } from '@/lib/incomeTypeFilingGrid';
 import {
   buildYearEndFilingTypeMap,
   filingTargets,
@@ -21,7 +21,7 @@ import {
 } from '@/app/utils/filingCheck';
 import {
   getWithholdingExclusionsForYear,
-  getWithholdingReceiptHistoryForYear,
+  getWithholdingRowNotesForYear,
 } from '@/lib/taxFilingChecksDb';
 
 function apiError(e: unknown) {
@@ -48,13 +48,9 @@ export async function GET(request: NextRequest) {
 
     const saved = await listYearEndFilings(year);
     const yearExcluded = await getWithholdingExclusionsForYear(manager, year);
-    const { ids, bizNos } = await getWithholdingReceiptHistoryForYear(
-      manager,
-      year,
-      normalizeBizNo,
-    );
+    const rowNotes = await getWithholdingRowNotesForYear(manager, year);
 
-    const grid = buildYearEndGrid(clients, year, saved, yearExcluded, { ids, bizNos });
+    const grid = buildYearEndGrid(clients, year, saved, yearExcluded, rowNotes);
 
     const tables: Record<
       YearEndIncomeType,
@@ -146,10 +142,11 @@ export async function POST(request: NextRequest) {
     for (const c of filingTargets(clients, 'yearEnd')) {
       const biz = normalizeBizNo(c.businessNo);
       if (biz) bizMap.set(c.id, biz);
-      const t = yearEndTypeTargets(readYearEndTypes(c.intakeData));
+      const incomeTypes = readIncomeTypes(c.intakeData);
+      const yearEndTypes = readYearEndTypes(c.intakeData);
       const active: YearEndIncomeType[] = [];
       for (const { key } of YEAR_END_TABLE_TYPES) {
-        if (t[key]) active.push(key);
+        if (yearEndColumnActive(key, incomeTypes, yearEndTypes)) active.push(key);
       }
       if (active.length) typesMap.set(c.id, active);
     }
@@ -184,13 +181,9 @@ export async function POST(request: NextRequest) {
 
     const manager = body.manager ?? user.name;
     const yearExcluded = await getWithholdingExclusionsForYear(manager, body.year);
-    const { ids, bizNos } = await getWithholdingReceiptHistoryForYear(
-      manager,
-      body.year,
-      normalizeBizNo,
-    );
+    const rowNotes = await getWithholdingRowNotesForYear(manager, body.year);
     const saved = await listYearEndFilings(body.year);
-    const grid = buildYearEndGrid(clients, body.year, saved, yearExcluded, { ids, bizNos });
+    const grid = buildYearEndGrid(clients, body.year, saved, yearExcluded, rowNotes);
     const stats = computeIncomeGridStats(grid, 'yearEnd', manager);
 
     return NextResponse.json({

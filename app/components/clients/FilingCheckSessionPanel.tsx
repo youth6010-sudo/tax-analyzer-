@@ -150,9 +150,9 @@ export default function FilingCheckSessionPanel({
                   >
                     {c.change === 'added' ? '추가' : '제외'}
                   </span>
-                  <span className="font-medium">{c.companyName}</span>
+                  <span className="text-sm font-semibold text-slate-800">{c.companyName}</span>
                   {c.businessNo && (
-                    <span className="text-xs text-slate-400 tabular-nums">{c.businessNo}</span>
+                    <span className="text-sm text-slate-500 tabular-nums">{c.businessNo}</span>
                   )}
                 </li>
               ))}

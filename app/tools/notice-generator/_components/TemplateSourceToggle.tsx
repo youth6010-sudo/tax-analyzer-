@@ -5,12 +5,13 @@ type Props = {
   onSourceChange: (source: TemplateSource) => void;
   hasCustom: boolean;
   onSave?: () => void;
-  saveState?: 'idle' | 'saving' | 'saved' | 'error';
+  saveState?: 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
   saveLabel?: string;
 };
 
 const SAVE_BADGE: Record<NonNullable<Props['saveState']>, { text: string; cls: string } | null> = {
   idle: null,
+  dirty: { text: '미저장', cls: 'text-amber-600' },
   saving: { text: '저장 중…', cls: 'text-slate-400' },
   saved: { text: '저장됨', cls: 'text-emerald-600' },
   error: { text: '저장 실패', cls: 'text-rose-500' },

@@ -6,7 +6,7 @@ export default async function ReviewSheetPage() {
   await requireUserPage();
 
   return (
-    <PortalPageShell bare className="min-h-0">
+    <PortalPageShell className="min-h-0">
       <ReviewSheetEmbed />
     </PortalPageShell>
   );

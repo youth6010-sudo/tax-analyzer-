@@ -1,6 +1,24 @@
 (function () {
   "use strict";
 
+  const SECTION_DISPLAY_KEY = "reviewIncomeSectionDisplay";
+
+  function getSectionDisplayEnabled() {
+    try {
+      return sessionStorage.getItem(SECTION_DISPLAY_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  }
+
+  function setSectionDisplayEnabled(on) {
+    try {
+      sessionStorage.setItem(SECTION_DISPLAY_KEY, on ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
+
   function filterClientRows(rows, checkedKinds) {
     if (!checkedKinds || !checkedKinds.length) {
       return { rows: [], filterEmpty: true };
@@ -27,7 +45,30 @@
     };
   }
 
-  function renderIncomeMainFilterBar(sections, owner, checkedKinds, onChange) {
+  function renderIncomeExcludedFilterChip(owner, showExcluded, onChange) {
+    const label = document.createElement("label");
+    label.className = "category-filter-chip";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "category-filter-input";
+    input.value = "excluded";
+    input.checked = showExcluded;
+    input.addEventListener("change", function () {
+      ReviewGridSections.setIncomeExcludedVisible(owner, input.checked);
+      onChange(input.checked);
+    });
+
+    const text = document.createElement("span");
+    text.className = "category-filter-label";
+    text.textContent = "이관/폐업/상담";
+
+    label.appendChild(input);
+    label.appendChild(text);
+    return label;
+  }
+
+  function renderIncomeMainFilterBar(sections, owner, checkedKinds, onChange, excludedOpts) {
     const available = ReviewGridSections.getIncomeMainFilterKinds(sections);
     const bar = document.createElement("div");
     bar.className = "category-filter-bar";
@@ -46,7 +87,7 @@
       input.addEventListener("change", function () {
         const next = [];
         bar.querySelectorAll(".category-filter-input").forEach(function (el) {
-          if (el.checked) next.push(el.value);
+          if (el.checked && el.value !== "excluded") next.push(el.value);
         });
         ReviewGridSections.setIncomeFilters(owner, next);
         onChange(next);
@@ -60,6 +101,12 @@
       label.appendChild(text);
       bar.appendChild(label);
     });
+
+    if (excludedOpts && ReviewGridSections.hasExcludedSection(sections)) {
+      bar.appendChild(
+        renderIncomeExcludedFilterChip(owner, excludedOpts.showExcluded, excludedOpts.onExcludedChange)
+      );
+    }
 
     return bar;
   }
@@ -145,6 +192,28 @@
       const filterRow = document.createElement("div");
       filterRow.className = "client-list-toolbar-row client-list-toolbar-row--filter";
       filterRow.appendChild(filterBar);
+      if (kind === "income") {
+        const sectionToggle = document.createElement("label");
+        sectionToggle.className = "category-filter-chip";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.className = "category-filter-input";
+        input.checked = !!options.showSections;
+        input.addEventListener("change", function () {
+          setSectionDisplayEnabled(input.checked);
+          if (typeof options.onSectionDisplayChange === "function") {
+            options.onSectionDisplayChange(input.checked);
+          } else {
+            onRefresh();
+          }
+        });
+        const text = document.createElement("span");
+        text.className = "category-filter-label";
+        text.textContent = "구분표시";
+        sectionToggle.appendChild(input);
+        sectionToggle.appendChild(text);
+        filterRow.appendChild(sectionToggle);
+      }
       toolbar.appendChild(filterRow);
     }
 
@@ -183,7 +252,7 @@
     const list = document.createElement("p");
     list.className = "list-color-legend-text";
     list.textContent =
-      "기장 · 성실 · 신고 · 업체 · 이관/폐업 · 상담 — 엑셀 구간별 분류입니다. 행 왼쪽 색 띠는 엑셀 행 색을 반영합니다.";
+      "기장 · 성실 · 신고 · 업체 — 신고 대상 구간입니다. 이관/폐업/상담은 하단 별도 목록입니다.";
     legend.appendChild(list);
     toolbar.appendChild(legend);
 
@@ -502,6 +571,8 @@
       if (row.isTransfer) {
         td.style.setProperty("--cell-stripe-color", "#f59e0b");
       }
+    } else if (role === "person") {
+      td.classList.add("cell-accent-person");
     } else if (role === "name") {
       td.classList.add("cell-accent-name");
       if (options.endStripe) {
@@ -511,9 +582,13 @@
   }
 
   function isAccentNameColumn(col, kind) {
-    if (kind === "income" && col.c === 3) return true;
+    if (kind === "income") return false;
     if (kind === "corp" && (col.key === "corp:1" || col.c === 1 || col.companyLink)) return true;
     return false;
+  }
+
+  function isAccentPersonColumn(col, kind) {
+    return kind === "income" && col.c === 3;
   }
 
   function showLeadAccentColumn(kind) {
@@ -550,16 +625,163 @@
   }
 
   function applyStickyOffsets(table, kind) {
+    const reviewPage = document.getElementById("review-page");
+    const stickyBar = reviewPage ? reviewPage.querySelector(".page-sticky-bar") : null;
+    const stickyTop = stickyBar ? Math.ceil(stickyBar.getBoundingClientRect().height) : 0;
+    const scrollWrap = table.parentElement;
+    const stickyHead = scrollWrap ? scrollWrap.querySelector(".client-list-sticky-head") : null;
+    const stickyHeadH = stickyHead ? Math.ceil(stickyHead.getBoundingClientRect().height || 34) : 34;
+    table.style.setProperty("--review-table-sticky-top", stickyTop + "px");
+    table.style.setProperty("--review-list-head-height", stickyHeadH + "px");
+    if (scrollWrap) {
+      scrollWrap.style.setProperty("--review-table-sticky-top", stickyTop + "px");
+      scrollWrap.style.setProperty("--review-list-head-height", stickyHeadH + "px");
+    }
+    if (stickyHead) {
+      stickyHead.style.setProperty("--review-table-sticky-top", stickyTop + "px");
+      stickyHead.style.setProperty("--review-list-head-height", stickyHeadH + "px");
+    }
+    if (scrollWrap && stickyHead) {
+      const stickyTable = stickyHead.querySelector("table");
+      const bodyRow = table.querySelector(
+        "tbody tr:not(.section-divider-row):not(.section-summary-row):not(.shareholder-inline-row)"
+      );
+      if (stickyTable && bodyRow) {
+        const headCells = Array.from(stickyTable.querySelectorAll("thead th"));
+        const bodyCells = Array.from(bodyRow.children);
+        if (headCells.length === bodyCells.length) {
+          stickyTable.style.width = table.getBoundingClientRect().width + "px";
+          headCells.forEach(function (th, index) {
+            const bodyCell = bodyCells[index];
+            const width = Math.ceil(bodyCell.getBoundingClientRect().width);
+            if (width > 0) {
+              th.style.width = width + "px";
+              th.style.minWidth = width + "px";
+              th.style.maxWidth = width + "px";
+            }
+          });
+        }
+      }
+    }
     if (kind !== "income") return;
-    const lead = table.querySelector("thead th.col-sticky-lead");
-    if (!lead) return;
-    const w = lead.getBoundingClientRect().width;
-    if (w > 0) table.style.setProperty("--sticky-name-left", w + "px");
+    const firstDataRow = table.querySelector(
+      "tbody tr:not(.section-divider-row):not(.section-summary-row):not(.shareholder-inline-row)"
+    );
+    if (firstDataRow) {
+      const cells = Array.from(firstDataRow.children);
+      const leadCell = cells[0];
+      const personCell = cells[1];
+      const leadW = leadCell ? Math.ceil(leadCell.getBoundingClientRect().width) : 0;
+      const personW = personCell ? Math.ceil(personCell.getBoundingClientRect().width) : 0;
+      if (leadW > 0) table.style.setProperty("--sticky-person-left", leadW + "px");
+      if (leadW > 0 && personW > 0) table.style.setProperty("--sticky-name-left", leadW + personW + "px");
+    }
+    if (scrollWrap && stickyHead) {
+      const wrapRect = scrollWrap.getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+      if (tableRect.top <= stickyTop && wrapRect.bottom > stickyTop + stickyHeadH + 12) {
+        stickyHead.style.display = "block";
+        stickyHead.style.position = "fixed";
+        stickyHead.style.top = stickyTop + "px";
+        stickyHead.style.left = wrapRect.left + "px";
+        stickyHead.style.width = wrapRect.width + "px";
+      } else {
+        stickyHead.style.display = "none";
+      }
+      if (!scrollWrap.__reviewStickyHeadBound) {
+        scrollWrap.addEventListener("scroll", function () {
+          applyStickyOffsets(table, kind);
+        });
+        [
+          document.querySelector(".review-embed-root .grid-scroll"),
+          document.querySelector(".portal-main-column"),
+          window,
+        ]
+          .filter(Boolean)
+          .forEach(function (host) {
+            host.addEventListener("scroll", function () {
+              applyStickyOffsets(table, kind);
+            }, { passive: true });
+          });
+        window.addEventListener("resize", function () {
+          applyStickyOffsets(table, kind);
+        });
+        scrollWrap.__reviewStickyHeadBound = true;
+      }
+    }
+  }
+
+  function toNumberValue(v) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    if (v == null) return 0;
+    const n = Number(String(v).replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function formatSectionFeeTotal(rows, kind) {
+    if (kind !== "income") return "";
+    let total = 0;
+    rows.forEach(function (row) {
+      total += toNumberValue(row.cells[14] && row.cells[14].v);
+      total += toNumberValue(row.cells[26] && row.cells[26].v);
+    });
+    return total ? total.toLocaleString("ko-KR") + "원" : "0원";
+  }
+
+  function buildSectionGroups(rows, kind) {
+    const out = [];
+    let current = null;
+    rows.forEach(function (row) {
+      const sectionId = row.sectionId || row.filterKey || "default";
+      const sectionLabel = row.sectionLabel || (row.isConsult ? "상담" : row.isTransfer ? "이관/폐업" : "기타");
+      if (!current || current.id !== sectionId) {
+        current = { id: sectionId, label: sectionLabel, rows: [] };
+        out.push(current);
+      }
+      current.rows.push(row);
+    });
+    out.forEach(function (group) {
+      group.feeTotalText = formatSectionFeeTotal(group.rows, kind);
+    });
+    return out;
   }
 
   function enableBoardEditOnList(table, sheetName, options) {
     if (!options.boardEditMode || !options.canEdit || options.readOnly) return;
     ReviewGridEdit.enableEditOnTable(table, sheetName, true, options.onPatch);
+  }
+
+  function buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader) {
+    const thead = document.createElement("thead");
+    const headTr = document.createElement("tr");
+    if (showSectionColumn) {
+      const thGroup = document.createElement("th");
+      thGroup.className =
+        "col-group col-sticky-lead col-id-section" + (accentOnlyColumn ? " col-group--accent-only" : "");
+      thGroup.textContent = accentOnlyColumn ? "" : sectionHeader;
+      if (accentOnlyColumn) thGroup.setAttribute("aria-label", "구분색");
+      headTr.appendChild(thGroup);
+    }
+    visibleCols.forEach(function (col) {
+      const th = document.createElement("th");
+      th.textContent = listColDisplayLabel(col, kind, listKind);
+      th.classList.add("col-id-" + String(ReviewReadable.listColId(col)).replace(/[^a-zA-Z0-9_-]/g, "-"));
+      if (col.highlight) th.classList.add("col-highlight");
+      if (isAccentPersonColumn(col, kind)) th.classList.add("col-sticky-person");
+      if (isAccentNameColumn(col, kind)) th.classList.add("col-sticky-name");
+      headTr.appendChild(th);
+    });
+    thead.appendChild(headTr);
+    table.appendChild(thead);
+  }
+
+  function syncListScrollPositions(wrap, source) {
+    if (!wrap) return;
+    const stickyHead = wrap.querySelector(".client-list-sticky-head");
+    const topScroll = stickyHead ? stickyHead.querySelector(".client-list-top-scroll") : null;
+    const left = source && typeof source.scrollLeft === "number" ? source.scrollLeft : wrap.scrollLeft;
+    if (wrap.scrollLeft !== left) wrap.scrollLeft = left;
+    if (topScroll && topScroll.scrollLeft !== left) topScroll.scrollLeft = left;
   }
 
   function renderClientList(rows, options) {
@@ -576,6 +798,10 @@
     const sectionHeader = kind === "fee" ? "담당" : "구분";
     const visibleCols = ReviewReadable.getVisibleListCols(listKind);
     const colCount = visibleCols.length + (showSectionColumn ? 1 : 0);
+    const showSections = kind === "income" && options.showSections !== false;
+
+    const shell = document.createElement("div");
+    shell.className = "client-list-shell";
 
     const wrap = document.createElement("div");
     wrap.className = "client-list-scroll";
@@ -593,26 +819,22 @@
       tableClass += " client-list-table--board-edit";
     }
     table.className = tableClass;
+    buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader);
 
-    const thead = document.createElement("thead");
-    const headTr = document.createElement("tr");
-    if (showSectionColumn) {
-      const thGroup = document.createElement("th");
-      thGroup.className =
-        "col-group col-sticky-lead" + (accentOnlyColumn ? " col-group--accent-only" : "");
-      thGroup.textContent = accentOnlyColumn ? "" : sectionHeader;
-      if (accentOnlyColumn) thGroup.setAttribute("aria-label", "구분색");
-      headTr.appendChild(thGroup);
-    }
-    visibleCols.forEach(function (col) {
-      const th = document.createElement("th");
-      th.textContent = listColDisplayLabel(col, kind, listKind);
-      if (col.highlight) th.classList.add("col-highlight");
-      if (isAccentNameColumn(col, kind)) th.classList.add("col-sticky-name");
-      headTr.appendChild(th);
-    });
-    thead.appendChild(headTr);
-    table.appendChild(thead);
+    const stickyHead = document.createElement("div");
+    stickyHead.className = "client-list-sticky-head";
+    const stickyTable = document.createElement("table");
+    stickyTable.className = tableClass + " client-list-table--sticky-head";
+    buildListHeader(stickyTable, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader);
+    stickyHead.appendChild(stickyTable);
+    const topScroll = document.createElement("div");
+    topScroll.className = "client-list-top-scroll client-list-top-scroll--floating";
+    const topScrollInner = document.createElement("div");
+    topScrollInner.className = "client-list-top-scroll-inner";
+    topScroll.appendChild(topScrollInner);
+    stickyHead.appendChild(topScroll);
+    wrap.appendChild(stickyHead);
+    shell.appendChild(wrap);
 
     const tbody = document.createElement("tbody");
     if (!rows.length) {
@@ -636,7 +858,27 @@
       tr.appendChild(td);
       tbody.appendChild(tr);
     } else {
-      rows.forEach(function (row) {
+      const groupedRows =
+        kind === "income" && showSections ? buildSectionGroups(rows, kind) : [{ id: "all", label: "", rows: rows }];
+      groupedRows.forEach(function (group) {
+        if (kind === "income" && showSections) {
+          const dividerTr = document.createElement("tr");
+          dividerTr.className = "section-divider-row";
+          const dividerTd = document.createElement("td");
+          dividerTd.colSpan = colCount;
+          dividerTd.className = "section-divider-cell";
+          const dividerInner = document.createElement("div");
+          dividerInner.className = "section-divider-inner";
+          const title = document.createElement("span");
+          title.className = "section-divider-title";
+          title.textContent = group.label;
+          dividerInner.appendChild(title);
+          dividerTd.appendChild(dividerInner);
+          dividerTr.appendChild(dividerTd);
+          tbody.appendChild(dividerTr);
+        }
+
+        group.rows.forEach(function (row) {
         const tr = document.createElement("tr");
         const accent = rowAccentColor(row);
         if (accent) tr.classList.add("row-stripe");
@@ -660,6 +902,7 @@
           if (row.r) td.dataset.r = String(row.r);
           if (col.c != null) td.dataset.c = String(col.c);
           const colId = ReviewReadable.listColId(col);
+          td.classList.add("col-id-" + String(colId).replace(/[^a-zA-Z0-9_-]/g, "-"));
           const data = row.cells[colId] || row.cells[col.c] || {};
           const isCompanyNameCell = col.companyLink && ReviewReadable.hasValue(data.v);
 
@@ -679,6 +922,7 @@
             } else {
               nameText.textContent = ReviewReadable.formatVal(v);
             }
+            td.title = String(ReviewReadable.formatVal(v));
             inner.appendChild(nameText);
             if (kind === "corp" && row.shareholders && row.shareholders.length) {
               const shBtn = document.createElement("button");
@@ -699,6 +943,9 @@
               attachCellTooltip(td, displayText, col, listKind);
             }
           }
+          if (isAccentPersonColumn(col, kind) && !ReviewReadable.isExcelEmphasisBg(data.bg)) {
+            paintAccentCell(td, row, "person");
+          }
           if (isAccentNameColumn(col, kind) && !ReviewReadable.isExcelEmphasisBg(data.bg)) {
             paintAccentCell(td, row, "name", { endStripe: kind === "corp" });
           } else if (kind !== "income" && kind !== "corp" && data.bg && !accent) {
@@ -708,12 +955,35 @@
           if (col.highlight) td.classList.add("col-highlight");
           if (col.num || typeof data.v === "number") td.classList.add("num");
           if (col.wrap || col.c === 5 || col.c === 11 || col.c === 21) td.classList.add("wrap");
+          if (isAccentPersonColumn(col, kind)) td.classList.add("col-sticky-person");
           if (isAccentNameColumn(col, kind)) td.classList.add("col-sticky-name");
           if (!ReviewReadable.hasValue(data.v)) td.classList.add("is-empty");
           tr.appendChild(td);
         });
 
         tbody.appendChild(tr);
+        });
+
+        if (kind === "income" && showSections) {
+          const sumTr = document.createElement("tr");
+          sumTr.className = "section-summary-row";
+          const sumTd = document.createElement("td");
+          sumTd.colSpan = colCount;
+          sumTd.className = "section-summary-cell";
+          const sumInner = document.createElement("div");
+          sumInner.className = "section-summary-inner";
+          const sumLabel = document.createElement("span");
+          sumLabel.className = "section-summary-label";
+          sumLabel.textContent = group.label + " 수수료 합계";
+          const sumValue = document.createElement("span");
+          sumValue.className = "section-summary-fee";
+          sumValue.textContent = group.feeTotalText;
+          sumInner.appendChild(sumLabel);
+          sumInner.appendChild(sumValue);
+          sumTd.appendChild(sumInner);
+          sumTr.appendChild(sumTd);
+          tbody.appendChild(sumTr);
+        }
       });
     }
 
@@ -724,8 +994,27 @@
     }
     requestAnimationFrame(function () {
       applyStickyOffsets(table, kind);
+      topScrollInner.style.width = table.getBoundingClientRect().width + "px";
+      syncListScrollPositions(wrap, wrap);
     });
-    return wrap;
+    if (!wrap.__reviewStickyResizeBound) {
+      window.addEventListener("resize", function () {
+        applyStickyOffsets(table, kind);
+        topScrollInner.style.width = table.getBoundingClientRect().width + "px";
+        syncListScrollPositions(wrap, wrap);
+      });
+      wrap.__reviewStickyResizeBound = true;
+    }
+    if (!wrap.__reviewTopScrollBound) {
+      wrap.addEventListener("scroll", function () {
+        syncListScrollPositions(wrap, wrap);
+      });
+      topScroll.addEventListener("scroll", function () {
+        syncListScrollPositions(wrap, topScroll);
+      });
+      wrap.__reviewTopScrollBound = true;
+    }
+    return shell;
   }
 
   function renderBoardContent(sheet, host, options, config) {
@@ -797,12 +1086,15 @@
     const owner = options.owner || sheet.name;
     const sections = ReviewGridSections.getSections(sheet);
     let checkedKinds = ReviewGridSections.getIncomeMainFilters(owner, sections);
+    let showExcluded = ReviewGridSections.getIncomeExcludedVisible(owner);
+    let showSections = getSectionDisplayEnabled();
     let activeSheet = sheet;
 
     const boardOpts = Object.assign({}, options, {
       sheet: activeSheet,
       owner: owner,
       kind: "income",
+      showSections: showSections,
     });
 
     const root = document.createElement("div");
@@ -811,15 +1103,15 @@
     const mainHost = document.createElement("div");
     mainHost.className = "client-list-host income-main";
 
-    const consultSection = document.createElement("section");
-    consultSection.className = "income-consult-section";
-    const consultTitle = document.createElement("h3");
-    consultTitle.className = "income-consult-title";
-    consultTitle.textContent = "상담";
-    consultSection.appendChild(consultTitle);
-    const consultHost = document.createElement("div");
-    consultHost.className = "client-list-host income-consult";
-    consultSection.appendChild(consultHost);
+    const excludedSection = document.createElement("section");
+    excludedSection.className = "income-consult-section income-excluded-section";
+    const excludedTitle = document.createElement("h3");
+    excludedTitle.className = "income-consult-title";
+    excludedTitle.textContent = "이관/폐업/상담";
+    excludedSection.appendChild(excludedTitle);
+    const excludedHost = document.createElement("div");
+    excludedHost.className = "client-list-host income-consult";
+    excludedSection.appendChild(excludedHost);
 
     function allIncomeRows() {
       return ReviewReadable.buildIncomeClientRows(activeSheet);
@@ -827,13 +1119,13 @@
 
     function mainRows() {
       return allIncomeRows().filter(function (row) {
-        return row.filterKey !== "consult";
+        return row.filterKey !== "excluded";
       });
     }
 
-    function consultRows() {
+    function excludedRows() {
       return allIncomeRows().filter(function (row) {
-        return row.filterKey === "consult";
+        return row.filterKey === "excluded";
       });
     }
 
@@ -846,24 +1138,32 @@
         rows = ReviewReadable.filterIncomeClientRows(rows, activeSheet, options.searchQuery);
       }
       mainHost.appendChild(
-        renderClientList(rows, Object.assign({}, boardOpts, { listMode: "income", filterEmpty: filterEmpty }))
+        renderClientList(
+          rows,
+          Object.assign({}, boardOpts, { listMode: "income", filterEmpty: filterEmpty, showSections: showSections })
+        )
       );
     }
 
-    function refreshConsult() {
-      consultHost.innerHTML = "";
-      let rows = consultRows();
+    function refreshExcluded() {
+      excludedHost.innerHTML = "";
+      if (!showExcluded) {
+        excludedSection.hidden = true;
+        return;
+      }
+      excludedSection.hidden = false;
+      let rows = excludedRows();
       if (options.searchQuery) {
         rows = ReviewReadable.filterIncomeClientRows(rows, activeSheet, options.searchQuery);
       }
-      consultHost.appendChild(
-        renderClientList(rows, Object.assign({}, boardOpts, { listMode: "consult" }))
+      excludedHost.appendChild(
+        renderClientList(rows, Object.assign({}, boardOpts, { listMode: "income", showSections: showSections }))
       );
     }
 
     function refreshAll() {
       refreshMain();
-      refreshConsult();
+      refreshExcluded();
     }
 
     boardOpts.onRerender = function () {
@@ -871,17 +1171,30 @@
       boardOpts.sheet = activeSheet;
       refreshAll();
     };
+    boardOpts.onSectionDisplayChange = function (next) {
+      showSections = next;
+      boardOpts.showSections = next;
+      refreshAll();
+    };
 
     const filterBar = renderIncomeMainFilterBar(sections, owner, checkedKinds, function (next) {
       checkedKinds = next;
       refreshMain();
+    }, {
+      showExcluded: showExcluded,
+      onExcludedChange: function (next) {
+        showExcluded = next;
+        refreshExcluded();
+      },
     });
 
     const toolbar = buildListToolbar("income", refreshAll, filterBar, boardOpts);
 
     root.appendChild(toolbar);
     root.appendChild(mainHost);
-    root.appendChild(consultSection);
+    if (ReviewGridSections.hasExcludedSection(sections)) {
+      root.appendChild(excludedSection);
+    }
     refreshAll();
     host.appendChild(root);
   }

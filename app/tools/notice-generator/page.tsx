@@ -13,6 +13,7 @@ import CompanyNotesField from './_components/CompanyNotesField';
 import PaymentNoticeField from './_components/PaymentNoticeField';
 import VatReportField from './_components/VatReportField';
 import TemplateEditor from './_components/TemplateEditor';
+import OfficialLetterEditor from './_components/OfficialLetterEditor';
 import { TAX_TYPES, TAX_TYPE_META } from './_lib/taxTypes';
 import { SELECTABLE_YEARS } from './_lib/holidays';
 import {
@@ -27,6 +28,24 @@ import {
   type TemplateScenario,
   type TemplateSource,
 } from './_lib/template';
+import {
+  DEFAULT_OFFICIAL_LETTER_BY_KIND,
+  OFFICIAL_LETTER_LABEL,
+  buildOfficialLetterVars,
+  legacyTaxKindFromMode,
+  normalizeNoticeCategory,
+  taxTypeForOfficialKind,
+  usesFormalOfficialLayout,
+  type NoticeOutputMode,
+  type OfficialLetterKind,
+} from './_lib/officialLetter';
+import {
+  defaultOfficialFormBodyForKind,
+  resolveOfficialFormId,
+  taxKindFromFormId,
+} from './_lib/officialFormCatalog';
+import type { VatBusinessType } from './_lib/vatBusinessItems';
+import { resolveManagerContact } from './_lib/managerContact';
 import { useLocalStorage } from './_lib/useLocalStorage';
 import { calculateDeadline, defaultMaterialDate } from './_lib/deadline';
 import { toISODate } from './_lib/dateUtils';
@@ -38,16 +57,19 @@ import {
   buildVatReportHtml,
   calcVatReport,
   hasLocalIncomeTax,
-  defaultPaymentSlips,
   installmentSchedule,
 } from './_lib/templates';
 import { fetchNoticeTemplateStore, saveNoticeTemplateStore } from './_lib/noticeTemplateClient';
 import {
   DEFAULT_MATERIALS_BY_TAX,
   NOTES_EXAMPLE_BY_TAX,
+  buildNoticeClientEntry,
+  emptyPaymentForTax,
   fetchClientNotice,
+  paymentFromNoticeEntry,
   saveClientNotice,
   TAX_TO_DOUZONE_NOTE_KEY,
+  vatReportFromNoticeEntry,
   type ClientNoticeMap,
   type NoticeClientData,
 } from './_lib/clientNotice';
@@ -59,12 +81,19 @@ import type {
   VatReport,
 } from './_lib/types';
 import { EMPTY_VAT_REPORT } from './_lib/types';
+import { currentMonthlyFilingMonth } from '@/lib/periodUtils';
 
-function getDefaultYear() {
-  const now = new Date().getFullYear();
+function defaultNoticeParams(): DeadlineParams {
+  const { year, month } = currentMonthlyFilingMonth();
   const min = SELECTABLE_YEARS[0];
   const max = SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1];
-  return Math.min(Math.max(now, min), max);
+  return {
+    year: Math.min(Math.max(year, min), max),
+    month,
+    vatPeriodId: '1-final',
+    fyEndMonth: 12,
+    filingTypeId: 'general',
+  };
 }
 
 type SelectedClient = {
@@ -73,16 +102,7 @@ type SelectedClient = {
   noticeMap: ClientNoticeMap;
 };
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
-function currentTaxEntry(
-  materials: string,
-  notes: string,
-  payrollByUs: boolean,
-  attachNote: string,
-): NoticeClientData {
-  return { materials, notes, payrollByUs, attachNote };
-}
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 function withTaxEntry(
   client: SelectedClient,
@@ -96,6 +116,32 @@ function withTaxEntry(
 export default function NoticeGeneratorPage() {
   // 세션 입력값 (수임처 미연결 시 전역 스크래치 — localStorage)
   const [taxType, setTaxType] = useLocalStorage<TaxTypeKey>('tng.taxType', TAX_TYPES.VAT);
+  const [outputModeRaw, setOutputModeRaw] = useLocalStorage<string>('tng.outputMode', 'message');
+  const [officialTaxKind, setOfficialTaxKind] = useLocalStorage<OfficialLetterKind>(
+    'tng.officialTaxKind',
+    'vat',
+  );
+  const outputMode = normalizeNoticeCategory(outputModeRaw) as NoticeOutputMode;
+
+  useEffect(() => {
+    const legacy = legacyTaxKindFromMode(outputModeRaw);
+    if (legacy) {
+      setOutputModeRaw('official');
+      setOfficialTaxKind(legacy);
+      return;
+    }
+    const normalized = normalizeNoticeCategory(outputModeRaw);
+    if (outputModeRaw !== normalized) {
+      setOutputModeRaw(normalized);
+    }
+  }, [outputModeRaw, setOutputModeRaw, setOfficialTaxKind]);
+
+  const setOutputMode = (mode: NoticeOutputMode) => setOutputModeRaw(mode);
+  const [vatBusinessType, setVatBusinessType] = useLocalStorage<VatBusinessType>(
+    'tng.vatBusinessType',
+    'individual',
+  );
+  const [sessionUser, setSessionUser] = useState<{ name: string; loginId: string } | null>(null);
   const [companyName, setCompanyName] = useLocalStorage('tng.company', '');
   const [notes, setNotes] = useLocalStorage('tng.notes', '');
   // 기본값은 비움 — 비었을 때는 세목별 예시를 연한 글씨(placeholder)로 안내
@@ -107,9 +153,7 @@ export default function NoticeGeneratorPage() {
   const [templateSaveState, setTemplateSaveState] = useState<SaveState>('idle');
   const [vatTemplateSaveState, setVatTemplateSaveState] = useState<SaveState>('idle');
   const [paymentTemplateSaveState, setPaymentTemplateSaveState] = useState<SaveState>('idle');
-  const templateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const vatTemplateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const paymentTemplateSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [officialTemplateSaveState, setOfficialTemplateSaveState] = useState<SaveState>('idle');
   const templateStoreRef = useRef(templateStore);
   templateStoreRef.current = templateStore;
 
@@ -123,30 +167,15 @@ export default function NoticeGeneratorPage() {
     { enabled: true, date: '', hour: 13, minute: 0 },
   );
 
-  // 신고 결과 안내(납부세액) 입력값 (세션 전용 — 매 신고마다 달라지므로 비영구)
-  // 부가세 외 세목(원천세·종소세·법인세)은 본세+지방소득세 → 납부서 기본 2장
-  const [payment, setPayment] = useState<PaymentNotice>(() => ({
-    slips: defaultPaymentSlips(taxType),
-    amount: 0,
-    localAmount: 0,
-    refundClaimed: false,
-    installments: [],
-    withholdingItems: [],
-    attachNote: '',
-  }));
+  // 신고 결과 안내(납부세액) — 수임처 미연결 시 세션 전용, 연결 시 세목별 DB 저장
+  const [payment, setPayment] = useState<PaymentNotice>(() => emptyPaymentForTax(taxType));
 
-  // 부가세 신고 결과 보고 및 검토 입력값 (세션 전용)
+  // 부가세 신고 결과 보고 및 검토 — 수임처 연결 시 세목별 DB 저장
   const [vatReport, setVatReport] = useState<VatReport>(EMPTY_VAT_REPORT);
   /** 부가세만: 신고결과보고 최종세액 → 납부금액 자동 연동 (수동 수정 시 해제) */
   const [vatPaymentLinked, setVatPaymentLinked] = useState(true);
 
-  const [params, setParams] = useLocalStorage<DeadlineParams>('tng.params', {
-    year: getDefaultYear(),
-    month: new Date().getMonth() + 1,
-    vatPeriodId: '1-final',
-    fyEndMonth: 12,
-    filingTypeId: 'general',
-  });
+  const [params, setParams] = useLocalStorage<DeadlineParams>('tng.params', defaultNoticeParams());
 
   // 수임처 연결 모드 상태
   const [selectedClient, setSelectedClient] = useState<SelectedClient | null>(null);
@@ -169,13 +198,48 @@ export default function NoticeGeneratorPage() {
 
   const loadForTax = (noticeMap: ClientNoticeMap, tax: TaxTypeKey) => {
     const entry = noticeMap[tax];
-    // 저장된 값이 있으면 그대로, 없으면 비워두고 예시 placeholder로 안내
     setClientMaterials(entry?.materials ?? '');
     setClientNotes(entry?.notes ?? '');
     setClientPayrollByUs(entry?.payrollByUs ?? false);
-    setPayment(prev => ({ ...prev, attachNote: entry?.attachNote ?? '' }));
+    setPayment(paymentFromNoticeEntry(entry, tax));
+    setVatReport(vatReportFromNoticeEntry(entry));
+    setVatPaymentLinked(entry?.vatPaymentLinked ?? tax === TAX_TYPES.VAT);
     setClientDirty(false);
   };
+
+  const clientEntrySnapshot = useCallback(
+    (overrides?: Partial<{ materials: string; notes: string; payrollByUs: boolean }>) =>
+      buildNoticeClientEntry(
+        overrides?.materials ?? clientMaterials,
+        overrides?.notes ?? clientNotes,
+        overrides?.payrollByUs ?? clientPayrollByUs,
+        payment,
+        vatReport,
+        vatPaymentLinked,
+        taxType,
+      ),
+    [
+      clientMaterials,
+      clientNotes,
+      clientPayrollByUs,
+      payment,
+      vatReport,
+      vatPaymentLinked,
+      taxType,
+    ],
+  );
+
+  /** 수임처 해제 후 이전 업체 입력값이 화면에 남지 않도록 초기화 */
+  const clearClientFormState = useCallback(() => {
+    const tax = taxTypeRef.current;
+    setClientMaterials('');
+    setClientNotes('');
+    setClientPayrollByUs(false);
+    setClientCompanyName('');
+    setPayment(emptyPaymentForTax(tax));
+    setVatReport(EMPTY_VAT_REPORT);
+    setVatPaymentLinked(tax === TAX_TYPES.VAT);
+  }, []);
 
   const persistCurrentClient = useCallback(
     async (client: SelectedClient, tax: TaxTypeKey, entry: NoticeClientData) => {
@@ -205,12 +269,7 @@ export default function NoticeGeneratorPage() {
     const leaving = selectedClientRef.current;
     if (leaving) {
       if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
-      const entry = currentTaxEntry(
-        clientMaterials,
-        clientNotes,
-        clientPayrollByUs,
-        payment.attachNote,
-      );
+      const entry = clientEntrySnapshot();
       try {
         await persistCurrentClient(leaving, taxTypeRef.current, entry);
       } catch {
@@ -222,7 +281,10 @@ export default function NoticeGeneratorPage() {
     const loadGen = clientLoadGen.current;
 
     if (!picked) {
+      clientLoadGen.current += 1;
+      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
       setSelectedClient(null);
+      clearClientFormState();
       setSaveState('idle');
       setClientDirty(false);
       return;
@@ -254,11 +316,7 @@ export default function NoticeGeneratorPage() {
     if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
     setSaveState('saving');
     try {
-      await persistCurrentClient(
-        client,
-        taxType,
-        currentTaxEntry(clientMaterials, clientNotes, clientPayrollByUs, payment.attachNote),
-      );
+      await persistCurrentClient(client, taxType, clientEntrySnapshot());
       setClientDirty(false);
       setSaveState('saved');
     } catch {
@@ -269,12 +327,7 @@ export default function NoticeGeneratorPage() {
   const handleSelectTax = (next: TaxTypeKey) => {
     let noticeMap = selectedClient?.noticeMap ?? {};
     if (selectedClient) {
-      const entry = currentTaxEntry(
-        clientMaterials,
-        clientNotes,
-        clientPayrollByUs,
-        payment.attachNote,
-      );
+      const entry = clientEntrySnapshot();
       const updated = withTaxEntry(selectedClient, taxType, entry);
       setSelectedClient(updated);
       noticeMap = updated.noticeMap;
@@ -289,18 +342,11 @@ export default function NoticeGeneratorPage() {
     }
 
     setTaxType(next);
-    const savedAttach = noticeMap[next]?.attachNote ?? '';
-    // 세목별 납부서 기본 장수 적용 + 금액 초기화(세목마다 금액이 다르므로)
-    setPayment({
-      slips: defaultPaymentSlips(next),
-      amount: 0,
-      localAmount: 0,
-      refundClaimed: false,
-      installments: [],
-      withholdingItems: [],
-      attachNote: savedAttach,
-    });
-    setVatPaymentLinked(next === TAX_TYPES.VAT);
+    if (!selectedClient) {
+      setPayment(emptyPaymentForTax(next));
+      setVatReport(EMPTY_VAT_REPORT);
+      setVatPaymentLinked(next === TAX_TYPES.VAT);
+    }
     // 세목을 바꾸면 자료 제출 마감일을 해당 세목 기본값으로 자동 변경
     // (원천세 -3일 / 부가세 -2주 / 종소세 -3주 / 법인세 직전 달 15일)
     const nextDeadline = calculateDeadline(next, params);
@@ -322,13 +368,7 @@ export default function NoticeGeneratorPage() {
       setClientMaterials(value);
       setSelectedClient(prev => {
         if (!prev) return prev;
-        const base = prev.noticeMap[taxType] ?? {
-          materials: '',
-          notes: '',
-          payrollByUs: false,
-          attachNote: '',
-        };
-        return withTaxEntry(prev, taxType, { ...base, materials: value });
+        return withTaxEntry(prev, taxType, clientEntrySnapshot({ materials: value }));
       });
       setClientDirty(true);
     } else {
@@ -341,13 +381,7 @@ export default function NoticeGeneratorPage() {
       setClientNotes(value);
       setSelectedClient(prev => {
         if (!prev) return prev;
-        const base = prev.noticeMap[taxType] ?? {
-          materials: '',
-          notes: '',
-          payrollByUs: false,
-          attachNote: '',
-        };
-        return withTaxEntry(prev, taxType, { ...base, notes: value });
+        return withTaxEntry(prev, taxType, clientEntrySnapshot({ notes: value }));
       });
       setClientDirty(true);
     } else {
@@ -360,13 +394,7 @@ export default function NoticeGeneratorPage() {
       setClientPayrollByUs(value);
       setSelectedClient(prev => {
         if (!prev) return prev;
-        const base = prev.noticeMap[taxType] ?? {
-          materials: '',
-          notes: '',
-          payrollByUs: false,
-          attachNote: '',
-        };
-        return withTaxEntry(prev, taxType, { ...base, payrollByUs: value });
+        return withTaxEntry(prev, taxType, clientEntrySnapshot({ payrollByUs: value }));
       });
       setClientDirty(true);
     } else {
@@ -375,22 +403,23 @@ export default function NoticeGeneratorPage() {
   };
 
   const handlePaymentChange = (next: PaymentNotice | ((prev: PaymentNotice) => PaymentNotice)) => {
-    setPayment(prev => {
-      const resolved = typeof next === 'function' ? next(prev) : next;
-      const sc = selectedClientRef.current;
-      if (sc && resolved.attachNote !== prev.attachNote) {
-        const tax = taxTypeRef.current;
-        const base = sc.noticeMap[tax] ?? {
-          materials: '',
-          notes: '',
-          payrollByUs: false,
-          attachNote: '',
-        };
-        setSelectedClient(withTaxEntry(sc, tax, { ...base, attachNote: resolved.attachNote }));
-        setClientDirty(true);
-      }
-      return resolved;
-    });
+    setPayment(prev => (typeof next === 'function' ? next(prev) : next));
+    if (selectedClientRef.current) setClientDirty(true);
+  };
+
+  const handleVatReportChange = (next: VatReport | ((prev: VatReport) => VatReport)) => {
+    setVatReport(prev => (typeof next === 'function' ? next(prev) : next));
+    if (selectedClientRef.current) setClientDirty(true);
+  };
+
+  const handleVatPaymentUnlink = () => {
+    setVatPaymentLinked(false);
+    if (selectedClientRef.current) setClientDirty(true);
+  };
+
+  const handleVatPaymentRelink = () => {
+    setVatPaymentLinked(true);
+    if (selectedClientRef.current) setClientDirty(true);
   };
 
   // 수임처 연결 시 입력 변경을 잠시 모아 서버에 자동 저장
@@ -403,12 +432,7 @@ export default function NoticeGeneratorPage() {
       void (async () => {
         const client = selectedClientRef.current;
         if (!client || loadGen !== clientLoadGen.current) return;
-        const entry = currentTaxEntry(
-          clientMaterials,
-          clientNotes,
-          clientPayrollByUs,
-          payment.attachNote,
-        );
+        const entry = clientEntrySnapshot();
         try {
           await persistCurrentClient(client, taxTypeRef.current, entry);
           if (loadGen !== clientLoadGen.current) return;
@@ -426,10 +450,7 @@ export default function NoticeGeneratorPage() {
   }, [
     selectedClient,
     clientDirty,
-    clientMaterials,
-    clientNotes,
-    clientPayrollByUs,
-    payment.attachNote,
+    clientEntrySnapshot,
     persistCurrentClient,
   ]);
 
@@ -451,46 +472,63 @@ export default function NoticeGeneratorPage() {
     return () => ac.abort();
   }, []);
 
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch('/api/auth/me', { credentials: 'same-origin', signal: ac.signal })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.user?.name) {
+          setSessionUser({ name: data.user.name, loginId: data.user.loginId ?? '' });
+        }
+      })
+      .catch(() => {});
+    return () => ac.abort();
+  }, []);
+
   const persistTemplateStore = useCallback(async (next: NoticeTemplateStore) => {
     setTemplateSaveState('saving');
+    setVatTemplateSaveState('saving');
+    setPaymentTemplateSaveState('saving');
+    setOfficialTemplateSaveState('saving');
     try {
       await saveNoticeTemplateStore(next);
       setTemplateSaveState('saved');
+      setVatTemplateSaveState('saved');
+      setPaymentTemplateSaveState('saved');
+      setOfficialTemplateSaveState('saved');
     } catch {
       setTemplateSaveState('error');
+      setVatTemplateSaveState('error');
+      setPaymentTemplateSaveState('error');
+      setOfficialTemplateSaveState('error');
     }
   }, []);
 
-  const schedulePersistStore = useCallback(
-    (next: NoticeTemplateStore, kind: 'notice' | 'vat' | 'payment' = 'notice') => {
-      setTemplateStore(next);
-      const setState =
-        kind === 'vat'
-          ? setVatTemplateSaveState
-          : kind === 'payment'
-            ? setPaymentTemplateSaveState
+  const markTemplateDirty = (kind: 'notice' | 'vat' | 'payment' | 'official') => {
+    const setState =
+      kind === 'vat'
+        ? setVatTemplateSaveState
+        : kind === 'payment'
+          ? setPaymentTemplateSaveState
+          : kind === 'official'
+            ? setOfficialTemplateSaveState
             : setTemplateSaveState;
-      setState('saving');
-      const timer =
-        kind === 'vat'
-          ? vatTemplateSaveTimer
-          : kind === 'payment'
-            ? paymentTemplateSaveTimer
-            : templateSaveTimer;
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(async () => {
-        try {
-          await saveNoticeTemplateStore(next);
-          setState('saved');
-        } catch {
-          setState('error');
-        }
-      }, 800);
-    },
-    [],
-  );
+    setState(prev => (prev === 'saving' ? prev : 'dirty'));
+  };
 
-  const deadline = useMemo(() => calculateDeadline(taxType, params), [taxType, params]);
+  const isOfficialMode = outputMode === 'official';
+  const usesFormalLayout = usesFormalOfficialLayout(officialTaxKind);
+  const periodTaxType = isOfficialMode ? taxTypeForOfficialKind(officialTaxKind) : taxType;
+  const officialFormId = useMemo(
+    () => resolveOfficialFormId(officialTaxKind, params),
+    [officialTaxKind, params.vatPeriodId, params.fyEndMonth, params.filingTypeId],
+  );
+  const officialEditorKey = usesFormalLayout ? officialFormId : officialTaxKind;
+
+  const deadline = useMemo(
+    () => calculateDeadline(periodTaxType, params),
+    [periodTaxType, params],
+  );
 
   const isWithholding = taxType === TAX_TYPES.WITHHOLDING;
 
@@ -537,7 +575,8 @@ export default function NoticeGeneratorPage() {
       templates: { ...prev.templates, [scenario]: html },
       sources: { ...prev.sources, [scenario]: 'custom' },
     };
-    schedulePersistStore(next, 'notice');
+    setTemplateStore(next);
+    markTemplateDirty('notice');
   };
 
   const handleNoticeSourceChange = (source: TemplateSource) => {
@@ -552,7 +591,8 @@ export default function NoticeGeneratorPage() {
         [scenario]: DEFAULT_TEMPLATE_BY_SCENARIO[scenario],
       };
     }
-    schedulePersistStore(next, 'notice');
+    setTemplateStore(next);
+    markTemplateDirty('notice');
   };
 
   const handleNoticeTemplateSave = () => {
@@ -566,7 +606,8 @@ export default function NoticeGeneratorPage() {
       vatReportTemplate: html,
       vatReportSource: 'custom',
     };
-    schedulePersistStore(next, 'vat');
+    setTemplateStore(next);
+    markTemplateDirty('vat');
   };
 
   const handleVatReportSourceChange = (source: TemplateSource) => {
@@ -579,7 +620,8 @@ export default function NoticeGeneratorPage() {
           ? DEFAULT_VAT_REPORT_TEMPLATE
           : prev.vatReportTemplate,
     };
-    schedulePersistStore(next, 'vat');
+    setTemplateStore(next);
+    markTemplateDirty('vat');
   };
 
   const handleVatReportTemplateSave = () => {
@@ -593,7 +635,8 @@ export default function NoticeGeneratorPage() {
       paymentNoticeTemplate: html,
       paymentNoticeSource: 'custom',
     };
-    schedulePersistStore(next, 'payment');
+    setTemplateStore(next);
+    markTemplateDirty('payment');
   };
 
   const handlePaymentNoticeSourceChange = (source: TemplateSource) => {
@@ -606,12 +649,81 @@ export default function NoticeGeneratorPage() {
           ? DEFAULT_PAYMENT_NOTICE_TEMPLATE
           : prev.paymentNoticeTemplate,
     };
-    schedulePersistStore(next, 'payment');
+    setTemplateStore(next);
+    markTemplateDirty('payment');
   };
 
   const handlePaymentNoticeTemplateSave = () => {
     void persistTemplateStore(templateStoreRef.current);
   };
+
+  const handleOfficialLetterChange = (kind: OfficialLetterKind, html: string) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      officialLetters: { ...prev.officialLetters, [kind]: html },
+      officialLetterSources: { ...prev.officialLetterSources, [kind]: 'custom' },
+    };
+    setTemplateStore(next);
+    markTemplateDirty('official');
+  };
+
+  const handleOfficialLetterSourceChange = (kind: OfficialLetterKind, source: TemplateSource) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      officialLetterSources: { ...prev.officialLetterSources, [kind]: source },
+    };
+    if (source === 'custom' && !prev.officialLetters?.[kind]?.trim()) {
+      next.officialLetters = {
+        ...prev.officialLetters,
+        [kind]: DEFAULT_OFFICIAL_LETTER_BY_KIND[kind],
+      };
+    }
+    setTemplateStore(next);
+    markTemplateDirty('official');
+  };
+
+  const handleOfficialLetterSave = () => {
+    void persistTemplateStore(templateStoreRef.current);
+  };
+
+  const handleOfficialFormChange = (formId: string, html: string) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      officialFormTemplates: { ...prev.officialFormTemplates, [formId]: html },
+      officialFormSources: { ...prev.officialFormSources, [formId]: 'custom' },
+    };
+    setTemplateStore(next);
+    markTemplateDirty('official');
+  };
+
+  const handleOfficialFormSourceChange = (formId: string, source: TemplateSource) => {
+    const prev = templateStoreRef.current;
+    const next: NoticeTemplateStore = {
+      ...prev,
+      officialFormSources: { ...prev.officialFormSources, [formId]: source },
+    };
+    if (source === 'custom' && !prev.officialFormTemplates?.[formId]?.trim()) {
+      next.officialFormTemplates = {
+        ...prev.officialFormTemplates,
+        [formId]: defaultOfficialFormBodyForKind(taxKindFromFormId(formId)),
+      };
+    }
+    setTemplateStore(next);
+    markTemplateDirty('official');
+  };
+
+  const handleOutputModeChange = (mode: NoticeOutputMode) => {
+    setOutputMode(mode);
+  };
+
+  const activeOfficialDefaultHtml = usesFormalLayout
+    ? defaultOfficialFormBodyForKind(officialTaxKind)
+    : DEFAULT_OFFICIAL_LETTER_BY_KIND[officialTaxKind];
+
+  const managerContact = useMemo(() => resolveManagerContact(sessionUser), [sessionUser]);
 
   // 자료 제출 마감은 항시 ON.
   // 세목/기간이 바뀌면 세목별 기본값(원천세 -3일, 부가세 -2주, 종소세 -3주, 법인세 2월 중순)으로
@@ -620,7 +732,7 @@ export default function NoticeGeneratorPage() {
   useEffect(() => {
     if (!deadline) return;
     const finalISO = toISODate(deadline.final);
-    const def = defaultMaterialDate(taxType, deadline.final);
+    const def = defaultMaterialDate(periodTaxType, deadline.final);
     const prevAuto = lastAutoMaterialDate.current;
     lastAutoMaterialDate.current = def;
     setMaterialDeadline(prev => {
@@ -638,7 +750,7 @@ export default function NoticeGeneratorPage() {
 
   const handleMaterialDeadlineChange = (next: MaterialDeadline) => {
     if (!next.date && deadline) {
-      next = { ...next, date: defaultMaterialDate(taxType, deadline.final) };
+      next = { ...next, date: defaultMaterialDate(periodTaxType, deadline.final) };
     }
     setMaterialDeadline({ ...next, enabled: true });
   };
@@ -651,6 +763,31 @@ export default function NoticeGeneratorPage() {
   const materialDeadlineNote = useMemo(
     () => formatMaterialDeadlineNote(materialDeadline),
     [materialDeadline],
+  );
+
+  const officialLetterVars = useMemo(
+    () =>
+      buildOfficialLetterVars({
+        deadline,
+        materialDeadlineLine,
+        manager: managerContact,
+        companyName: effectiveCompanyName,
+        year: params.year,
+        vatPeriodId: params.vatPeriodId,
+        vatBusinessType,
+        officialKind: isOfficialMode ? officialTaxKind : null,
+      }),
+    [
+      deadline,
+      materialDeadlineLine,
+      managerContact,
+      effectiveCompanyName,
+      params.year,
+      params.vatPeriodId,
+      vatBusinessType,
+      isOfficialMode,
+      officialTaxKind,
+    ],
   );
 
   const effectiveTemplate = activeTemplate;
@@ -733,21 +870,30 @@ export default function NoticeGeneratorPage() {
         prev.slips < 2 ||
         (installments[0]?.amount === finalTax);
       if (prev.amount === finalTax && instSynced) return prev;
+      if (selectedClientRef.current) setClientDirty(true);
       return { ...prev, amount: finalTax, installments };
     });
   }, [isVat, vatReport, payment.slips, vatPaymentLinked]);
 
-  const meta = TAX_TYPE_META[taxType];
+  const meta = TAX_TYPE_META[periodTaxType];
 
   return (
     <div className="space-y-3">
       <PortalPageHeader
         title="안내문 생성기"
-        description="세목·기간별 신고 안내·납부 문구를 생성합니다."
+        description={
+          isOfficialMode
+            ? '세목별 신고 공문을 직접 편집·인쇄·저장합니다.'
+            : '세목·기간별 신고 안내·납부 문구를 생성합니다.'
+        }
         icon={<PageHeaderIcon name="notice-generator" />}
       />
 
       <NoticeSetupBar
+        outputMode={outputMode}
+        onOutputModeChange={handleOutputModeChange}
+        officialTaxKind={officialTaxKind}
+        onOfficialTaxKindChange={setOfficialTaxKind}
         taxType={taxType}
         onSelectTax={handleSelectTax}
         params={params}
@@ -756,6 +902,8 @@ export default function NoticeGeneratorPage() {
         taxLabel={meta.name}
         materialDeadline={materialDeadline}
         onMaterialDeadlineChange={handleMaterialDeadlineChange}
+        vatBusinessType={vatBusinessType}
+        onVatBusinessTypeChange={setVatBusinessType}
         clientPicker={
           <NoticeClientPicker
             value={
@@ -768,6 +916,44 @@ export default function NoticeGeneratorPage() {
         }
       />
 
+      {isOfficialMode && templateLoaded ? (
+        <OfficialLetterEditor
+          key={officialEditorKey}
+          storageKey={officialEditorKey}
+          kind={officialEditorKey}
+          title={OFFICIAL_LETTER_LABEL[officialTaxKind]}
+          defaultHtml={activeOfficialDefaultHtml}
+          customHtml={
+            usesFormalLayout
+              ? (templateStore.officialFormTemplates?.[officialFormId] ?? '')
+              : (templateStore.officialLetters?.[officialTaxKind] ?? '')
+          }
+          source={
+            usesFormalLayout
+              ? (templateStore.officialFormSources?.[officialFormId] ?? 'default')
+              : (templateStore.officialLetterSources?.[officialTaxKind] ?? 'default')
+          }
+          vars={officialLetterVars}
+          layout={usesFormalLayout ? 'formal' : 'prep'}
+          onChange={html =>
+            usesFormalLayout
+              ? handleOfficialFormChange(officialFormId, html)
+              : handleOfficialLetterChange(officialTaxKind, html)
+          }
+          onSourceChange={source =>
+            usesFormalLayout
+              ? handleOfficialFormSourceChange(officialFormId, source)
+              : handleOfficialLetterSourceChange(officialTaxKind, source)
+          }
+          onSave={handleOfficialLetterSave}
+          hasCustomSaved={
+            usesFormalLayout
+              ? Boolean(templateStore.officialFormTemplates?.[officialFormId]?.trim())
+              : Boolean(templateStore.officialLetters?.[officialTaxKind]?.trim())
+          }
+          saveState={officialTemplateSaveState}
+        />
+      ) : (
       <div className={`${noticePageSplit} w-full`}>
         <div className="space-y-3 min-w-0">
           <CompanyNotesField
@@ -787,7 +973,7 @@ export default function NoticeGeneratorPage() {
 
           {isVat && (
             <NoticeCollapsibleSection title="신고 결과 보고 (부가세)">
-              <VatReportField value={vatReport} onChange={setVatReport} embedded />
+              <VatReportField value={vatReport} onChange={handleVatReportChange} embedded />
             </NoticeCollapsibleSection>
           )}
 
@@ -800,8 +986,8 @@ export default function NoticeGeneratorPage() {
               isWithholding={taxType === TAX_TYPES.WITHHOLDING}
               showInstallments={isVat}
               vatAmountLinked={isVat && vatPaymentLinked}
-              onManualAmountEdit={isVat ? () => setVatPaymentLinked(false) : undefined}
-              onReLinkVatAmount={isVat ? () => setVatPaymentLinked(true) : undefined}
+              onManualAmountEdit={isVat ? handleVatPaymentUnlink : undefined}
+              onReLinkVatAmount={isVat ? handleVatPaymentRelink : undefined}
               clientLinked={inClientMode}
               embedded
             />
@@ -867,6 +1053,7 @@ export default function NoticeGeneratorPage() {
           </NoticeCollapsibleSection>
         </div>
       </div>
+      )}
 
       <p className={portalFooterMeta}>
         마감일은 법정기한 기준입니다. 공휴일: 2025~2035년 · 연도: {SELECTABLE_YEARS[0]}~

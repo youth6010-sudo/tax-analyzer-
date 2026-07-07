@@ -92,15 +92,27 @@ export function simplePayrollMonthlyPeriodKey(year: number, month: number): stri
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
-/** 간이지급 근로(상용) 반기 신고월 — 1월(하반기)·7월(상반기) */
+/** 간이지급 근로(상용) 반기 신고월 — 6월(상반기)·12월(하반기) */
+export const SIMPLE_PAYROLL_EMPLOYED_FILING_MONTHS = [6, 12] as const;
+
 export function isSimplePayrollEmployedFilingMonth(month: number): boolean {
-  return month === 1 || month === 7;
+  return (SIMPLE_PAYROLL_EMPLOYED_FILING_MONTHS as readonly number[]).includes(month);
+}
+
+/** 반기 신고대상 + 매월 표시일 때 원천세·간이지급 근로(상용) 열 노출 */
+export function isEmployedColumnApplicable(
+  month: number,
+  intakeData: Record<string, unknown>,
+): boolean {
+  if (isSimplePayrollEmployedFilingMonth(month)) return true;
+  const { semiAnnualTarget, semiAnnualMonthlyDisplay } = readWithholdingSettings(intakeData);
+  return semiAnnualTarget && semiAnnualMonthlyDisplay;
 }
 
 /** 근로 간이지급 저장용 반기 period_key. 반기 신고월이 아니면 null */
 export function employedSimplePayrollPeriodKey(year: number, month: number): string | null {
-  if (month === 7) return simplePayrollPeriodKey(year, 'H1');
-  if (month === 1) return simplePayrollPeriodKey(year - 1, 'H2');
+  if (month === 6) return simplePayrollPeriodKey(year, 'H1');
+  if (month === 12) return simplePayrollPeriodKey(year, 'H2');
   return null;
 }
 
@@ -111,5 +123,5 @@ export function parseSimplePayrollViewPeriod(periodKey: string): { year: number;
     return { year: Number(y), month: Number(m) };
   }
   const { year, half } = parseSimplePayrollPeriodKey(periodKey);
-  return { year, month: half === 'H1' ? 7 : 1 };
+  return { year, month: half === 'H1' ? 6 : 12 };
 }
