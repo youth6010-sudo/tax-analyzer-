@@ -104,11 +104,16 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
   return (await res.json().catch(() => ({}))) as Record<string, unknown>;
 }
 
-async function deleteReviewLinks(reviewKey: string): Promise<void> {
-  const res = await fetch(
-    `/api/admin/review-client-links?reviewKey=${encodeURIComponent(reviewKey)}`,
-    { method: 'DELETE' },
-  );
+async function deleteReviewLinks(reviewKey: string, clientId?: string): Promise<void> {
+  const res = await fetch('/api/admin/review-client-links', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'delete',
+      reviewKey,
+      ...(clientId ? { clientId } : {}),
+    }),
+  });
   const data = await readJson(res);
   if (!res.ok) throw new Error((data.error as string) || '연결 삭제 실패');
 }
@@ -421,12 +426,7 @@ function MultiLinkEditor({
     setBusy(true);
     setError('');
     try {
-      const res = await fetch(
-        `/api/admin/review-client-links?reviewKey=${encodeURIComponent(entry.reviewKey)}&clientId=${encodeURIComponent(clientId)}`,
-        { method: 'DELETE' },
-      );
-      const data = await readJson(res);
-      if (!res.ok) throw new Error((data.error as string) || '해제 실패');
+      await deleteReviewLinks(entry.reviewKey, clientId);
       const next = clientIds.filter(id => id !== clientId);
       setClientIds(next);
       if (next.length === 0) onLinkDeleted?.();

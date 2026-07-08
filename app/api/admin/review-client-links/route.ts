@@ -23,7 +23,22 @@ function apiError(e: unknown) {
     return NextResponse.json({ error: '검토표 연결 Admin 권한이 없습니다.' }, { status: 403 });
   }
   console.error('[admin/review-client-links]', e);
-  return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  const detail =
+    e instanceof Error ? e.message : typeof e === 'string' ? e : 'Server error';
+  return NextResponse.json({ error: detail }, { status: 500 });
+}
+
+async function deleteReviewLinksByKey(reviewKey: string, clientId?: string) {
+  const key = reviewKey.trim();
+  if (!key) {
+    throw new Error('reviewKey required');
+  }
+  if (clientId) {
+    await removeReviewClientLink(key, clientId);
+  } else {
+    await deleteAllReviewClientLinks(key);
+  }
+  invalidateUnlinkedReviewCompaniesCache();
 }
 
 export async function GET() {
@@ -52,11 +67,23 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireReviewLinkAdmin();
     const body = (await request.json()) as {
+      action?: string;
       reviewKey?: string;
       reviewName?: string;
       clientId?: string;
       clientIds?: string[];
     };
+
+    if (body.action === 'delete') {
+      const reviewKey = String(body.reviewKey ?? '').trim();
+      const clientId = String(body.clientId ?? '').trim();
+      if (!reviewKey) {
+        return NextResponse.json({ error: 'reviewKey required' }, { status: 400 });
+      }
+      await deleteReviewLinksByKey(reviewKey, clientId || undefined);
+      return NextResponse.json({ ok: true });
+    }
+
     const reviewKey = normalizeReviewLookupKey(body.reviewKey ?? body.reviewName ?? '');
     if (!reviewKey) {
       return NextResponse.json({ error: 'reviewKey required' }, { status: 400 });
@@ -89,17 +116,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     await requireReviewLinkAdmin();
-    const reviewKey = normalizeReviewLookupKey(request.nextUrl.searchParams.get('reviewKey') ?? '');
+    const reviewKey = request.nextUrl.searchParams.get('reviewKey')?.trim() ?? '';
     const clientId = request.nextUrl.searchParams.get('clientId')?.trim() ?? '';
     if (!reviewKey) {
       return NextResponse.json({ error: 'reviewKey required' }, { status: 400 });
     }
-    if (clientId) {
-      await removeReviewClientLink(reviewKey, clientId);
-    } else {
-      await deleteAllReviewClientLinks(reviewKey);
-    }
-    invalidateUnlinkedReviewCompaniesCache();
+    await deleteReviewLinksByKey(reviewKey, clientId || undefined);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e);
