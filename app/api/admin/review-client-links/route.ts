@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireReviewLinkAdmin } from '@/lib/auth';
-import { listClients } from '@/lib/clientsDb';
+import { listUnlinkedReviewCompanies } from '@/lib/review/reviewCompanyIndex';
 import {
   deleteAllReviewClientLinks,
-  listReviewClientLinks,
   removeReviewClientLink,
   replaceReviewClientLinks,
 } from '@/lib/review/clientLinkDb';
 import { normalizeReviewLookupKey } from '@/lib/review/companyKey';
-import { listUnlinkedReviewCompanies } from '@/lib/review/reviewCompanyIndex';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,14 +26,12 @@ export async function GET() {
   try {
     await requireReviewLinkAdmin();
     const data = await listUnlinkedReviewCompanies();
-    const links = await listReviewClientLinks();
-    const clients = await listClients({ includeChurned: true });
     return NextResponse.json({
       unlinked: data.unlinked,
       linked: data.linked,
-      links,
+      links: data.links,
       suggestionsByKey: data.suggestionsByKey,
-      clients: clients.map(c => ({
+      clients: data.clients.map(c => ({
         id: c.id,
         companyName: c.companyName,
         manager: c.manager,

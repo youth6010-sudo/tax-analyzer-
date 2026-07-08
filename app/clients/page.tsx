@@ -159,7 +159,10 @@ function ClientsPageContent() {
     if (state.includeChurned) params.set('includeChurned', '1');
     setFetching(true);
     try {
-      const res = await fetch(`/api/clients?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/clients?${params}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20_000),
+      });
       const data = await res.json();
       const incoming: ClientRecord[] = data.clients ?? [];
       setFetchedClients(prev => {
@@ -187,6 +190,8 @@ function ClientsPageContent() {
           };
         });
       });
+    } catch {
+      setFetchedClients([]);
     } finally {
       setFetching(false);
     }

@@ -21,10 +21,18 @@ export default function ContactHeaderSearch({ expanded = false }: { expanded?: b
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const searchIndexPrefetched = useRef(false);
 
   useEffect(() => {
     hydratePortal();
-    void prefetchSearchIndex();
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    setOpen(true);
+    if (!searchIndexPrefetched.current) {
+      searchIndexPrefetched.current = true;
+      void prefetchSearchIndex();
+    }
   }, []);
 
   useEffect(() => {
@@ -113,7 +121,7 @@ export default function ContactHeaderSearch({ expanded = false }: { expanded?: b
             setQuery(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={handleSearchFocus}
           onKeyDown={handleKeyDown}
           placeholder="업체·대표·연락처 이름·전화·담당자 검색"
           className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400 focus:bg-white transition-colors"

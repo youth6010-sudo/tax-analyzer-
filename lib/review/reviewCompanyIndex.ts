@@ -186,6 +186,34 @@ export async function listReviewCompanyEntries(): Promise<ReviewCompanyEntry[]> 
 }
 
 export async function listUnlinkedReviewCompanies() {
+  const now = Date.now();
+  if (unlinkedCache && now - unlinkedCache.at < UNLINKED_TTL_MS) {
+    return unlinkedCache.data;
+  }
+  if (unlinkedInflight) return unlinkedInflight;
+
+  unlinkedInflight = loadUnlinkedReviewCompaniesFresh()
+    .then(data => {
+      unlinkedCache = { at: Date.now(), data };
+      unlinkedInflight = null;
+      return data;
+    })
+    .catch(err => {
+      unlinkedInflight = null;
+      throw err;
+    });
+
+  return unlinkedInflight;
+}
+
+const UNLINKED_TTL_MS = 90_000;
+let unlinkedCache: {
+  at: number;
+  data: Awaited<ReturnType<typeof loadUnlinkedReviewCompaniesFresh>>;
+} | null = null;
+let unlinkedInflight: Promise<Awaited<ReturnType<typeof loadUnlinkedReviewCompaniesFresh>>> | null = null;
+
+async function loadUnlinkedReviewCompaniesFresh() {
   const [entries, links, pool] = await Promise.all([
     listReviewCompanyEntries(),
     listReviewClientLinks(),
@@ -239,7 +267,7 @@ export async function listUnlinkedReviewCompanies() {
     unlinked.push(entry);
   }
 
-  return { unlinked, linked, links, suggestionsByKey };
+  return { unlinked, linked, links, suggestionsByKey, clients: pool };
 }
 
 export { companyLinkKey };

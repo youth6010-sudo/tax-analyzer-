@@ -54,6 +54,21 @@ const STORAGE_KEY = 'portalBootstrap:v9';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
+const FETCH_TIMEOUT_MS = 15_000;
+
+function emptyBootstrap(): PortalBootstrap {
+  return {
+    fetchedAt: Date.now(),
+    tasks: [],
+    homeStats: { count: 0, corporate: 0, individual: 0, nonBusiness: 0, unclassified: 0 },
+    clients: [],
+    searchIndex: [],
+    inquiries: [],
+    processes: [],
+    churnRecords: [],
+    churnMissingClients: [],
+  };
+}
 
 let memory: PortalBootstrap | null = null;
 let searchIndexMemory: ClientSearchResult[] | null = null;
@@ -327,7 +342,10 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
   }
   if (inflight) return inflight;
 
-  inflight = fetch('/api/portal/bootstrap', { credentials: 'same-origin' })
+  inflight = fetch('/api/portal/bootstrap', {
+    credentials: 'same-origin',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  })
     .then(async res => {
       if (!res.ok) {
         if (res.status === 401) {
@@ -340,7 +358,7 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
               : `동기화 실패 (${res.status}). 새로고침 후 다시 시도해 주세요.`;
         }
         notify();
-        return memory;
+        return memory ?? emptyBootstrap();
       }
       const data = (await res.json()) as PortalBootstrap;
       bootstrapSyncError = null;
@@ -360,6 +378,10 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
     })
     .catch(() => {
       bootstrapSyncError = '서버에 연결할 수 없습니다. 네트워크 또는 DB 설정을 확인해 주세요.';
+      if (!memory) {
+        memory = emptyBootstrap();
+        writeStorage(memory);
+      }
       notify();
       return memory;
     })
@@ -376,7 +398,10 @@ export function prefetchSearchIndex(force = false): Promise<ClientSearchResult[]
   }
   if (searchInflight) return searchInflight;
 
-  searchInflight = fetch('/api/portal/search-index', { credentials: 'same-origin' })
+  searchInflight = fetch('/api/portal/search-index', {
+    credentials: 'same-origin',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  })
     .then(async res => {
       if (!res.ok) return searchIndexMemory;
       const data = (await res.json()) as { searchIndex: ClientSearchResult[] };

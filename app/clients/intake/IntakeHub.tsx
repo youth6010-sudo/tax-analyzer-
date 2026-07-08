@@ -265,6 +265,12 @@ export default function IntakeHub() {
   }, [load]);
 
   useEffect(() => {
+    if (!listLoading) return;
+    const timer = window.setTimeout(() => setListLoading(false), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [listLoading]);
+
+  useEffect(() => {
     return subscribePortal(() => {
       setInquiries(getPortalInquiries().map(r => normalizeInquiry(r)));
       setProcesses(getPortalProcesses().map(r => normalizeProcess(r)));

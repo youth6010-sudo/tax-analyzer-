@@ -28,14 +28,21 @@ export async function getPortalBootstrap() {
     ? { mineOnly: true as const, userId: user.id, userName: user.name }
     : {};
 
-  const [tasks, activeClients, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
-    listDashboardTasks({ name: user.name, isAdmin: isDataViewer(user) }),
-    listClients({
-      status: 'active',
-      mineOnly,
-      userId: user.id,
-      userName: user.name,
-    }),
+  const activeClients = await listClients({
+    status: 'active',
+    mineOnly,
+    userId: user.id,
+    userName: user.name,
+  });
+
+  const taskClientPool = activeClients.map(c => ({
+    id: c.id,
+    companyName: c.companyName,
+    manager: c.manager,
+  }));
+
+  const [tasks, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
+    listDashboardTasks({ name: user.name, isAdmin: isDataViewer(user) }, 20, taskClientPool),
     listInquiries(),
     listIntakeProcesses(),
     listChurnRecords(accessFilter),

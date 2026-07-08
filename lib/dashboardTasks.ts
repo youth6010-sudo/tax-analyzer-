@@ -33,6 +33,12 @@ export type DashboardTaskUser = {
   isAdmin: boolean;
 };
 
+export type DashboardTaskClientRef = {
+  id: string;
+  companyName: string;
+  manager: string;
+};
+
 /**
  * 담당자 기준 노출 규칙:
  *  - 담당자가 지정된 업체 → 그 담당자에게만
@@ -112,6 +118,7 @@ function toProcessRow(row: {
 export async function listDashboardTasks(
   user: DashboardTaskUser,
   limit = 20,
+  clientPool?: DashboardTaskClientRef[],
 ): Promise<DashboardTask[]> {
   const db = getDb();
   const tasks: DashboardTask[] = [];
@@ -161,9 +168,11 @@ export async function listDashboardTasks(
 
   const inquiries = inquiryRows.map(toInquiryRow);
 
-  const clientRows = await db
-    .select({ id: clients.id, companyName: clients.companyName, manager: clients.manager })
-    .from(clients);
+  const clientRows =
+    clientPool ??
+    (await db
+      .select({ id: clients.id, companyName: clients.companyName, manager: clients.manager })
+      .from(clients));
   const clientRefs: ClientNameRef[] = clientRows.map(c => ({
     id: c.id,
     companyName: c.companyName,
