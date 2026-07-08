@@ -45,6 +45,12 @@ type ClientOption = {
   status: string;
 };
 
+type IndexMeta = {
+  ready: boolean;
+  builtAt: string | null;
+  entryCount: number;
+};
+
 type TaxTab = 'all' | ReviewTaxKind;
 
 const TAX_TABS: { id: TaxTab; label: string }[] = [
@@ -59,6 +65,40 @@ const TAX_KIND_LABEL: Record<ReviewTaxKind, string> = {
   'corp-tax': '법인신고',
   'corp-fee': '법인조정료',
 };
+
+function formatIndexBuiltAt(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function useLazySuggestions(entry: ReviewEntry): MatchSuggestion[] | undefined {
+  const [items, setItems] = useState<MatchSuggestion[] | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ reviewKey: entry.reviewKey });
+        const owner = entry.owners?.[0];
+        if (owner) params.set('owner', owner);
+        const res = await fetch(`/api/admin/review-client-links/suggestions?${params}`);
+        const data = await readJson(res);
+        if (!cancelled && res.ok) {
+          setItems((data.suggestions as MatchSuggestion[]) || []);
+        }
+      } catch {
+        if (!cancelled) setItems([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.reviewKey, entry.owners]);
+
+  return items;
+}
 
 async function readJson(res: Response): Promise<Record<string, unknown>> {
   return (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -498,14 +538,13 @@ function MultiLinkEditor({
 function QuickLinkRow({
   entry,
   clients,
-  suggestionItems,
   onLinkSaved,
 }: {
   entry: ReviewEntry;
   clients: ClientOption[];
-  suggestionItems?: MatchSuggestion[];
   onLinkSaved: (entry: ReviewEntry, clientIds: string[]) => void;
 }) {
+  const suggestionItems = useLazySuggestions(entry);
   const [multiMode, setMultiMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -639,8 +678,13 @@ export default function ReviewClientLinksAdmin() {
   const [unlinked, setUnlinked] = useState<ReviewEntry[]>([]);
   const [linked, setLinked] = useState<LinkedEntry[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [suggestionsByKey, setSuggestionsByKey] = useState<Record<string, MatchSuggestion[]>>({});
+  const [indexMeta, setIndexMeta] = useState<IndexMeta>({
+    ready: false,
+    builtAt: null,
+    entryCount: 0,
+  });
   const [loading, setLoading] = useState(true);
+  const [rebuildingIndex, setRebuildingIndex] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkMsg, setAutoLinkMsg] = useState('');
   const [error, setError] = useState('');
@@ -664,7 +708,9 @@ export default function ReviewClientLinksAdmin() {
       setUnlinked((data.unlinked as ReviewEntry[]) || []);
       setLinked((data.linked as LinkedEntry[]) || []);
       setClients((data.clients as ClientOption[]) || []);
-      setSuggestionsByKey((data.suggestionsByKey as Record<string, MatchSuggestion[]>) || {});
+      setIndexMeta(
+        (data.indexMeta as IndexMeta) || { ready: false, builtAt: null, entryCount: 0 },
+      );
     } catch (e) {
       const msg =
         e instanceof Error && e.name === 'TimeoutError'
@@ -683,11 +729,6 @@ export default function ReviewClientLinksAdmin() {
     setLinked(prev => {
       const without = prev.filter(l => l.entry.reviewKey !== entry.reviewKey);
       return [...without, { entry, clientIds, manual: true }];
-    });
-    setSuggestionsByKey(prev => {
-      const next = { ...prev };
-      delete next[entry.reviewKey];
-      return next;
     });
   }, []);
 
@@ -710,6 +751,25 @@ export default function ReviewClientLinksAdmin() {
     },
     [load],
   );
+
+  const runRebuildIndex = async () => {
+    setRebuildingIndex(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/review-client-links/rebuild-index', {
+        method: 'POST',
+        signal: AbortSignal.timeout(120_000),
+      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error((data.error as string) || '인덱스 빌드 실패');
+      if (data.indexMeta) setIndexMeta(data.indexMeta as IndexMeta);
+      await load(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '인덱스 빌드 실패');
+    } finally {
+      setRebuildingIndex(false);
+    }
+  };
 
   const runRelinkAuto = async () => {
     if (
@@ -830,6 +890,38 @@ export default function ReviewClientLinksAdmin() {
           </Link>
         </div>
 
+        {!indexMeta.ready ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-medium">검토표 업체 인덱스가 없습니다.</p>
+            <p className="mt-1 text-xs text-amber-800">
+              미연결 목록을 보려면 인덱스를 빌드해 주세요. 수동·자동 연결(DB 저장분)은 아래에서 바로 확인할 수 있습니다.
+            </p>
+            <button
+              type="button"
+              className={`${portalBtnPrimary} mt-3`}
+              disabled={rebuildingIndex || loading}
+              onClick={() => void runRebuildIndex()}
+            >
+              {rebuildingIndex ? '인덱스 빌드 중… (1~2분)' : '인덱스 빌드'}
+            </button>
+          </div>
+        ) : (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            <span>
+              인덱스 갱신: {formatIndexBuiltAt(indexMeta.builtAt)} ·{' '}
+              {indexMeta.entryCount.toLocaleString()}건
+            </span>
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={rebuildingIndex || loading}
+              onClick={() => void runRebuildIndex()}
+            >
+              {rebuildingIndex ? '재빌드 중…' : '인덱스 다시 빌드'}
+            </button>
+          </div>
+        )}
+
         <div className={`${portalCard} mb-4 flex flex-col gap-3`}>
           <div className="flex flex-wrap gap-2">
             {TAX_TABS.map(tab => (
@@ -918,9 +1010,7 @@ export default function ReviewClientLinksAdmin() {
           onToggle={() => setOpenManual(v => !v)}
         >
           {loading ? (
-            <p className="text-sm text-slate-500">
-              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
-            </p>
+            <p className="text-sm text-slate-500">목록 불러오는 중…</p>
           ) : manualLinked.length === 0 ? (
             <p className={portalEmptyState}>수동 연결된 업체가 없습니다.</p>
           ) : (
@@ -945,9 +1035,7 @@ export default function ReviewClientLinksAdmin() {
           hint="상호·대표자·담당자 기준 자동 매칭. 수정하면 수동 연결로 저장됩니다."
         >
           {loading ? (
-            <p className="text-sm text-slate-500">
-              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
-            </p>
+            <p className="text-sm text-slate-500">목록 불러오는 중…</p>
           ) : autoLinked.length === 0 ? (
             <p className={portalEmptyState}>자동 연결된 업체가 없습니다.</p>
           ) : (
@@ -971,8 +1059,10 @@ export default function ReviewClientLinksAdmin() {
           onToggle={() => setOpenUnlinked(v => !v)}
         >
           {loading ? (
-            <p className="text-sm text-slate-500">
-              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
+            <p className="text-sm text-slate-500">목록 불러오는 중…</p>
+          ) : !indexMeta.ready ? (
+            <p className={portalEmptyState}>
+              인덱스 빌드 후 미연결 업체 목록이 표시됩니다.
             </p>
           ) : filteredUnlinked.length === 0 ? (
             <p className={portalEmptyState}>미연결 업체가 없습니다.</p>
@@ -982,7 +1072,6 @@ export default function ReviewClientLinksAdmin() {
                 key={entry.reviewKey}
                 entry={entry}
                 clients={clients}
-                suggestionItems={suggestionsByKey[entry.reviewKey]}
                 onLinkSaved={handleLinkSaved}
               />
             ))

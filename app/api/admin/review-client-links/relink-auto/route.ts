@@ -4,6 +4,7 @@ import { requireReviewLinkAdmin } from '@/lib/auth';
 import { runAutoLinkReviewClients } from '@/lib/review/autoLinkReview';
 import { invalidateClientLinksIndexCache } from '@/lib/review/clientLink';
 import { deleteAutoReviewClientLinks } from '@/lib/review/clientLinkDb';
+import { invalidateUnlinkedReviewCompaniesCache } from '@/lib/review/reviewCompanyIndex';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,6 +28,7 @@ export async function POST() {
     invalidateClientLinksIndexCache();
     const result = await runAutoLinkReviewClients(user.id);
     invalidateClientLinksIndexCache();
+    invalidateUnlinkedReviewCompaniesCache();
     return NextResponse.json({ cleared, ...result });
   } catch (e) {
     return apiError(e);

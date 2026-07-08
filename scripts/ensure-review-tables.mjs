@@ -142,6 +142,15 @@ try {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS review_company_index_cache (
+      id text PRIMARY KEY DEFAULT 'default',
+      built_at timestamptz NOT NULL DEFAULT now(),
+      entry_count integer NOT NULL DEFAULT 0,
+      entries jsonb NOT NULL DEFAULT '[]'::jsonb
+    )
+  `;
+
   console.log('review_grid tables ready');
 } finally {
   await sql.end();

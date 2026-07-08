@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireReviewLinkAdmin } from '@/lib/auth';
-import { listUnlinkedReviewCompanies } from '@/lib/review/reviewCompanyIndex';
+import {
+  invalidateUnlinkedReviewCompaniesCache,
+  listUnlinkedReviewCompanies,
+} from '@/lib/review/reviewCompanyIndex';
 import {
   deleteAllReviewClientLinks,
   removeReviewClientLink,
@@ -31,7 +34,6 @@ export async function GET() {
       unlinked: data.unlinked,
       linked: data.linked,
       links: data.links,
-      suggestionsByKey: data.suggestionsByKey,
       clients: data.clients.map(c => ({
         id: c.id,
         companyName: c.companyName,
@@ -39,6 +41,7 @@ export async function GET() {
         businessNo: c.businessNo,
         status: c.status,
       })),
+      indexMeta: data.indexMeta,
     });
   } catch (e) {
     return apiError(e);
@@ -76,6 +79,7 @@ export async function POST(request: NextRequest) {
       updatedBy: user.id,
       matchMethod: 'manual',
     });
+    invalidateUnlinkedReviewCompaniesCache();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e);
@@ -95,6 +99,7 @@ export async function DELETE(request: NextRequest) {
     } else {
       await deleteAllReviewClientLinks(reviewKey);
     }
+    invalidateUnlinkedReviewCompaniesCache();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e);

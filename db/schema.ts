@@ -410,6 +410,14 @@ export const reviewGridSheets = pgTable('review_grid_sheets', {
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** 검토표 업체 인덱스 캐시 (Admin·자동연결용) */
+export const reviewCompanyIndexCache = pgTable('review_company_index_cache', {
+  id: text('id').primaryKey().default('default'),
+  builtAt: timestamp('built_at', { withTimezone: true }).notNull().defaultNow(),
+  entryCount: integer('entry_count').notNull().default(0),
+  entries: jsonb('entries').notNull().$type<unknown[]>().default([]),
+});
+
 /** 검토표 ↔ 수임처 수동 연결 (찰리 관리, 1:N) */
 export const reviewClientLinks = pgTable(
   'review_client_links',

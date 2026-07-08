@@ -46,6 +46,7 @@
     "vercel:deploy": "npx vercel@latest deploy --prod",
     "vercel:sync-db": "node scripts/sync-supabase-vercel.mjs",
     "db:ensure-review-tables": "node scripts/ensure-review-tables.mjs",
+    "rebuild:company-index": "npx tsx scripts/rebuild-company-index.ts",
     "rebuild:review-links": "npx tsx scripts/rebuild-review-client-links.ts",
     "auto-link:review": "npx tsx scripts/run-auto-link-review.ts",
     "import:review": "python scripts/import-review-grid.py --output public/data/review-grid.json",

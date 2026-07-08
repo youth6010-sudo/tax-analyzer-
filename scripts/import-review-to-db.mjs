@@ -5,6 +5,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import postgres from 'postgres';
 
@@ -71,4 +72,15 @@ try {
   console.log(`Supabase review_grid_sheets 업로드 완료: ${sheets.length}개 시트`);
 } finally {
   await sql.end();
+}
+
+console.log('업체 인덱스 재빌드 중…');
+const rebuild = spawnSync('npm', ['run', 'rebuild:company-index'], {
+  cwd: root,
+  stdio: 'inherit',
+  shell: true,
+});
+if (rebuild.status !== 0) {
+  console.error('rebuild:company-index 실패');
+  process.exit(rebuild.status ?? 1);
 }

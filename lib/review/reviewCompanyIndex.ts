@@ -1,14 +1,17 @@
 import { buildCorpFeeIndex } from '@/lib/review/corpFeeIndex';
 import { buildCorpTaxCompanyIndex } from '@/lib/review/corpTaxCompanyIndex';
 import {
-  companyLinkKey,
   legacyBaseKeyFromScopedReviewKey,
   scopedReviewKey,
 } from '@/lib/review/companyKey';
 import { listClients } from '@/lib/clientsDb';
 import { listReviewClientLinks } from '@/lib/review/clientLinkDb';
-import { buildClientMatchIndex, matchReviewEntry } from '@/lib/review/clientMatch';
 import { buildIncomeCompanyIndex } from '@/lib/review/incomeCompanyIndex';
+import {
+  readCachedCompanyEntries,
+  readCompanyIndexMeta,
+  type CompanyIndexMeta,
+} from '@/lib/review/reviewCompanyIndexCache';
 
 export type ReviewTaxKind = 'income' | 'corp-tax' | 'corp-fee';
 
@@ -101,18 +104,19 @@ function mergeEntry(
   if (meta?.companyLabel && !existing.companyLabel) existing.companyLabel = meta.companyLabel;
   if (meta?.baseKey && !existing.baseKey) existing.baseKey = meta.baseKey;
   if (meta?.altKeys?.length) {
-    const merged = new Set([...(existing.altKeys ?? []), reviewKey, ...(existing.baseKey ? [existing.baseKey] : []), ...meta.altKeys]);
+    const merged = new Set([
+      ...(existing.altKeys ?? []),
+      reviewKey,
+      ...(existing.baseKey ? [existing.baseKey] : []),
+      ...meta.altKeys,
+    ]);
     existing.altKeys = [...merged];
   }
   existing.source = existing.sources.map(s => s.sheetName).filter(Boolean).join(', ');
 }
 
-/** 검토표 전 시트(종소·법인신고·법인조정료) 업체 목록 */
-const ENTRIES_TTL_MS = 90_000;
-let entriesCache: { at: number; entries: ReviewCompanyEntry[] } | null = null;
-let entriesInflight: Promise<ReviewCompanyEntry[]> | null = null;
-
-async function loadReviewCompanyEntriesFresh(): Promise<ReviewCompanyEntry[]> {
+/** 검토표 전 시트(종소·법인신고·법인조정료) 업체 목록 — 그리드에서 직접 빌드 */
+export async function buildReviewCompanyEntriesFresh(): Promise<ReviewCompanyEntry[]> {
   const [incomeRows, corpTaxRows, corpFeeIndex] = await Promise.all([
     buildIncomeCompanyIndex(),
     buildCorpTaxCompanyIndex(),
@@ -171,18 +175,48 @@ async function loadReviewCompanyEntriesFresh(): Promise<ReviewCompanyEntry[]> {
   return [...map.values()].sort((a, b) => a.reviewName.localeCompare(b.reviewName, 'ko'));
 }
 
+const ENTRIES_TTL_MS = 90_000;
+let entriesCache: { at: number; entries: ReviewCompanyEntry[] } | null = null;
+let entriesInflight: Promise<ReviewCompanyEntry[]> | null = null;
+
 export async function listReviewCompanyEntries(): Promise<ReviewCompanyEntry[]> {
   const now = Date.now();
   if (entriesCache && now - entriesCache.at < ENTRIES_TTL_MS) return entriesCache.entries;
+
+  const dbCached = await readCachedCompanyEntries();
+  if (dbCached?.length) {
+    entriesCache = { at: Date.now(), entries: dbCached };
+    return dbCached;
+  }
+
   if (entriesInflight) return entriesInflight;
 
-  entriesInflight = loadReviewCompanyEntriesFresh().then(entries => {
+  entriesInflight = buildReviewCompanyEntriesFresh().then(entries => {
     entriesCache = { at: Date.now(), entries };
     entriesInflight = null;
     return entries;
   });
 
   return entriesInflight;
+}
+
+export function invalidateReviewCompanyEntriesMemoryCache(): void {
+  entriesCache = null;
+  entriesInflight = null;
+}
+
+function stubEntry(reviewKey: string, reviewName: string): ReviewCompanyEntry {
+  const baseKey = legacyBaseKeyFromScopedReviewKey(reviewKey);
+  return {
+    reviewKey,
+    reviewName,
+    sources: [],
+    source: '',
+    taxKinds: [],
+    owners: [],
+    baseKey,
+    altKeys: [reviewKey, baseKey],
+  };
 }
 
 export async function listUnlinkedReviewCompanies() {
@@ -206,6 +240,11 @@ export async function listUnlinkedReviewCompanies() {
   return unlinkedInflight;
 }
 
+export function invalidateUnlinkedReviewCompaniesCache(): void {
+  unlinkedCache = null;
+  unlinkedInflight = null;
+}
+
 const UNLINKED_TTL_MS = 90_000;
 let unlinkedCache: {
   at: number;
@@ -214,11 +253,15 @@ let unlinkedCache: {
 let unlinkedInflight: Promise<Awaited<ReturnType<typeof loadUnlinkedReviewCompaniesFresh>>> | null = null;
 
 async function loadUnlinkedReviewCompaniesFresh() {
-  const [entries, links, pool] = await Promise.all([
-    listReviewCompanyEntries(),
+  const [cachedEntries, links, pool, indexMeta] = await Promise.all([
+    readCachedCompanyEntries(),
     listReviewClientLinks(),
     listClients({ includeChurned: true }),
+    readCompanyIndexMeta(),
   ]);
+
+  const entries = cachedEntries ?? [];
+  const entryByKey = new Map(entries.map(e => [e.reviewKey, e]));
 
   const linksByKey = new Map<string, typeof links>();
   for (const link of links) {
@@ -227,47 +270,41 @@ async function loadUnlinkedReviewCompaniesFresh() {
     linksByKey.set(link.reviewKey, list);
   }
 
-  const unlinked: ReviewCompanyEntry[] = [];
   const linked: {
     entry: ReviewCompanyEntry;
     clientIds: string[];
     manual: boolean;
     matchMethod?: string;
   }[] = [];
-  const suggestionsByKey: Record<string, ReturnType<typeof matchReviewEntry>['suggestions']> = {};
+  const linkedKeys = new Set<string>();
 
-  const matchIndex = buildClientMatchIndex(pool);
-
-  for (const entry of entries) {
-    const manual = linksByKey.get(entry.reviewKey);
-    if (manual?.length) {
-      const matchMethod = manual[0]?.matchMethod ?? 'manual';
-      linked.push({
-        entry,
-        clientIds: manual.sort((a, b) => a.sortOrder - b.sortOrder).map(l => l.clientId),
-        manual: matchMethod === 'manual',
-        matchMethod,
-      });
-      continue;
-    }
-    const autoMatch = matchReviewEntry(entry, matchIndex);
-    if (autoMatch.confidence === 'high' && autoMatch.clientIds.length) {
-      linked.push({
-        entry,
-        clientIds: autoMatch.clientIds,
-        manual: false,
-        matchMethod: autoMatch.method ?? undefined,
-      });
-      continue;
-    }
-
-    if (autoMatch.suggestions.length) {
-      suggestionsByKey[entry.reviewKey] = autoMatch.suggestions;
-    }
-    unlinked.push(entry);
+  for (const [reviewKey, rows] of linksByKey) {
+    linkedKeys.add(reviewKey);
+    const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+    const matchMethod = sorted[0]?.matchMethod ?? 'manual';
+    const entry =
+      entryByKey.get(reviewKey) ??
+      stubEntry(reviewKey, sorted[0]?.reviewName || reviewKey);
+    linked.push({
+      entry,
+      clientIds: sorted.map(l => l.clientId),
+      manual: matchMethod === 'manual',
+      matchMethod,
+    });
   }
 
-  return { unlinked, linked, links, suggestionsByKey, clients: pool };
+  linked.sort((a, b) => a.entry.reviewName.localeCompare(b.entry.reviewName, 'ko'));
+
+  const unlinked = entries.filter(e => !linkedKeys.has(e.reviewKey));
+
+  return {
+    unlinked,
+    linked,
+    links,
+    suggestionsByKey: {} as Record<string, never>,
+    clients: pool,
+    indexMeta,
+  };
 }
 
-export { companyLinkKey };
+export type { CompanyIndexMeta };
