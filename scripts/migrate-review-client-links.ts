@@ -22,13 +22,17 @@ for (const name of ['.env.local', '.env']) {
 
 import { migrateReviewClientLinksToScoped } from '../lib/review/migrateReviewClientLinks';
 import { invalidateClientLinksIndexCache } from '../lib/review/clientLink';
+import { invalidateUnlinkedReviewCompaniesCache } from '../lib/review/reviewCompanyIndex';
 
 const dryRun = process.argv.includes('--dry-run');
 
 async function main() {
   console.log(`[migrate-review-links] dryRun=${dryRun}`);
   const result = await migrateReviewClientLinksToScoped({ dryRun });
-  if (!dryRun) invalidateClientLinksIndexCache();
+  if (!dryRun) {
+    invalidateClientLinksIndexCache();
+    invalidateUnlinkedReviewCompaniesCache();
+  }
   console.log(`마이그레이션: ${result.migrated}건`);
   console.log(`스킵: ${result.skipped.length}건`);
   if (result.conflicts.length) {

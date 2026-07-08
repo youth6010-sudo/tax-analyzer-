@@ -758,14 +758,20 @@ export default function ReviewClientLinksAdmin() {
     try {
       const res = await fetch('/api/admin/review-client-links/rebuild-index', {
         method: 'POST',
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(300_000),
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error((data.error as string) || '인덱스 빌드 실패');
       if (data.indexMeta) setIndexMeta(data.indexMeta as IndexMeta);
       await load(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '인덱스 빌드 실패');
+      const msg =
+        e instanceof Error && e.name === 'TimeoutError'
+          ? '인덱스 빌드 시간이 초과되었습니다. 터미널에서 npm run rebuild:company-index 를 실행해 주세요.'
+          : e instanceof Error
+            ? e.message
+            : '인덱스 빌드 실패';
+      setError(msg);
     } finally {
       setRebuildingIndex(false);
     }
