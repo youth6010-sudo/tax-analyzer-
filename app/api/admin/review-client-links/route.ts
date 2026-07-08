@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { requireCharlie } from '@/lib/auth';
+import { requireReviewLinkAdmin } from '@/lib/auth';
 import { listClients } from '@/lib/clientsDb';
 import {
   deleteAllReviewClientLinks,
@@ -8,7 +8,7 @@ import {
   removeReviewClientLink,
   replaceReviewClientLinks,
 } from '@/lib/review/clientLinkDb';
-import { companyLinkKey } from '@/lib/review/companyKey';
+import { normalizeReviewLookupKey } from '@/lib/review/companyKey';
 import { listUnlinkedReviewCompanies } from '@/lib/review/reviewCompanyIndex';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ function apiError(e: unknown) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (e instanceof Error && e.message === 'FORBIDDEN') {
-    return NextResponse.json({ error: '찰리 계정만 접근할 수 있습니다.' }, { status: 403 });
+    return NextResponse.json({ error: '검토표 연결 Admin 권한이 없습니다.' }, { status: 403 });
   }
   console.error('[admin/review-client-links]', e);
   return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -26,7 +26,7 @@ function apiError(e: unknown) {
 
 export async function GET() {
   try {
-    await requireCharlie();
+    await requireReviewLinkAdmin();
     const data = await listUnlinkedReviewCompanies();
     const links = await listReviewClientLinks();
     const clients = await listClients({ includeChurned: true });
@@ -34,6 +34,7 @@ export async function GET() {
       unlinked: data.unlinked,
       linked: data.linked,
       links,
+      suggestionsByKey: data.suggestionsByKey,
       clients: clients.map(c => ({
         id: c.id,
         companyName: c.companyName,
@@ -49,14 +50,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireCharlie();
+    const user = await requireReviewLinkAdmin();
     const body = (await request.json()) as {
       reviewKey?: string;
       reviewName?: string;
       clientId?: string;
       clientIds?: string[];
     };
-    const reviewKey = companyLinkKey(body.reviewKey ?? body.reviewName ?? '');
+    const reviewKey = normalizeReviewLookupKey(body.reviewKey ?? body.reviewName ?? '');
     if (!reviewKey) {
       return NextResponse.json({ error: 'reviewKey required' }, { status: 400 });
     }
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       reviewName: body.reviewName?.trim() || reviewKey,
       clientIds,
       updatedBy: user.id,
+      matchMethod: 'manual',
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -85,8 +87,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireCharlie();
-    const reviewKey = companyLinkKey(request.nextUrl.searchParams.get('reviewKey') ?? '');
+    await requireReviewLinkAdmin();
+    const reviewKey = normalizeReviewLookupKey(request.nextUrl.searchParams.get('reviewKey') ?? '');
     const clientId = request.nextUrl.searchParams.get('clientId')?.trim() ?? '';
     if (!reviewKey) {
       return NextResponse.json({ error: 'reviewKey required' }, { status: 400 });

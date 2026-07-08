@@ -123,6 +123,45 @@ export async function getClientById(id: string) {
   return primaryContactName ? { ...record, primaryContactName } : record;
 }
 
+/** id 목록으로 수임처 목록 조회 (listClients와 동일한 목록 레코드 형식) */
+export async function getClientsByIds(ids: string[]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const db = getDb();
+  const rows = await db.select().from(clients).where(inArray(clients.id, unique));
+  const records = rows.map(clientToListRecord);
+
+  const churnedIds = records.filter(r => r.status === 'churned').map(r => r.id);
+  if (churnedIds.length === 0) return records;
+
+  const churnRows = await db
+    .select()
+    .from(churnRecords)
+    .where(inArray(churnRecords.clientId, churnedIds))
+    .orderBy(desc(churnRecords.churnedAt));
+
+  const churnByClient = new Map<string, ChurnSummary>();
+  for (const c of churnRows) {
+    if (c.clientId && !churnByClient.has(c.clientId)) {
+      churnByClient.set(c.clientId, {
+        id: c.id,
+        churnedAt: c.churnedAt.toISOString(),
+        reason: c.reason,
+        detail: c.detail,
+        churnType: c.churnType,
+        dataCleanup: c.dataCleanup,
+        earlySign: c.earlySign,
+        feeAmount: c.feeAmount,
+      });
+    }
+  }
+
+  return records.map(r =>
+    r.status === 'churned' ? { ...r, churn: churnByClient.get(r.id) ?? null } : r,
+  );
+}
+
 /** 여러 수임처 id → 상호 맵 (감사 로그 등 표시용) */
 export async function getClientNamesByIds(ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();

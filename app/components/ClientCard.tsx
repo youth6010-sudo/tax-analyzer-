@@ -11,6 +11,7 @@ export default function ClientCard({ client }: { client: ClientRecord }) {
   return (
     <Link
       href={`/clients/${client.id}`}
+      prefetch={false}
       className="block rounded-xl border border-gray-100 bg-white p-4 hover:border-blue-300 hover:shadow-md transition-all"
     >
       <h3 className="font-bold text-gray-900 leading-snug">{client.companyName}</h3>

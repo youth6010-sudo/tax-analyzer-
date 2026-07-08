@@ -162,7 +162,7 @@ export default function ClientExpandableCard({ client, churn, query = '', onSele
 
   if (asLink) {
     return (
-      <Link href={`/clients/${client.id}`} className={cls}>
+      <Link href={`/clients/${client.id}`} prefetch={false} className={cls}>
         {inner}
       </Link>
     );

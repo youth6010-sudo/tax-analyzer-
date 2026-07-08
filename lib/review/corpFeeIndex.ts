@@ -3,14 +3,19 @@ import { companyLinkKey } from '@/lib/review/companyKey';
 import type { CorpFeeEntry, CorpFeeIndex } from '@/lib/review/corpFeeTypes';
 export type { CorpFeeEntry, CorpFeeIndex } from '@/lib/review/corpFeeTypes';
 export { buildCorpRevenueByClientId } from '@/lib/review/corpFeeTypes';
-import { getReviewGridMeta, readReviewGridFile } from '@/lib/review/gridData';
+import { getReviewGridMetaAsync, readReviewGridSheets } from '@/lib/review/gridData';
+import {
+  applyPatchesToSheet,
+  cellAt,
+  detectCorpRowKind,
+  hasValue,
+  type GridSheet,
+} from '@/lib/review/gridSheetUtils';
 import {
   listReviewNewRows,
   listReviewPatches,
   type ReviewNewRowInput,
-  type ReviewPatchInput,
 } from '@/lib/review/reviewGridDb';
-
 const FEE_STAFF_ORDER = ['블루', '다야', '윈터', '리아', '페리', '인디'] as const;
 const FEE_SEGMENT_GAP = 10;
 
@@ -19,37 +24,7 @@ const ADJUSTMENT_COL_LAST_YEAR = 6;
 const REVENUE_COL_THIS_YEAR = 9;
 const ADJUSTMENT_COL_THIS_YEAR = 10;
 
-type GridCell = {
-  r: number;
-  c: number;
-  v?: string | number | boolean | null;
-  bg?: string | null;
-};
-
-type GridSheet = {
-  name: string;
-  minR: number;
-  maxR: number;
-  minC?: number;
-  maxC?: number;
-  cells: GridCell[];
-};
-
-function hasValue(v: unknown): boolean {
-  return v !== null && v !== undefined && v !== '';
-}
-
-function detectCorpRowKind(company: unknown): 'client' | 'header' | 'subtotal' | 'total' {
-  if (!hasValue(company) || typeof company !== 'string') return 'client';
-  const s = company.trim();
-  if (s === '업체명' || s === '주주명') return 'header';
-  if (s === '소계') return 'subtotal';
-  if (s === '합계' || s === '총계' || s.includes('합계')) return 'total';
-  return 'client';
-}
-
-function parseNumericValue(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
+function parseNumericValue(v: unknown): number | null {  if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string') {
     const t = v.trim().replace(/,/g, '');
     if (!t) return null;
@@ -59,46 +34,8 @@ function parseNumericValue(v: unknown): number | null {
   return null;
 }
 
-function cellAt(sheet: GridSheet, r: number, c: number): GridCell | null {
-  for (const cell of sheet.cells) {
-    if (cell.r === r && cell.c === c) return cell;
-  }
-  return null;
-}
-
-function applyPatchesToSheet(sheet: GridSheet, patches: ReviewPatchInput[]): GridSheet {
-  const relevant = patches.filter(p => p.sheetName === sheet.name);
-  if (!relevant.length) return sheet;
-
-  const cellMap = new Map<string, GridCell>();
-  for (const cell of sheet.cells) {
-    cellMap.set(`${cell.r}:${cell.c}`, { ...cell });
-  }
-
-    for (const p of relevant) {
-    const key = `${p.r}:${p.c}`;
-    const existing = cellMap.get(key) ?? { r: p.r, c: p.c };
-    if (p.v === '' || p.v === null || p.v === undefined) {
-      delete existing.v;
-    } else if (p.v !== undefined) {
-      existing.v = p.v as string | number | boolean;
-    }
-    if (p.bg !== undefined) {
-      if (p.bg === null || p.bg === '') {
-        delete existing.bg;
-      } else {
-        existing.bg = p.bg;
-      }
-    }
-    cellMap.set(key, existing);
-  }
-
-  return { ...sheet, cells: Array.from(cellMap.values()) };
-}
-
 function feeRowCompany(sheet: GridSheet, r: number): { v: string } | null {
-  const bCell = cellAt(sheet, r, 2);
-  const bVal = bCell?.v;
+  const bCell = cellAt(sheet, r, 2);  const bVal = bCell?.v;
   if (hasValue(bVal) && detectCorpRowKind(bVal) === 'client' && typeof bVal === 'string') {
     return { v: bVal };
   }
@@ -230,7 +167,7 @@ function buildCacheKey(
 }
 
 export async function buildCorpFeeIndex(): Promise<CorpFeeIndex> {
-  const meta = getReviewGridMeta();
+  const meta = await getReviewGridMetaAsync();
   const [patches, newRows] = await Promise.all([listReviewPatches(), listReviewNewRows()]);
   const key = buildCacheKey(meta.importedAt, patches.length, newRows.length);
   const now = Date.now();
@@ -250,9 +187,8 @@ export async function buildCorpFeeIndex(): Promise<CorpFeeIndex> {
     return empty;
   }
 
-  const grid = readReviewGridFile();
-  const sheets = (grid.sheets ?? []) as GridSheet[];
-  const feeSheetRaw = sheets.find(s => s.name === sheetName);
+  const grid = await readReviewGridSheets([sheetName]);
+  const feeSheetRaw = (grid.sheets as GridSheet[]).find(s => s.name === sheetName);
   if (!feeSheetRaw) {
     const empty = { importedAt: meta.importedAt, sheetName, byKey: {} };
     corpFeeServerCache = { key, builtAt: now, index: empty };

@@ -632,6 +632,21 @@
 
     const body = document.createElement("div");
     body.className = "client-detail-modal-body";
+
+    let portalWrap = null;
+    if (window.__REVIEW_EMBED__ && window.ReviewClientList) {
+      if (
+        !context.companyLinkMeta &&
+        typeof window.ReviewClientList.resolveCompanyLinkMetaForRow === "function"
+      ) {
+        context.companyLinkMeta = window.ReviewClientList.resolveCompanyLinkMetaForRow(row, context);
+      }
+      if (context.companyLinkMeta && context.companyLinkMeta.key) {
+        portalWrap = document.createElement("div");
+        portalWrap.className = "review-detail-portal-wrap";
+      }
+    }
+
     if (isModalSections(detail)) {
       body.appendChild(renderModalSections(detail, row, context));
       const shSec = renderShareholderSection(row, context);
@@ -644,6 +659,14 @@
       empty.textContent = "표시할 항목 없음";
       body.appendChild(empty);
     }
+
+    if (portalWrap) {
+      body.insertBefore(portalWrap, body.firstChild);
+      if (typeof window.ReviewClientList.renderPortalLinkSection === "function") {
+        window.ReviewClientList.renderPortalLinkSection(portalWrap, context.companyLinkMeta);
+      }
+    }
+
     dialog.appendChild(body);
 
     const foot = document.createElement("footer");

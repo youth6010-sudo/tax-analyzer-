@@ -419,14 +419,39 @@
 
   function normalizeCompanyName(name) {
     if (!hasValue(name)) return "";
-    let base = String(name).trim().normalize("NFKC").replace(/\s+/g, "");
-    base = base.replace(/주식회사|\(주\)|㈜/gi, "");
-    base = base.replace(/[()（）\[\]/\\+]/g, "");
-    return base.toLowerCase();
+    var s = String(name).trim().normalize("NFKC");
+    if (!s) return "";
+    s = s
+      .replace(
+        /주식회사|유한회사|유한책임회사|합자회사|합명회사|재단법인|사단법인|의료법인|사회복지법인|학교법인|영농조합법인|농업회사법인|협동조합/g,
+        ""
+      )
+      .replace(/㈜|㈐|㈎|\(주\)|\(유\)|\(재\)|\(사\)|\(의\)|\(학\)|\(농\)|（주）|（유）|（재）|（사）/gi, "");
+    s = s.replace(/[\s()[\]{}<>.,·•\-_/\\'"`~!@#$%^&*+=|:;?（）]/g, "");
+    var withoutBranch = s.replace(/(본점|지점|제\d+공장)$/, "");
+    if (withoutBranch.length >= 4) s = withoutBranch;
+    return s.toLowerCase();
+  }
+
+  function coreCompanyName(name) {
+    var s = normalizeCompanyName(name);
+    if (!s) return "";
+    return s.replace(/[^a-z0-9가-힣]/g, "");
   }
 
   function companyLinkKey(name) {
     return normalizeCompanyName(name);
+  }
+
+  function scopedReviewKey(owner, baseKey, personName) {
+    var base = String(baseKey || "").trim();
+    if (!base) return "";
+    var ownerPart = String(owner || "").trim();
+    var personKey = personName ? companyLinkKey(personName) : "";
+    if (ownerPart && personKey) return ownerPart + "/" + base + "/" + personKey;
+    if (ownerPart) return ownerPart + "/" + base;
+    if (personKey) return base + "/" + personKey;
+    return base;
   }
 
   function linkKeyFromName(name) {
@@ -2389,7 +2414,9 @@
     parseFieldKey,
     cellKey,
     normalizeCompanyName,
+    coreCompanyName,
     companyLinkKey,
+    scopedReviewKey,
     dedupeClientRowsByCompany,
     linkKeyFromName,
     rowHasTcIncomplete,

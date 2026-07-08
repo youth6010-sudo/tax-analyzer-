@@ -360,9 +360,23 @@
     window.location.href = href;
   }
 
-  function showClientPickerMenu(anchor, clients, nameVal) {
+  function closePortalPickerMenu() {
     const existing = document.querySelector(".review-portal-link-menu");
     if (existing) existing.remove();
+  }
+
+  function positionPickerMenu(menu, anchor) {
+    const rect = anchor.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 328)) + "px";
+    menu.style.top = rect.bottom + 6 + "px";
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.bottom > window.innerHeight - 8) {
+      menu.style.top = Math.max(8, rect.top - menuRect.height - 6) + "px";
+    }
+  }
+
+  function showClientPickerMenu(anchor, clients, nameVal) {
+    closePortalPickerMenu();
 
     const menu = document.createElement("div");
     menu.className = "review-portal-link-menu";
@@ -388,7 +402,8 @@
       menu.appendChild(btn);
     });
 
-    anchor.after(menu);
+    document.body.appendChild(menu);
+    positionPickerMenu(menu, anchor);
     const close = function (e) {
       if (!menu.contains(e.target) && e.target !== anchor) {
         menu.remove();
@@ -400,91 +415,849 @@
     }, 0);
   }
 
-  function applyPortalLinkUI(inner, nameVal, data) {
-    const clients = Array.isArray(data.clients) ? data.clients : data.match ? [data.match] : [];
-    if (!data.linked && !inner.querySelector(".review-unlinked-badge")) {
-      const badge = document.createElement("span");
-      badge.className = "review-unlinked-badge";
-      badge.textContent = "미연결";
-      inner.appendChild(badge);
-    }
-    if (!data.linked || inner.querySelector(".review-portal-link")) return;
+  function canManageClientLinks() {
+    const session = window.__REVIEW_SESSION__;
+    return !!(session && session.isMaster);
+  }
 
-    const linkBtn = document.createElement("a");
-    linkBtn.className = "review-portal-link";
-    linkBtn.href = "#";
-    linkBtn.textContent = clients.length > 1 ? "수임처 " + clients.length : "수임처";
-    linkBtn.title =
-      clients.length > 1 ? "연결된 수임처 " + clients.length + "곳" : "포털 수임처로 이동";
-    linkBtn.addEventListener("click", function (e) {
-      e.preventDefault();
+  function updateClientLinksIndex(key, data) {
+    if (!window.__REVIEW_CLIENT_LINKS_INDEX__) window.__REVIEW_CLIENT_LINKS_INDEX__ = {};
+    const entry = {
+      linked: !!data.linked,
+      clients: Array.isArray(data.clients) ? data.clients : [],
+      primary: data.primary || null,
+      manual: !!data.manual,
+    };
+    window.__REVIEW_CLIENT_LINKS_INDEX__[key] = entry;
+    installClientLinksResolver(window.__REVIEW_CLIENT_LINKS_INDEX__);
+  }
+
+  function resolveSheetOwner(options, sheet) {
+    if (options && options.owner) return options.owner;
+    if (sheet && sheet.meta && sheet.meta.owner) return sheet.meta.owner;
+    return null;
+  }
+
+  function installClientLinksResolver(index) {
+    const resolve = {};
+    if (!index) {
+      window.__REVIEW_CLIENT_LINKS_RESOLVE__ = resolve;
+      return;
+    }
+    Object.keys(index).forEach(function (k) {
+      const entry = index[k];
+      if (!entry) return;
+      resolve[k] = entry;
+      if (k.indexOf("/") < 0) {
+        var ambiguous = false;
+        var baseCount = 0;
+        Object.keys(index).forEach(function (other) {
+          if (other === k || other.endsWith("/" + k) || other.indexOf("/" + k + "/") >= 0) {
+            baseCount++;
+          }
+        });
+        ambiguous = baseCount > 1;
+        if (!ambiguous) {
+          buildAltLinkKeysForName(k).forEach(function (alt) {
+            if (!resolve[alt]) resolve[alt] = entry;
+          });
+        }
+      }
+      if (entry.primary && entry.primary.id) {
+        resolve["id:" + entry.primary.id] = entry;
+      }
+      (entry.clients || []).forEach(function (c) {
+        if (c && c.id) resolve["id:" + c.id] = entry;
+      });
+    });
+    window.__REVIEW_CLIENT_LINKS_RESOLVE__ = resolve;
+  }
+
+  function installClientLinksIndex(index) {
+    window.__REVIEW_CLIENT_LINKS_INDEX__ = index || {};
+    installClientLinksResolver(window.__REVIEW_CLIENT_LINKS_INDEX__);
+  }
+
+  function filingCheckTaxParam(linkOpts) {
+    if (!linkOpts) return "comprehensive";
+    const kind = linkOpts.kind || "income";
+    if (kind === "income") return "comprehensive";
+    return "corporate";
+  }
+
+  function navigateToFilingCheck(reviewKey, linkOpts) {
+    const tax = filingCheckTaxParam(linkOpts);
+    const cached = resolveClientLinkData(reviewKey, linkOpts);
+    const primary =
+      cached && (cached.primary || (cached.clients && cached.clients.length ? cached.clients[0] : null));
+    if (primary && primary.id) {
+      window.location.href =
+        "/clients/filing-check?tax=" +
+        encodeURIComponent(tax) +
+        "&client=" +
+        encodeURIComponent(primary.id);
+      return;
+    }
+    window.location.href = "/clients/filing-check?tax=" + encodeURIComponent(tax);
+  }
+
+  function createPortalAction(label, className) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "review-detail-portal-action" + (className ? " " + className : "");
+    btn.textContent = label;
+    return btn;
+  }
+
+  function buildCompanyLinkMeta(nameVal, options) {
+    options = options || {};
+    const baseKey = ReviewReadable.companyLinkKey
+      ? ReviewReadable.companyLinkKey(nameVal)
+      : ReviewReadable.normalizeCompanyName(nameVal);
+    const owner = options.owner || null;
+    const personName = options.personName || null;
+    const scopedKey =
+      ReviewReadable.scopedReviewKey && owner
+        ? ReviewReadable.scopedReviewKey(owner, baseKey, personName)
+        : baseKey;
+    return {
+      key: scopedKey || baseKey,
+      baseKey: baseKey,
+      scopedKey: scopedKey || baseKey,
+      owner: owner,
+      personName: personName,
+      nameVal: nameVal,
+      linkOpts: {
+        kind: options.kind || "income",
+        corpListMode: options.corpListMode || "corp-fee",
+        owner: owner,
+        personName: personName,
+        baseKey: baseKey,
+        scopedKey: scopedKey || baseKey,
+      },
+    };
+  }
+
+  function buildAltLinkKeysForName(name) {
+    const keys = new Set();
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return [];
+
+    function addKey(label) {
+      const k = ReviewReadable.companyLinkKey(label);
+      if (k && k.length >= 2) keys.add(k);
+      if (ReviewReadable.coreCompanyName) {
+        const core = ReviewReadable.coreCompanyName(label);
+        if (core && core.length >= 2) keys.add(core);
+      }
+    }
+
+    addKey(trimmed);
+    const noLegal = trimmed
+      .replace(/\(주\)|（주）|㈜|주식회사|\(유\)|（유）/gi, "")
+      .replace(/\s+/g, "")
+      .trim();
+    if (noLegal) addKey(noLegal);
+    if (!/\(주\)|㈜|주식회사/i.test(trimmed)) {
+      addKey("(주)" + trimmed);
+      addKey("㈜" + trimmed);
+    }
+    const inner = trimmed.match(/^\(주\)\s*(.+)$/i);
+    if (inner && inner[1]) addKey(inner[1].trim());
+
+    return Array.from(keys);
+  }
+
+  function readRowCompanyName(row, context) {
+    const kind = context.kind || "income";
+    if (kind === "income") {
+      const company = row.cells[4] && row.cells[4].v;
+      if (ReviewReadable.hasValue(company)) return company;
+      const person = row.cells[3] && row.cells[3].v;
+      if (ReviewReadable.hasValue(person)) return person;
+      return null;
+    }
+    if (kind === "corp" || kind === "fee") {
+      const listKind = kind === "corp" ? context.corpListMode || "corp-fee" : "fee";
+      const cols = ReviewReadable.getVisibleListCols(listKind);
+      for (let i = 0; i < cols.length; i++) {
+        const col = cols[i];
+        if (!col.companyLink) continue;
+        const colId = ReviewReadable.listColId(col);
+        const data = row.cells[colId] || (col.c != null ? row.cells[col.c] : null);
+        if (data && ReviewReadable.hasValue(data.v)) return data.v;
+      }
+      const corpCell = row.cells["corp:1"] || row.cells[1];
+      if (corpCell && ReviewReadable.hasValue(corpCell.v)) return corpCell.v;
+    }
+    return null;
+  }
+
+  function resolveCompanyLinkMetaForRow(row, context) {
+    const nameVal = readRowCompanyName(row, context);
+    if (!ReviewReadable.hasValue(nameVal)) return null;
+    const kind = context.kind || "income";
+    let personName = null;
+    if (kind === "income") {
+      const person = row.cells[3] && row.cells[3].v;
+      if (ReviewReadable.hasValue(person)) personName = person;
+    }
+    return buildCompanyLinkMeta(nameVal, {
+      kind: context.kind,
+      corpListMode: context.corpListMode,
+      owner: resolveSheetOwner(context, context.sheet),
+      personName: personName,
+    });
+  }
+
+  function normalizeLinkData(data) {
+    const clients = Array.isArray(data.clients) ? data.clients : data.match ? [data.match] : [];
+    return {
+      linked: !!(data.linked || clients.length),
+      clients: clients,
+      primary: data.primary || data.match || clients[0] || null,
+      manual: !!data.manual,
+      suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+    };
+  }
+
+  function saveClientLinks(meta, clientIds, onLinked, onBusy) {
+    const ids = Array.isArray(clientIds) ? clientIds.filter(Boolean) : [];
+    if (!ids.length) {
+      window.alert("수임처를 1곳 이상 선택하세요.");
+      return Promise.resolve();
+    }
+    if (typeof onBusy === "function") onBusy(true);
+    return fetch("/api/review/client-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewKey: meta.key,
+        reviewName: meta.nameVal,
+        clientIds: ids,
+      }),
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          return { ok: res.ok, body: body };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          throw new Error(result.body.error || "연결 저장 실패");
+        }
+        const linkedData = normalizeLinkData({
+          linked: true,
+          clients: result.body.clients || [],
+          primary: result.body.primary || null,
+          manual: true,
+        });
+        updateClientLinksIndex(meta.key, linkedData);
+        if (typeof onLinked === "function") onLinked(linkedData);
+      })
+      .catch(function (err) {
+        window.alert(err && err.message ? err.message : "연결 저장 실패");
+      })
+      .finally(function () {
+        if (typeof onBusy === "function") onBusy(false);
+      });
+  }
+
+  function saveClientLink(meta, clientId, onLinked, onBusy) {
+    return saveClientLinks(meta, [clientId], onLinked, onBusy);
+  }
+
+  function searchClientsApi(query) {
+    const q = String(query || "").trim();
+    if (!q) return Promise.resolve([]);
+    const params = new URLSearchParams({ q: q, includeChurned: "1" });
+    return fetch("/api/clients/search?" + params.toString())
+      .then(function (res) {
+        return res.ok ? res.json() : { clients: [] };
+      })
+      .then(function (data) {
+        const list = Array.isArray(data.clients) ? data.clients : [];
+        return list.slice(0, 20);
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function renderQuickLinkPanel(host, meta, data, onLinked) {
+    const row = document.createElement("div");
+    row.className = "review-detail-portal-row review-detail-portal-row--unlinked";
+
+    const status = document.createElement("span");
+    status.className = "review-detail-portal-status review-detail-portal-status--unlinked";
+    status.textContent = "미연결";
+    row.appendChild(status);
+
+    const filingBtn = createPortalAction(
+      "신고확인",
+      "review-detail-portal-action--filing review-detail-portal-action--compact",
+    );
+    filingBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      if (clients.length > 1) {
-        showClientPickerMenu(linkBtn, clients, nameVal);
+      navigateToFilingCheck(meta.key, meta.linkOpts);
+    });
+    row.appendChild(filingBtn);
+
+    if (!canManageClientLinks()) {
+      const hint = document.createElement("span");
+      hint.className = "review-detail-portal-hint-inline";
+      hint.textContent = "연결은 인디·찰리만 가능";
+      row.appendChild(hint);
+      host.appendChild(row);
+      return;
+    }
+
+    host.appendChild(row);
+
+    const quick = document.createElement("div");
+    quick.className = "review-detail-portal-quick";
+    host.appendChild(quick);
+
+    const suggestRow = document.createElement("div");
+    suggestRow.className = "review-detail-portal-suggest-row";
+    suggestRow.hidden = true;
+    quick.appendChild(suggestRow);
+
+    const multiHint = document.createElement("p");
+    multiHint.className = "review-detail-portal-hint";
+    multiHint.textContent = "맨 위 수임처가 매출 대표입니다. ↑↓로 순서를 바꿀 수 있습니다.";
+    multiHint.hidden = true;
+    quick.appendChild(multiHint);
+
+    const multiListHost = document.createElement("div");
+    multiListHost.className = "review-detail-portal-multi-list";
+    multiListHost.hidden = true;
+    quick.appendChild(multiListHost);
+
+    const multiActions = document.createElement("div");
+    multiActions.className = "review-detail-portal-multi-actions";
+    multiActions.hidden = true;
+    const saveMultiBtn = createPortalAction(
+      "연결 저장",
+      "review-detail-portal-action--primary review-detail-portal-action--compact",
+    );
+    const cancelMultiBtn = createPortalAction(
+      "취소",
+      "review-detail-portal-action--ghost review-detail-portal-action--compact",
+    );
+    multiActions.appendChild(saveMultiBtn);
+    multiActions.appendChild(cancelMultiBtn);
+    quick.appendChild(multiActions);
+
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "review-detail-portal-search";
+    search.placeholder = "수임처 검색 (상호·담당·사업자번호)";
+    search.value = String(meta.nameVal || "");
+    quick.appendChild(search);
+
+    const list = document.createElement("div");
+    list.className =
+      "review-detail-portal-client-list review-detail-portal-client-list--compact";
+    quick.appendChild(list);
+
+    const multiToggle = document.createElement("button");
+    multiToggle.type = "button";
+    multiToggle.className = "review-detail-portal-multi-toggle";
+    multiToggle.textContent = "복수 연결 · 대표 업체 지정…";
+    quick.appendChild(multiToggle);
+
+    let busy = false;
+    let multiMode = false;
+    let searchTimer = null;
+    let suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+    const pickedIds = [];
+    const pickedInfo = {};
+
+    function setBusyState(next) {
+      busy = next;
+      search.disabled = busy;
+      saveMultiBtn.disabled = busy;
+      cancelMultiBtn.disabled = busy;
+      multiToggle.disabled = busy;
+      suggestRow.querySelectorAll("button").forEach(function (btn) {
+        btn.disabled = busy;
+      });
+      list.querySelectorAll("button").forEach(function (btn) {
+        btn.disabled = busy;
+      });
+      multiListHost.querySelectorAll("button").forEach(function (btn) {
+        btn.disabled = busy;
+      });
+    }
+
+    function clientSubLabel(c) {
+      return (c.manager || "") + (c.status === "churned" ? " · 유출" : "");
+    }
+
+    function addPicked(client) {
+      if (!client || !client.id || pickedIds.includes(client.id)) return;
+      pickedIds.push(client.id);
+      pickedInfo[client.id] = {
+        id: client.id,
+        companyName: client.companyName || client.id,
+        manager: client.manager || "",
+        status: client.status || "",
+      };
+      renderMultiList();
+      if (multiMode) {
+        renderSuggestions();
+        scheduleSearch();
+      }
+    }
+
+    function removePicked(id) {
+      const idx = pickedIds.indexOf(id);
+      if (idx < 0) return;
+      pickedIds.splice(idx, 1);
+      delete pickedInfo[id];
+      renderMultiList();
+      if (multiMode) {
+        renderSuggestions();
+        scheduleSearch();
+      }
+    }
+
+    function movePicked(idx, dir) {
+      const next = idx + dir;
+      if (next < 0 || next >= pickedIds.length) return;
+      const tmp = pickedIds[idx];
+      pickedIds[idx] = pickedIds[next];
+      pickedIds[next] = tmp;
+      renderMultiList();
+    }
+
+    function renderMultiList() {
+      multiListHost.innerHTML = "";
+      if (!pickedIds.length) {
+        const empty = document.createElement("p");
+        empty.className = "review-detail-portal-hint";
+        empty.textContent = "아래 검색에서 수임처를 추가하세요. 맨 위가 매출 대표입니다.";
+        multiListHost.appendChild(empty);
         return;
       }
-      const primary = data.primary || data.match || clients[0];
+      pickedIds.forEach(function (id, idx) {
+        const c = pickedInfo[id] || { id: id, companyName: id, manager: "" };
+        const item = document.createElement("div");
+        item.className = "review-detail-portal-multi-item";
+
+        const num = document.createElement("span");
+        num.className = "review-detail-portal-multi-item-num";
+        num.textContent = String(idx + 1);
+        item.appendChild(num);
+
+        const label = document.createElement("span");
+        label.className = "review-detail-portal-multi-item-label";
+        label.textContent =
+          (c.companyName || id) + (c.manager ? " · " + c.manager : "");
+        item.appendChild(label);
+
+        if (idx === 0) {
+          const badge = document.createElement("span");
+          badge.className = "review-detail-portal-multi-badge";
+          badge.textContent = "대표";
+          item.appendChild(badge);
+        }
+
+        const upBtn = createPortalAction(
+          "↑",
+          "review-detail-portal-action--ghost review-detail-portal-action--compact",
+        );
+        upBtn.disabled = busy || idx === 0;
+        upBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          movePicked(idx, -1);
+        });
+        item.appendChild(upBtn);
+
+        const downBtn = createPortalAction(
+          "↓",
+          "review-detail-portal-action--ghost review-detail-portal-action--compact",
+        );
+        downBtn.disabled = busy || idx === pickedIds.length - 1;
+        downBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          movePicked(idx, 1);
+        });
+        item.appendChild(downBtn);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "review-detail-portal-multi-remove";
+        removeBtn.textContent = "제거";
+        removeBtn.disabled = busy;
+        removeBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          removePicked(id);
+        });
+        item.appendChild(removeBtn);
+
+        multiListHost.appendChild(item);
+      });
+    }
+
+    function setMultiMode(on) {
+      multiMode = on;
+      multiHint.hidden = !on;
+      multiListHost.hidden = !on;
+      multiActions.hidden = !on;
+      multiToggle.hidden = on;
+      if (on) {
+        renderMultiList();
+        scheduleSearch();
+      } else {
+        pickedIds.length = 0;
+        Object.keys(pickedInfo).forEach(function (key) {
+          delete pickedInfo[key];
+        });
+        multiListHost.innerHTML = "";
+        scheduleSearch();
+      }
+      renderSuggestions();
+    }
+
+    function renderSuggestions() {
+      suggestRow.innerHTML = "";
+      const visible = suggestions.filter(function (s) {
+        return !multiMode || !pickedIds.includes(s.clientId);
+      });
+      if (!visible.length) {
+        suggestRow.hidden = true;
+        return;
+      }
+      suggestRow.hidden = false;
+      const label = document.createElement("span");
+      label.className = "review-detail-portal-suggest-label";
+      label.textContent = "추천";
+      suggestRow.appendChild(label);
+      visible.forEach(function (s) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "review-detail-portal-suggest-chip";
+        chip.textContent =
+          (s.companyName || "") + (s.manager ? " · " + s.manager : "");
+        chip.title = s.reason || "";
+        chip.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (busy) return;
+          if (multiMode) {
+            addPicked({
+              id: s.clientId,
+              companyName: s.companyName,
+              manager: s.manager,
+            });
+            return;
+          }
+          const prev = chip.textContent;
+          chip.textContent = "저장 중…";
+          saveClientLink(meta, s.clientId, onLinked, setBusyState).then(function () {
+            if (chip.isConnected) chip.textContent = prev;
+          });
+        });
+        suggestRow.appendChild(chip);
+      });
+    }
+
+    function renderSearchResults(items) {
+      list.innerHTML = "";
+      const q = String(search.value || "").trim();
+      if (!q || q.length < 2) {
+        const hint = document.createElement("p");
+        hint.className = "review-detail-portal-hint";
+        hint.textContent = "2글자 이상 입력하면 검색됩니다";
+        list.appendChild(hint);
+        return;
+      }
+      const visible = multiMode
+        ? items.filter(function (c) {
+            return !pickedIds.includes(c.id);
+          })
+        : items;
+      if (!visible.length) {
+        const empty = document.createElement("p");
+        empty.className = "review-detail-portal-hint";
+        empty.textContent = "검색 결과 없음";
+        list.appendChild(empty);
+        return;
+      }
+      visible.forEach(function (c) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "review-detail-portal-client-item";
+        const name = document.createElement("span");
+        name.className = "review-detail-portal-client-name";
+        name.textContent = c.companyName || c.id;
+        btn.appendChild(name);
+        const sub = document.createElement("span");
+        sub.className = "review-detail-portal-client-sub";
+        sub.textContent = clientSubLabel(c);
+        btn.appendChild(sub);
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (busy) return;
+          if (multiMode) {
+            addPicked(c);
+            return;
+          }
+          const prevName = name.textContent;
+          name.textContent = "저장 중…";
+          saveClientLink(meta, c.id, onLinked, setBusyState).then(function () {
+            if (name.isConnected) name.textContent = prevName;
+          });
+        });
+        list.appendChild(btn);
+      });
+    }
+
+    function scheduleSearch() {
+      if (searchTimer) clearTimeout(searchTimer);
+      const q = String(search.value || "").trim();
+      if (!q || q.length < 2) {
+        renderSearchResults([]);
+        return;
+      }
+      list.innerHTML = '<p class="review-detail-portal-hint">검색 중…</p>';
+      searchTimer = setTimeout(function () {
+        searchClientsApi(q).then(renderSearchResults);
+      }, 300);
+    }
+
+    search.addEventListener("input", function () {
+      scheduleSearch();
+    });
+
+    multiToggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (busy) return;
+      setMultiMode(true);
+    });
+
+    saveMultiBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (busy) return;
+      saveClientLinks(meta, pickedIds.slice(), onLinked, setBusyState);
+    });
+
+    cancelMultiBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (busy) return;
+      setMultiMode(false);
+    });
+
+    renderSuggestions();
+    fetchClientLinkSuggestions(meta.key, meta.linkOpts).then(function (items) {
+      if (items && items.length) {
+        suggestions = items;
+        renderSuggestions();
+      }
+    });
+    renderSearchResults([]);
+  }
+
+  function renderLinkedPanel(host, meta, data) {
+    const normalized = normalizeLinkData(data);
+    const clients = normalized.clients;
+
+    const row = document.createElement("div");
+    row.className = "review-detail-portal-row review-detail-portal-row--linked";
+
+    const status = document.createElement("span");
+    status.className = "review-detail-portal-status review-detail-portal-status--linked";
+    status.textContent = normalized.manual ? "수동 연결" : "연결됨";
+    row.appendChild(status);
+
+    const primary = normalized.primary || clients[0];
+    if (primary) {
+      const label = document.createElement("span");
+      label.className = "review-detail-portal-linked-label";
+      label.textContent =
+        (clients.length > 1 ? clients.length + "곳 · " : "") +
+        (primary.companyName || "") +
+        (primary.manager ? " · " + primary.manager : "");
+      row.appendChild(label);
+    }
+
+    const portalBtn = createPortalAction(
+      clients.length > 1 ? "수임처" : "수임처",
+      "review-detail-portal-action--portal review-detail-portal-action--compact",
+    );
+    portalBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (clients.length > 1) {
+        showClientPickerMenu(portalBtn, clients, meta.nameVal);
+        return;
+      }
       if (primary && primary.href) {
         navigateToClient(primary.href);
       } else {
-        navigateToClient("/clients/directory?q=" + encodeURIComponent(String(nameVal)));
+        navigateToClient("/clients/directory?q=" + encodeURIComponent(String(meta.nameVal)));
       }
     });
-    inner.appendChild(linkBtn);
+    row.appendChild(portalBtn);
+
+    const filingBtn = createPortalAction(
+      "신고확인",
+      "review-detail-portal-action--filing review-detail-portal-action--compact",
+    );
+    filingBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      navigateToFilingCheck(meta.key, meta.linkOpts);
+    });
+    row.appendChild(filingBtn);
+
+    host.appendChild(row);
   }
 
-  function resolveClientLinkData(key) {
-    const index = window.__REVIEW_CLIENT_LINKS_INDEX__;
-    if (!index) return null;
-    const entry = index[key];
-    if (entry) return entry;
-    return { linked: false, clients: [], primary: null, manual: false };
-  }
-
-  function attachPortalLink(inner, key, nameVal) {
-    const cached = resolveClientLinkData(key);
-    if (cached) {
-      applyPortalLinkUI(inner, nameVal, cached);
+  function paintPortalLinkBody(body, meta, data) {
+    body.innerHTML = "";
+    const normalized = normalizeLinkData(data);
+    if (normalized.clients.length) {
+      renderLinkedPanel(body, meta, normalized);
       return;
     }
-    fetch("/api/review/client-link?key=" + encodeURIComponent(key))
+    renderQuickLinkPanel(body, meta, normalized, function (linkedData) {
+      body.innerHTML = "";
+      renderLinkedPanel(body, meta, linkedData);
+    });
+  }
+
+  function renderPortalLinkSection(container, meta) {
+    if (!container || !meta || !meta.key) return;
+    container.innerHTML = "";
+
+    const shell = document.createElement("div");
+    shell.className = "review-detail-portal-section";
+
+    const header = document.createElement("div");
+    header.className = "review-detail-portal-head";
+    header.textContent = "수임처 · 신고확인";
+    shell.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "review-detail-portal-body";
+    shell.appendChild(body);
+    container.appendChild(shell);
+
+    const cached = resolveClientLinkData(meta.key, meta.linkOpts);
+
+    if (cached) {
+      const normalizedCached = normalizeLinkData(cached);
+      paintPortalLinkBody(body, meta, normalizedCached);
+      return;
+    }
+
+    body.innerHTML =
+      '<span class="review-detail-portal-hint-inline">연결 정보 확인 중…</span>';
+    fetchClientLinkData(meta.key, meta.linkOpts).then(function (data) {
+      paintPortalLinkBody(body, meta, data);
+    });
+  }
+
+  function fetchClientLinkSuggestions(key, opts) {
+    opts = opts || {};
+    const params = new URLSearchParams({ key: key, suggestions: "1" });
+    if (opts.owner) params.set("owner", opts.owner);
+    if (opts.personName) params.set("personName", opts.personName);
+    return fetch("/api/review/client-link?" + params.toString())
+      .then(function (res) {
+        return res.ok ? res.json() : { suggestions: [] };
+      })
+      .then(function (data) {
+        return Array.isArray(data.suggestions) ? data.suggestions : [];
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function fetchClientLinkData(key, opts) {
+    opts = opts || {};
+    const cached = resolveClientLinkData(key, opts);
+    if (cached) return Promise.resolve(normalizeLinkData(cached));
+
+    const lookupKey = opts.scopedKey || key;
+    const params = new URLSearchParams({ key: lookupKey });
+    if (opts.owner) params.set("owner", opts.owner);
+    if (opts.personName) params.set("personName", opts.personName);
+
+    return fetch("/api/review/client-link?" + params.toString())
       .then(function (res) {
         return res.json();
       })
       .then(function (data) {
-        applyPortalLinkUI(inner, nameVal, data);
+        const normalized = normalizeLinkData(data);
+        rememberClientLinkData(lookupKey, normalized);
+        return normalized;
       })
       .catch(function () {
-        if (inner.querySelector(".review-portal-link")) return;
-        const linkBtn = document.createElement("a");
-        linkBtn.className = "review-portal-link";
-        linkBtn.href = "#";
-        linkBtn.textContent = "수임처";
-        linkBtn.title = "포털 수임처로 이동";
-        linkBtn.addEventListener("click", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          navigateToClient("/clients/directory?q=" + encodeURIComponent(String(nameVal)));
-        });
-        inner.appendChild(linkBtn);
+        return normalizeLinkData({});
       });
   }
 
-  function attachNameClick(tr, td, row, options, col) {
+  function rememberClientLinkData(key, normalized) {
+    if (!key || !window.__REVIEW_CLIENT_LINKS_INDEX__) return;
+    window.__REVIEW_CLIENT_LINKS_INDEX__[key] = {
+      linked: !!normalized.linked,
+      clients: normalized.clients || [],
+      primary: normalized.primary || null,
+      manual: !!normalized.manual,
+    };
+    installClientLinksResolver(window.__REVIEW_CLIENT_LINKS_INDEX__);
+  }
+
+  function resolveClientLinkData(key, opts) {
+    opts = opts || {};
+    const keys = [];
+    if (opts.scopedKey) keys.push(opts.scopedKey);
+    if (opts.owner && opts.baseKey && ReviewReadable.scopedReviewKey) {
+      keys.push(ReviewReadable.scopedReviewKey(opts.owner, opts.baseKey, opts.personName));
+    }
+    if (key) keys.push(key);
+    if (opts.baseKey && opts.baseKey !== key) keys.push(opts.baseKey);
+
+    const resolve = window.__REVIEW_CLIENT_LINKS_RESOLVE__;
+    const index = window.__REVIEW_CLIENT_LINKS_INDEX__;
+
+    for (let i = 0; i < keys.length; i++) {
+      const lookupKey = keys[i];
+      if (!lookupKey) continue;
+      if (resolve && resolve[lookupKey]) return resolve[lookupKey];
+      if (index && index[lookupKey]) return index[lookupKey];
+    }
+
+    const legacyKey = opts.baseKey || key;
+    if (!opts.owner && legacyKey && legacyKey.indexOf("/") < 0) {
+      const altKeys = buildAltLinkKeysForName(legacyKey);
+      for (let j = 0; j < altKeys.length; j++) {
+        if (resolve && resolve[altKeys[j]]) return resolve[altKeys[j]];
+        if (index && index[altKeys[j]]) return index[altKeys[j]];
+      }
+    }
+
+    return null;
+  }
+
+  function attachRowDetailClick(tr, td, row, options, labelVal) {
     if (options.boardEditMode) return;
     tr.dataset.rowNum = String(row.r);
-    const colId = ReviewReadable.listColId(col);
-    const nameVal = row.cells[colId] && row.cells[colId].v;
     td.classList.add("name-col-clickable");
     td.setAttribute("role", "button");
     td.setAttribute("tabindex", "0");
-    td.setAttribute("aria-label", (nameVal ? String(nameVal) : "행") + " 상세정보");
+    td.setAttribute("aria-label", (labelVal ? String(labelVal) : "행") + " 상세정보");
 
     function openDetail(e) {
       if (e && e.target.closest(".corp-shareholder-count")) return;
-      if (e && e.target.closest(".review-portal-link")) return;
       if (e) e.stopPropagation();
-      ReviewRowExpand.toggle(row, tr, expandContext(options), null);
+      const ctx = expandContext(options);
+      if (window.__REVIEW_EMBED__) {
+        ctx.companyLinkMeta = resolveCompanyLinkMetaForRow(row, ctx);
+      }
+      ReviewRowExpand.toggle(row, tr, ctx, null);
     }
 
     td.addEventListener("click", openDetail);
@@ -494,16 +1267,12 @@
         openDetail(e);
       }
     });
+  }
 
-    if (window.__REVIEW_EMBED__ && ReviewReadable.hasValue(nameVal)) {
-      const inner = td.querySelector(".name-col-inner");
-      if (inner && !inner.querySelector(".review-portal-link")) {
-        const key = ReviewReadable.companyLinkKey
-          ? ReviewReadable.companyLinkKey(nameVal)
-          : ReviewReadable.normalizeCompanyName(nameVal);
-        attachPortalLink(inner, key, nameVal);
-      }
-    }
+  function attachNameClick(tr, td, row, options, col) {
+    const colId = ReviewReadable.listColId(col);
+    const nameVal = row.cells[colId] && row.cells[colId].v;
+    attachRowDetailClick(tr, td, row, options, nameVal);
   }
 
   function expandContext(options) {
@@ -523,7 +1292,7 @@
       kind: kind,
       listMode: options.listMode || "income",
       corpListMode: options.corpListMode || "corp-fee",
-      owner: options.owner,
+      owner: resolveSheetOwner(options, options.sheet || corpSheet),
       sectionTitle: null,
       canEdit: !!options.canEdit,
       readOnly: !!options.readOnly,
@@ -677,6 +1446,8 @@
       if (leadW > 0 && personW > 0) table.style.setProperty("--sticky-name-left", leadW + personW + "px");
     }
     if (scrollWrap && stickyHead) {
+      const shell = scrollWrap.parentElement;
+      const dockScroll = shell ? shell.querySelector(".client-list-top-scroll--dock") : null;
       const wrapRect = scrollWrap.getBoundingClientRect();
       const tableRect = table.getBoundingClientRect();
       if (tableRect.top <= stickyTop && wrapRect.bottom > stickyTop + stickyHeadH + 12) {
@@ -685,8 +1456,22 @@
         stickyHead.style.top = stickyTop + "px";
         stickyHead.style.left = wrapRect.left + "px";
         stickyHead.style.width = wrapRect.width + "px";
+        if (dockScroll) {
+          dockScroll.style.position = "fixed";
+          dockScroll.style.top = stickyTop + stickyHeadH + "px";
+          dockScroll.style.left = wrapRect.left + "px";
+          dockScroll.style.width = wrapRect.width + "px";
+          dockScroll.style.zIndex = "40";
+        }
       } else {
         stickyHead.style.display = "none";
+        if (dockScroll) {
+          dockScroll.style.position = "";
+          dockScroll.style.top = "";
+          dockScroll.style.left = "";
+          dockScroll.style.width = "";
+          dockScroll.style.zIndex = "";
+        }
       }
       if (!scrollWrap.__reviewStickyHeadBound) {
         scrollWrap.addEventListener("scroll", function () {
@@ -777,8 +1562,8 @@
 
   function syncListScrollPositions(wrap, source) {
     if (!wrap) return;
-    const stickyHead = wrap.querySelector(".client-list-sticky-head");
-    const topScroll = stickyHead ? stickyHead.querySelector(".client-list-top-scroll") : null;
+    const shell = wrap.parentElement;
+    const topScroll = shell ? shell.querySelector(".client-list-top-scroll--dock") : null;
     const left = source && typeof source.scrollLeft === "number" ? source.scrollLeft : wrap.scrollLeft;
     if (wrap.scrollLeft !== left) wrap.scrollLeft = left;
     if (topScroll && topScroll.scrollLeft !== left) topScroll.scrollLeft = left;
@@ -802,6 +1587,13 @@
 
     const shell = document.createElement("div");
     shell.className = "client-list-shell";
+
+    const topScroll = document.createElement("div");
+    topScroll.className = "client-list-top-scroll client-list-top-scroll--dock";
+    const topScrollInner = document.createElement("div");
+    topScrollInner.className = "client-list-top-scroll-inner";
+    topScroll.appendChild(topScrollInner);
+    shell.appendChild(topScroll);
 
     const wrap = document.createElement("div");
     wrap.className = "client-list-scroll";
@@ -827,12 +1619,6 @@
     stickyTable.className = tableClass + " client-list-table--sticky-head";
     buildListHeader(stickyTable, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader);
     stickyHead.appendChild(stickyTable);
-    const topScroll = document.createElement("div");
-    topScroll.className = "client-list-top-scroll client-list-top-scroll--floating";
-    const topScrollInner = document.createElement("div");
-    topScrollInner.className = "client-list-top-scroll-inner";
-    topScroll.appendChild(topScrollInner);
-    stickyHead.appendChild(topScroll);
     wrap.appendChild(stickyHead);
     shell.appendChild(wrap);
 
@@ -942,6 +1728,14 @@
             if (!row.isTransfer) {
               attachCellTooltip(td, displayText, col, listKind);
             }
+            if (
+              kind === "income" &&
+              col.c === 3 &&
+              ReviewReadable.hasValue(data.v) &&
+              !options.boardEditMode
+            ) {
+              attachRowDetailClick(tr, td, row, options, data.v);
+            }
           }
           if (isAccentPersonColumn(col, kind) && !ReviewReadable.isExcelEmphasisBg(data.bg)) {
             paintAccentCell(td, row, "person");
@@ -1018,7 +1812,7 @@
   }
 
   function renderBoardContent(sheet, host, options, config) {
-    const owner = options.owner || sheet.name;
+    const owner = resolveSheetOwner(options, sheet);
     let activeSheet = sheet;
     const kind = config.kind;
     const boardOptions = Object.assign({}, options, {
@@ -1083,7 +1877,7 @@
   }
 
   function renderIncomeBoardContent(sheet, host, options) {
-    const owner = options.owner || sheet.name;
+    const owner = resolveSheetOwner(options, sheet);
     const sections = ReviewGridSections.getSections(sheet);
     let checkedKinds = ReviewGridSections.getIncomeMainFilters(owner, sections);
     let showExcluded = ReviewGridSections.getIncomeExcludedVisible(owner);
@@ -1200,7 +1994,7 @@
   }
 
   function renderCorpBoardContent(sheet, host, options) {
-    const owner = options.owner || (sheet && sheet.name) || "담당";
+    const owner = resolveSheetOwner(options, sheet) || "담당";
     let activeCorp = sheet || null;
     let activeFee = options.feeSheet || null;
     let activeCorpFull = options.corpFullSheet || null;
@@ -1343,5 +2137,8 @@
     renderCorpBoardContent,
     renderFeeBoardContent,
     expandContext,
+    resolveCompanyLinkMetaForRow,
+    installClientLinksIndex,
+    renderPortalLinkSection,
   };
 })();

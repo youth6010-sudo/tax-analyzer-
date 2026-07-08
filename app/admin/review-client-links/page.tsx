@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
-import { requireCharlie } from '@/lib/auth';
+import { requireReviewLinkAdmin } from '@/lib/auth';
 import ReviewClientLinksAdmin from './ReviewClientLinksAdmin';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ReviewClientLinksPage() {
   try {
-    await requireCharlie();
+    await requireReviewLinkAdmin();
   } catch {
     redirect('/');
   }

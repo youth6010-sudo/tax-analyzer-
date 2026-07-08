@@ -60,6 +60,10 @@ try {
     ALTER TABLE review_grid_patches ADD COLUMN IF NOT EXISTS bg text
   `;
 
+  await sql`
+    ALTER TABLE review_client_links ADD COLUMN IF NOT EXISTS match_method text NOT NULL DEFAULT 'manual'
+  `;
+
   const linkTable = await sql`
     SELECT column_name
     FROM information_schema.columns
@@ -75,6 +79,7 @@ try {
         client_id text NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         review_name text NOT NULL DEFAULT '',
         sort_order integer NOT NULL DEFAULT 0,
+        match_method text NOT NULL DEFAULT 'manual',
         updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
         updated_at timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY (review_key, client_id)
@@ -96,6 +101,7 @@ try {
         client_id text NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         review_name text NOT NULL DEFAULT '',
         sort_order integer NOT NULL DEFAULT 0,
+        match_method text NOT NULL DEFAULT 'manual',
         updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
         updated_at timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY (review_key, client_id)

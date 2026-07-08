@@ -344,6 +344,40 @@
     }
   }
 
+  function applyDeepLinkFocus() {
+    const link = window.__REVIEW_DEEP_LINK__;
+    if (!link || !link.focus) return;
+    const focusKey = String(link.focus).toLowerCase();
+    const normalize =
+      ReviewReadable && ReviewReadable.companyLinkKey
+        ? ReviewReadable.companyLinkKey
+        : function (v) {
+            return String(v || "")
+              .trim()
+              .toLowerCase();
+          };
+
+    window.setTimeout(function () {
+      const rows = document.querySelectorAll("tr[data-row-num]");
+      for (let i = 0; i < rows.length; i++) {
+        const tr = rows[i];
+        const nameCell = tr.querySelector(".name-col-inner, .name-col-clickable");
+        if (!nameCell) continue;
+        const text = (nameCell.textContent || "").trim();
+        const key = normalize(text);
+        if (!key) continue;
+        if (key === focusKey || key.indexOf(focusKey) >= 0 || focusKey.indexOf(key) >= 0) {
+          tr.classList.add("row-highlight");
+          tr.scrollIntoView({ block: "center", behavior: "smooth" });
+          window.setTimeout(function () {
+            tr.classList.remove("row-highlight");
+          }, 2500);
+          break;
+        }
+      }
+    }, 500);
+  }
+
   function notifyBootError(mountId, opts, message) {
     if (mountId !== activeMountId) return;
     const els = getEls();
@@ -431,7 +465,11 @@
             return res.ok ? res.json() : { index: {} };
           })
           .then(function (data) {
-            window.__REVIEW_CLIENT_LINKS_INDEX__ = data.index || {};
+            if (window.ReviewClientList && window.ReviewClientList.installClientLinksIndex) {
+              window.ReviewClientList.installClientLinksIndex(data.index || {});
+            } else {
+              window.__REVIEW_CLIENT_LINKS_INDEX__ = data.index || {};
+            }
           })
           .catch(function () {
             window.__REVIEW_CLIENT_LINKS_INDEX__ = {};
@@ -461,6 +499,7 @@
       dashboardData = await ReviewGridDashboard.buildPanels(user, access, sheets);
       if (gen !== bootGen || mountId !== activeMountId) return { ok: false, reason: "superseded" };
       render();
+      applyDeepLinkFocus();
       notifyBootReady(mountId, opts);
       return { ok: true };
     } catch (err) {

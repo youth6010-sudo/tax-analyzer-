@@ -420,6 +420,7 @@ export const reviewClientLinks = pgTable(
       .references(() => clients.id, { onDelete: 'cascade' }),
     reviewName: text('review_name').notNull().default(''),
     sortOrder: integer('sort_order').notNull().default(0),
+    matchMethod: text('match_method').notNull().default('manual'),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

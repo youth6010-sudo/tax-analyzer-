@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
@@ -126,6 +126,113 @@ function manualToClient(m: ManualClient): ClientRecord {
 }
 
 const isManualId = (id: string) => id.startsWith('manual:');
+
+type ReviewKeyHint = {
+  reviewKey: string;
+  reviewName: string;
+  owners: string[];
+  taxKinds: string[];
+  focusOwner?: string;
+  focusRow?: number;
+};
+
+const ReviewClientIdMapContext = createContext<Record<string, ReviewKeyHint[]> | null>(null);
+
+function ReviewClientIdMapProvider({ children }: { children: React.ReactNode }) {
+  const [map, setMap] = useState<Record<string, ReviewKeyHint[]> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/review/client-id-review-map')
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) setMap(data.byClientId || {});
+      })
+      .catch(() => {
+        if (!cancelled) setMap({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <ReviewClientIdMapContext.Provider value={map}>{children}</ReviewClientIdMapContext.Provider>
+  );
+}
+
+function reviewSheetHrefFromContext(ctx: {
+  reviewKey: string;
+  owners: string[];
+  taxKinds: string[];
+  sources?: { owner: string; row?: number }[];
+}): string {
+  const params = new URLSearchParams();
+  const owner = ctx.sources?.[0]?.owner ?? ctx.owners[0];
+  if (owner) params.set('owner', owner);
+  if (ctx.taxKinds.includes('income')) params.set('tab', 'income');
+  else if (ctx.taxKinds.some(k => k === 'corp-tax' || k === 'corp-fee')) params.set('tab', 'corp');
+  params.set('focus', ctx.reviewKey);
+  return `/clients/review-sheet?${params.toString()}`;
+}
+
+function ReviewSheetBridge({ clientId }: { clientId: string }) {
+  const map = useContext(ReviewClientIdMapContext);
+  const [href, setHref] = useState<string | null>(null);
+  const [label, setLabel] = useState('검토표');
+  const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    if (map === null) return;
+    const hints = map[clientId];
+    if (hints?.length) {
+      const ctx = hints[0];
+      setHref(
+        reviewSheetHrefFromContext({
+          reviewKey: ctx.reviewKey,
+          owners: ctx.owners,
+          taxKinds: ctx.taxKinds,
+          sources: ctx.focusOwner
+            ? [{ owner: ctx.focusOwner, row: ctx.focusRow }]
+            : undefined,
+        }),
+      );
+      setLabel(ctx.reviewName ? '검토표' : '검토표');
+      setMissing(false);
+    } else {
+      setHref(null);
+      setMissing(true);
+    }
+  }, [clientId, map]);
+
+  if (map === null) return null;
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        className="shrink-0 text-xs font-semibold text-violet-600 hover:underline"
+        title="검토표 해당 행으로 이동"
+        onClick={e => e.stopPropagation()}
+      >
+        {label}
+      </a>
+    );
+  }
+  if (missing) {
+    return (
+      <a
+        href="/admin/review-client-links"
+        className="shrink-0 text-xs text-slate-400 hover:underline"
+        title="검토표 미연결 — 연결 Admin"
+        onClick={e => e.stopPropagation()}
+      >
+        미연결
+      </a>
+    );
+  }
+  return null;
+}
 
 /** 세션 진입 시 제외 업체를 맨 아래로 — 세션 중 제외 토글 시에는 순서 유지 */
 function splitStableDisplayOrder<T>(
@@ -336,7 +443,9 @@ function FilingBottomStats({
 export default function FilingCheckPage() {
   return (
     <Suspense fallback={<PortalLoading label="신고대상확인 불러오는 중…" />}>
-      <FilingCheckPageInner />
+      <ReviewClientIdMapProvider>
+        <FilingCheckPageInner />
+      </ReviewClientIdMapProvider>
     </Suspense>
   );
 }
@@ -449,6 +558,8 @@ function FilingCheckPageInner() {
   const [targetDisplayOrder, setTargetDisplayOrder] = useState<string[]>([]);
   const [groupDisplayOrder, setGroupDisplayOrder] = useState<string[]>([]);
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
+  const focusClientId = searchParams.get('client')?.trim() ?? '';
+  const focusAppliedRef = useRef('');
 
   const cycle = getCycle(tax);
   const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
@@ -1171,6 +1282,19 @@ function FilingCheckPageInner() {
       .filter((c): c is ClientRecord => !!c);
     return [...ordered, ...manual];
   }, [canReorderTargets, tax, displayedTargets, reorderableOrderedIds]);
+
+  useEffect(() => {
+    if (!focusClientId || focusAppliedRef.current === focusClientId) return;
+    const timer = window.setTimeout(() => {
+      const row = document.querySelector(`[data-filing-client-id="${focusClientId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.add('ring-2', 'ring-inset', 'ring-violet-400', 'bg-violet-50/40');
+      focusAppliedRef.current = focusClientId;
+      window.setTimeout(() => row.classList.remove('ring-2', 'ring-inset', 'ring-violet-400', 'bg-violet-50/40'), 2500);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [focusClientId, displayedTargetsForTable, displayedComprehensiveGroupsOrdered]);
 
   const setClientFilingType = async (c: ClientRecord, value: '당월' | '전월') => {
     if (isManualId(c.id) || locked) return;
@@ -1985,6 +2109,7 @@ function FilingCheckPageInner() {
                   return (
                     <tr
                       key={g.groupKey}
+                      data-filing-client-id={g.primaryClientId}
                       className={`border-b border-slate-50 ${
                         excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
                       }`}
@@ -2044,6 +2169,7 @@ function FilingCheckPageInner() {
                               외 {restCount}
                             </button>
                           )}
+                          <ReviewSheetBridge clientId={g.primaryClientId} />
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -2092,6 +2218,7 @@ function FilingCheckPageInner() {
                   return (
                     <tr
                       key={c.id}
+                      data-filing-client-id={c.id}
                       className={`border-b border-slate-50 ${
                         excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
                       }`}
@@ -2220,6 +2347,7 @@ function FilingCheckPageInner() {
                 return (
                   <tr
                     key={c.id}
+                    data-filing-client-id={c.id}
                     className={`border-b border-slate-50 ${
                       excluded ? 'bg-slate-50/70' : received ? 'bg-emerald-50/40' : ''
                     }`}
@@ -2278,6 +2406,7 @@ function FilingCheckPageInner() {
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
                         )}
+                        <ReviewSheetBridge clientId={c.id} />
                         {tax === 'vat' && isVatSummaryOnlyClient(c) && (
                           <span className="shrink-0 whitespace-nowrap rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                             합계표제출

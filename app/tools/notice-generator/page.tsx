@@ -877,6 +877,14 @@ export default function NoticeGeneratorPage() {
 
   const meta = TAX_TYPE_META[periodTaxType];
 
+  const filingTaxId = useMemo(() => {
+    if (periodTaxType === TAX_TYPES.INCOME) return 'comprehensive';
+    if (periodTaxType === TAX_TYPES.CORPORATE) return 'corporate';
+    if (periodTaxType === TAX_TYPES.VAT) return 'vat';
+    if (periodTaxType === TAX_TYPES.WITHHOLDING) return 'withholding';
+    return 'comprehensive';
+  }, [periodTaxType]);
+
   return (
     <div className="space-y-3">
       <PortalPageHeader
@@ -912,6 +920,9 @@ export default function NoticeGeneratorPage() {
                 : null
             }
             onSelect={client => void handleSelectClient(client)}
+            draftCompanyName={inClientMode ? '' : companyName}
+            onDraftCompanyNameChange={inClientMode ? undefined : handleCompanyNameChange}
+            filingTax={filingTaxId}
           />
         }
       />

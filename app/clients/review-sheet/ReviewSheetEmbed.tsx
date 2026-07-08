@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 
@@ -62,6 +63,7 @@ function ensureReviewStylesheet() {
 }
 
 export default function ReviewSheetEmbed() {
+  const searchParams = useSearchParams();
   const rootRef = useRef<HTMLDivElement>(null);
   const remountRef = useRef<(() => void) | null>(null);
   const bootStatusRef = useRef<BootStatus>('loading');
@@ -114,6 +116,21 @@ export default function ReviewSheetEmbed() {
     }
   }, [setBootStatusSafe]);
 
+  useEffect(() => {
+    const owner = searchParams.get('owner');
+    const tab = searchParams.get('tab');
+    const focus = searchParams.get('focus');
+    try {
+      if (owner) sessionStorage.setItem('reviewSelectedPanel', `panel-${owner}`);
+      if (tab) sessionStorage.setItem('reviewTaxTab', tab === 'corp' ? 'corp' : 'income');
+    } catch {
+      /* ignore */
+    }
+    if (owner || tab || focus) {
+      window.__REVIEW_DEEP_LINK__ = { owner, tab, focus };
+    }
+  }, [searchParams]);
+
   useLayoutEffect(() => {
     let cancelled = false;
     const isCancelled = () => cancelled;
@@ -121,19 +138,37 @@ export default function ReviewSheetEmbed() {
     (async () => {
       try {
         window.__REVIEW_EMBED__ = true;
+        window.__REVIEW_CLIENT_LINKS_INDEX__ = window.__REVIEW_CLIENT_LINKS_INDEX__ || {};
         ensureReviewStylesheet();
 
-        void fetch('/api/review/client-links-index', { credentials: 'same-origin' })
+        const INDEX_FETCH_MS = 10_000;
+        const indexController = new AbortController();
+        const indexTimeout = window.setTimeout(() => indexController.abort(), INDEX_FETCH_MS);
+
+        const indexPromise = fetch('/api/review/client-links-index', {
+          credentials: 'same-origin',
+          signal: indexController.signal,
+        })
           .then(res => (res.ok ? res.json() : { index: {} }))
           .then(data => {
-            if (!cancelled) window.__REVIEW_CLIENT_LINKS_INDEX__ = data.index || {};
+            if (cancelled) return;
+            if (window.ReviewClientList?.installClientLinksIndex) {
+              window.ReviewClientList.installClientLinksIndex(data.index || {});
+            } else {
+              window.__REVIEW_CLIENT_LINKS_INDEX__ = data.index || {};
+            }
           })
           .catch(() => {
             if (!cancelled) window.__REVIEW_CLIENT_LINKS_INDEX__ = {};
+          })
+          .finally(() => {
+            window.clearTimeout(indexTimeout);
           });
 
         await loadReviewScripts();
         if (cancelled) return;
+
+        void indexPromise;
 
         const sessionRes = await fetch('/api/review/session');
         if (!sessionRes.ok) {
@@ -297,6 +332,7 @@ declare global {
         manual: boolean;
       }
     >;
+    __REVIEW_DEEP_LINK__?: { owner?: string | null; tab?: string | null; focus?: string | null };
     ReviewAuth?: {
       initFromPortal?: (session: unknown) => Promise<void>;
       resetEmbed?: () => void;
@@ -311,6 +347,9 @@ declare global {
     ReviewGridApp?: {
       mount?: (root: HTMLElement, opts?: MountOpts) => Promise<MountResult | void>;
       reset?: () => void;
+    };
+    ReviewClientList?: {
+      installClientLinksIndex?: (index: Record<string, unknown>) => void;
     };
   }
 }
