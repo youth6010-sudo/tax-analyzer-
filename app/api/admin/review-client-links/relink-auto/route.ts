@@ -6,6 +6,7 @@ import { invalidateClientLinksIndexCache } from '@/lib/review/clientLink';
 import { deleteAutoReviewClientLinks } from '@/lib/review/clientLinkDb';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 function apiError(e: unknown) {
   if (e instanceof Error && e.message === 'UNAUTHORIZED') {

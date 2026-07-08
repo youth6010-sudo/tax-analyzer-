@@ -655,7 +655,10 @@ export default function ReviewClientLinksAdmin() {
     if (!quiet) setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/review-client-links', { cache: 'no-store' });
+      const res = await fetch('/api/admin/review-client-links', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(55_000),
+      });
       const data = await readJson(res);
       if (!res.ok) throw new Error((data.error as string) || '목록 로드 실패');
       setUnlinked((data.unlinked as ReviewEntry[]) || []);
@@ -663,7 +666,13 @@ export default function ReviewClientLinksAdmin() {
       setClients((data.clients as ClientOption[]) || []);
       setSuggestionsByKey((data.suggestionsByKey as Record<string, MatchSuggestion[]>) || {});
     } catch (e) {
-      if (!quiet) setError(e instanceof Error ? e.message : '목록 로드 실패');
+      const msg =
+        e instanceof Error && e.name === 'TimeoutError'
+          ? '목록 로드 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'
+          : e instanceof Error
+            ? e.message
+            : '목록 로드 실패';
+      if (!quiet) setError(msg);
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -889,9 +898,17 @@ export default function ReviewClientLinksAdmin() {
         </div>
 
         {error ? (
-          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </p>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span>{error}</span>
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              다시 시도
+            </button>
+          </div>
         ) : null}
 
         <CollapsibleSection
@@ -901,7 +918,9 @@ export default function ReviewClientLinksAdmin() {
           onToggle={() => setOpenManual(v => !v)}
         >
           {loading ? (
-            <p className="text-sm text-slate-500">불러오는 중…</p>
+            <p className="text-sm text-slate-500">
+              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
+            </p>
           ) : manualLinked.length === 0 ? (
             <p className={portalEmptyState}>수동 연결된 업체가 없습니다.</p>
           ) : (
@@ -926,7 +945,9 @@ export default function ReviewClientLinksAdmin() {
           hint="상호·대표자·담당자 기준 자동 매칭. 수정하면 수동 연결로 저장됩니다."
         >
           {loading ? (
-            <p className="text-sm text-slate-500">불러오는 중…</p>
+            <p className="text-sm text-slate-500">
+              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
+            </p>
           ) : autoLinked.length === 0 ? (
             <p className={portalEmptyState}>자동 연결된 업체가 없습니다.</p>
           ) : (
@@ -950,7 +971,9 @@ export default function ReviewClientLinksAdmin() {
           onToggle={() => setOpenUnlinked(v => !v)}
         >
           {loading ? (
-            <p className="text-sm text-slate-500">불러오는 중…</p>
+            <p className="text-sm text-slate-500">
+              검토표 전체를 불러오는 중… (최초 30~60초 걸릴 수 있습니다)
+            </p>
           ) : filteredUnlinked.length === 0 ? (
             <p className={portalEmptyState}>미연결 업체가 없습니다.</p>
           ) : (

@@ -10,6 +10,7 @@ import {
 import { normalizeReviewLookupKey } from '@/lib/review/companyKey';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 function apiError(e: unknown) {
   if (e instanceof Error && e.message === 'UNAUTHORIZED') {
