@@ -104,6 +104,19 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
   return (await res.json().catch(() => ({}))) as Record<string, unknown>;
 }
 
+async function deleteReviewLinks(reviewKey: string): Promise<void> {
+  const res = await fetch(
+    `/api/admin/review-client-links?reviewKey=${encodeURIComponent(reviewKey)}`,
+    { method: 'DELETE' },
+  );
+  const data = await readJson(res);
+  if (!res.ok) throw new Error((data.error as string) || '연결 삭제 실패');
+}
+
+function isLegacyStubEntry(entry: ReviewEntry): boolean {
+  return entryTaxKinds(entry).length === 0 && !entryOwners(entry);
+}
+
 function clientLabel(c: ClientOption) {
   const churned = c.status === 'churned' ? ' · 유출' : '';
   return `${c.companyName} · ${c.manager}${churned}`;
@@ -269,6 +282,7 @@ function SuggestionChips({
 
 function EntryMeta({ entry }: { entry: ReviewEntry }) {
   const kinds = entryTaxKinds(entry);
+  const legacy = isLegacyStubEntry(entry);
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
       {kinds.map(k => (
@@ -278,6 +292,14 @@ function EntryMeta({ entry }: { entry: ReviewEntry }) {
       ))}
       {entryOwners(entry) ? <span>담당 {entryOwners(entry)}</span> : null}
       {entrySourceLabel(entry) ? <span className="text-slate-400">· {entrySourceLabel(entry)}</span> : null}
+      {legacy ? (
+        <span
+          className="rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800"
+          title={entry.reviewKey}
+        >
+          레거시 키 · 중복이면 연결 삭제
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -324,6 +346,7 @@ function MultiLinkEditor({
   suggestionItems,
   multiMode = false,
   onLinkSaved,
+  onLinkDeleted,
   onCancel,
 }: {
   entry: ReviewEntry;
@@ -332,9 +355,11 @@ function MultiLinkEditor({
   suggestionItems?: MatchSuggestion[];
   multiMode?: boolean;
   onLinkSaved: (clientIds: string[]) => void;
+  onLinkDeleted?: () => void;
   onCancel?: () => void;
 }) {
   const isMulti = multiMode || (initialClientIds != null && initialClientIds.length > 1);
+  const isEditingExisting = initialClientIds != null;
   const [clientIds, setClientIds] = useState<string[]>(initialClientIds ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -402,9 +427,31 @@ function MultiLinkEditor({
       );
       const data = await readJson(res);
       if (!res.ok) throw new Error((data.error as string) || '해제 실패');
-      setClientIds(prev => prev.filter(id => id !== clientId));
+      const next = clientIds.filter(id => id !== clientId);
+      setClientIds(next);
+      if (next.length === 0) onLinkDeleted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : '해제 실패');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAll = async () => {
+    if (
+      !window.confirm(
+        `「${entry.reviewName}」 연결을 전체 삭제할까요?\n(다른 줄에 같은 업체 연결이 있으면 그쪽은 유지됩니다)`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await deleteReviewLinks(entry.reviewKey);
+      onLinkDeleted?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '연결 삭제 실패');
     } finally {
       setBusy(false);
     }
@@ -509,9 +556,22 @@ function MultiLinkEditor({
       ) : null}
 
       {!isMulti && clientIds.length === 1 ? (
-        <p className="text-sm text-slate-600">
-          현재: {clientMap.get(clientIds[0]) ? clientLabel(clientMap.get(clientIds[0])!) : clientIds[0]}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <span>
+            현재:{' '}
+            {clientMap.get(clientIds[0]) ? clientLabel(clientMap.get(clientIds[0])!) : clientIds[0]}
+          </span>
+          {isEditingExisting ? (
+            <button
+              type="button"
+              className="text-xs text-red-600 hover:underline"
+              disabled={busy}
+              onClick={() => void unlinkOne(clientIds[0])}
+            >
+              해제
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <QuickClientSearch
@@ -525,8 +585,31 @@ function MultiLinkEditor({
       />
 
       {!isMulti && onCancel ? (
-        <button type="button" className={portalBtnSecondary} disabled={busy} onClick={onCancel}>
-          취소
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={portalBtnSecondary} disabled={busy} onClick={onCancel}>
+            취소
+          </button>
+          {isEditingExisting ? (
+            <button
+              type="button"
+              className="text-sm text-red-600 hover:underline disabled:opacity-55"
+              disabled={busy}
+              onClick={() => void deleteAll()}
+            >
+              연결 전체 삭제
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isMulti && isEditingExisting ? (
+        <button
+          type="button"
+          className="self-start text-sm text-red-600 hover:underline disabled:opacity-55"
+          disabled={busy}
+          onClick={() => void deleteAll()}
+        >
+          연결 전체 삭제
         </button>
       ) : null}
 
@@ -626,14 +709,38 @@ function LinkedRow({
   editingKey,
   setEditingKey,
   onLinkUpdated,
+  onLinkDeleted,
 }: {
   row: LinkedEntry;
   clients: ClientOption[];
   editingKey: string | null;
   setEditingKey: (key: string | null) => void;
   onLinkUpdated: (entry: ReviewEntry, clientIds: string[]) => void;
+  onLinkDeleted: (entry: ReviewEntry) => void;
 }) {
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const [busy, setBusy] = useState(false);
+  const [rowError, setRowError] = useState('');
+
+  const deleteAll = async () => {
+    if (
+      !window.confirm(
+        `「${row.entry.reviewName}」 연결을 전체 삭제할까요?\n(다른 줄에 같은 업체 연결이 있으면 그쪽은 유지됩니다)`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setRowError('');
+    try {
+      await deleteReviewLinks(row.entry.reviewKey);
+      onLinkDeleted(row.entry);
+    } catch (e) {
+      setRowError(e instanceof Error ? e.message : '연결 삭제 실패');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (editingKey === row.entry.reviewKey) {
     return (
@@ -644,6 +751,10 @@ function LinkedRow({
         onLinkSaved={clientIds => {
           setEditingKey(null);
           onLinkUpdated(row.entry, clientIds);
+        }}
+        onLinkDeleted={() => {
+          setEditingKey(null);
+          onLinkDeleted(row.entry);
         }}
         onCancel={() => setEditingKey(null)}
       />
@@ -663,13 +774,25 @@ function LinkedRow({
         {names ? <p className="mt-0.5 truncate text-xs text-slate-500">{names}</p> : null}
         <EntryMeta entry={row.entry} />
       </div>
-      <button
-        type="button"
-        className={portalBtnSecondary}
-        onClick={() => setEditingKey(row.entry.reviewKey)}
-      >
-        수정
-      </button>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <button
+          type="button"
+          className={portalBtnSecondary}
+          disabled={busy}
+          onClick={() => setEditingKey(row.entry.reviewKey)}
+        >
+          수정
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-55"
+          disabled={busy}
+          onClick={() => void deleteAll()}
+        >
+          연결 삭제
+        </button>
+      </div>
+      {rowError ? <p className="w-full text-sm text-red-600">{rowError}</p> : null}
     </div>
   );
 }
@@ -747,6 +870,15 @@ export default function ReviewClientLinksAdmin() {
           l.entry.reviewKey === entry.reviewKey ? { ...l, clientIds, manual: true } : l,
         ),
       );
+      void load(true);
+    },
+    [load],
+  );
+
+  const handleLinkDeleted = useCallback(
+    (entry: ReviewEntry) => {
+      setLinked(prev => prev.filter(l => l.entry.reviewKey !== entry.reviewKey));
+      setEditingKey(prev => (prev === entry.reviewKey ? null : prev));
       void load(true);
     },
     [load],
@@ -1028,6 +1160,7 @@ export default function ReviewClientLinksAdmin() {
                 editingKey={editingKey}
                 setEditingKey={setEditingKey}
                 onLinkUpdated={handleLinkUpdated}
+                onLinkDeleted={handleLinkDeleted}
               />
             ))
           )}
@@ -1053,6 +1186,7 @@ export default function ReviewClientLinksAdmin() {
                 editingKey={editingKey}
                 setEditingKey={setEditingKey}
                 onLinkUpdated={handleLinkUpdated}
+                onLinkDeleted={handleLinkDeleted}
               />
             ))
           )}
