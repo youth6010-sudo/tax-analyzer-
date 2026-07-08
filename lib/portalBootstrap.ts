@@ -3,6 +3,10 @@ import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 import { listInquiries, listIntakeProcesses } from '@/lib/workbookDb';
 
+const BOOTSTRAP_CACHE_MS = 60_000;
+const bootstrapCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof buildPortalBootstrap>> }>();
+const bootstrapInflight = new Map<string, Promise<Awaited<ReturnType<typeof buildPortalBootstrap>>>>();
+
 export type PortalHomeStats = {
   count: number;
   corporate: number;
@@ -23,6 +27,28 @@ function statsFromClients(clients: { businessEntityType?: string | null }[]): Po
 
 export async function getPortalBootstrap() {
   const user = await requireUser();
+  const now = Date.now();
+  const cached = bootstrapCache.get(user.id);
+  if (cached && now - cached.at < BOOTSTRAP_CACHE_MS) {
+    return { ...cached.data, fetchedAt: now };
+  }
+
+  const inflight = bootstrapInflight.get(user.id);
+  if (inflight) return inflight;
+
+  const promise = buildPortalBootstrap(user).then(data => {
+    bootstrapCache.set(user.id, { at: Date.now(), data });
+    bootstrapInflight.delete(user.id);
+    return data;
+  }).catch(err => {
+    bootstrapInflight.delete(user.id);
+    throw err;
+  });
+  bootstrapInflight.set(user.id, promise);
+  return promise;
+}
+
+async function buildPortalBootstrap(user: Awaited<ReturnType<typeof requireUser>>) {
   const mineOnly = !isDataViewer(user);
   const accessFilter = mineOnly
     ? { mineOnly: true as const, userId: user.id, userName: user.name }

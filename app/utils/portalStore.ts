@@ -358,7 +358,8 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
               : `동기화 실패 (${res.status}). 새로고침 후 다시 시도해 주세요.`;
         }
         notify();
-        return memory ?? emptyBootstrap();
+        const fallback = memory ?? readStorage();
+        return fallback ?? emptyBootstrap();
       }
       const data = (await res.json()) as PortalBootstrap;
       bootstrapSyncError = null;
@@ -378,10 +379,8 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
     })
     .catch(() => {
       bootstrapSyncError = '서버에 연결할 수 없습니다. 네트워크 또는 DB 설정을 확인해 주세요.';
-      if (!memory) {
-        memory = emptyBootstrap();
-        writeStorage(memory);
-      }
+      if (!memory) memory = readStorage();
+      if (!memory) memory = emptyBootstrap();
       notify();
       return memory;
     })

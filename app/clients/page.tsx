@@ -191,7 +191,11 @@ function ClientsPageContent() {
         });
       });
     } catch {
-      setFetchedClients([]);
+      setFetchedClients(prev => {
+        if (prev && prev.length > 0) return prev;
+        const cached = getPortalClients();
+        return cached.length > 0 ? cached : [];
+      });
     } finally {
       setFetching(false);
     }

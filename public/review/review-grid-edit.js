@@ -9,25 +9,47 @@
   let storageReady = null;
   let saveTimer = null;
   let boardEditMode = false;
+  let saveInFlight = null;
+  let lastSaveFailed = false;
 
-  function isEmbed() {
-    return !!window.__REVIEW_EMBED__;
+  function reportSaveFailure(err) {
+    lastSaveFailed = true;
+    console.error("[review] patch save failed", err);
+    window.alert("검토표 저장에 실패했습니다. 네트워크를 확인한 뒤 다시 수정해 주세요.");
   }
 
   function flushRemoteSave() {
     if (!isEmbed()) return Promise.resolve();
     clearTimeout(saveTimer);
     saveTimer = null;
-    return fetch("/api/review/patches", {
+    if (saveInFlight) return saveInFlight;
+    saveInFlight = fetch("/api/review/patches", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         patches: patchesCache || [],
         newRows: newRowsCache || [],
       }),
-    }).catch(function (err) {
-      console.error("[review] patch save failed", err);
-    });
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (body) {
+            throw new Error((body && body.error) || "저장 실패 (" + res.status + ")");
+          });
+        }
+        lastSaveFailed = false;
+      })
+      .catch(function (err) {
+        reportSaveFailure(err);
+      })
+      .finally(function () {
+        saveInFlight = null;
+      });
+    return saveInFlight;
+  }
+
+  function isEmbed() {
+    return !!window.__REVIEW_EMBED__;
   }
 
   function scheduleRemoteSave() {
@@ -294,6 +316,18 @@
     boardEditMode = false;
     clearTimeout(saveTimer);
     saveTimer = null;
+    saveInFlight = null;
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", function () {
+      if (!isEmbed() || !patchesCache) return;
+      if (saveTimer) flushRemoteSave();
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "hidden" || !isEmbed()) return;
+      if (saveTimer || saveInFlight) flushRemoteSave();
+    });
   }
 
   window.ReviewGridEdit = {
