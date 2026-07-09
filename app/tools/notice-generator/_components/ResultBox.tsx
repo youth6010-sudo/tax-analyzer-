@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { htmlToPlainText, normalizeHtmlForClipboard, sanitizeNoticeHtml } from '../_lib/templates';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { htmlToPlainText, normalizeHtmlForClipboard, prepareNoticePasteContent, sanitizeNoticeHtml } from '../_lib/templates';
+import { useNoticeRichEditor } from '../_lib/useNoticeRichEditor';
 import {
   noticeBtnPrimary,
   noticeBtnSecondary,
@@ -26,8 +27,19 @@ export default function ResultBox({
   const [copiedPlain, setCopiedPlain] = useState(false);
   const [edited, setEdited] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const editorRef = useRef<HTMLDivElement>(null);
   const lastMessageHtml = useRef(messageHtml);
+
+  const effectiveHtml = edited ?? messageHtml;
+  const displayHtml = sanitizeNoticeHtml(effectiveHtml);
+  const toEditorHtml = useCallback((v: string) => sanitizeNoticeHtml(v), []);
+
+  const { ref: editorRef, handleFocus, handleBlur, handleInput, afterInsert, emit } =
+    useNoticeRichEditor({
+      value: effectiveHtml,
+      onChange: (html: string) => setEdited(html),
+      toEditorHtml,
+      enabled: editing,
+    });
 
   useEffect(() => {
     if (editing) return;
@@ -41,35 +53,31 @@ export default function ResultBox({
     lastMessageHtml.current = messageHtml;
   }, [messageHtml, edited, editing]);
 
-  const effectiveHtml = edited ?? messageHtml;
   const isDirty = edited !== null && edited !== messageHtml;
   const previewMinH = compact ? 'min-h-[8rem]' : 'min-h-[12rem]';
 
-  useEffect(() => {
-    if (editing && editorRef.current) {
-      editorRef.current.innerHTML = sanitizeNoticeHtml(effectiveHtml || '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing]);
-
-  const emitEdit = () => {
-    if (!editorRef.current) return;
-    const sanitized = sanitizeNoticeHtml(editorRef.current.innerHTML);
-    if (editorRef.current.innerHTML !== sanitized) {
-      editorRef.current.innerHTML = sanitized;
-    }
-    setEdited(sanitized);
+  const insertSanitizedContent = (html: string, plain: string) => {
+    const next = prepareNoticePasteContent(html, plain);
+    if (!next) return;
+    document.execCommand('insertHTML', false, next);
+    afterInsert();
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const html = e.clipboardData.getData('text/html');
-    const text = e.clipboardData.getData('text/plain');
-    const next = html
-      ? sanitizeNoticeHtml(html)
-      : sanitizeNoticeHtml(text.replace(/\n/g, '<br>'));
-    document.execCommand('insertHTML', false, next);
-    emitEdit();
+    insertSanitizedContent(
+      e.clipboardData.getData('text/html'),
+      e.clipboardData.getData('text/plain'),
+    );
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    insertSanitizedContent(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/plain'));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
   };
 
   const resetToGenerated = () => {
@@ -79,7 +87,7 @@ export default function ResultBox({
 
   const toggleEdit = () => {
     if (editing) {
-      emitEdit();
+      emit(true);
       setEditing(false);
     } else {
       setEditing(true);
@@ -104,9 +112,9 @@ export default function ResultBox({
   };
 
   const copyRich = async () => {
-    if (!effectiveHtml) return;
-    const richHtml = normalizeHtmlForClipboard(effectiveHtml);
-    const plain = htmlToPlainText(effectiveHtml);
+    if (!displayHtml) return;
+    const richHtml = normalizeHtmlForClipboard(displayHtml);
+    const plain = htmlToPlainText(displayHtml);
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([
@@ -128,8 +136,8 @@ export default function ResultBox({
   };
 
   const copyPlain = async () => {
-    if (!effectiveHtml) return;
-    const plain = htmlToPlainText(effectiveHtml);
+    if (!displayHtml) return;
+    const plain = htmlToPlainText(displayHtml);
     try {
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(plain);
@@ -175,7 +183,7 @@ export default function ResultBox({
           <button
             type="button"
             onClick={copyPlain}
-            disabled={!effectiveHtml}
+            disabled={!displayHtml}
             className={`${noticeBtnSecondary} !px-2.5 !py-1 text-xs disabled:opacity-50`}
           >
             {copiedPlain ? '복사됨' : '텍스트'}
@@ -183,7 +191,7 @@ export default function ResultBox({
           <button
             type="button"
             onClick={copyRich}
-            disabled={!effectiveHtml}
+            disabled={!displayHtml}
             className={`${noticeBtnPrimary} !px-2.5 !py-1 text-xs disabled:opacity-50`}
           >
             {copied ? '복사됨' : '서식 복사'}
@@ -196,20 +204,23 @@ export default function ResultBox({
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
-          onInput={emitEdit}
-          onBlur={emitEdit}
+          onFocus={handleFocus}
+          onInput={handleInput}
+          onBlur={handleBlur}
           onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
           className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-blue-200 bg-white p-3 text-sm leading-relaxed text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20`}
         />
       ) : (
         <div
           className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-800`}
-          dangerouslySetInnerHTML={{ __html: effectiveHtml }}
+          dangerouslySetInnerHTML={{ __html: displayHtml }}
         />
       )}
       {!compact && !embedded && (
         <p className="mt-1.5 text-[10px] text-slate-400">
-          서식 복사: 한글·워드·메일 · 텍스트: 카카오톡 등
+          서식 복사: 한글·워드·메일 · 텍스트: 카카오톡 등 · 편집: Ctrl+B/I/U/Z/Y
         </p>
       )}
     </>

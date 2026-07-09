@@ -8,7 +8,13 @@ import {
   UNUSED_CATEGORY,
   shouldShowComprehensiveOptionalClient,
 } from '@/app/utils/clientsGrouping';
-import { shouldShowInWithholdingPeriod, simplePayrollMonthlyPeriodKey, type SimplePayrollHalf } from '@/lib/periodUtils';
+import {
+  isSemiAnnualOffMonthExcluded,
+  isSemiAnnualWithholdingClient,
+  SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON,
+  simplePayrollMonthlyPeriodKey,
+  type SimplePayrollHalf,
+} from '@/lib/periodUtils';
 
 export type FilingCycle = 'month' | 'vat' | 'year' | 'half';
 
@@ -313,15 +319,16 @@ export function usesMonthOverMonthCompare(taxId: FilingTaxId): boolean {
   return taxId === 'withholding' || taxId === 'simplePayroll';
 }
 
-/** 원천세 — 특정 월 기준 (반기·소득유형 필터 포함) */
+/** 원천세 — 특정 월 기준 (반기 업체는 목록 유지, 비신고월은 자동 제외) */
 export function withholdingTargetsForPeriod(
   clients: ClientRecord[],
-  month: number,
+  _month: number,
 ): ClientRecord[] {
-  return filingTargets(clients, 'withholding').filter(c =>
-    shouldShowInWithholdingPeriod(c.intakeData ?? {}, month),
-  );
+  void _month;
+  return filingTargets(clients, 'withholding');
 }
+
+export { isSemiAnnualOffMonthExcluded, isSemiAnnualWithholdingClient, SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON };
 
 /** 간이지급 — 원천세와 동일한 업체·반기·매월 표시 규칙 */
 export function simplePayrollTargetsForPeriod(

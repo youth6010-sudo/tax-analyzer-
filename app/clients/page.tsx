@@ -36,6 +36,7 @@ import type { FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { feeItemsEqual, readFeeItems } from '@/app/utils/feeBreakdown';
 import {
   buildClientsListUrl,
+  DEFAULT_CATEGORY_FILTERS,
   parseClientsListState,
   type ClientsListState,
 } from '@/app/utils/clientsListState';
@@ -67,6 +68,7 @@ function ClientsPageContent() {
   const urlState = useMemo(() => parseClientsListState(searchParams), [searchParams]);
   const scrollRestored = useRef(false);
   const defaultMgrApplied = useRef(false);
+  const defaultCatApplied = useRef(false);
 
   const cachedClients = usePortalClients();
   const [fetchedClients, setFetchedClients] = useState<ClientRecord[] | null>(() => {
@@ -313,6 +315,18 @@ function ClientsPageContent() {
   useEffect(() => {
     writeClientSort(state.sort);
   }, [state.sort]);
+
+  /** URL에 catFilter 없을 때 개인·법인 기본 적용 */
+  useEffect(() => {
+    if (defaultCatApplied.current) return;
+    const catParam = searchParams.get('catFilter');
+    if (catParam === 'all' || catParam) {
+      defaultCatApplied.current = true;
+      return;
+    }
+    defaultCatApplied.current = true;
+    updateState({ categoryFilters: [...DEFAULT_CATEGORY_FILTERS] });
+  }, [searchParams, updateState]);
 
   /** URL에 mgr 없을 때 로그인 담당자 기본 선택 */
   useEffect(() => {
@@ -588,7 +602,7 @@ function ClientsPageContent() {
         <div>
           <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
             <span className="text-xs font-semibold text-slate-500">대분류</span>
-            <span className="text-[10px] text-slate-400">선택한 분류만 표시 · 비어 있으면 전체</span>
+            <span className="text-[10px] text-slate-400">기본 개인·법인 · 비어 있으면 전체</span>
             <button
               type="button"
               onClick={selectAllCategoryFilters}
@@ -609,7 +623,7 @@ function ClientsPageContent() {
               const count = categoryCounts.get(cat) ?? 0;
               const active =
                 state.categoryFilters.length > 0 && state.categoryFilters.includes(cat);
-              const highlight = state.categoryFilters.length === 0 || active;
+              const highlight = active;
               return (
                 <button
                   key={cat}

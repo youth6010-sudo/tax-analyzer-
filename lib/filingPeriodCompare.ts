@@ -1,18 +1,21 @@
 import type { ClientRecord } from '@/app/types/client';
-import { normalizeBizNo } from '@/app/utils/filingCheck';
+import { normalizeBizNo, filingTargets } from '@/app/utils/filingCheck';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
-import { shouldShowInWithholdingPeriod } from '@/lib/periodUtils';
+import { isSemiAnnualOffMonthExcluded } from '@/lib/periodUtils';
 import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import { hasPlaceholderBizNo } from '@/app/utils/filingCheck';
+
+function isWithholdingPoolClient(c: ClientRecord): boolean {
+  return filingTargets([c], 'withholding').length === 1;
+}
 
 function isActiveTarget(
   c: ClientRecord,
   session: FilingCheckSessionData | null,
   month: number,
 ): boolean {
-  if (hasPlaceholderBizNo(c)) return false;
-  if (getClientCategory(c) === SINGO_DAERI) return false;
-  if (!shouldShowInWithholdingPeriod(c.intakeData ?? {}, month)) return false;
+  if (!isWithholdingPoolClient(c)) return false;
+  if (isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, month)) return false;
   if (session?.excluded && Object.prototype.hasOwnProperty.call(session.excluded, c.id)) {
     return false;
   }

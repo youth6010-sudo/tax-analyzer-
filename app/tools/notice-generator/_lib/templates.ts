@@ -40,6 +40,13 @@ function multilineHtml(str: string): string {
   return escapeHtml((str || '').trim()).replace(/\n/g, '<br>');
 }
 
+/** 수임처 정보 입력란 — 평문은 br 변환, HTML은 서식 정리 후 삽입 */
+export function noticeFieldToHtml(str: string): string {
+  if (!str?.trim()) return '';
+  if (/<[a-z][\s\S]*>/i.test(str)) return sanitizeNoticeHtml(str);
+  return multilineHtml(str);
+}
+
 /** 한글/워드 붙여넣기 시 줄이 늘어나지 않도록 단일 래퍼 + &lt;br&gt; 줄 구조 */
 function noticeLine(text: string): string {
   return `${text}<br>`;
@@ -53,8 +60,24 @@ function noticeDash(text: string): string {
   return `&nbsp;- ${text}<br>`;
 }
 
+const NOTICE_TEXT_COLOR = '#334155';
+
+const INLINE_UNWRAP_TAGS = new Set([
+  'span',
+  'a',
+  'cite',
+  's',
+  'strike',
+  'del',
+  'ins',
+  'sub',
+  'sup',
+  'font',
+  'mark',
+]);
+
 function wrapNoticeHtml(body: string): string {
-  return `<div style="margin:0;padding:0;line-height:1.6;color:#334155;font-size:14px;">${body}</div>`;
+  return `<div style="margin:0;padding:0;line-height:1.6;color:${NOTICE_TEXT_COLOR};font-size:14px;">${body}</div>`;
 }
 
 function isBlankBlock(el: HTMLElement): boolean {
@@ -71,6 +94,61 @@ function isBoldLike(el: HTMLElement): boolean {
   return Number.isFinite(numeric) && numeric >= 600;
 }
 
+function isItalicLike(el: HTMLElement): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'i' || tag === 'em') return true;
+  const fontStyle = (el.style.fontStyle || '').trim().toLowerCase();
+  return fontStyle === 'italic' || fontStyle === 'oblique';
+}
+
+function isUnderlineLike(el: HTMLElement): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'u') return true;
+  const deco = `${el.style.textDecorationLine} ${el.style.textDecoration}`.toLowerCase();
+  return deco.includes('underline');
+}
+
+function spanToSemanticInline(el: HTMLElement): HTMLElement | null {
+  const bold = isBoldLike(el);
+  const italic = isItalicLike(el);
+  const underline = isUnderlineLike(el);
+  if (!bold && !italic && !underline) return null;
+
+  let wrapped: HTMLElement = document.createElement('span');
+  while (el.firstChild) wrapped.appendChild(el.firstChild);
+  if (underline) {
+    const u = document.createElement('u');
+    u.appendChild(wrapped);
+    wrapped = u;
+  }
+  if (italic) {
+    const em = document.createElement('em');
+    em.appendChild(wrapped);
+    wrapped = em;
+  }
+  if (bold) {
+    const strong = document.createElement('strong');
+    strong.appendChild(wrapped);
+    wrapped = strong;
+  }
+  return wrapped;
+}
+
+function clearForeignPresentation(el: HTMLElement) {
+  el.style.removeProperty('background');
+  el.style.removeProperty('background-color');
+  el.style.removeProperty('background-image');
+  el.style.removeProperty('color');
+  el.style.removeProperty('text-decoration');
+  el.style.removeProperty('text-decoration-line');
+  el.style.removeProperty('text-decoration-color');
+  el.style.removeProperty('font-style');
+  el.style.removeProperty('font-size');
+  el.style.removeProperty('font-family');
+  el.style.removeProperty('letter-spacing');
+  el.style.removeProperty('vertical-align');
+}
+
 function sanitizeNodeStyles(el: HTMLElement) {
   const tag = el.tagName.toLowerCase();
   const isTable = tag === 'table';
@@ -78,7 +156,6 @@ function sanitizeNodeStyles(el: HTMLElement) {
   const isTableRow = tag === 'tr';
   const isTableSection = tag === 'thead' || tag === 'tbody' || tag === 'tfoot' || tag === 'colgroup' || tag === 'col';
   const isBold = isBoldLike(el) || tag === 'th';
-  const textColor = isBold ? '#0f172a' : '#334155';
 
   const prevAlign = el.style.textAlign;
   const prevWidth = el.style.width;
@@ -92,6 +169,9 @@ function sanitizeNodeStyles(el: HTMLElement) {
   if (prevColSpan) el.setAttribute('colspan', prevColSpan);
   if (prevRowSpan) el.setAttribute('rowspan', prevRowSpan);
 
+  el.removeAttribute('style');
+  clearForeignPresentation(el);
+
   if (isTable) {
     el.style.borderCollapse = 'collapse';
     el.style.tableLayout = 'fixed';
@@ -99,7 +179,7 @@ function sanitizeNodeStyles(el: HTMLElement) {
     el.style.margin = '6px 0';
     el.style.fontSize = '13px';
     el.style.lineHeight = '1.7';
-    el.style.color = '#334155';
+    el.style.color = NOTICE_TEXT_COLOR;
     el.style.backgroundColor = 'transparent';
     return;
   }
@@ -112,14 +192,14 @@ function sanitizeNodeStyles(el: HTMLElement) {
   if (isCell) {
     el.style.border = '1px solid #e5e7eb';
     el.style.padding = '8px 12px';
-    el.style.color = textColor;
+    el.style.color = NOTICE_TEXT_COLOR;
     el.style.backgroundColor = 'transparent';
     if (isBold) el.style.fontWeight = '700';
     if (prevAlign) el.style.textAlign = prevAlign;
     return;
   }
 
-  el.style.color = textColor;
+  el.style.color = NOTICE_TEXT_COLOR;
   el.style.backgroundColor = 'transparent';
   if (tag === 'div' || tag === 'p' || tag === 'li') {
     el.style.margin = '0';
@@ -131,11 +211,189 @@ function sanitizeNodeStyles(el: HTMLElement) {
   }
 }
 
+function replaceHeadingWithStrong(root: HTMLElement) {
+  root.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+    const strong = document.createElement('strong');
+    while (h.firstChild) strong.appendChild(h.firstChild);
+    h.replaceWith(strong);
+  });
+}
+
+function normalizeInlineNoticeMarkup(root: HTMLElement) {
+  replaceHeadingWithStrong(root);
+
+  for (let pass = 0; pass < 10; pass++) {
+    let changed = false;
+    const nodes = Array.from(root.querySelectorAll(Array.from(INLINE_UNWRAP_TAGS).join(',')));
+    for (const el of nodes) {
+      const htmlEl = el as HTMLElement;
+      if (htmlEl.classList?.contains('num-badge')) continue;
+      const parent = htmlEl.parentNode;
+      if (!parent) continue;
+      const semantic = spanToSemanticInline(htmlEl);
+      if (semantic) {
+        parent.replaceChild(semantic, htmlEl);
+        sanitizeNodeStyles(semantic);
+      } else {
+        while (htmlEl.firstChild) parent.insertBefore(htmlEl.firstChild, htmlEl);
+        parent.removeChild(htmlEl);
+      }
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  root.querySelectorAll('b,strong,i,em,u').forEach(el => sanitizeNodeStyles(el as HTMLElement));
+}
+
 function collapseNoticeBreaks(html: string): string {
   return html
-    .replace(/(<br\s*\/?>\s*)+/gi, '<br>')
+    .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
     .replace(/^(<br\s*\/?>\s*)+/gi, '')
     .replace(/(<br\s*\/?>\s*)+$/gi, '');
+}
+
+function brBodyToParagraphHtml(body: string): string {
+  const parts = body.split(/<br\s*\/?>/gi);
+  return parts
+    .map(part => {
+      const inner = part.trim() ? part : '&nbsp;';
+      return `<p style="margin:0;line-height:1.8;color:${NOTICE_TEXT_COLOR};">${inner}</p>`;
+    })
+    .join('');
+}
+
+function normalizePlainPasteText(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+}
+
+function unwrapLegacyInlineTags(root: HTMLElement) {
+  root.querySelectorAll('font').forEach(el => {
+    const parent = el.parentNode;
+    if (!parent) return;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    el.remove();
+  });
+  root.querySelectorAll('mark').forEach(el => {
+    const parent = el.parentNode;
+    if (!parent) return;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    el.remove();
+  });
+}
+
+function flattenNoticeElement(el: Element): string {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'table') return (el as HTMLElement).outerHTML;
+  if (tag === 'br') return '<br>';
+  if (tag === 'ol' || tag === 'ul') return (el as HTMLElement).outerHTML;
+
+  if (tag === 'div' || tag === 'p') {
+    const block = el as HTMLElement;
+    if (isBlankBlock(block)) return '';
+
+    const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
+    if (blockChild) {
+      return Array.from(block.children)
+        .map(child => flattenNoticeElement(child))
+        .filter(Boolean)
+        .join('');
+    }
+
+    const inner = block.innerHTML.trim();
+    if (!inner) return '';
+    if (inner.endsWith('<br>') || inner.endsWith('<br/>')) return inner;
+    return `${inner}<br>`;
+  }
+
+  return (el as HTMLElement).outerHTML;
+}
+
+function flattenNoticeHtmlRoot(root: HTMLElement): string {
+  let target: Element = root;
+  if (
+    root.children.length === 1 &&
+    root.firstElementChild &&
+    (root.firstElementChild.tagName.toLowerCase() === 'div' ||
+      root.firstElementChild.tagName.toLowerCase() === 'p')
+  ) {
+    target = root.firstElementChild;
+  }
+
+  return Array.from(target.childNodes)
+    .map(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = (node.textContent ?? '').trim();
+        return t ? `${escapeHtml(t)}<br>` : '';
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) return flattenNoticeElement(node as Element);
+      return '';
+    })
+    .join('');
+}
+
+function sanitizeNoticeHtmlRoot(root: HTMLElement) {
+  root.querySelectorAll('script,style,meta,link,title').forEach(el => el.remove());
+  unwrapLegacyInlineTags(root);
+  normalizeInlineNoticeMarkup(root);
+  root.querySelectorAll('*').forEach(node => sanitizeNodeStyles(node as HTMLElement));
+}
+
+/** 공문 편집 영역 — 템플릿 class는 유지하고 붙여넣은 인라인 서식만 제거 */
+export function scrubOfficialLetterInlineMarkup(root: HTMLElement) {
+  if (typeof document === 'undefined') return;
+
+  const scopes = root.querySelectorAll('td, .guide-msg, .contact-item, .section-header h3');
+  scopes.forEach(scope => {
+    const el = scope as HTMLElement;
+    replaceHeadingWithStrong(el);
+    unwrapLegacyInlineTags(el);
+    normalizeInlineNoticeMarkup(el);
+    el.querySelectorAll('[style]').forEach(node => {
+      const styled = node as HTMLElement;
+      if (styled.classList?.contains('num-badge')) return;
+      const tag = styled.tagName.toLowerCase();
+      if (tag === 'table' || tag === 'tr' || tag === 'td' || tag === 'th') return;
+      sanitizeNodeStyles(styled);
+    });
+    el.querySelectorAll('b,strong,i,em,u,span').forEach(node => {
+      const inline = node as HTMLElement;
+      if (inline.classList?.contains('num-badge')) return;
+      if (inline.tagName.toLowerCase() === 'span') return;
+      sanitizeNodeStyles(inline);
+    });
+  });
+}
+
+/** 붙여넣기·드래그용 — 이중 줄바꿈 제거, 외부 배경·글자색 정리 */
+export function prepareNoticePasteContent(
+  html: string,
+  plainText: string,
+  opts?: { flattenBlocks?: boolean; wrap?: boolean },
+): string {
+  const flattenBlocks = opts?.flattenBlocks ?? true;
+  const wrap = opts?.wrap ?? false;
+
+  if (typeof document === 'undefined') {
+    const t = normalizePlainPasteText(plainText || html);
+    const body = collapseNoticeBreaks(escapeHtml(t).replace(/\n/g, '<br>'));
+    return wrap ? wrapNoticeHtml(body) : body;
+  }
+
+  const root = document.createElement('div');
+  const trimmedHtml = html?.trim().replace(/<!--[\s\S]*?-->/g, '');
+  if (trimmedHtml) {
+    root.innerHTML = trimmedHtml;
+  } else {
+    const t = normalizePlainPasteText(plainText);
+    root.innerHTML = escapeHtml(t).replace(/\n/g, '<br>');
+  }
+
+  sanitizeNoticeHtmlRoot(root);
+
+  let body = flattenBlocks ? flattenNoticeHtmlRoot(root) : root.innerHTML.trim();
+  body = collapseNoticeBreaks(body.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''));
+  return wrap ? wrapNoticeHtml(body) : body;
 }
 
 /** 외부 HTML을 안내문 용도로 정리: 색상은 일반/볼드만 유지, 배경색 제거 */
@@ -145,8 +403,7 @@ export function sanitizeNoticeHtml(html: string): string {
   const root = document.createElement('div');
   root.innerHTML = html;
 
-  root.querySelectorAll('script,style,meta,link,title').forEach(el => el.remove());
-  root.querySelectorAll('*').forEach(node => sanitizeNodeStyles(node as HTMLElement));
+  sanitizeNoticeHtmlRoot(root);
 
   return collapseNoticeBreaks(
     root.innerHTML.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''),
@@ -158,56 +415,11 @@ export function normalizeHtmlForClipboard(html: string): string {
   if (!html?.trim() || typeof document === 'undefined') return html;
 
   const root = document.createElement('div');
-  root.innerHTML = sanitizeNoticeHtml(html).trim();
+  root.innerHTML = html;
+  sanitizeNoticeHtmlRoot(root);
 
-  const flatten = (el: Element): string => {
-    const tag = el.tagName.toLowerCase();
-    if (tag === 'table') return el.outerHTML;
-    if (tag === 'br') return '<br>';
-    if (tag === 'ol' || tag === 'ul') return (el as HTMLElement).outerHTML;
-
-    if (tag === 'div' || tag === 'p') {
-      const block = el as HTMLElement;
-      if (isBlankBlock(block)) return '<br>';
-
-      const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
-      if (blockChild) {
-        return Array.from(block.children)
-          .map(child => flatten(child))
-          .join('');
-      }
-
-      const inner = block.innerHTML.trim();
-      if (!inner) return '<br>';
-      if (inner.endsWith('<br>') || inner.endsWith('<br/>')) return inner;
-      return `${inner}<br>`;
-    }
-
-    return (el as HTMLElement).outerHTML;
-  };
-
-  let target: Element = root;
-  if (
-    root.children.length === 1 &&
-    root.firstElementChild &&
-    (root.firstElementChild.tagName.toLowerCase() === 'div' ||
-      root.firstElementChild.tagName.toLowerCase() === 'p')
-  ) {
-    target = root.firstElementChild;
-  }
-
-  const body = Array.from(target.childNodes)
-    .map(node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const t = (node.textContent ?? '').trim();
-        return t ? `${t}<br>` : '';
-      }
-      if (node.nodeType === Node.ELEMENT_NODE) return flatten(node as Element);
-      return '';
-    })
-    .join('');
-
-  return wrapNoticeHtml(collapseNoticeBreaks(body));
+  const body = collapseNoticeBreaks(flattenNoticeHtmlRoot(root));
+  return `<div style="margin:0;padding:0;line-height:1.8;color:${NOTICE_TEXT_COLOR};font-size:14px;">${brBodyToParagraphHtml(body)}</div>`;
 }
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {
@@ -507,7 +719,7 @@ export function buildPaymentNoticeTokens({
 
 function cleanupPaymentTemplate(html: string): string {
   return html
-    .replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>')
+    .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
     .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
 }
 
@@ -824,11 +1036,11 @@ export function renderVatReportTemplate({
     out = out.split(token).join(value);
   }
   if (!installmentBlock) {
-    out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+    out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
     out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
   }
   if (!supplementBlock) {
-    out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+    out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
   }
   return out;
 }
@@ -887,8 +1099,8 @@ export function renderTemplate({
     ['{세목}', escapeHtml(NAME[taxType] || '')],
     ['{귀속}', deadline ? escapeHtml(deadline.periodLabel) : ''],
     ['{요일}', deadline ? escapeHtml(getWeekdayKo(deadline.final)) : ''],
-    ['{필요자료}', multilineHtml(materials)],
-    ['{특이사항}', multilineHtml(notes)],
+    ['{필요자료}', noticeFieldToHtml(materials)],
+    ['{특이사항}', noticeFieldToHtml(notes)],
     ['{휴일안내}', escapeHtml(adjustmentSentence(deadline))],
   ];
 
@@ -911,8 +1123,7 @@ export function renderTemplate({
   out = out.replace(/color\s*:\s*#13a89e\s*;?/gi, '');
   // 토큰이 비어 내용이 사라진 블록(<div>/<p>) 제거 — <br>만 있는 빈 줄은 유지
   out = out.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, '');
-  // 빈 특이사항 등으로 인접한 빈 줄이 둘 이상이면 하나로 축소
-  out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+  out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
   out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
   return out;
 }

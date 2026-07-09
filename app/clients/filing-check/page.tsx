@@ -55,6 +55,8 @@ import {
   usesMonthOverMonthCompare,
   withholdingTargetsForPeriod,
   simplePayrollTargetsForPeriod,
+  isSemiAnnualOffMonthExcluded,
+  SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON,
   type FilingPeriod,
   type FilingTaxId,
   type SpecialFiling,
@@ -71,6 +73,7 @@ import {
   type ComprehensiveFilingGroup,
 } from '@/lib/comprehensiveFilingGroups';
 import { prevWithholdingPeriodKey, simplePayrollMonthlyPeriodKey } from '@/lib/periodUtils';
+import { readWithholdingSettings } from '@/lib/incomeTypes';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
   mergeFilingRecords,
@@ -786,7 +789,13 @@ function FilingCheckPageInner() {
     if (tax === 'simplePayroll') {
       const prevTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, prevP.month));
       const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, period.month));
-      return compareSessionTargets(prevTargets, currTargets, prevSession, record);
+      return compareSessionTargets(prevTargets, currTargets, prevSession, record, {
+        isAutoExcluded: (c, which) =>
+          isSemiAnnualOffMonthExcluded(
+            c.intakeData ?? {},
+            which === 'prev' ? prevP.month : period.month,
+          ),
+      });
     }
     if (tax === 'comprehensive') {
       const prevGroups = groupComprehensiveFilingTargets(
@@ -973,6 +982,12 @@ function FilingCheckPageInner() {
   // 연말정산·간이지급 제외는 원천세 세션에서 끌어옴 (IncomeTypeFilingSection)
   const excludeReasonOf = (c: ClientRecord): string | null => {
     if (isManualExcluded(c.id)) return record.excluded[c.id] ?? '';
+    if (
+      (tax === 'withholding' || tax === 'simplePayroll') &&
+      isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, period.month)
+    ) {
+      return SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON;
+    }
     return null;
   };
 
@@ -2334,7 +2349,11 @@ function FilingCheckPageInner() {
                 const manualExcluded = isManualExcluded(c.id);
                 const reason = excludeReasonOf(c);
                 const excluded = reason !== null;
-                const autoExcluded = excluded && !manualExcluded; // 연말정산: 원천세 이력 없음
+                const semiAnnualAutoExcluded =
+                  excluded &&
+                  !manualExcluded &&
+                  reason === SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON;
+                const autoExcluded = excluded && !manualExcluded;
                 const vatObligation =
                   tax === 'vat' ? readVatObligation(c, period.vatPhase) : null;
                 const vatNoticeOnly = vatObligation === '예정고지';
@@ -2392,6 +2411,20 @@ function FilingCheckPageInner() {
                           >
                             {c.companyName || '(이름 없음)'}
                           </span>
+                        ) : !isManualId(c.id) && tax === 'withholding' ? (
+                          <button
+                            type="button"
+                            disabled={locked}
+                            onClick={() => setIncomePanelClient(c)}
+                            className={`min-w-0 break-words text-left text-sm font-semibold hover:underline ${
+                              excluded
+                                ? 'text-slate-400 line-through decoration-slate-400'
+                                : 'text-slate-800 hover:text-blue-600'
+                            } disabled:cursor-default disabled:no-underline`}
+                            title="클릭 — 지급명세서 신고대상 설정"
+                          >
+                            {c.companyName || '(이름 없음)'}
+                          </button>
                         ) : (
                           <span
                             className={`min-w-0 break-words text-sm font-semibold ${
@@ -2406,7 +2439,7 @@ function FilingCheckPageInner() {
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
                         )}
-                        <ReviewSheetBridge clientId={c.id} />
+                        {tax !== 'withholding' && <ReviewSheetBridge clientId={c.id} />}
                         {tax === 'vat' && isVatSummaryOnlyClient(c) && (
                           <span className="shrink-0 whitespace-nowrap rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                             합계표제출
@@ -2417,6 +2450,22 @@ function FilingCheckPageInner() {
                             간이
                           </span>
                         )}
+                        {tax === 'withholding' && (() => {
+                          const wh = readWithholdingSettings(c.intakeData);
+                          if (!wh.semiAnnualTarget) return null;
+                          return (
+                            <span
+                              className="shrink-0 whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                              title={
+                                wh.semiAnnualMonthlyDisplay
+                                  ? '반기 신고대상 · 매월 표시'
+                                  : '반기 신고대상 (6·12월)'
+                              }
+                            >
+                              반기{wh.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                            </span>
+                          );
+                        })()}
                         {isExtraAdded(c.id) && !locked && (
                           <>
                             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
@@ -2538,7 +2587,13 @@ function FilingCheckPageInner() {
                         disabled={autoExcluded || locked}
                         onChange={e => toggleExclude(c.id, e.target.checked)}
                         className="h-4 w-4 accent-slate-400 disabled:opacity-40"
-                        title={autoExcluded ? '원천세 신고내역이 없어 자동 제외' : '신고목록에서 제외'}
+                        title={
+                          semiAnnualAutoExcluded
+                            ? '반기 신고대상 — 이번 달은 신고월(6·12월)이 아니어서 자동 제외'
+                            : autoExcluded
+                              ? reason || '자동 제외'
+                              : '신고목록에서 제외'
+                        }
                       />
                     </td>
                   </tr>
@@ -2639,6 +2694,7 @@ function FilingCheckPageInner() {
                 if (d?.clients) setAllClients(d.clients as ClientRecord[]);
               })
               .catch(() => {});
+            incomeSectionRef.current?.reload();
           }}
         />
       )}

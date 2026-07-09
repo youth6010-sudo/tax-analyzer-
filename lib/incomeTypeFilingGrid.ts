@@ -1,5 +1,9 @@
 import type { ClientRecord } from '@/app/types/client';
-import { SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS, SIMPLE_PAYROLL_COLUMNS } from '@/app/types/incomeTypes';
+import {
+  SIMPLE_PAYROLL_GRID_COLUMNS,
+  SIMPLE_PAYROLL_STAT_COLUMNS,
+  YEAR_END_COLUMNS,
+} from '@/app/types/incomeTypes';
 import type { ClientIncomeTypes, IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import { filingTargets, simplePayrollTargetsForPeriod } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
@@ -7,10 +11,13 @@ import { readIncomeTypes, readYearEndTypes, isLaborContentReportActive } from '@
 import {
   employedSimplePayrollPeriodKey,
   isEmployedColumnApplicable,
+  isSemiAnnualOffMonthExcluded,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
+  SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
+import { readWithholdingSettings } from '@/lib/incomeTypes';
 
 
 export type IncomeGridCell = {
@@ -29,6 +36,9 @@ export type IncomeTypeGridRow = {
   douzoneCode: string;
   manager: string;
   excludeReason: string | null;
+  /** 반기 신고대상 — 목록 배지 표시용 */
+  semiAnnualTarget?: boolean;
+  semiAnnualMonthlyDisplay?: boolean;
   /** 원천세 세션에서 가져온 신고 특이사항 */
   rowNote?: string;
   cells: Record<string, IncomeGridCell>;
@@ -87,6 +97,7 @@ export function buildSimplePayrollGrid(
     simplePayrollTargetsForPeriod(clients, meta.month).map(c => {
       const types = readIncomeTypes(c.intakeData);
       const intakeData = c.intakeData ?? {};
+      const whSettings = readWithholdingSettings(intakeData);
       const cells: Record<string, IncomeGridCell> = {};
 
       for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
@@ -122,8 +133,14 @@ export function buildSimplePayrollGrid(
         businessNo: c.businessNo,
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
-        excludeReason: excluded[c.id] ?? null,
+        excludeReason:
+          excluded[c.id] ??
+          (isSemiAnnualOffMonthExcluded(intakeData, meta.month)
+            ? SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON
+            : null),
         rowNote: rowNotes[c.id] ?? '',
+        semiAnnualTarget: whSettings.semiAnnualTarget,
+        semiAnnualMonthlyDisplay: whSettings.semiAnnualMonthlyDisplay,
         cells,
       };
     }),
@@ -260,13 +277,12 @@ export function computeIncomeGridStats(
 
   const columnKeys =
     mode === 'simplePayroll'
-      ? SIMPLE_PAYROLL_COLUMNS.map(c => c.key)
+      ? SIMPLE_PAYROLL_STAT_COLUMNS.map(c => c.key)
       : YEAR_END_COLUMNS.map(c => c.key);
 
   let target = 0;
   let received = 0;
   for (const row of rows) {
-    if (row.excludeReason != null && row.excludeReason !== undefined) continue;
     for (const key of columnKeys) {
       const cell = row.cells[key];
       if (!cell?.active) continue;

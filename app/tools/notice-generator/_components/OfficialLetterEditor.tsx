@@ -8,6 +8,7 @@ import {
   OFFICIAL_LETTER_TOKENS,
   type OfficialLetterVars,
 } from '../_lib/officialLetter';
+import { prepareNoticePasteContent, scrubOfficialLetterInlineMarkup } from '../_lib/templates';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
 import { noticeBtnSecondary, noticeSectionCompact, noticeSectionTitle } from './noticeUi';
 import '../_lib/officialLetter.scoped.css';
@@ -72,12 +73,17 @@ export default function OfficialLetterEditor({
   const pageRef = useRef<HTMLDivElement>(null);
   const baselineRef = useRef('');
   const skipSyncRef = useRef(false);
+  const focusedRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [moveMode, setMoveMode] = useState(false);
   const isCustom = source === 'custom';
 
   useEffect(() => {
     ensureFontAwesome();
     ensureNotoSans();
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const varsKey = [
@@ -106,7 +112,8 @@ export default function OfficialLetterEditor({
     skipSyncRef.current = true;
     const html = applyOfficialLetterVars(template, vars);
     el.innerHTML = html;
-    baselineRef.current = html;
+    scrubOfficialLetterInlineMarkup(el);
+    baselineRef.current = el.innerHTML;
     requestAnimationFrame(() => {
       skipSyncRef.current = false;
     });
@@ -118,10 +125,55 @@ export default function OfficialLetterEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, source, varsKey, defaultHtml, storageKey]);
 
-  const emitChange = () => {
+  const emitChange = (scrub = false) => {
     if (!pageRef.current || !isCustom || skipSyncRef.current) return;
+    if (scrub) scrubOfficialLetterInlineMarkup(pageRef.current);
     const normalized = normalizeOfficialLetterHtml(pageRef.current.innerHTML);
     onChange(normalized);
+  };
+
+  const scheduleEmit = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      if (focusedRef.current) emitChange(false);
+    }, 600);
+  };
+
+  const handleBlur = () => {
+    focusedRef.current = false;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    emitChange(true);
+  };
+
+  const insertSanitizedContent = (html: string, plain: string) => {
+    const fragment = prepareNoticePasteContent(html, plain);
+    if (!fragment) return;
+    document.execCommand('insertHTML', false, fragment);
+    scheduleEmit();
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
+    insertSanitizedContent(
+      e.clipboardData.getData('text/html'),
+      e.clipboardData.getData('text/plain'),
+    );
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
+    insertSanitizedContent(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/plain'));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
   };
 
   const handleReset = () => {
@@ -260,8 +312,14 @@ export default function OfficialLetterEditor({
             className={`a4-page mx-auto ${moveMode ? 'move-mode' : ''}`}
             contentEditable={isCustom}
             suppressContentEditableWarning
-            onInput={emitChange}
-            onBlur={emitChange}
+            onFocus={() => {
+              focusedRef.current = true;
+            }}
+            onInput={scheduleEmit}
+            onBlur={handleBlur}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
           />
         </div>
       </div>

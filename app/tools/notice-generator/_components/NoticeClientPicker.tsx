@@ -195,13 +195,13 @@ export default function NoticeClientPicker({
     <div className="space-y-2">
       {onDraftCompanyNameChange && (
         <label className="block min-w-0">
-          <span className={noticeLabel}>업체명 (안내문 삽입)</span>
+          <span className={noticeLabel}>안내문 표기용 업체명</span>
           <div className="mt-1 flex min-w-0 items-center gap-2">
             <input
               type="text"
               value={draftCompanyName}
               onChange={e => onDraftCompanyNameChange(e.target.value)}
-              placeholder="예) (주)○○건설"
+              placeholder="예) (주)○○건설 — {업체명} 토큰에 삽입"
               className={`${noticeInput} min-w-0 flex-1 !py-1.5 text-xs`}
             />
             {draftTrimmed ? (
@@ -216,7 +216,8 @@ export default function NoticeClientPicker({
           </div>
           {draftTrimmed ? (
             <p className="mt-1 text-[11px] text-slate-500">
-              업체명을 클릭하거나 「연결」로 수임처를 찾을 수 있습니다.
+              수임처 미연결 시 안내문 본문의 {'{업체명}'}에 들어갑니다. 「연결」로 수임처를 찾으면
+              세목별 입력이 자동 저장됩니다.
             </p>
           ) : null}
         </label>

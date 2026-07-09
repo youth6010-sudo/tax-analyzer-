@@ -1,4 +1,4 @@
-import { defaultPaymentSlips } from './templates';
+import { defaultPaymentSlips, htmlToPlainText } from './templates';
 import type {
   PaymentInstallment,
   PaymentNotice,
@@ -284,7 +284,7 @@ export async function saveClientNotice(
       ? (intakeData.notes as Record<string, string>)
       : {};
   const douzoneKey = TAX_TO_DOUZONE_NOTE_KEY[taxType];
-  const nextNotes = { ...currentNotes, [douzoneKey]: data.materials };
+  const nextNotes = { ...currentNotes, [douzoneKey]: htmlToPlainText(data.materials) };
 
   const res = await fetch(`/api/clients/${id}`, {
     method: 'PATCH',

@@ -19,7 +19,11 @@ import IncomeTypeGridTable, {
   type GridCellState,
   type IncomeGridRow,
 } from '@/app/components/clients/IncomeTypeGridTable';
-import { SIMPLE_PAYROLL_COLUMNS, SIMPLE_PAYROLL_GRID_COLUMNS, YEAR_END_COLUMNS } from '@/app/types/incomeTypes';
+import {
+  SIMPLE_PAYROLL_GRID_COLUMNS,
+  SIMPLE_PAYROLL_STAT_COLUMNS,
+  YEAR_END_COLUMNS,
+} from '@/app/types/incomeTypes';
 import type { IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
@@ -200,9 +204,10 @@ function matchesRowFilter(
   filter: IncomeStatFilter,
 ): boolean {
   if (filter === 'all') return true;
-  if (row.excludeReason != null && row.excludeReason !== undefined) return false;
   const hasActive = Object.values(row.cells).some(c => c.active);
+  const excluded = isGridRowExcluded(row);
   if (filter === 'target') return hasActive;
+  if (excluded && !hasActive) return false;
   const fullyFiled = isRowFullyFiled(row, mode);
   if (filter === 'received') return hasActive && fullyFiled;
   if (filter === 'diff') return hasActive && !fullyFiled;
@@ -225,7 +230,7 @@ function isCellReceived(
 
 function columnDefs(mode: 'simplePayroll' | 'yearEnd') {
   if (mode === 'simplePayroll') {
-    return SIMPLE_PAYROLL_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+    return SIMPLE_PAYROLL_STAT_COLUMNS.map(c => ({ key: c.key, label: c.label }));
   }
   return YEAR_END_COLUMNS.map(c => ({ key: c.key, label: c.label }));
 }
@@ -241,7 +246,6 @@ function computeStats(
     let colTarget = 0;
     let colReceived = 0;
     for (const row of rows) {
-      if (row.excludeReason != null && row.excludeReason !== undefined) continue;
       const cell = row.cells[key];
       if (!cell?.active) continue;
       colTarget += 1;
@@ -806,6 +810,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           <ClientFilingSettingsModal
             clientId={settingsClient.id}
             companyName={settingsClient.companyName}
+            canEdit={!locked}
             onClose={() => setSettingsClient(null)}
             onSaved={() => void refreshClientIncomeTypes(settingsClient.id)}
           />

@@ -16,7 +16,7 @@ export const INCOME_TYPE_KEYS = [
 
 export type IncomeTypeKey = (typeof INCOME_TYPE_KEYS)[number];
 
-/** 연말정산지급명세서 전용 (간이지급 incomeTypes와 분리) */
+/** 연말정산지급명세서 — 그리드·저장 키 (근로·사업·기타는 간이지급 incomeTypes 연동) */
 export const YEAR_END_INCOME_KEYS = [
   'employed',
   'retirement',
@@ -25,6 +25,10 @@ export const YEAR_END_INCOME_KEYS = [
   'interestDividend',
 ] as const;
 export type YearEndIncomeKey = (typeof YEAR_END_INCOME_KEYS)[number];
+
+/** 연말정산 설정 패널 — 간이지급과 중복되는 근로·사업·기타 제외 */
+export const YEAR_END_PANEL_INCOME_KEYS = ['retirement', 'interestDividend'] as const;
+export type YearEndPanelIncomeKey = (typeof YEAR_END_PANEL_INCOME_KEYS)[number];
 
 export type YearEndClientTypes = Record<YearEndIncomeKey, boolean>;
 
@@ -108,6 +112,11 @@ export const SIMPLE_PAYROLL_COLUMNS = [
 ] as const;
 
 export type SimplePayrollColumnKey = (typeof SIMPLE_PAYROLL_COLUMNS)[number]['key'];
+
+/** 간이지급 신고대상 건수 집계 — 근로내용확인신고 제외 */
+export const SIMPLE_PAYROLL_STAT_COLUMNS = SIMPLE_PAYROLL_COLUMNS.filter(
+  c => c.key !== 'laborContentReport',
+);
 
 /** 연말정산지급명세서 그리드 열 — 근로·퇴직·사업·기타·이자배당 */
 export const YEAR_END_COLUMNS = [

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   SIMPLE_PAYROLL_INCOME_KEYS,
   SIMPLE_PAYROLL_INCOME_LABELS,
-  YEAR_END_INCOME_KEYS,
+  YEAR_END_PANEL_INCOME_KEYS,
   YEAR_END_INCOME_LABELS,
   EMPTY_YEAR_END_TYPES,
   type ClientIncomeTypes,
   type IncomeTypeKey,
   type YearEndClientTypes,
-  type YearEndIncomeKey,
+  type YearEndPanelIncomeKey,
 } from '@/app/types/incomeTypes';
 import { portalBtnPrimary, portalBtnSecondary, portalCard } from '@/app/components/portal/uiClasses';
 
@@ -39,7 +39,11 @@ export default function ClientIncomeTypesPanel({
     if (!res.ok) return;
     const data = await res.json();
     setTypes(data.incomeTypes as ClientIncomeTypes);
-    setYearEndTypes((data.yearEndTypes as YearEndClientTypes) ?? EMPTY_YEAR_END_TYPES);
+    setYearEndTypes({
+      ...EMPTY_YEAR_END_TYPES,
+      retirement: Boolean((data.yearEndTypes as YearEndClientTypes)?.retirement),
+      interestDividend: Boolean((data.yearEndTypes as YearEndClientTypes)?.interestDividend),
+    });
     setSemiAnnualTarget(Boolean(data.withholdingSettings?.semiAnnualTarget));
     setSemiAnnualMonthly(Boolean(data.withholdingSettings?.semiAnnualMonthlyDisplay));
   }, [clientId]);
@@ -53,10 +57,16 @@ export default function ClientIncomeTypesPanel({
     setTypes({ ...types, [key]: !types[key] });
   };
 
-  const toggleYearEnd = (key: YearEndIncomeKey) => {
+  const toggleYearEnd = (key: YearEndPanelIncomeKey) => {
     if (!canEdit) return;
     setYearEndTypes(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const normalizedYearEndTypes = (): YearEndClientTypes => ({
+    ...EMPTY_YEAR_END_TYPES,
+    retirement: yearEndTypes.retirement,
+    interestDividend: yearEndTypes.interestDividend,
+  });
 
   const save = async () => {
     if (!canEdit || !types) return;
@@ -68,7 +78,7 @@ export default function ClientIncomeTypesPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           incomeTypes: types,
-          yearEndTypes,
+          yearEndTypes: normalizedYearEndTypes(),
           withholdingSettings: {
             semiAnnualTarget,
             semiAnnualMonthlyDisplay: semiAnnualMonthly,
@@ -78,7 +88,11 @@ export default function ClientIncomeTypesPanel({
       if (!res.ok) throw new Error('저장 실패');
       const data = await res.json();
       setTypes(data.incomeTypes);
-      setYearEndTypes(data.yearEndTypes ?? EMPTY_YEAR_END_TYPES);
+      setYearEndTypes({
+        ...EMPTY_YEAR_END_TYPES,
+        retirement: Boolean(data.yearEndTypes?.retirement),
+        interestDividend: Boolean(data.yearEndTypes?.interestDividend),
+      });
       onSaved?.(data.incomeTypes);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
@@ -130,8 +144,9 @@ export default function ClientIncomeTypesPanel({
 
       <div className="border-t border-slate-100 pt-3">
         <p className="mb-2 text-xs font-bold text-violet-800">연말정산지급명세서</p>
+        <p className="mb-2 text-[11px] text-slate-500">근로·사업·기타는 간이지급명세서와 동일 · 퇴직·이자배당만 별도</p>
         <div className="flex flex-wrap gap-2">
-          {YEAR_END_INCOME_KEYS.map(key => (
+          {YEAR_END_PANEL_INCOME_KEYS.map(key => (
             <label key={key} className={yearEndCheckboxCls}>
               <input
                 type="checkbox"

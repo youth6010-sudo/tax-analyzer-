@@ -1,9 +1,10 @@
+import NoticeRichTextField from './NoticeRichTextField';
+import { NOTICE_EDITOR_SHORTCUT_HINT } from '../_lib/noticeEditorShortcuts';
 import {
   noticeBtnPrimary,
   noticeLabel,
   noticeSection,
   noticeSectionTitle,
-  noticeTextarea,
   noticeTwoCol,
 } from './noticeUi';
 
@@ -53,7 +54,10 @@ export default function CompanyNotesField({
 }: Props) {
   return (
     <section className={noticeSection}>
-      <h2 className={noticeSectionTitle}>수임처 정보</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className={noticeSectionTitle}>수임처 정보</h2>
+        <span className="text-[10px] text-slate-400">{NOTICE_EDITOR_SHORTCUT_HINT}</span>
+      </div>
 
       <div className={`${noticeTwoCol} mt-3`}>
         <div className="min-w-0">
@@ -63,23 +67,21 @@ export default function CompanyNotesField({
               <span className="font-normal text-slate-400"> (세목별 저장)</span>
             )}
           </label>
-          <textarea
+          <NoticeRichTextField
             value={materials}
-            onChange={e => onMaterialsChange(e.target.value)}
+            onChange={onMaterialsChange}
             rows={5}
             placeholder={materialsPlaceholder ?? '- 매출/매입 세금계산서\n- 카드/현금영수증 매출 내역'}
-            className={`${noticeTextarea} mt-1 w-full`}
           />
         </div>
 
         <div className="min-w-0">
           <label className={noticeLabel}>특이사항</label>
-          <textarea
+          <NoticeRichTextField
             value={notes}
-            onChange={e => onNotesChange(e.target.value)}
+            onChange={onNotesChange}
             rows={5}
             placeholder={notesPlaceholder ?? '예) 4분기 매입 세금계산서는 이미 수령함.'}
-            className={`${noticeTextarea} mt-1 w-full`}
           />
         </div>
       </div>

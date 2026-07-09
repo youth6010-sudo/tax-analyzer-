@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { TOKENS, type TemplateSource, type TemplateToken } from '../_lib/template';
-import { sanitizeNoticeHtml } from '../_lib/templates';
+import { sanitizeNoticeHtml, prepareNoticePasteContent } from '../_lib/templates';
+import { NOTICE_EDITOR_SHORTCUT_HINT } from '../_lib/noticeEditorShortcuts';
+import { useNoticeRichEditor } from '../_lib/useNoticeRichEditor';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
 import {
   noticeBtnSecondary,
@@ -39,45 +41,43 @@ export default function TemplateEditor({
   hint,
 }: Props) {
   const [open, setOpen] = useState(true);
-  const ref = useRef<HTMLDivElement>(null);
-  const internalChangeRef = useRef(false);
   const isCustom = source === 'custom';
   const displayHtml = isCustom ? html : defaultHtml;
+  const toEditorHtml = useCallback((v: string) => sanitizeNoticeHtml(v || ''), []);
 
-  useEffect(() => {
-    if (!ref.current || !isCustom) return;
-    if (internalChangeRef.current) {
-      internalChangeRef.current = false;
-      return;
-    }
-    const sanitized = sanitizeNoticeHtml(html || '');
-    if (ref.current.innerHTML !== sanitized) {
-      ref.current.innerHTML = sanitized;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, html, isCustom]);
+  const { ref, handleFocus, handleBlur, handleInput, afterInsert } =
+    useNoticeRichEditor({
+      value: html,
+      onChange,
+      toEditorHtml,
+      enabled: isCustom,
+    });
 
-  const emit = (syncDom = false) => {
-    if (!ref.current || !isCustom) return;
-    const raw = ref.current.innerHTML;
-    const sanitized = sanitizeNoticeHtml(raw);
-    if (syncDom && ref.current.innerHTML !== sanitized) {
-      ref.current.innerHTML = sanitized;
-    }
-    internalChangeRef.current = true;
-    onChange(sanitized);
+  const insertSanitizedContent = (html: string, plain: string) => {
+    const next = prepareNoticePasteContent(html, plain);
+    if (!next) return;
+    document.execCommand('insertHTML', false, next);
+    afterInsert();
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     if (!isCustom) return;
     e.preventDefault();
-    const pastedHtml = e.clipboardData.getData('text/html');
-    const text = e.clipboardData.getData('text/plain');
-    const next = pastedHtml
-      ? sanitizeNoticeHtml(pastedHtml)
-      : sanitizeNoticeHtml(text.replace(/\n/g, '<br>'));
-    document.execCommand('insertHTML', false, next);
-    emit(true);
+    insertSanitizedContent(
+      e.clipboardData.getData('text/html'),
+      e.clipboardData.getData('text/plain'),
+    );
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
+    insertSanitizedContent(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/plain'));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isCustom) return;
+    e.preventDefault();
   };
 
   const insertToken = (token: string) => {
@@ -89,12 +89,10 @@ export default function TemplateEditor({
     if (!ok) {
       el.innerHTML += token;
     }
-    emit(false);
+    afterInsert();
   };
 
   const loadDefaultIntoCustom = () => {
-    if (ref.current) ref.current.innerHTML = defaultHtml;
-    internalChangeRef.current = true;
     onChange(defaultHtml);
     onSourceChange('custom');
   };
@@ -148,9 +146,12 @@ export default function TemplateEditor({
               ref={ref}
               contentEditable
               suppressContentEditableWarning
-              onInput={() => emit(false)}
-              onBlur={() => emit(true)}
+              onFocus={handleFocus}
+              onInput={handleInput}
+              onBlur={handleBlur}
               onPaste={handlePaste}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
               className={`${noticeTextarea} min-h-[120px] !text-sm`}
             />
           ) : (
@@ -163,7 +164,7 @@ export default function TemplateEditor({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] text-slate-400">
               {isCustom
-                ? '※ 붙여넣을 때 서식이 함께 들어옵니다 (Ctrl+Shift+V는 서식 제거). Ctrl+Z 되돌리기를 사용할 수 있습니다.'
+                ? `※ 붙여넣기·드래그 시 색·배경은 제거됩니다. ${NOTICE_EDITOR_SHORTCUT_HINT}`
                 : '※ 기본 서식은 읽기 전용입니다.'}
             </span>
             {isCustom && (

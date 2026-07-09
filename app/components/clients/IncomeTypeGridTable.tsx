@@ -20,6 +20,8 @@ export type IncomeGridRow = {
   douzoneCode?: string;
   excludeReason?: string | null;
   rowNote?: string;
+  semiAnnualTarget?: boolean;
+  semiAnnualMonthlyDisplay?: boolean;
   cells: Record<string, GridCellState>;
 };
 
@@ -79,6 +81,23 @@ function isExcluded(row: IncomeGridRow): boolean {
   return row.excludeReason !== null && row.excludeReason !== undefined;
 }
 
+/** 원천세 제외여도 지급명세서 항목이 활성화되면 열 표시 */
+function hasActivePaySpecCells(row: IncomeGridRow): boolean {
+  return Object.values(row.cells).some(c => c.active);
+}
+
+function showPaySpecColumns(row: IncomeGridRow): boolean {
+  if (hasActivePaySpecCells(row)) return true;
+  return !isExcluded(row);
+}
+
+/** 제외 업체의 지급명세 열 — 활성 셀만 편집 허용 */
+function canEditPaySpecCell(excluded: boolean, cellActive: boolean, locked: boolean): boolean {
+  if (locked) return false;
+  if (!excluded) return true;
+  return cellActive;
+}
+
 function renderInactiveCell(
   row: IncomeGridRow,
   colKey: string,
@@ -112,21 +131,43 @@ function renderInactiveCell(
   );
 }
 
-function renderExcludeBadgeCell(colKey: string, className?: string) {
+function renderExcludeBadgeCell(
+  colKey: string,
+  onRevive?: () => void,
+  locked?: boolean,
+  className?: string,
+) {
+  const badgeCls =
+    'whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500';
   return (
     <td key={colKey} className={`px-1 py-2 text-center ${className ?? ''}`}>
       <div className="flex min-h-9 items-center justify-center">
-        <span className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-          원천세 제외
-        </span>
+        {onRevive && !locked ? (
+          <button
+            type="button"
+            onClick={onRevive}
+            className={`${badgeCls} cursor-pointer transition-colors hover:bg-blue-100 hover:text-blue-700`}
+            title="클릭 — 지급명세서 신고대상 설정"
+          >
+            원천세 제외
+          </button>
+        ) : (
+          <span className={badgeCls}>원천세 제외</span>
+        )}
       </div>
     </td>
   );
 }
 
-function renderNaCell(colKey: string, excluded: boolean, showExcludeBadge: boolean) {
+function renderNaCell(
+  colKey: string,
+  excluded: boolean,
+  showExcludeBadge: boolean,
+  onRevive?: () => void,
+  locked?: boolean,
+) {
   if (excluded && showExcludeBadge) {
-    return renderExcludeBadgeCell(colKey);
+    return renderExcludeBadgeCell(colKey, onRevive, locked);
   }
   return (
     <td key={colKey} className="px-2 py-2 text-center text-[11px] text-slate-300">
@@ -154,6 +195,11 @@ export default function IncomeTypeGridTable({
 }: Props) {
   const simpleCols = SIMPLE_PAYROLL_GRID_COLUMNS;
   const yearEndCols = YEAR_END_COLUMNS as readonly YearEndColumn[];
+
+  const handleReviveExclude = (row: IncomeGridRow) => {
+    if (locked) return;
+    onOpenSettings(row.clientId, row.companyName);
+  };
   const statMap = useMemo(() => {
     const m = new Map<string, IncomeColumnStat>();
     for (const s of columnStats ?? []) m.set(s.key, s);
@@ -161,6 +207,7 @@ export default function IncomeTypeGridTable({
   }, [columnStats]);
 
   const renderColCount = (key: string) => {
+    if (key === 'laborContentReport') return null;
     const s = statMap.get(key);
     if (!s || s.target <= 0) return null;
     return (
@@ -311,10 +358,13 @@ export default function IncomeTypeGridTable({
         ) : (
           rows.map((row, i) => {
             const excluded = isExcluded(row);
+            const paySpecVisible = showPaySpecColumns(row);
+            const showExcludedBadge = excluded && !paySpecVisible;
+            const reviveExclude = () => handleReviveExclude(row);
             return (
               <tr
                 key={row.clientId}
-                className={`border-b border-slate-50 ${excluded ? 'bg-slate-50/80' : ''}`}
+                className={`border-b border-slate-50 ${showExcludedBadge ? 'bg-slate-50/80' : ''}`}
               >
                 <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">
                   {i + 1}
@@ -332,25 +382,41 @@ export default function IncomeTypeGridTable({
                         if (!locked) onToggleExclude(row.clientId);
                       }}
                       className={`shrink-0 text-left text-sm font-semibold hover:underline ${
-                        excluded
+                        showExcludedBadge
                           ? 'text-slate-400 line-through decoration-slate-400'
                           : 'text-slate-800 hover:text-blue-600'
                       }`}
                       title={
-                        excluded
+                        showExcludedBadge
                           ? locked
                             ? '원천세 제외'
-                            : '더블클릭 — 원천세 제외 해제(복구)'
-                          : locked
-                            ? [row.companyName, row.representative].filter(Boolean).join(' · ') ||
-                              '(이름 없음)'
-                            : '클릭 — 설정 · 더블클릭 — 원천세 제외'
+                            : '클릭 — 지급명세서 신고대상 설정 · 더블클릭 — 원천세 제외 해제'
+                          : excluded
+                            ? locked
+                              ? '원천세 제외'
+                              : '클릭 — 지급명세서 신고대상 · 더블클릭 — 원천세 제외 해제'
+                            : locked
+                              ? [row.companyName, row.representative].filter(Boolean).join(' · ') ||
+                                '(이름 없음)'
+                              : '클릭 — 지급명세서 신고대상 설정 · 더블클릭 — 원천세 제외'
                       }
                     >
                       {row.companyName || '(이름 없음)'}
                     </button>
                     {row.representative ? (
                       <span className="shrink-0 text-xs text-slate-400">{row.representative}</span>
+                    ) : null}
+                    {row.semiAnnualTarget ? (
+                      <span
+                        className="shrink-0 whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                        title={
+                          row.semiAnnualMonthlyDisplay
+                            ? '반기 신고대상 · 매월 표시'
+                            : '반기 신고대상 (6·12월)'
+                        }
+                      >
+                        반기{row.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                      </span>
                     ) : null}
                   </div>
                 </td>
@@ -362,25 +428,21 @@ export default function IncomeTypeGridTable({
                   {row.businessNo || '-'}
                 </td>
 
-                {excluded ? (
-                  <td colSpan={incomeColCount} className="px-2 py-2 text-center">
-                    <div className="flex min-h-9 items-center justify-center">
-                      <span className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                        원천세 제외
-                      </span>
-                    </div>
-                  </td>
-                ) : mode === 'simplePayroll'
-                  ? simpleCols.map((col, colIdx) => {
-                      const showExcludeBadge = excluded && colIdx === 0;
+                {paySpecVisible ? (
+                  mode === 'simplePayroll'
+                    ? simpleCols.map((col, colIdx) => {
+                      const showExcludeBadge = excluded && colIdx === 0 && !hasActivePaySpecCells(row);
                       if (col.kind === 'laborDate' || col.kind === 'laborMethod') {
                         const labor = row.cells.laborContentReport ?? {
                           active: false,
                           filed: false,
                         };
+                        const laborEditable = canEditPaySpecCell(excluded, labor.active, locked);
                         if (showExcludeBadge) {
                           return renderExcludeBadgeCell(
                             col.kind,
+                            reviveExclude,
+                            locked,
                             col.kind === 'laborDate' ? 'border-l border-slate-50' : undefined,
                           );
                         }
@@ -408,33 +470,33 @@ export default function IncomeTypeGridTable({
                             <input
                               value={labor[field] ?? ''}
                               onChange={e =>
-                                !excluded &&
-                                !locked &&
+                                laborEditable &&
                                 onPatchLabor?.(row.clientId, { [field]: e.target.value })
                               }
                               onDoubleClick={() =>
-                                !excluded && !locked && onDeactivate(row.clientId, 'laborContentReport')
+                                laborEditable && onDeactivate(row.clientId, 'laborContentReport')
                               }
-                              readOnly={excluded || locked}
-                              disabled={excluded || locked}
+                              readOnly={!laborEditable}
+                              disabled={!laborEditable}
                               placeholder={placeholder}
                               title={
-                                excluded
-                                  ? '원천세 제외 — 더블클릭 업체명으로 복구'
+                                excluded && !labor.active
+                                  ? '클릭 — 상호명에서 지급명세서 신고대상 설정'
                                   : '더블클릭 — 근로내용확인 비활성화'
                               }
-                              className={`${inputCls} box-border w-full min-w-0 ${excluded ? 'cursor-not-allowed opacity-50' : ''}`}
+                              className={`${inputCls} box-border w-full min-w-0 ${!laborEditable ? 'cursor-not-allowed opacity-50' : ''}`}
                             />
                           </td>
                         );
                       }
 
                       const cell = row.cells[col.key] ?? { active: false, filed: false };
+                      const cellEditable = canEditPaySpecCell(excluded, cell.active, locked);
                       if (col.semiAnnual && cell.applicable === false) {
-                        return renderNaCell(col.key, excluded, showExcludeBadge);
+                        return renderNaCell(col.key, excluded, showExcludeBadge, reviveExclude, locked);
                       }
                       if (showExcludeBadge) {
-                        return renderExcludeBadgeCell(col.key);
+                        return renderExcludeBadgeCell(col.key, reviveExclude, locked);
                       }
                       if (!cell.active) {
                         return renderInactiveCell(
@@ -451,16 +513,16 @@ export default function IncomeTypeGridTable({
                           <input
                             type="checkbox"
                             checked={cell.filed}
-                            disabled={excluded || locked}
+                            disabled={!cellEditable}
                             onClick={e => e.stopPropagation()}
-                            onDoubleClick={() => !excluded && !locked && onDeactivate(row.clientId, col.key)}
+                            onDoubleClick={() => cellEditable && onDeactivate(row.clientId, col.key)}
                             onChange={e =>
-                              !excluded && !locked && onToggleFiled(row.clientId, col.key, e.target.checked)
+                              cellEditable && onToggleFiled(row.clientId, col.key, e.target.checked)
                             }
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                             title={
-                              excluded
-                                ? '원천세 제외'
+                              excluded && !cell.active
+                                ? '클릭 — 상호명에서 지급명세서 신고대상 설정'
                                 : locked
                                   ? '완료 처리됨'
                                   : '더블클릭 — 소득유형 비활성화'
@@ -470,11 +532,12 @@ export default function IncomeTypeGridTable({
                       );
                     })
                   : yearEndCols.map((col, colIdx) => {
-                      const showExcludeBadge = excluded && colIdx === 0;
+                      const showExcludeBadge = excluded && colIdx === 0 && !hasActivePaySpecCells(row);
                       if (showExcludeBadge) {
-                        return renderExcludeBadgeCell(col.key);
+                        return renderExcludeBadgeCell(col.key, reviveExclude, locked);
                       }
                       const cell = row.cells[col.key] ?? { active: false, filed: false };
+                      const cellEditable = canEditPaySpecCell(excluded, cell.active, locked);
                       if (!cell.active) {
                         return renderInactiveCell(row, col.key, onActivate, col.label, excluded, locked);
                       }
@@ -483,20 +546,42 @@ export default function IncomeTypeGridTable({
                           <input
                             type="checkbox"
                             checked={cell.filed}
-                            disabled={excluded || locked}
+                            disabled={!cellEditable}
                             onClick={e => e.stopPropagation()}
-                            onDoubleClick={() => !excluded && !locked && onDeactivate(row.clientId, col.key)}
+                            onDoubleClick={() => cellEditable && onDeactivate(row.clientId, col.key)}
                             onChange={e =>
-                              !excluded && !locked && onToggleFiled(row.clientId, col.key, e.target.checked)
+                              cellEditable && onToggleFiled(row.clientId, col.key, e.target.checked)
                             }
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
                             title={
-                              excluded ? '원천세 제외' : '더블클릭 — 소득유형 비활성화'
+                              excluded && !cell.active
+                                ? '클릭 — 상호명에서 지급명세서 신고대상 설정'
+                                : '더블클릭 — 소득유형 비활성화'
                             }
                           />
                         </td>
                       );
-                    })}
+                    })
+                ) : (
+                  <td colSpan={incomeColCount} className="px-2 py-2 text-center">
+                    <div className="flex min-h-9 items-center justify-center">
+                      {locked ? (
+                        <span className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                          원천세 제외
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={reviveExclude}
+                          className="whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          title="클릭 — 지급명세서 신고대상 설정"
+                        >
+                          원천세 제외
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
 
                 <td className="px-2 py-2">
                   <input

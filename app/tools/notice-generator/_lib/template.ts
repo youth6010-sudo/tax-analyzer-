@@ -25,17 +25,13 @@ export const TOKENS: TemplateToken[] = [
 // 기본 서식(HTML). 색상·이모지 예시 포함 — 사용자가 외부 서식으로 덮어쓰면 됩니다.
 export const DEFAULT_TEMPLATE = `<div style="line-height:1.8;">
 {귀속} {세목} 신고를 위해 첨부된 공문을 확인하시고, 해당 자료 업로드를 부탁드립니다.<br>
-<br>
 📢 <b>[ 중요 ] 신고 일정 안내</b><br>
 대상 기간: {대상기간}<br>
 {자료제출마감}<br>
 세금 납부 기한: {세금납부기한}<br>
-<br>
 📁 <b>기존 제출 자료</b><br>
 {필요자료}<br>
-<br>
 {특이사항}<br>
-<br>
 {자료제출안내}<br>
 </div>`;
 
@@ -61,11 +57,9 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
     desc: '인건비 자료를 요청하는 안내',
     html: `<div style="line-height:1.8;">
 {귀속} {세목} 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.<br>
-<br>
 📢 <b>신고 일정 안내</b><br>
 {자료제출마감}<br>
 세금 납부 기한: {세금납부기한}<br>
-<br>
 📁 <b>요청자료</b><br>
 {필요자료}<br>
 </div>`,
@@ -119,11 +113,9 @@ export const VAT_REPORT_TOKENS: TemplateToken[] = [
 
 export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.8;">
 📋 [신고 결과 보고 및 검토 안내]<br>
-<br>
 안녕하세요. {귀속} {세목} 신고 결과를 안내드립니다.<br>
 매입매출장과 결과 보고서를 함께 첨부했습니다.<br>
 아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.<br>
-<br>
 [신고 결과 요약]<br>
 {신고결과요약표}
 <br>

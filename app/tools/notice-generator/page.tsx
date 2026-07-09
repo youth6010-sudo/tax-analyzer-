@@ -58,6 +58,7 @@ import {
   calcVatReport,
   hasLocalIncomeTax,
   installmentSchedule,
+  htmlToPlainText,
 } from './_lib/templates';
 import { fetchNoticeTemplateStore, saveNoticeTemplateStore } from './_lib/noticeTemplateClient';
 import {
@@ -252,7 +253,7 @@ export default function NoticeGeneratorPage() {
       const nextIntake = {
         ...client.intakeData,
         noticeData: nextMap,
-        notes: { ...prevNotes, [douzoneKey]: entry.materials },
+        notes: { ...prevNotes, [douzoneKey]: htmlToPlainText(entry.materials) },
       };
       const updated: SelectedClient = {
         id: client.id,
@@ -366,10 +367,6 @@ export default function NoticeGeneratorPage() {
   const handleMaterialsChange = (value: string) => {
     if (inClientMode) {
       setClientMaterials(value);
-      setSelectedClient(prev => {
-        if (!prev) return prev;
-        return withTaxEntry(prev, taxType, clientEntrySnapshot({ materials: value }));
-      });
       setClientDirty(true);
     } else {
       setMaterials(value);
@@ -379,10 +376,6 @@ export default function NoticeGeneratorPage() {
   const handleNotesChange = (value: string) => {
     if (inClientMode) {
       setClientNotes(value);
-      setSelectedClient(prev => {
-        if (!prev) return prev;
-        return withTaxEntry(prev, taxType, clientEntrySnapshot({ notes: value }));
-      });
       setClientDirty(true);
     } else {
       setNotes(value);
@@ -443,7 +436,7 @@ export default function NoticeGeneratorPage() {
           setSaveState('error');
         }
       })();
-    }, 800);
+    }, 1500);
     return () => {
       if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
     };

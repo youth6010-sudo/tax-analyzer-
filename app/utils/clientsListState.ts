@@ -17,6 +17,16 @@ export type ClientsListState = {
   scroll: number;
 };
 
+/** 최초 조회 기본 대분류 */
+export const DEFAULT_CATEGORY_FILTERS = ['개인', '법인'] as const;
+
+function isDefaultCategoryFilters(filters: string[]): boolean {
+  return (
+    filters.length === DEFAULT_CATEGORY_FILTERS.length &&
+    DEFAULT_CATEGORY_FILTERS.every(c => filters.includes(c))
+  );
+}
+
 export const DEFAULT_CLIENTS_LIST_STATE: ClientsListState = {
   q: '',
   sort: 'code',
@@ -24,7 +34,7 @@ export const DEFAULT_CLIENTS_LIST_STATE: ClientsListState = {
   includeChurned: false,
   entity: '',
   visibleManagers: [],
-  categoryFilters: [],
+  categoryFilters: [...DEFAULT_CATEGORY_FILTERS],
   manager: '',
   scroll: 0,
 };
@@ -43,10 +53,15 @@ export function parseClientsListState(
     ? mgrRaw.split(',').map(s => s.trim()).filter(Boolean)
     : [];
 
-  const catFilterRaw = params.get('catFilter') ?? '';
-  const categoryFilters = catFilterRaw
-    ? catFilterRaw.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const catFilterRaw = params.get('catFilter');
+  let categoryFilters: string[];
+  if (catFilterRaw === 'all') {
+    categoryFilters = [];
+  } else if (catFilterRaw) {
+    categoryFilters = catFilterRaw.split(',').map(s => s.trim()).filter(Boolean);
+  } else {
+    categoryFilters = [...DEFAULT_CATEGORY_FILTERS];
+  }
 
   return {
     q: params.get('q') ?? '',
@@ -74,7 +89,11 @@ export function buildClientsListUrl(state: ClientsListState, opts?: { includeScr
   if (state.includeChurned) p.set('includeChurned', '1');
   if (state.entity) p.set('entity', state.entity);
   if (state.visibleManagers.length > 0) p.set('mgr', state.visibleManagers.join(','));
-  if (state.categoryFilters.length > 0) p.set('catFilter', state.categoryFilters.join(','));
+  if (state.categoryFilters.length === 0) {
+    p.set('catFilter', 'all');
+  } else if (!isDefaultCategoryFilters(state.categoryFilters)) {
+    p.set('catFilter', state.categoryFilters.join(','));
+  }
   if (state.manager) p.set('manager', state.manager);
   if (opts?.includeScroll && state.scroll > 0) p.set('scroll', String(Math.round(state.scroll)));
   const qs = p.toString();

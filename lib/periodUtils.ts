@@ -1,7 +1,7 @@
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
-/** 원천세 반기 신고 제출월 (1월·7월) */
-export const SEMI_ANNUAL_FILING_MONTHS = [1, 7] as const;
+/** 원천세 반기 신고 제출월 — 지급월 기준 6월(상반기)·12월(하반기) */
+export const SEMI_ANNUAL_FILING_MONTHS = [6, 12] as const;
 
 export type SimplePayrollHalf = 'H1' | 'H2';
 
@@ -14,15 +14,32 @@ export function isSemiAnnualFilingMonth(month: number): boolean {
   return (SEMI_ANNUAL_FILING_MONTHS as readonly number[]).includes(month);
 }
 
-/** 반기 신고대상 + 매월 미표시일 때만 1·7월 제한. 기본은 매월 전체 노출(기존과 동일) */
-export function shouldShowInWithholdingPeriod(
+export const SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON = '반기 신고월 아님';
+
+/** 반기 신고대상 업체 여부 */
+export function isSemiAnnualWithholdingClient(intakeData: Record<string, unknown>): boolean {
+  return readWithholdingSettings(intakeData).semiAnnualTarget;
+}
+
+/** 반기 신고대상 + 매월 미표시 + 반기 신고월(6·12월) 아님 → 자동 제외 */
+export function isSemiAnnualOffMonthExcluded(
   intakeData: Record<string, unknown>,
   month: number,
 ): boolean {
   const { semiAnnualTarget, semiAnnualMonthlyDisplay } = readWithholdingSettings(intakeData);
-  if (!semiAnnualTarget) return true;
-  if (semiAnnualMonthlyDisplay) return true;
-  return isSemiAnnualFilingMonth(month);
+  if (!semiAnnualTarget) return false;
+  if (semiAnnualMonthlyDisplay) return false;
+  return !isSemiAnnualFilingMonth(month);
+}
+
+/** @deprecated 목록 제외 대신 isSemiAnnualOffMonthExcluded 로 자동 제외 처리 */
+export function shouldShowInWithholdingPeriod(
+  intakeData: Record<string, unknown>,
+  _month: number,
+): boolean {
+  void intakeData;
+  void _month;
+  return true;
 }
 
 export function simplePayrollPeriodKey(year: number, half: SimplePayrollHalf): string {
