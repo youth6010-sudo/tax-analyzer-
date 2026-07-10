@@ -1,6 +1,8 @@
+'use client';
+
 import { useCallback, useState } from 'react';
 import { TOKENS, type TemplateSource, type TemplateToken } from '../_lib/template';
-import { sanitizeNoticeHtml, prepareNoticePasteContent } from '../_lib/templates';
+import { finalizeNoticeHtml, prepareNoticePasteContent } from '../_lib/templates';
 import { NOTICE_EDITOR_SHORTCUT_HINT } from '../_lib/noticeEditorShortcuts';
 import { useNoticeRichEditor } from '../_lib/useNoticeRichEditor';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
@@ -25,6 +27,11 @@ type Props = {
   defaultHtml?: string;
   tokens?: TemplateToken[];
   hint?: string;
+  /** 리아 관리자 모드 — 기본 서식 탭에서 바로 편집·저장 */
+  canEditDefault?: boolean;
+  onDefaultChange?: (html: string) => void;
+  onDefaultSave?: () => void;
+  defaultSaveState?: SaveState;
 };
 
 export default function TemplateEditor({
@@ -39,29 +46,43 @@ export default function TemplateEditor({
   defaultHtml = '',
   tokens = TOKENS,
   hint,
+  canEditDefault = false,
+  onDefaultChange,
+  onDefaultSave,
+  defaultSaveState = 'idle',
 }: Props) {
   const [open, setOpen] = useState(true);
   const isCustom = source === 'custom';
-  const displayHtml = isCustom ? html : defaultHtml;
-  const toEditorHtml = useCallback((v: string) => sanitizeNoticeHtml(v || ''), []);
+  const editingDefault = !isCustom && canEditDefault;
+  const editable = isCustom || editingDefault;
 
-  const { ref, handleFocus, handleBlur, handleInput, afterInsert } =
-    useNoticeRichEditor({
-      value: html,
-      onChange,
-      toEditorHtml,
-      enabled: isCustom,
-    });
+  const displayValue = isCustom ? html : defaultHtml;
+  // 읽기 전용 미리보기 — 생성 안내문구와 동일 줄바꿈 규칙
+  const previewHtml = finalizeNoticeHtml(displayValue || '');
 
-  const insertSanitizedContent = (html: string, plain: string) => {
-    const next = prepareNoticePasteContent(html, plain);
+  const toEditorHtml = useCallback((v: string) => finalizeNoticeHtml(v || ''), []);
+
+  const handleEditorChange = (next: string) => {
+    if (isCustom) onChange(next);
+    else onDefaultChange?.(next);
+  };
+
+  const { ref, handleFocus, handleBlur, handleInput, afterInsert } = useNoticeRichEditor({
+    value: displayValue,
+    onChange: handleEditorChange,
+    toEditorHtml,
+    enabled: editable,
+  });
+
+  const insertSanitizedContent = (pasteHtml: string, plain: string) => {
+    const next = prepareNoticePasteContent(pasteHtml, plain);
     if (!next) return;
     document.execCommand('insertHTML', false, next);
     afterInsert();
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    if (!isCustom) return;
+    if (!editable) return;
     e.preventDefault();
     insertSanitizedContent(
       e.clipboardData.getData('text/html'),
@@ -70,18 +91,18 @@ export default function TemplateEditor({
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!isCustom) return;
+    if (!editable) return;
     e.preventDefault();
     insertSanitizedContent(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/plain'));
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!isCustom) return;
+    if (!editable) return;
     e.preventDefault();
   };
 
   const insertToken = (token: string) => {
-    if (!isCustom) return;
+    if (!editable) return;
     const el = ref.current;
     if (!el) return;
     el.focus();
@@ -96,6 +117,10 @@ export default function TemplateEditor({
     onChange(defaultHtml);
     onSourceChange('custom');
   };
+
+  const activeSave = isCustom ? onSave : onDefaultSave;
+  const activeSaveState = isCustom ? saveState : defaultSaveState;
+  const saveLabel = isCustom ? '내 서식 저장' : '기본 서식 저장 (전체 적용)';
 
   return (
     <section className={noticeSectionCompact}>
@@ -114,18 +139,27 @@ export default function TemplateEditor({
             source={source}
             onSourceChange={onSourceChange}
             hasCustom={hasCustomSaved}
-            onSave={onSave}
-            saveState={saveState}
+            onSave={editable ? activeSave : undefined}
+            saveState={editable ? activeSaveState : 'idle'}
+            saveLabel={saveLabel}
           />
+
+          {editingDefault && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+              리아 관리자 모드 — 여기서 저장하면 <strong>모든 담당자</strong>의 기본 서식에 반영됩니다.
+            </p>
+          )}
 
           <p className="text-xs text-slate-500">
             {hint ??
               (isCustom
                 ? '쓰시던 안내문을 복사해 붙여넣고 토큰을 넣으세요. 편집 후 「내 서식 저장」을 누르면 담당자 계정에 저장됩니다.'
-                : '기본 서식이 적용됩니다. 「내 서식」으로 바꾸면 편집·저장할 수 있습니다.')}
+                : editingDefault
+                  ? '기본 서식을 바로 수정할 수 있습니다. 「기본 서식 저장」을 누르면 전체에 적용됩니다.'
+                  : '기본 서식이 적용됩니다. 「내 서식」으로 바꾸면 편집·저장할 수 있습니다.')}
           </p>
 
-          {isCustom && (
+          {editable && (
             <div className="flex flex-wrap gap-1.5">
               {tokens.map(t => (
                 <button
@@ -141,7 +175,7 @@ export default function TemplateEditor({
             </div>
           )}
 
-          {isCustom ? (
+          {editable ? (
             <div
               ref={ref}
               contentEditable
@@ -156,14 +190,14 @@ export default function TemplateEditor({
             />
           ) : (
             <div
-              className="notice-preview min-h-[100px] w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-700"
-              dangerouslySetInnerHTML={{ __html: displayHtml }}
+              className="notice-preview min-h-[100px] w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] text-slate-400">
-              {isCustom
+              {editable
                 ? `※ 붙여넣기·드래그 시 색·배경은 제거됩니다. ${NOTICE_EDITOR_SHORTCUT_HINT}`
                 : '※ 기본 서식은 읽기 전용입니다.'}
             </span>

@@ -363,6 +363,34 @@ export function specialFilingKey(bizNo: string, type: string): string {
   return `${bizNo}|${type}`;
 }
 
+/** 접수목록에만 있고 신고대상 사업자번호에 없는 상호(또는 번호) 목록 */
+export function missingFromListLabels(
+  fileBizSet: Iterable<string>,
+  targetBizSet: Set<string>,
+  filings: HometaxFiling[],
+): string[] {
+  const nameByBiz = new Map<string, string>();
+  for (const f of filings) {
+    const biz = normalizeBizNo(f.bizNo);
+    if (biz.length !== 10) continue;
+    if (!nameByBiz.has(biz) && f.name?.trim()) nameByBiz.set(biz, f.name.trim());
+  }
+  const labels: string[] = [];
+  for (const b of fileBizSet) {
+    if (targetBizSet.has(b)) continue;
+    labels.push(nameByBiz.get(b) || b);
+  }
+  return labels;
+}
+
+/** 상호 목록을 안내 문구용으로 짧게 이어 붙임 */
+export function formatCompanyNameList(names: string[], limit = 12): string {
+  const cleaned = names.map(n => n.trim()).filter(Boolean);
+  if (cleaned.length === 0) return '';
+  const shown = cleaned.slice(0, limit).join(', ');
+  return cleaned.length > limit ? `${shown} 외 ${cleaned.length - limit}건` : shown;
+}
+
 // 신고유형 → 특이 분류('수정신고'/'기한후신고'/'경정청구') 또는 null
 function classifySpecialType(filingType: string): string | null {
   const t = (filingType || '').replace(/\s/g, '');
@@ -627,6 +655,12 @@ export async function parseHometaxBizNos(file: File): Promise<string[]> {
   return bizNos;
 }
 
+export type UnreceivedByColumnNotice = {
+  key: string;
+  label: string;
+  names: string[];
+};
+
 export type IncomeUploadResult = {
   matched: number;
   checkedCells: number;
@@ -638,9 +672,33 @@ export type IncomeUploadResult = {
   target: number;
   received: number;
   diff: number;
+  /** 업로드됐지만 수임처에 없어 추가하지 못한 상호 */
+  missingFromList?: string[];
+  /** 리스트에 있으나 접수(체크)되지 않은 상호 (평탄) */
+  noReceiptNames?: string[];
+  /** 항목별 미접수 상호 — 「근로 ○○ 접수내역이 없습니다」 */
+  unreceivedByColumn?: UnreceivedByColumnNotice[];
+  /** 비활성·제외였는데 자동 활성화·추가한 상호 */
+  addedNames?: string[];
 };
 
 export function parseIncomeUploadResult(data: Record<string, unknown>): IncomeUploadResult {
+  const asStringList = (raw: unknown): string[] | undefined =>
+    Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : undefined;
+  const asUnreceivedByColumn = (raw: unknown): UnreceivedByColumnNotice[] | undefined => {
+    if (!Array.isArray(raw)) return undefined;
+    const out: UnreceivedByColumnNotice[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const rec = item as Record<string, unknown>;
+      const key = typeof rec.key === 'string' ? rec.key : '';
+      const label = typeof rec.label === 'string' ? rec.label : '';
+      const names = asStringList(rec.names) ?? [];
+      if (!label || names.length === 0) continue;
+      out.push({ key, label, names });
+    }
+    return out.length > 0 ? out : undefined;
+  };
   return {
     matched: Number(data.matched ?? 0),
     checkedCells: Number(data.checkedCells ?? data.matched ?? 0),
@@ -652,38 +710,51 @@ export function parseIncomeUploadResult(data: Record<string, unknown>): IncomeUp
     target: Number(data.target ?? 0),
     received: Number(data.received ?? 0),
     diff: Number(data.diff ?? 0),
+    missingFromList: asStringList(data.missingFromList),
+    noReceiptNames: asStringList(data.noReceiptNames),
+    unreceivedByColumn: asUnreceivedByColumn(data.unreceivedByColumn),
+    addedNames: asStringList(data.addedNames),
   };
 }
 
 /** 간이지급·연말정산 접수목록 업로드 결과 안내 문구 */
-export function formatIncomeUploadNotice(result: IncomeUploadResult, taxLabel: string): string {
+export function formatIncomeUploadNotice(result: IncomeUploadResult, _taxLabel?: string): string {
   const lines: string[] = [];
   lines.push(
     `접수목록 ${result.parsedRows}건 파싱 · ${result.checkedCells}건 자동 체크했습니다.`,
   );
-  if (result.target > 0) {
-    if (result.diff > 0) {
+  if (result.target > 0 && result.diff === 0) {
+    lines.push(`신고대상 ${result.target}건 모두 접수완료되었습니다.`);
+  }
+
+  const added = result.addedNames?.filter(Boolean) ?? [];
+  if (added.length > 0) {
+    lines.push(`${formatCompanyNameList(added)} 리스트에 없어 추가하였습니다.`);
+  }
+
+  const missing = result.missingFromList?.filter(Boolean) ?? [];
+  if (missing.length > 0) {
+    lines.push(`${formatCompanyNameList(missing)} 리스트에 없습니다.`);
+  }
+
+  const byCol = result.unreceivedByColumn ?? [];
+  if (byCol.length > 0) {
+    for (const col of byCol) {
       lines.push(
-        `신고대상 ${result.target}건 중 접수완료 ${result.received}건 — ${result.diff}건 차이가 있습니다.`,
+        `${col.label} ${formatCompanyNameList(col.names)} 접수내역이 없습니다.`,
       );
-    } else {
-      lines.push(`신고대상 ${result.target}건 모두 접수완료되었습니다.`);
+    }
+  } else {
+    const noReceipt = result.noReceiptNames?.filter(Boolean) ?? [];
+    if (noReceipt.length > 0) {
+      lines.push(`${formatCompanyNameList(noReceipt)} 접수내역이 없습니다.`);
     }
   }
-  if (result.extraCount > 0) {
-    lines.push(
-      `접수목록 중 ${result.extraCount}건은 현재 ${taxLabel} 신고대상 수임처와 일치하지 않습니다.`,
-    );
-  }
+
   if (result.unmappedRows > 0) {
     lines.push(
       `신고서 구분을 찾지 못해 ${result.unmappedRows}건은 자동 체크하지 않았습니다.`,
     );
   }
-  if (result.skippedInactive > 0) {
-    lines.push(
-      `접수는 있으나 비활성 소득유형 ${result.skippedInactive}건은 체크하지 않았습니다.`,
-    );
-  }
-  return lines.join(' ');
+  return lines.join('\n');
 }

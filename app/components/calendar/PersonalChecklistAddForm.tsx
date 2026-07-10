@@ -10,6 +10,7 @@ import {
   formatCalendarCreatedAt,
 } from '@/app/types/calendar';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
+import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
@@ -71,10 +72,23 @@ export default function PersonalChecklistAddForm({
   const [clientId, setClientId] = useState(defaultClientId || '');
   const [dueDate, setDueDate] = useState('');
   const [reflectInNotes, setReflectInNotes] = useState(false);
+  const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
+  const [memoDraft, setMemoDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [allClients, setAllClients] = useState<ClientRecord[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState('');
+
+  useEffect(() => {
+    void fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const name = (d as { user?: { name?: string } })?.user?.name || '';
+        setCurrentUser(name);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
 
   useEffect(() => {
     if (isMaster === null) return;
@@ -95,6 +109,8 @@ export default function PersonalChecklistAddForm({
       setClientId(editItem.clientId || '');
       setDueDate(editItem.dueDate || '');
       setReflectInNotes(editItem.reflectInNotes);
+      setAssigneeNames(editItem.assigneeNames ?? []);
+      setMemoDraft('');
       return;
     }
     setTaxType('');
@@ -102,7 +118,21 @@ export default function PersonalChecklistAddForm({
     setClientId(defaultClientId || '');
     setDueDate('');
     setReflectInNotes(false);
+    setAssigneeNames([]);
+    setMemoDraft('');
   }, [editItem, defaultClientId]);
+
+  const isOwner = !editItem || !currentUser || editItem.ownerName === currentUser;
+  const staffOptions = useMemo(
+    () => MANAGER_DISPLAY_ORDER.filter(n => n !== (editItem?.ownerName || currentUser)),
+    [editItem?.ownerName, currentUser],
+  );
+
+  const toggleAssignee = (name: string) => {
+    setAssigneeNames(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name],
+    );
+  };
 
   const clients = useMemo(() => {
     if (!taxType || taxType === 'other') {
@@ -141,27 +171,48 @@ export default function PersonalChecklistAddForm({
   };
 
   const submit = async () => {
-    if (!taxType) {
-      window.alert('구분을 선택해주세요.');
-      return;
-    }
-    if (!title.trim()) {
-      window.alert('체크리스트 내용을 입력해주세요.');
-      return;
-    }
-    if (!dueDate.trim()) {
-      window.alert('마감일을 입력해주세요.');
+    if (isOwner) {
+      if (!taxType) {
+        window.alert('구분을 선택해주세요.');
+        return;
+      }
+      if (!title.trim()) {
+        window.alert('체크리스트 내용을 입력해주세요.');
+        return;
+      }
+      if (!dueDate.trim()) {
+        window.alert('마감일을 입력해주세요.');
+        return;
+      }
+    } else if (isEdit && !memoDraft.trim()) {
+      window.alert('추가할 메모를 입력해주세요.');
       return;
     }
     setSaving(true);
     setError('');
-    const payload = {
-      title,
-      taxType,
-      clientId: clientId || null,
-      dueDate,
-      reflectInNotes,
-    };
+    const payload = isEdit
+      ? {
+          ...(isOwner
+            ? {
+                title,
+                taxType,
+                clientId: clientId || null,
+                dueDate,
+                reflectInNotes,
+                assigneeNames,
+              }
+            : {}),
+          ...(memoDraft.trim() ? { addMemo: memoDraft.trim() } : {}),
+        }
+      : {
+          title,
+          taxType,
+          clientId: clientId || null,
+          dueDate,
+          reflectInNotes,
+          assigneeNames,
+          ...(memoDraft.trim() ? { memo: memoDraft.trim() } : {}),
+        };
     try {
       const res = await fetch(
         isEdit && editItem
@@ -188,8 +239,11 @@ export default function PersonalChecklistAddForm({
         setDueDate('');
         setClientId(defaultClientId || '');
         setReflectInNotes(false);
+        setAssigneeNames([]);
+        setMemoDraft('');
         onCreated?.();
       } else {
+        setMemoDraft('');
         onUpdated?.();
       }
     } catch (e) {
@@ -203,13 +257,14 @@ export default function PersonalChecklistAddForm({
 
   return (
     <div className={wrapperCls}>
-      <FormRow label="구분" required>
+      <FormRow label="구분" required={isOwner}>
         <select
           value={taxType}
           onChange={e => handleTaxTypeChange(e.target.value as ChecklistTaxType | '')}
           className={portalInput + ' w-full text-xs py-1.5'}
           aria-label="구분"
-          aria-required
+          aria-required={isOwner}
+          disabled={!isOwner}
         >
           <option value="">선택</option>
           {CHECKLIST_TAX_OPTIONS.map(o => (
@@ -218,62 +273,127 @@ export default function PersonalChecklistAddForm({
         </select>
       </FormRow>
 
-      <FormRow label="체크리스트 내용" required>
+      <FormRow label="체크리스트 내용" required={isOwner}>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           className={portalInput + ' w-full text-xs py-1.5'}
-          aria-required
+          aria-required={isOwner}
+          readOnly={!isOwner}
         />
       </FormRow>
 
-      <FormRow label="마감일" required>
+      <FormRow label="마감일" required={isOwner}>
         <input
           type="date"
           value={dueDate}
           onChange={e => setDueDate(e.target.value)}
           className={portalInput + ' w-full text-xs py-1.5'}
-          aria-required
+          aria-required={isOwner}
+          readOnly={!isOwner}
         />
       </FormRow>
 
-      <FormRow label="수임처">
-        <ScopedClientSearch
-          candidates={clients}
-          clientId={clientId}
-          onSelect={setClientId}
-          loading={clientsLoading}
-          placeholder="검색"
-          emptyHint={
-            !taxType
-              ? '구분을 먼저 선택하세요'
-              : taxType === 'other'
-                ? '검색 결과 없음'
-                : '해당 세목 범위에서 검색 결과 없음'
-          }
-        />
-      </FormRow>
+      {isOwner && (
+        <>
+          <FormRow label="수임처">
+            <ScopedClientSearch
+              candidates={clients}
+              clientId={clientId}
+              onSelect={setClientId}
+              loading={clientsLoading}
+              placeholder="검색"
+              emptyHint={
+                !taxType
+                  ? '구분을 먼저 선택하세요'
+                  : taxType === 'other'
+                    ? '검색 결과 없음'
+                    : '해당 세목 범위에서 검색 결과 없음'
+              }
+            />
+          </FormRow>
 
-      <label className="flex items-start gap-2 pl-[6.5rem] text-xs text-slate-600 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={reflectInNotes}
-          onChange={e => setReflectInNotes(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>업체별 특이사항에 반영</span>
-      </label>
+          <FormRow label="담당자">
+            <div className="flex flex-wrap gap-1.5">
+              {staffOptions.map(name => {
+                const on = assigneeNames.includes(name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggleAssignee(name)}
+                    className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                      on
+                        ? 'border-blue-500 bg-blue-50 text-blue-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[10px] text-slate-400">함께 볼 팀원을 선택합니다.</p>
+          </FormRow>
+
+          <label className="flex items-start gap-2 pl-[6.5rem] text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={reflectInNotes}
+              onChange={e => setReflectInNotes(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>업체별 특이사항에 반영</span>
+          </label>
+        </>
+      )}
+
+      {!isOwner && editItem && (
+        <div className="pl-[6.5rem] space-y-1 text-xs text-slate-600">
+          <p>
+            작성자 <span className="font-semibold text-slate-800">{editItem.ownerName}</span>
+          </p>
+          {(editItem.assigneeNames?.length ?? 0) > 0 && (
+            <p>담당 {editItem.assigneeNames.join(', ')}</p>
+          )}
+        </div>
+      )}
+
+      <FormRow label="메모">
+        <div className="space-y-2">
+          {isEdit && (editItem?.memos?.length ?? 0) > 0 && (
+            <ul className="max-h-36 space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 p-2">
+              {editItem!.memos.map(m => (
+                <li key={m.id} className="text-xs leading-snug">
+                  <span className="font-semibold text-slate-700">{m.authorName}</span>
+                  <span className="ml-1.5 text-[10px] text-slate-400">
+                    {formatCalendarCreatedAt(m.createdAt)}
+                  </span>
+                  <p className="mt-0.5 whitespace-pre-wrap text-slate-600">{m.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <textarea
+            value={memoDraft}
+            onChange={e => setMemoDraft(e.target.value)}
+            rows={2}
+            placeholder={isEdit ? '메모 추가…' : '메모 (선택)'}
+            className={portalInput + ' w-full resize-y text-xs py-1.5'}
+          />
+        </div>
+      </FormRow>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       {isEdit && editItem?.createdAt && (
         <p className="text-xs text-slate-500 pl-[6.5rem]">
-          등록: {formatCalendarCreatedAt(editItem.createdAt)}
+          등록: {editItem.ownerName} · {formatCalendarCreatedAt(editItem.createdAt)}
         </p>
       )}
 
       <div className="flex items-center gap-2">
-        {isEdit && (
+        {isEdit && isOwner && (
           <button
             type="button"
             onClick={() => void handleDelete()}
@@ -289,7 +409,7 @@ export default function PersonalChecklistAddForm({
           disabled={saving}
           className={portalBtnPrimary + ' text-xs py-1.5' + (isEdit ? ' flex-1' : '')}
         >
-          {saving ? '저장 중…' : isEdit ? '저장' : '체크리스트 추가'}
+          {saving ? '저장 중…' : isEdit ? (isOwner ? '저장' : '메모 추가') : '체크리스트 추가'}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} className={portalBtnSecondary + ' text-xs py-1.5'}>

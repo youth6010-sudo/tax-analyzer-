@@ -116,14 +116,16 @@ export function isSimplePayrollEmployedFilingMonth(month: number): boolean {
   return (SIMPLE_PAYROLL_EMPLOYED_FILING_MONTHS as readonly number[]).includes(month);
 }
 
-/** 반기 신고대상 + 매월 표시일 때 원천세·간이지급 근로(상용) 열 노출 */
+/**
+ * 간이지급 근로(상용) 열 노출 — 원천 반기/매월표시와 무관.
+ * 근로 간이지급은 항상 반기 제출이므로 6·12월에만 적용.
+ */
 export function isEmployedColumnApplicable(
   month: number,
-  intakeData: Record<string, unknown>,
+  _intakeData?: Record<string, unknown>,
 ): boolean {
-  if (isSimplePayrollEmployedFilingMonth(month)) return true;
-  const { semiAnnualTarget, semiAnnualMonthlyDisplay } = readWithholdingSettings(intakeData);
-  return semiAnnualTarget && semiAnnualMonthlyDisplay;
+  void _intakeData;
+  return isSimplePayrollEmployedFilingMonth(month);
 }
 
 /** 근로 간이지급 저장용 반기 period_key. 반기 신고월이 아니면 null */
@@ -141,4 +143,15 @@ export function parseSimplePayrollViewPeriod(periodKey: string): { year: number;
   }
   const { year, half } = parseSimplePayrollPeriodKey(periodKey);
   return { year, month: half === 'H1' ? 6 : 12 };
+}
+
+/** 해당 연도 간이지급 조회용 period_key (월 1~12 + 근로 반기 H1/H2) */
+export function simplePayrollPeriodKeysForYear(year: number): string[] {
+  const keys: string[] = [];
+  for (let month = 1; month <= 12; month += 1) {
+    keys.push(simplePayrollMonthlyPeriodKey(year, month));
+  }
+  keys.push(simplePayrollPeriodKey(year, 'H1'));
+  keys.push(simplePayrollPeriodKey(year, 'H2'));
+  return keys;
 }

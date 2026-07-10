@@ -11,12 +11,19 @@ import {
 export type FilingCheckSessionData = {
   overrides: Record<string, boolean>;
   excelBizNos: string[];
+  /** 홈택스 접수목록 사업자번호 → 상호 (안내 문구용) */
+  excelNamesByBiz?: Record<string, string>;
   fileName: string;
   diffReason: string;
   done: boolean;
   specialFilings: { bizNo: string; name: string; type: string; count: number }[];
   specialReasons: Record<string, string>;
   excluded: Record<string, string>;
+  /**
+   * 반기 자동제외 등을 수기로 다시 살린 업체 (clientId → true).
+   * excluded에 없어도 자동제외 사유가 있으면 이 목록으로 신고대상·접수체크에 포함.
+   */
+  forceIncluded?: Record<string, boolean>;
   rowNotes: Record<string, string>;
   extraClients: { id: string; companyName: string; businessNo: string; representative?: string }[];
   /** 신고대상확인 화면 전용 업체 순서 */
@@ -28,12 +35,14 @@ export type FilingCheckSessionData = {
 export const EMPTY_SESSION_DATA: FilingCheckSessionData = {
   overrides: {},
   excelBizNos: [],
+  excelNamesByBiz: {},
   fileName: '',
   diffReason: '',
   done: false,
   specialFilings: [],
   specialReasons: {},
   excluded: {},
+  forceIncluded: {},
   rowNotes: {},
   extraClients: [],
 };
@@ -90,7 +99,7 @@ export async function findMostRecentPreviousFilingCheckSession(
   return bestData ? { data: bestData, periodKey: bestKey } : null;
 }
 
-/** @deprecated 비교·레거시용 — 완료(done)분만 */
+/** 직전 완료(done) 신고분 — 다음 리스트 제외·특이사항 승계 기준 */
 export async function findPreviousCompletedFilingCheckSession(
   manager: string,
   taxType: FilingTaxId | string,
@@ -130,6 +139,7 @@ function receiptSlice(rec: Partial<FilingCheckSessionData> | null | undefined) {
   return {
     overrides: rec?.overrides ?? {},
     excelBizNos: rec?.excelBizNos ?? [],
+    excelNamesByBiz: rec?.excelNamesByBiz ?? {},
     fileName: rec?.fileName ?? '',
     specialFilings: rec?.specialFilings ?? [],
     done: rec?.done ?? false,
@@ -137,14 +147,42 @@ function receiptSlice(rec: Partial<FilingCheckSessionData> | null | undefined) {
   };
 }
 
-/** 현재 기간 세션 + 없으면 직전 신고분에서 제외·특이사항 승계 (접수는 매월 새로) */
+/** 전월 제외 키가 당월에 빠져 있으면 승계가 더 필요 */
+function carryNeedsPreviousMerge(
+  previous: FilingCheckSessionData | null | undefined,
+  current: FilingCheckSessionData | null | undefined,
+): boolean {
+  if (!previous) return false;
+  const prevEx = previous.excluded ?? {};
+  const curEx = current?.excluded ?? {};
+  for (const id of Object.keys(prevEx)) {
+    if (!Object.prototype.hasOwnProperty.call(curEx, id)) return true;
+  }
+  const prevNotes = previous.rowNotes ?? {};
+  const curNotes = current?.rowNotes ?? {};
+  for (const id of Object.keys(prevNotes)) {
+    if (!(curNotes[id] ?? '').trim() && (prevNotes[id] ?? '').trim()) return true;
+  }
+  const prevForce = previous.forceIncluded ?? {};
+  const curForce = current?.forceIncluded ?? {};
+  for (const id of Object.keys(prevForce)) {
+    if (prevForce[id] && !curForce[id]) return true;
+  }
+  if ((previous.extraClients?.length ?? 0) > 0 && (current?.extraClients?.length ?? 0) === 0) {
+    return true;
+  }
+  if ((previous.diffReason ?? '').trim() && !(current?.diffReason ?? '').trim()) return true;
+  return false;
+}
+
+/** 현재 기간 세션 + 직전 완료 신고분 제외·특이사항 병합 (접수는 매월 새로). 당월에 일부 제외가 있어도 완료분 누락분은 채움. */
 export async function loadFilingCheckSessionWithCarry(
   manager: string,
   taxType: FilingTaxId | string,
   periodKey: string,
 ): Promise<FilingCheckLoadResult> {
   const current = await getFilingCheckSession(manager, taxType, periodKey);
-  const previous = await findMostRecentPreviousFilingCheckSession(manager, taxType, periodKey);
+  const previous = await findPreviousCompletedFilingCheckSession(manager, taxType, periodKey);
 
   if (current === null) {
     if (previous) {
@@ -161,24 +199,30 @@ export async function loadFilingCheckSessionWithCarry(
   }
 
   const receipt = receiptSlice(current);
-  if (hasCarryFieldsData(current)) {
-    return {
-      data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
-      carriedFromPeriodKey: null,
-    };
-  }
+  // 직전 완료분이 있으면 7월 등 다음 리스트에 승계 출처를 항상 표시
+  const carriedFromPeriodKey = previous?.periodKey ?? null;
 
-  if (previous) {
+  if (previous && carryNeedsPreviousMerge(previous.data, current)) {
     const carry = mergeCarryFieldLayers(previous.data, current);
-    return {
-      data: { ...EMPTY_SESSION_DATA, ...carry, ...receipt },
-      carriedFromPeriodKey: previous.periodKey,
+    const merged: FilingCheckSessionData = {
+      ...EMPTY_SESSION_DATA,
+      ...carry,
+      ...receipt,
+      forceIncluded: {
+        ...(previous.data.forceIncluded ?? {}),
+        ...(current.forceIncluded ?? {}),
+      },
+      clientOrder: current.clientOrder,
+      siteDone: current.siteDone,
     };
+    // 누락 승계분을 DB에도 반영해 다음 로드·다른 기기와 맞춤
+    await upsertFilingCheckSession(manager, taxType, periodKey, merged);
+    return { data: merged, carriedFromPeriodKey };
   }
 
   return {
     data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
-    carriedFromPeriodKey: null,
+    carriedFromPeriodKey,
   };
 }
 
@@ -191,11 +235,35 @@ export async function upsertFilingCheckSession(
 ): Promise<void> {
   const db = getDb();
   const existing = await getFilingCheckSession(manager, taxType, periodKey);
+  const incoming = { ...EMPTY_SESSION_DATA, ...data };
+
+  // 빈 로컬(EMPTY)로 기존 제외·특이사항을 통째로 지우는 경우만 방어.
+  // 정상 저장(제외 목록이 있는 PUT)은 요청 데이터를 그대로 반영.
+  const incomingWipesCarry =
+    !hasCarryFieldsData(incoming) &&
+    (incoming.excelBizNos?.length ?? 0) === 0 &&
+    !incoming.fileName?.trim() &&
+    Object.keys(incoming.overrides ?? {}).length === 0;
+  const merged: FilingCheckSessionData =
+    existing && incomingWipesCarry && hasCarryFieldsData(existing)
+      ? {
+          ...incoming,
+          ...carryFieldsFromRecord(existing),
+          ...receiptSlice(incoming),
+          forceIncluded: {
+            ...(existing.forceIncluded ?? {}),
+            ...(incoming.forceIncluded ?? {}),
+          },
+          clientOrder: incoming.clientOrder ?? existing.clientOrder,
+          siteDone: incoming.siteDone ?? existing.siteDone,
+        }
+      : incoming;
+
   if (existing) {
     await db
       .update(filingCheckSessions)
       .set({
-        data,
+        data: merged,
         updatedByUserId: userId ?? null,
         updatedAt: new Date(),
       })
@@ -212,7 +280,7 @@ export async function upsertFilingCheckSession(
     manager,
     taxType,
     periodKey,
-    data,
+    data: merged,
     updatedByUserId: userId ?? null,
   });
 }
@@ -225,6 +293,15 @@ export async function getExcludedClientIds(
 ): Promise<Record<string, string>> {
   const session = await getFilingCheckSession(manager, taxType, periodKey);
   return session?.excluded ?? {};
+}
+
+/** 원천세 세션 — 반기 자동제외를 수기로 살린 업체 */
+export async function getForceIncludedClientIds(
+  manager: string,
+  periodKey: string,
+): Promise<Record<string, boolean>> {
+  const session = await getFilingCheckSession(manager, 'withholding', periodKey);
+  return session?.forceIncluded ?? {};
 }
 
 /** 원천세 세션 특이사항 — 간이지급·연말정산 표시용 */
@@ -355,9 +432,38 @@ export async function toggleWithholdingClientExclusion(
     ...EMPTY_SESSION_DATA,
   };
   const excluded = { ...session.excluded };
+  const forceIncluded = { ...(session.forceIncluded ?? {}) };
   const nowExcluded = !Object.prototype.hasOwnProperty.call(excluded, clientId);
-  if (nowExcluded) excluded[clientId] = excluded[clientId] ?? '';
-  else delete excluded[clientId];
+  if (nowExcluded) {
+    excluded[clientId] = excluded[clientId] ?? '';
+    delete forceIncluded[clientId];
+  } else {
+    delete excluded[clientId];
+    forceIncluded[clientId] = true;
+  }
+  await upsertFilingCheckSession(
+    manager,
+    'withholding',
+    periodKey,
+    { ...session, excluded, forceIncluded },
+    userId,
+  );
+  return nowExcluded;
+}
+
+/** 제외만 해제 (이미 활성이면 그대로). forceIncluded는 건드리지 않음. */
+export async function clearWithholdingClientExclusion(
+  manager: string,
+  periodKey: string,
+  clientId: string,
+  userId?: string,
+): Promise<boolean> {
+  const session = (await getFilingCheckSession(manager, 'withholding', periodKey)) ?? {
+    ...EMPTY_SESSION_DATA,
+  };
+  if (!Object.prototype.hasOwnProperty.call(session.excluded, clientId)) return false;
+  const excluded = { ...session.excluded };
+  delete excluded[clientId];
   await upsertFilingCheckSession(
     manager,
     'withholding',
@@ -365,7 +471,23 @@ export async function toggleWithholdingClientExclusion(
     { ...session, excluded },
     userId,
   );
-  return nowExcluded;
+  return true;
+}
+
+/** 연도 전체(1~12월) 제외만 해제 */
+export async function clearWithholdingClientExclusionForYear(
+  manager: string,
+  year: number,
+  clientId: string,
+  userId?: string,
+): Promise<boolean> {
+  const yearEx = await getWithholdingExclusionsForYear(manager, year);
+  if (!Object.prototype.hasOwnProperty.call(yearEx, clientId)) return false;
+  for (let m = 1; m <= 12; m += 1) {
+    const pk = `${year}-${String(m).padStart(2, '0')}`;
+    await clearWithholdingClientExclusion(manager, pk, clientId, userId);
+  }
+  return true;
 }
 
 /** 연말정산용 — 해당 연도 12개월 원천세 제외 동기 토글 */
@@ -382,9 +504,21 @@ export async function toggleWithholdingClientExclusionForYear(
     const pk = `${year}-${String(m).padStart(2, '0')}`;
     const cur = (await getFilingCheckSession(manager, 'withholding', pk)) ?? { ...EMPTY_SESSION_DATA };
     const excluded = { ...cur.excluded };
-    if (nowExcluded) excluded[clientId] = excluded[clientId] ?? '';
-    else delete excluded[clientId];
-    await upsertFilingCheckSession(manager, 'withholding', pk, { ...cur, excluded }, userId);
+    const forceIncluded = { ...(cur.forceIncluded ?? {}) };
+    if (nowExcluded) {
+      excluded[clientId] = excluded[clientId] ?? '';
+      delete forceIncluded[clientId];
+    } else {
+      delete excluded[clientId];
+      forceIncluded[clientId] = true;
+    }
+    await upsertFilingCheckSession(
+      manager,
+      'withholding',
+      pk,
+      { ...cur, excluded, forceIncluded },
+      userId,
+    );
   }
   return nowExcluded;
 }

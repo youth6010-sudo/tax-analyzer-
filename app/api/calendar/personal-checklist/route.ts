@@ -26,6 +26,8 @@ export async function POST(req: Request) {
       clientId?: string | null;
       dueDate?: string;
       reflectInNotes?: boolean;
+      assigneeNames?: string[];
+      memo?: string;
     };
 
     const item = await createPersonalChecklistItem(user.name, {
@@ -34,6 +36,8 @@ export async function POST(req: Request) {
       clientId: body.clientId,
       dueDate: body.dueDate,
       reflectInNotes: body.reflectInNotes,
+      assigneeNames: body.assigneeNames,
+      memo: body.memo,
     });
 
     return NextResponse.json({ item });

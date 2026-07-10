@@ -2070,10 +2070,30 @@ body[data-capture] .print-header-logo {
     linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 45%, #eff6ff 100%);
 }
 
-/* 결과 미리보기 — 블록 여백 없이 미리보기와 복사본 줄간격 일치 */
+/* 결과 미리보기 — 래퍼(line-height:1.55)와 동일, 블록 여백 제거 */
+.notice-preview {
+  line-height: 1.55;
+  text-align: left;
+}
 .notice-preview p,
 .notice-preview div {
-  margin: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  line-height: inherit;
+}
+.notice-preview table {
+  display: table !important;
+  float: none !important;
+  clear: both !important;
+  margin: 6px 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+/* 안전망 — 빈 칸은 finalizeNoticeHtml에서 이미 제거됨 */
+.notice-preview p:empty,
+.notice-preview div:empty {
+  display: none;
 }
 
 @keyframes notice-pop-in {

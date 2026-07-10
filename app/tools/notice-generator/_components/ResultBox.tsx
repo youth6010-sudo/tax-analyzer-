@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { htmlToPlainText, normalizeHtmlForClipboard, prepareNoticePasteContent, sanitizeNoticeHtml } from '../_lib/templates';
+import {
+  finalizeNoticeHtml,
+  htmlToPlainText,
+  normalizeHtmlForClipboard,
+  prepareNoticePasteContent,
+} from '../_lib/templates';
 import { useNoticeRichEditor } from '../_lib/useNoticeRichEditor';
 import {
   noticeBtnPrimary,
@@ -30,12 +35,13 @@ export default function ResultBox({
   const lastMessageHtml = useRef(messageHtml);
 
   const effectiveHtml = edited ?? messageHtml;
-  const displayHtml = sanitizeNoticeHtml(effectiveHtml);
-  const toEditorHtml = useCallback((v: string) => sanitizeNoticeHtml(v), []);
+  // 미리보기·서식 복사 동일 HTML
+  const displayHtml = finalizeNoticeHtml(effectiveHtml);
+  const toEditorHtml = useCallback((v: string) => finalizeNoticeHtml(v), []);
 
   const { ref: editorRef, handleFocus, handleBlur, handleInput, afterInsert, emit } =
     useNoticeRichEditor({
-      value: effectiveHtml,
+      value: displayHtml,
       onChange: (html: string) => setEdited(html),
       toEditorHtml,
       enabled: editing,
@@ -113,6 +119,7 @@ export default function ResultBox({
 
   const copyRich = async () => {
     if (!displayHtml) return;
+    // 한글·워드용: margin:0 문단으로 변환해 붙여넣기 여분 줄 방지
     const richHtml = normalizeHtmlForClipboard(displayHtml);
     const plain = htmlToPlainText(displayHtml);
     try {
@@ -210,11 +217,11 @@ export default function ResultBox({
           onPaste={handlePaste}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-blue-200 bg-white p-3 text-sm leading-relaxed text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20`}
+          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-blue-200 bg-white p-3 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20`}
         />
       ) : (
         <div
-          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-800`}
+          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-800`}
           dangerouslySetInnerHTML={{ __html: displayHtml }}
         />
       )}

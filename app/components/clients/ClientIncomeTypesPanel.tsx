@@ -144,7 +144,11 @@ export default function ClientIncomeTypesPanel({
 
       <div className="border-t border-slate-100 pt-3">
         <p className="mb-2 text-xs font-bold text-violet-800">연말정산지급명세서</p>
-        <p className="mb-2 text-[11px] text-slate-500">근로·사업·기타는 간이지급명세서와 동일 · 퇴직·이자배당만 별도</p>
+        <p className="mb-2 text-[11px] text-slate-500">
+          근로·사업·기타는 간이지급에서 월별로 켜고 끕니다. 같은 해 간이지급에 접수(체크)된
+          항목은 지금 설정이 꺼져 있어도 연말정산에 표시됩니다. 퇴직·이자배당만 여기서 별도
+          설정합니다.
+        </p>
         <div className="flex flex-wrap gap-2">
           {YEAR_END_PANEL_INCOME_KEYS.map(key => (
             <label key={key} className={yearEndCheckboxCls}>
@@ -162,7 +166,7 @@ export default function ClientIncomeTypesPanel({
       </div>
 
       <div className="space-y-2 border-t border-slate-100 pt-3">
-        <p className="text-xs font-bold text-slate-600">원천세 · 근로(반기) 표시</p>
+        <p className="text-xs font-bold text-slate-600">원천세 반기 신고</p>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"

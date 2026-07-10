@@ -20,6 +20,7 @@ import IncomeTypeGridTable, {
   type IncomeGridRow,
 } from '@/app/components/clients/IncomeTypeGridTable';
 import {
+  SIMPLE_PAYROLL_COLUMNS,
   SIMPLE_PAYROLL_GRID_COLUMNS,
   SIMPLE_PAYROLL_STAT_COLUMNS,
   YEAR_END_COLUMNS,
@@ -100,12 +101,22 @@ export type IncomeColumnStat = {
   diff: number;
 };
 
+export type UnreceivedByColumnStat = {
+  key: string;
+  label: string;
+  names: string[];
+};
+
 export type IncomeFilingStats = {
   target: number;
   received: number;
   diff: number;
   excludedRows: number;
   byColumn: IncomeColumnStat[];
+  /** 활성 칸 중 미접수인 업체 상호 (평탄) */
+  unreceivedNames: string[];
+  /** 항목별 미접수 — 「근로 ○○ 접수내역이 없습니다」 */
+  unreceivedByColumn: UnreceivedByColumnStat[];
 };
 
 export type IncomeStatFilter = 'all' | 'target' | 'received' | 'diff';
@@ -235,6 +246,13 @@ function columnDefs(mode: 'simplePayroll' | 'yearEnd') {
   return YEAR_END_COLUMNS.map(c => ({ key: c.key, label: c.label }));
 }
 
+function noticeColumnDefs(mode: 'simplePayroll' | 'yearEnd') {
+  if (mode === 'simplePayroll') {
+    return SIMPLE_PAYROLL_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+  }
+  return YEAR_END_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+}
+
 function computeStats(
   grid: ApiGridRow[],
   manager: string,
@@ -264,7 +282,39 @@ function computeStats(
 
   const excludedRows = rows.filter(r => isGridRowExcluded(r)).length;
 
-  return { target, received, diff: target - received, excludedRows, byColumn };
+  const unreceivedByColumn: UnreceivedByColumnStat[] = [];
+  const unreceivedNames: string[] = [];
+  const seenName = new Set<string>();
+
+  for (const { key, label } of noticeColumnDefs(mode)) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      // 원천세 제외여도 활성 칸이면 미접수 안내에 포함
+      const cell = row.cells[key];
+      if (!cell?.active) continue;
+      if (isCellReceived(cell, key)) continue;
+      const name = row.companyName?.trim() || '(이름없음)';
+      if (seen.has(name)) continue;
+      seen.add(name);
+      names.push(name);
+      if (!seenName.has(name)) {
+        seenName.add(name);
+        unreceivedNames.push(name);
+      }
+    }
+    if (names.length > 0) unreceivedByColumn.push({ key, label, names });
+  }
+
+  return {
+    target,
+    received,
+    diff: target - received,
+    excludedRows,
+    byColumn,
+    unreceivedNames,
+    unreceivedByColumn,
+  };
 }
 
 const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(function IncomeTypeFilingSection(
@@ -392,7 +442,17 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         setGrid(prev =>
           prev.map(row => {
             if (row.clientId !== clientId) return row;
-            return patchYearEndRowFromTypes(row, data.incomeTypes!, data.yearEndTypes!);
+            // 이미 활성인 공유 열(근로·사업·기타)은 간이지급 이력으로 켠 것으로 보고 유지
+            const keepSimple = new Set<string>();
+            for (const key of ['employed', 'bizIncome', 'otherTax'] as const) {
+              if (row.cells[key]?.active) keepSimple.add(key);
+            }
+            return patchYearEndRowFromTypes(
+              row,
+              data.incomeTypes!,
+              data.yearEndTypes!,
+              keepSimple,
+            );
           }),
         );
       }
@@ -544,10 +604,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           for (const col of YEAR_END_COLUMNS) {
             const cell = row.cells[col.key];
             if (!cell) continue;
+            // 비활성 칸이어도 접수 체크는 유지 (간이지급 월별 off ≠ 연말 접수 삭제)
             rows.push({
               clientId: row.clientId,
               incomeType: col.key,
-              filed: cell.active ? cell.filed : false,
+              filed: cell.filed,
             });
           }
         }
@@ -664,11 +725,18 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     columnLabels[incomeType] ??
     (incomeType === 'laborContentReport' ? '근로내용확인신고' : incomeType);
 
+  const YEAR_END_SHARED = new Set<string>(['employed', 'bizIncome', 'otherTax']);
+
   const handleActivate = async (clientId: string, incomeType: string) => {
     if (locked) return;
     try {
       if (mode === 'yearEnd') {
-        await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: true });
+        if (YEAR_END_SHARED.has(incomeType)) {
+          // 근로·사업·기타는 간이지급 incomeTypes와 공유
+          await patchIncomeType(clientId, { [incomeType]: true });
+        } else {
+          await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: true });
+        }
       } else {
         await patchIncomeType(clientId, { [incomeType]: true });
       }
@@ -686,16 +754,26 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     if (locked) return;
     try {
       if (mode === 'yearEnd') {
+        if (YEAR_END_SHARED.has(incomeType)) {
+          // 근로·사업·기타 월별 on/off는 간이지급에서만. 연말에서는 설정을 지우지 않음.
+          if (!embedded) {
+            setMessage(
+              `${labelOf(incomeType)} 월별 활성/비활성은 간이지급에서 하세요. 같은 해 간이지급 접수가 있으면 설정이 꺼져 있어도 연말정산에 표시됩니다.`,
+            );
+          }
+          return;
+        }
         await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: false });
+        updateCell(clientId, incomeType, { active: false });
       } else {
         await patchIncomeType(clientId, { [incomeType]: false });
+        updateCell(clientId, incomeType, {
+          active: false,
+          filed: false,
+          acceptanceDate: '',
+          acceptanceMethod: '',
+        });
       }
-      updateCell(clientId, incomeType, {
-        active: false,
-        filed: false,
-        acceptanceDate: '',
-        acceptanceMethod: '',
-      });
       if (!embedded) setMessage(`${labelOf(incomeType)} 비활성화`);
       scheduleSave();
     } catch (e) {

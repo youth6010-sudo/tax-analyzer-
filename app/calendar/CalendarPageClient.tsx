@@ -376,13 +376,13 @@ export default function CalendarPageClient() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {selectedEvent.kind === 'personal' && selectedEvent.ownerName === currentUser && (
+                {selectedEvent.kind === 'personal' && (
                   <button
                     type="button"
                     onClick={() => void openChecklistEdit(selectedEvent)}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
-                    수정
+                    {selectedEvent.ownerName === currentUser ? '수정' : '메모·확인'}
                   </button>
                 )}
                 {selectedEvent.kind === 'company' && canDeleteCalendarEvent(selectedEvent, currentUser, isAdmin) && (

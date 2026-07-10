@@ -5,12 +5,14 @@ export type CheckRecord = FilingCheckSessionData;
 export const EMPTY_CHECK_RECORD: CheckRecord = {
   overrides: {},
   excelBizNos: [],
+  excelNamesByBiz: {},
   fileName: '',
   diffReason: '',
   done: false,
   specialFilings: [],
   specialReasons: {},
   excluded: {},
+  forceIncluded: {},
   rowNotes: {},
   extraClients: [],
 };
@@ -19,6 +21,7 @@ export const EMPTY_CHECK_RECORD: CheckRecord = {
 export function hasCarryFieldsData(rec: Partial<CheckRecord> | null | undefined): boolean {
   if (!rec) return false;
   if (Object.keys(rec.excluded ?? {}).length > 0) return true;
+  if (Object.keys(rec.forceIncluded ?? {}).length > 0) return true;
   if (Object.keys(rec.rowNotes ?? {}).length > 0) return true;
   if ((rec.extraClients?.length ?? 0) > 0) return true;
   if (rec.diffReason?.trim()) return true;
@@ -32,6 +35,7 @@ export function resetReceiptOnly(rec: CheckRecord): CheckRecord {
     ...rec,
     overrides: {},
     excelBizNos: [],
+    excelNamesByBiz: {},
     fileName: '',
     specialFilings: [],
     done: false,
@@ -41,11 +45,15 @@ export function resetReceiptOnly(rec: CheckRecord): CheckRecord {
 export function mergeCarryFieldLayers(
   previous: CheckRecord | null | undefined,
   current: CheckRecord | null | undefined,
-): Pick<CheckRecord, 'diffReason' | 'specialReasons' | 'excluded' | 'rowNotes' | 'extraClients'> {
+): Pick<
+  CheckRecord,
+  'diffReason' | 'specialReasons' | 'excluded' | 'forceIncluded' | 'rowNotes' | 'extraClients'
+> {
   const prev = carryFieldsFromRecord(previous ? { ...EMPTY_CHECK_RECORD, ...previous } : EMPTY_CHECK_RECORD);
   const cur = carryFieldsFromRecord(current ? { ...EMPTY_CHECK_RECORD, ...current } : EMPTY_CHECK_RECORD);
   return {
     excluded: { ...prev.excluded, ...cur.excluded },
+    forceIncluded: { ...prev.forceIncluded, ...cur.forceIncluded },
     rowNotes: { ...prev.rowNotes, ...cur.rowNotes },
     specialReasons: { ...prev.specialReasons, ...cur.specialReasons },
     extraClients: cur.extraClients.length > 0 ? cur.extraClients : prev.extraClients,
@@ -78,10 +86,15 @@ export function mergeFilingRecords(
     ...server,
     diffReason: server.diffReason?.trim() ? server.diffReason : local.diffReason,
     excluded: { ...local.excluded, ...server.excluded },
+    forceIncluded: { ...local.forceIncluded, ...server.forceIncluded },
     rowNotes: { ...local.rowNotes, ...server.rowNotes },
     specialReasons: { ...local.specialReasons, ...server.specialReasons },
     extraClients: server.extraClients?.length ? server.extraClients : local.extraClients,
     excelBizNos: server.excelBizNos?.length ? server.excelBizNos : local.excelBizNos,
+    excelNamesByBiz:
+      Object.keys(server.excelNamesByBiz ?? {}).length > 0
+        ? server.excelNamesByBiz
+        : local.excelNamesByBiz,
     fileName: server.fileName?.trim() ? server.fileName : local.fileName,
     overrides: { ...local.overrides, ...server.overrides },
     specialFilings: server.specialFilings?.length ? server.specialFilings : local.specialFilings,
@@ -91,11 +104,15 @@ export function mergeFilingRecords(
 
 export function carryFieldsFromRecord(
   rec: CheckRecord,
-): Pick<CheckRecord, 'diffReason' | 'specialReasons' | 'excluded' | 'rowNotes' | 'extraClients'> {
+): Pick<
+  CheckRecord,
+  'diffReason' | 'specialReasons' | 'excluded' | 'forceIncluded' | 'rowNotes' | 'extraClients'
+> {
   return {
     diffReason: rec.diffReason ?? '',
     specialReasons: { ...(rec.specialReasons ?? {}) },
     excluded: { ...(rec.excluded ?? {}) },
+    forceIncluded: { ...(rec.forceIncluded ?? {}) },
     rowNotes: { ...(rec.rowNotes ?? {}) },
     extraClients: [...(rec.extraClients ?? [])],
   };
@@ -183,13 +200,14 @@ export function restoreCarryFromLocalStorage(
   manager: string,
   taxType: string,
   currentPeriodKey: string,
-): Pick<CheckRecord, 'excluded' | 'rowNotes' | 'diffReason' | 'specialReasons'> {
+): Pick<CheckRecord, 'excluded' | 'forceIncluded' | 'rowNotes' | 'diffReason' | 'specialReasons'> {
   if (typeof window === 'undefined') {
-    return { excluded: {}, rowNotes: {}, diffReason: '', specialReasons: {} };
+    return { excluded: {}, forceIncluded: {}, rowNotes: {}, diffReason: '', specialReasons: {} };
   }
 
   const prefix = `${storagePrefix}${manager}:${taxType}:`;
   const excluded: Record<string, string> = {};
+  const forceIncluded: Record<string, boolean> = {};
   const rowNotes: Record<string, string> = {};
   const specialReasons: Record<string, string> = {};
   let diffReason = '';
@@ -203,6 +221,7 @@ export function restoreCarryFromLocalStorage(
       const rec = { ...EMPTY_CHECK_RECORD, ...(JSON.parse(raw) as Partial<CheckRecord>) };
       if (rec.diffReason?.trim() && !diffReason) diffReason = rec.diffReason;
       Object.assign(excluded, rec.excluded);
+      Object.assign(forceIncluded, rec.forceIncluded);
       Object.assign(rowNotes, rec.rowNotes);
       Object.assign(specialReasons, rec.specialReasons);
     } catch {
@@ -217,6 +236,7 @@ export function restoreCarryFromLocalStorage(
       const rec = { ...EMPTY_CHECK_RECORD, ...(JSON.parse(cur) as Partial<CheckRecord>) };
       if (rec.diffReason?.trim()) diffReason = rec.diffReason;
       Object.assign(excluded, rec.excluded);
+      Object.assign(forceIncluded, rec.forceIncluded);
       Object.assign(rowNotes, rec.rowNotes);
       Object.assign(specialReasons, rec.specialReasons);
     }
@@ -224,5 +244,5 @@ export function restoreCarryFromLocalStorage(
     /* skip */
   }
 
-  return { excluded, rowNotes, diffReason, specialReasons };
+  return { excluded, forceIncluded, rowNotes, diffReason, specialReasons };
 }

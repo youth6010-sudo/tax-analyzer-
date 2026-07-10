@@ -142,7 +142,24 @@ export default function NoticeGeneratorPage() {
     'tng.vatBusinessType',
     'individual',
   );
-  const [sessionUser, setSessionUser] = useState<{ name: string; loginId: string } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{
+    name: string;
+    loginId: string;
+    adminMode?: boolean;
+  } | null>(null);
+  /** 전역 기본 서식 (리아 관리자 편집 가능) */
+  const [globalDefaults, setGlobalDefaults] = useState({
+    general: DEFAULT_TEMPLATE_BY_SCENARIO.general,
+    withholding_request: DEFAULT_TEMPLATE_BY_SCENARIO.withholding_request,
+    withholding_filing: DEFAULT_TEMPLATE_BY_SCENARIO.withholding_filing,
+    vatReport: DEFAULT_VAT_REPORT_TEMPLATE,
+    paymentNotice: DEFAULT_PAYMENT_NOTICE_TEMPLATE,
+  });
+  const [defaultSaveState, setDefaultSaveState] = useState<
+    'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const globalDefaultsRef = useRef(globalDefaults);
+  globalDefaultsRef.current = globalDefaults;
   const [companyName, setCompanyName] = useLocalStorage('tng.company', '');
   const [notes, setNotes] = useLocalStorage('tng.notes', '');
   // 기본값은 비움 — 비었을 때는 세목별 예시를 연한 글씨(placeholder)로 안내
@@ -451,12 +468,37 @@ export default function NoticeGeneratorPage() {
     setParams(prev => ({ ...prev, [key]: value }));
   };
 
-  // 마운트 시 서버에 저장된 담당자 시나리오별 서식 로드 (없으면 기본 서식 사용)
+  // 마운트 시 담당자 서식 + 전역 기본 서식 로드
   useEffect(() => {
     const ac = new AbortController();
-    fetchNoticeTemplateStore(ac.signal)
-      .then(saved => {
+    Promise.all([
+      fetchNoticeTemplateStore(ac.signal),
+      fetch('/api/notice-template/defaults', { credentials: 'same-origin', signal: ac.signal }).then(
+        r => (r.ok ? r.json() : null),
+      ),
+    ])
+      .then(([saved, defaultsJson]) => {
         setTemplateStore(saved);
+        const d = defaultsJson?.defaults;
+        if (d && typeof d === 'object') {
+          setGlobalDefaults(prev => ({
+            general: typeof d.general === 'string' && d.general.trim() ? d.general : prev.general,
+            withholding_request:
+              typeof d.withholding_request === 'string' && d.withholding_request.trim()
+                ? d.withholding_request
+                : prev.withholding_request,
+            withholding_filing:
+              typeof d.withholding_filing === 'string' && d.withholding_filing.trim()
+                ? d.withholding_filing
+                : prev.withholding_filing,
+            vatReport:
+              typeof d.vatReport === 'string' && d.vatReport.trim() ? d.vatReport : prev.vatReport,
+            paymentNotice:
+              typeof d.paymentNotice === 'string' && d.paymentNotice.trim()
+                ? d.paymentNotice
+                : prev.paymentNotice,
+          }));
+        }
         setTemplateLoaded(true);
       })
       .catch(err => {
@@ -471,7 +513,11 @@ export default function NoticeGeneratorPage() {
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.user?.name) {
-          setSessionUser({ name: data.user.name, loginId: data.user.loginId ?? '' });
+          setSessionUser({
+            name: data.user.name,
+            loginId: data.user.loginId ?? '',
+            adminMode: Boolean(data.user.adminMode),
+          });
         }
       })
       .catch(() => {});
@@ -534,14 +580,17 @@ export default function NoticeGeneratorPage() {
       ? 'withholding_filing'
       : 'withholding_request';
 
+  const canEditGlobalDefault =
+    (sessionUser?.loginId ?? '').trim().toLowerCase() === 'ria' && Boolean(sessionUser?.adminMode);
+
+  const scenarioDefaultHtml = globalDefaults[scenario];
+
   const noticeSource: TemplateSource = templateStore.sources[scenario] ?? 'default';
   const noticeCustomHtml = templateStore.templates[scenario] ?? '';
   const hasNoticeCustom = Boolean(noticeCustomHtml.trim());
 
   const activeTemplate =
-    noticeSource === 'custom' && hasNoticeCustom
-      ? noticeCustomHtml
-      : DEFAULT_TEMPLATE_BY_SCENARIO[scenario];
+    noticeSource === 'custom' && hasNoticeCustom ? noticeCustomHtml : scenarioDefaultHtml;
 
   const vatReportSource: TemplateSource = templateStore.vatReportSource ?? 'default';
   const vatReportCustomHtml = templateStore.vatReportTemplate ?? '';
@@ -550,7 +599,7 @@ export default function NoticeGeneratorPage() {
   const activeVatReportTemplate =
     vatReportSource === 'custom' && hasVatReportCustom
       ? vatReportCustomHtml
-      : DEFAULT_VAT_REPORT_TEMPLATE;
+      : globalDefaults.vatReport;
 
   const paymentNoticeSource: TemplateSource = templateStore.paymentNoticeSource ?? 'default';
   const paymentNoticeCustomHtml = templateStore.paymentNoticeTemplate ?? '';
@@ -559,7 +608,7 @@ export default function NoticeGeneratorPage() {
   const activePaymentNoticeTemplate =
     paymentNoticeSource === 'custom' && hasPaymentNoticeCustom
       ? paymentNoticeCustomHtml
-      : DEFAULT_PAYMENT_NOTICE_TEMPLATE;
+      : globalDefaults.paymentNotice;
 
   const handleNoticeTemplateChange = (html: string) => {
     const prev = templateStoreRef.current;
@@ -581,7 +630,7 @@ export default function NoticeGeneratorPage() {
     if (source === 'custom' && !prev.templates[scenario]?.trim()) {
       next.templates = {
         ...prev.templates,
-        [scenario]: DEFAULT_TEMPLATE_BY_SCENARIO[scenario],
+        [scenario]: globalDefaultsRef.current[scenario],
       };
     }
     setTemplateStore(next);
@@ -591,6 +640,39 @@ export default function NoticeGeneratorPage() {
   const handleNoticeTemplateSave = () => {
     void persistTemplateStore(templateStoreRef.current);
   };
+
+  const handleGlobalDefaultChange = (html: string) => {
+    setGlobalDefaults(prev => ({ ...prev, [scenario]: html }));
+    setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
+  };
+
+  const handleVatGlobalDefaultChange = (html: string) => {
+    setGlobalDefaults(prev => ({ ...prev, vatReport: html }));
+    setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
+  };
+
+  const handlePaymentGlobalDefaultChange = (html: string) => {
+    setGlobalDefaults(prev => ({ ...prev, paymentNotice: html }));
+    setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
+  };
+
+  const persistGlobalDefaults = useCallback(async () => {
+    setDefaultSaveState('saving');
+    try {
+      const res = await fetch('/api/notice-template/defaults', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ defaults: globalDefaultsRef.current }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      const json = (await res.json()) as { defaults?: typeof globalDefaults };
+      if (json.defaults) setGlobalDefaults(prev => ({ ...prev, ...json.defaults }));
+      setDefaultSaveState('saved');
+    } catch {
+      setDefaultSaveState('error');
+    }
+  }, []);
 
   const handleVatReportTemplateChange = (html: string) => {
     const prev = templateStoreRef.current;
@@ -610,7 +692,7 @@ export default function NoticeGeneratorPage() {
       vatReportSource: source,
       vatReportTemplate:
         source === 'custom' && !prev.vatReportTemplate?.trim()
-          ? DEFAULT_VAT_REPORT_TEMPLATE
+          ? globalDefaultsRef.current.vatReport
           : prev.vatReportTemplate,
     };
     setTemplateStore(next);
@@ -639,7 +721,7 @@ export default function NoticeGeneratorPage() {
       paymentNoticeSource: source,
       paymentNoticeTemplate:
         source === 'custom' && !prev.paymentNoticeTemplate?.trim()
-          ? DEFAULT_PAYMENT_NOTICE_TEMPLATE
+          ? globalDefaultsRef.current.paymentNotice
           : prev.paymentNoticeTemplate,
     };
     setTemplateStore(next);
@@ -1003,7 +1085,7 @@ export default function NoticeGeneratorPage() {
             <NoticeCollapsibleSection title="담당자 서식 설정">
               <TemplateEditor
                 key={scenario}
-                html={noticeCustomHtml || DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+                html={noticeCustomHtml || scenarioDefaultHtml}
                 onChange={handleNoticeTemplateChange}
                 source={noticeSource}
                 onSourceChange={handleNoticeSourceChange}
@@ -1011,12 +1093,16 @@ export default function NoticeGeneratorPage() {
                 hasCustomSaved={hasNoticeCustom}
                 saveState={templateSaveState}
                 title={SCENARIO_LABEL[scenario]}
-                defaultHtml={DEFAULT_TEMPLATE_BY_SCENARIO[scenario]}
+                defaultHtml={scenarioDefaultHtml}
+                canEditDefault={canEditGlobalDefault}
+                onDefaultChange={handleGlobalDefaultChange}
+                onDefaultSave={() => void persistGlobalDefaults()}
+                defaultSaveState={defaultSaveState}
               />
               {isVat && (
                 <TemplateEditor
                   key="vat-report-template"
-                  html={vatReportCustomHtml || DEFAULT_VAT_REPORT_TEMPLATE}
+                  html={vatReportCustomHtml || globalDefaults.vatReport}
                   onChange={handleVatReportTemplateChange}
                   source={vatReportSource}
                   onSourceChange={handleVatReportSourceChange}
@@ -1024,14 +1110,18 @@ export default function NoticeGeneratorPage() {
                   hasCustomSaved={hasVatReportCustom}
                   saveState={vatTemplateSaveState}
                   title="신고 결과 보고 서식 (부가세)"
-                  defaultHtml={DEFAULT_VAT_REPORT_TEMPLATE}
+                  defaultHtml={globalDefaults.vatReport}
                   tokens={VAT_REPORT_TOKENS}
                   hint="부가세 신고 결과 보고 문구 서식입니다."
+                  canEditDefault={canEditGlobalDefault}
+                  onDefaultChange={handleVatGlobalDefaultChange}
+                  onDefaultSave={() => void persistGlobalDefaults()}
+                  defaultSaveState={defaultSaveState}
                 />
               )}
               <TemplateEditor
                 key="payment-notice-template"
-                html={paymentNoticeCustomHtml || DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                html={paymentNoticeCustomHtml || globalDefaults.paymentNotice}
                 onChange={handlePaymentNoticeTemplateChange}
                 source={paymentNoticeSource}
                 onSourceChange={handlePaymentNoticeSourceChange}
@@ -1039,9 +1129,13 @@ export default function NoticeGeneratorPage() {
                 hasCustomSaved={hasPaymentNoticeCustom}
                 saveState={paymentTemplateSaveState}
                 title="신고 결과 안내 서식 (납부세액)"
-                defaultHtml={DEFAULT_PAYMENT_NOTICE_TEMPLATE}
+                defaultHtml={globalDefaults.paymentNotice}
                 tokens={PAYMENT_NOTICE_TOKENS}
                 hint="납부·환급·분납 안내 문구 서식입니다."
+                canEditDefault={canEditGlobalDefault}
+                onDefaultChange={handlePaymentGlobalDefaultChange}
+                onDefaultSave={() => void persistGlobalDefaults()}
+                defaultSaveState={defaultSaveState}
               />
             </NoticeCollapsibleSection>
           )}

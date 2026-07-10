@@ -324,7 +324,7 @@ export const yearEndFilings = pgTable(
   ],
 );
 
-/** 개인 체크리스트 (캘린더·할 일) */
+/** 개인 체크리스트 (캘린더·할 일) — 담당자·메모로 공동 업무 */
 export const personalChecklistItems = pgTable('personal_checklist_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   ownerName: text('owner_name').notNull(),
@@ -335,6 +335,13 @@ export const personalChecklistItems = pgTable('personal_checklist_items', {
   dueDate: text('due_date').notNull().default(''),
   completed: boolean('completed').notNull().default(false),
   reflectInNotes: boolean('reflect_in_notes').notNull().default(false),
+  /** 공동 담당자(작성자 제외 가능) */
+  assigneeNames: jsonb('assignee_names').notNull().$type<string[]>().default([]),
+  /** 메모 — 작성자·시각 포함 */
+  memos: jsonb('memos')
+    .notNull()
+    .$type<{ id: string; authorName: string; body: string; createdAt: string }[]>()
+    .default([]),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

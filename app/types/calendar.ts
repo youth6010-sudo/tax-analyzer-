@@ -4,6 +4,14 @@ export type ChecklistTaxType = 'withholding' | 'vat' | 'comprehensive' | 'corpor
 
 export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other'> | '';
 
+/** 개인 체크리스트 메모 — 작성자 표시 */
+export type PersonalChecklistMemo = {
+  id: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+};
+
 export type PersonalChecklistDto = {
   id: string;
   ownerName: string;
@@ -15,6 +23,9 @@ export type PersonalChecklistDto = {
   dueDate: string;
   completed: boolean;
   reflectInNotes: boolean;
+  /** 공동 담당자 (작성자 외) */
+  assigneeNames: string[];
+  memos: PersonalChecklistMemo[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

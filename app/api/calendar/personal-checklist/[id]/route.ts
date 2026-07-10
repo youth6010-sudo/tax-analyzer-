@@ -14,8 +14,8 @@ export async function GET(
   try {
     const user = await requireUser();
     const { id } = await params;
-    const item = await getPersonalChecklistById(id);
-    if (!item || item.ownerName !== user.name) {
+    const item = await getPersonalChecklistById(id, user.name);
+    if (!item) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ item });
@@ -38,6 +38,8 @@ export async function PATCH(
       dueDate?: string;
       completed?: boolean;
       reflectInNotes?: boolean;
+      assigneeNames?: string[];
+      addMemo?: string;
     };
 
     const item = await updatePersonalChecklistItem(id, user.name, body);

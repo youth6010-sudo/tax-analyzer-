@@ -296,7 +296,24 @@ export default function HomeTasksPanel() {
                               {item.clientName && (
                                 <span className="text-[10px] text-[#4b6cb7]">{item.clientName}</span>
                               )}
+                              {item.ownerName && item.ownerName !== currentUser && (
+                                <span className="text-[10px] text-slate-500">작성 {item.ownerName}</span>
+                              )}
+                              {(item.assigneeNames?.length ?? 0) > 0 && (
+                                <span className="text-[10px] text-violet-700">
+                                  담당 {item.assigneeNames.join(', ')}
+                                </span>
+                              )}
                             </div>
+                            {(item.memos?.length ?? 0) > 0 && (
+                              <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
+                                <span className="font-semibold text-slate-600">
+                                  {item.memos[item.memos.length - 1].authorName}
+                                </span>
+                                {': '}
+                                {item.memos[item.memos.length - 1].body}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </li>

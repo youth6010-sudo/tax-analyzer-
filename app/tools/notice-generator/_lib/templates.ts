@@ -40,11 +40,25 @@ function multilineHtml(str: string): string {
   return escapeHtml((str || '').trim()).replace(/\n/g, '<br>');
 }
 
+/** 특이사항·필요자료 등이 실질적으로 비었는지 (HTML 빈 태그·nbsp 무시) */
+export function isNoticeFieldEmpty(str: string | null | undefined): boolean {
+  if (!str?.trim()) return true;
+  const text = str
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return !text;
+}
+
 /** 수임처 정보 입력란 — 평문은 br 변환, HTML은 서식 정리 후 삽입 */
 export function noticeFieldToHtml(str: string): string {
-  if (!str?.trim()) return '';
-  if (/<[a-z][\s\S]*>/i.test(str)) return sanitizeNoticeHtml(str);
-  return multilineHtml(str);
+  if (isNoticeFieldEmpty(str)) return '';
+  let html = /<[a-z][\s\S]*>/i.test(str) ? sanitizeNoticeHtml(str) : multilineHtml(str);
+  // 여러 줄이면 끝 줄바꿈 유지, 한 줄이면 서식의 다음 토큰과 붙지 않게 br 추가
+  if (html && !/(?:<br\s*\/?>)\s*$/i.test(html)) html += '<br>';
+  return html;
 }
 
 /** 한글/워드 붙여넣기 시 줄이 늘어나지 않도록 단일 래퍼 + &lt;br&gt; 줄 구조 */
@@ -77,12 +91,64 @@ const INLINE_UNWRAP_TAGS = new Set([
 ]);
 
 function wrapNoticeHtml(body: string): string {
-  return `<div style="margin:0;padding:0;line-height:1.6;color:${NOTICE_TEXT_COLOR};font-size:14px;">${body}</div>`;
+  return `<div style="margin:0;padding:0;line-height:1.55;color:${NOTICE_TEXT_COLOR};font-size:14px;text-align:left;">${body}</div>`;
 }
 
+/** 빈 문단 — 글자 없고 br도 없을 때만 진짜 빈 칸 */
 function isBlankBlock(el: HTMLElement): boolean {
-  const html = el.innerHTML.replace(/\s/g, '').toLowerCase();
-  return html === '' || html === '<br>' || html === '<br/>';
+  const text = (el.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+  if (text) return false;
+  const html = el.innerHTML
+    .replace(/\u00a0/g, '')
+    .replace(/&nbsp;/gi, '')
+    .replace(/\s/g, '')
+    .toLowerCase();
+  // <br>만 있으면 의도된 빈 줄 — 삭제로 취급하지 않음
+  if (/^(?:<br\/?>)+$/.test(html)) return false;
+  return html === '';
+}
+
+/** 빈 줄 전용 블록(<div><br></div>) → <br> 로 치환해 서식 간격 유지 */
+function normalizeSpacerBlocks(root: HTMLElement) {
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    root.querySelectorAll('p,div').forEach(node => {
+      const el = node as HTMLElement;
+      if (el === root) return;
+      if (el.querySelector('p,div,table,ul,ol')) return;
+      const text = (el.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+      if (text) return;
+      const html = el.innerHTML
+        .replace(/\u00a0/g, '')
+        .replace(/&nbsp;/gi, '')
+        .replace(/\s/g, '')
+        .toLowerCase();
+      if (!/^(?:<br\/?>)+$/.test(html)) return;
+      const brCount = (html.match(/<br\/?>/g) || []).length;
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < brCount; i++) frag.appendChild(document.createElement('br'));
+      el.replaceWith(frag);
+      changed = true;
+    });
+    if (!changed) break;
+  }
+}
+
+/** DOM에서 완전 빈 p/div 제거 (br 스페이서는 normalizeSpacerBlocks에서 처리) */
+function removeBlankBlocks(root: HTMLElement) {
+  normalizeSpacerBlocks(root);
+  for (let pass = 0; pass < 8; pass++) {
+    let removed = false;
+    root.querySelectorAll('p,div').forEach(node => {
+      const el = node as HTMLElement;
+      if (el === root) return;
+      if (!isBlankBlock(el)) return;
+      if (el.querySelector('p,div,table,ul,ol')) return;
+      el.remove();
+      removed = true;
+    });
+    if (!removed) break;
+  }
 }
 
 function isBoldLike(el: HTMLElement): boolean {
@@ -176,7 +242,14 @@ function sanitizeNodeStyles(el: HTMLElement) {
     el.style.borderCollapse = 'collapse';
     el.style.tableLayout = 'fixed';
     if (prevWidth) el.style.width = prevWidth;
+    // align/float 쓰면 한글·워드에서 다음 글이 표 옆으로 붙음
+    el.removeAttribute('align');
+    el.style.display = 'table';
+    el.style.float = 'none';
+    el.style.clear = 'both';
     el.style.margin = '6px 0';
+    el.style.marginLeft = '0';
+    el.style.marginRight = '0';
     el.style.fontSize = '13px';
     el.style.lineHeight = '1.7';
     el.style.color = NOTICE_TEXT_COLOR;
@@ -246,21 +319,198 @@ function normalizeInlineNoticeMarkup(root: HTMLElement) {
   root.querySelectorAll('b,strong,i,em,u').forEach(el => sanitizeNodeStyles(el as HTMLElement));
 }
 
+/** 연속 줄바꿈 — 빈 줄 1칸(br×2)까지 허용, 그 이상은 정리 */
 function collapseNoticeBreaks(html: string): string {
   return html
-    .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
+    .replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>')
     .replace(/^(<br\s*\/?>\s*)+/gi, '')
     .replace(/(<br\s*\/?>\s*)+$/gi, '');
 }
 
-function brBodyToParagraphHtml(body: string): string {
-  const parts = body.split(/<br\s*\/?>/gi);
-  return parts
-    .map(part => {
-      const inner = part.trim() ? part : '&nbsp;';
-      return `<p style="margin:0;line-height:1.8;color:${NOTICE_TEXT_COLOR};">${inner}</p>`;
-    })
-    .join('');
+/**
+ * 안내문 줄바꿈 정리 — 서식에 있는 빈 줄(br×2)은 유지.
+ * br×3 이상만 줄이고, 제목 뒤 간격을 강제로 합치지 않음.
+ */
+export function tidyNoticeBreaks(html: string): string {
+  let out = html
+    // 이모지 단독 줄 + 다음 줄 <b>제목 → 한 줄로
+    .replace(/(📢|📁|📂|📋|✅)\s*(?:<br\s*\/?>\s*)+(<b\b[^>]*>)/gi, '$1 $2')
+    // 완전 빈 문단만 제거 (&nbsp;만, br 없는 것)
+    .replace(/<(p|div)\b[^>]*>\s*(?:&nbsp;|\u00a0|\s)*\s*<\/\1>/gi, '')
+    .replace(/(<br\s*\/?>)\s*(?:&nbsp;|\u00a0)+\s*(<br\s*\/?>)/gi, '$1$2');
+
+  // 연속 br — 서식의 섹션 간격(br×2) 유지, 그 이상만 정리
+  out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
+  out = out.replace(/^(?:<br\s*\/?>\s*)+/gi, '');
+  out = out.replace(/(?:<br\s*\/?>\s*)+$/gi, '');
+  return out;
+}
+
+/** 본문만 추출 — 중첩 단일 div 래퍼를 벗겨 <br> 기반 본문만 남김 */
+function unwrapNoticeBody(html: string): string {
+  if (typeof document === 'undefined') {
+    let out = html.trim();
+    for (let i = 0; i < 6; i++) {
+      const m = out.match(/^<div\b[^>]*>([\s\S]*)<\/div>\s*$/i);
+      if (!m) break;
+      out = m[1].trim();
+    }
+    return out;
+  }
+  const root = document.createElement('div');
+  root.innerHTML = html.trim();
+  removeBlankBlocks(root);
+
+  // 최상위가 단일 div면 계속 풀어 중첩 래퍼 제거
+  while (
+    root.children.length === 1 &&
+    root.firstElementChild &&
+    root.firstElementChild.tagName.toLowerCase() === 'div' &&
+    !root.firstElementChild.querySelector('table,ul,ol')
+  ) {
+    const inner = root.firstElementChild as HTMLElement;
+    removeBlankBlocks(inner);
+    root.innerHTML = inner.innerHTML;
+  }
+  removeBlankBlocks(root);
+  return root.innerHTML.trim();
+}
+
+/** 미리보기·서식 복사에 쓰는 최종 HTML (동일 결과 보장, 멱등) */
+export function finalizeNoticeHtml(html: string): string {
+  if (!html?.trim()) return '';
+
+  if (typeof document !== 'undefined') {
+    const root = document.createElement('div');
+    root.innerHTML = html.trim();
+    removeBlankBlocks(root);
+    // 항상 평탄화 — 표는 유지, 중첩 div는 <br> 구조로 (한글 붙여넣기 여분 줄 방지)
+    let body = flattenNoticeHtmlRoot(root);
+    body = body.replace(/<(div|p)\b[^>]*>\s*(?:&nbsp;|\u00a0|\s)*\s*<\/\1>/gi, '');
+    body = tidyNoticeBreaks(body);
+    // 표: align/float 제거 — 한글에서 다음 줄이 표 옆으로 붙는 원인
+    body = body.replace(/<table\b([^>]*)>/gi, (_m, attrs: string) => {
+      let a = String(attrs || '')
+        .replace(/\s*align\s*=\s*["']?[^"'\s>]+["']?/gi, '')
+        .replace(/\s*align\s*=\s*[^\s>]+/gi, '');
+      if (/\bstyle="/i.test(a)) {
+        a = a.replace(/\bstyle="([^"]*)"/i, (_s, style: string) => {
+          let st = style
+            .replace(/float\s*:[^;]+;?/gi, '')
+            .replace(/clear\s*:[^;]+;?/gi, '')
+            .replace(/margin\s*:[^;]+;?/gi, '')
+            .replace(/margin-left\s*:[^;]+;?/gi, '')
+            .replace(/margin-right\s*:[^;]+;?/gi, '')
+            .replace(/display\s*:[^;]+;?/gi, '');
+          st = `display:table;float:none;clear:both;margin:6px 0;${st}`.replace(/;;+/g, ';');
+          return `style="${st}"`;
+        });
+      } else {
+        a += ' style="display:table;float:none;clear:both;margin:6px 0;"';
+      }
+      return `<table${a}>`;
+    });
+    // 표는 이미 블록 — 뒤 <br>를 붙이면 미리보기·한글에서 빈 줄로 보임
+    body = body.replace(/<\/table>\s*(?:<br\s*\/?>\s*)*/gi, '</table>');
+    return wrapNoticeHtml(body);
+  }
+
+  let out = unwrapNoticeBody(html);
+  out = out.replace(/<(div|p)\b[^>]*>\s*(?:&nbsp;|\u00a0|\s)*\s*<\/\1>/gi, '');
+  out = tidyNoticeBreaks(out);
+  return wrapNoticeHtml(out);
+}
+
+/**
+ * 한글·워드 붙여넣기용 — <br> 줄을 margin:0 문단으로 바꿔 여분 줄바꿈 방지.
+ * 미리보기 HTML과 시각적으로 동일하게 맞춤.
+ */
+export function normalizeHtmlForClipboard(html: string): string {
+  const finalized = finalizeNoticeHtml(html);
+  if (!finalized?.trim() || typeof document === 'undefined') return finalized;
+
+  const root = document.createElement('div');
+  root.innerHTML = finalized;
+  // 본문 추출
+  let target: HTMLElement = root;
+  if (
+    root.children.length === 1 &&
+    root.firstElementChild?.tagName.toLowerCase() === 'div'
+  ) {
+    target = root.firstElementChild as HTMLElement;
+  }
+
+  const parts: string[] = [];
+  let lineBuf = '';
+
+  const flushLine = (asBlank: boolean) => {
+    if (asBlank) {
+      const last = parts[parts.length - 1] || '';
+      if (last.includes('>&nbsp;</p>')) return; // 연속 빈 문단 방지
+      parts.push('<p style="margin:0;padding:0;line-height:1.55;">&nbsp;</p>');
+      return;
+    }
+    const t = lineBuf.trim();
+    if (!t) {
+      flushLine(true);
+      lineBuf = '';
+      return;
+    }
+    parts.push(`<p style="margin:0;padding:0;line-height:1.55;">${lineBuf}</p>`);
+    lineBuf = '';
+  };
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      lineBuf += node.textContent ?? '';
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'br') {
+      if (lineBuf.trim() || lineBuf.includes('<')) {
+        flushLine(false);
+      } else {
+        flushLine(true);
+      }
+      return;
+    }
+    if (tag === 'table') {
+      if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
+      const tableHtml = el.outerHTML
+        .replace(/\s*align\s*=\s*["']?[^"'\s>]+["']?/gi, '')
+        .replace(/float\s*:[^;]+;?/gi, 'float:none;');
+      parts.push(
+        `<div style="clear:both;display:block;text-align:left;margin:6px 0;">${tableHtml}</div>`,
+      );
+      return;
+    }
+    if (tag === 'ul' || tag === 'ol') {
+      if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
+      parts.push(el.outerHTML);
+      return;
+    }
+    if (['b', 'strong', 'i', 'em', 'u', 'span', 'a'].includes(tag)) {
+      lineBuf += el.outerHTML;
+      return;
+    }
+    Array.from(el.childNodes).forEach(walk);
+  };
+
+  Array.from(target.childNodes).forEach(walk);
+  if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
+
+  let body = parts.join('');
+  body = body.replace(
+    /(?:<p style="margin:0;padding:0;line-height:1\.55;">&nbsp;<\/p>\s*){2,}/gi,
+    '<p style="margin:0;padding:0;line-height:1.55;">&nbsp;</p>',
+  );
+
+  return (
+    `<div style="margin:0;padding:0;line-height:1.55;color:${NOTICE_TEXT_COLOR};font-size:14px;text-align:left;">` +
+    `${body}</div>`
+  );
 }
 
 function normalizePlainPasteText(text: string): string {
@@ -290,6 +540,16 @@ function flattenNoticeElement(el: Element): string {
 
   if (tag === 'div' || tag === 'p') {
     const block = el as HTMLElement;
+    const text = (block.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+    const raw = block.innerHTML
+      .replace(/\u00a0/g, '')
+      .replace(/&nbsp;/gi, '')
+      .replace(/\s/g, '')
+      .toLowerCase();
+    // 빈 줄 전용 블록은 <br>로 보존 (삭제하지 않음)
+    if (!text && /^(?:<br\/?>)+$/.test(raw)) {
+      return '<br>'.repeat((raw.match(/<br\/?>/g) || []).length);
+    }
     if (isBlankBlock(block)) return '';
 
     const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
@@ -320,16 +580,26 @@ function flattenNoticeHtmlRoot(root: HTMLElement): string {
     target = root.firstElementChild;
   }
 
-  return Array.from(target.childNodes)
-    .map(node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const t = (node.textContent ?? '').trim();
-        return t ? `${escapeHtml(t)}<br>` : '';
-      }
-      if (node.nodeType === Node.ELEMENT_NODE) return flattenNoticeElement(node as Element);
-      return '';
-    })
-    .join('');
+  const nodes = Array.from(target.childNodes);
+  const parts: string[] = [];
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = (node.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+      if (!t) continue;
+      // 다음이 이미 <br>이면 텍스트에 br을 또 붙이지 않음 (간격 2배 방지)
+      const next = nodes[i + 1];
+      const nextIsBr =
+        next?.nodeType === Node.ELEMENT_NODE &&
+        (next as Element).tagName.toLowerCase() === 'br';
+      parts.push(nextIsBr ? escapeHtml(t) : `${escapeHtml(t)}<br>`);
+      continue;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      parts.push(flattenNoticeElement(node as Element));
+    }
+  }
+  return parts.join('');
 }
 
 function sanitizeNoticeHtmlRoot(root: HTMLElement) {
@@ -337,35 +607,27 @@ function sanitizeNoticeHtmlRoot(root: HTMLElement) {
   unwrapLegacyInlineTags(root);
   normalizeInlineNoticeMarkup(root);
   root.querySelectorAll('*').forEach(node => sanitizeNodeStyles(node as HTMLElement));
+  removeBlankBlocks(root);
 }
 
-/** 공문 편집 영역 — 템플릿 class는 유지하고 붙여넣은 인라인 서식만 제거 */
-export function scrubOfficialLetterInlineMarkup(root: HTMLElement) {
+/** 공문 편집 영역 — 붙여넣기 배경만 제거하고 굵게·색·글자크기는 유지 */
+export function scrubOfficialLetterBackgroundOnly(root: HTMLElement) {
   if (typeof document === 'undefined') return;
-
-  const scopes = root.querySelectorAll('td, .guide-msg, .contact-item, .section-header h3');
-  scopes.forEach(scope => {
-    const el = scope as HTMLElement;
-    replaceHeadingWithStrong(el);
-    unwrapLegacyInlineTags(el);
-    normalizeInlineNoticeMarkup(el);
-    el.querySelectorAll('[style]').forEach(node => {
-      const styled = node as HTMLElement;
-      if (styled.classList?.contains('num-badge')) return;
-      const tag = styled.tagName.toLowerCase();
-      if (tag === 'table' || tag === 'tr' || tag === 'td' || tag === 'th') return;
-      sanitizeNodeStyles(styled);
-    });
-    el.querySelectorAll('b,strong,i,em,u,span').forEach(node => {
-      const inline = node as HTMLElement;
-      if (inline.classList?.contains('num-badge')) return;
-      if (inline.tagName.toLowerCase() === 'span') return;
-      sanitizeNodeStyles(inline);
-    });
+  root.querySelectorAll('[style]').forEach(node => {
+    const el = node as HTMLElement;
+    if (el.classList?.contains('num-badge')) return;
+    el.style.removeProperty('background');
+    el.style.removeProperty('background-color');
+    el.style.removeProperty('background-image');
   });
 }
 
-/** 붙여넣기·드래그용 — 이중 줄바꿈 제거, 외부 배경·글자색 정리 */
+/** @deprecated 서식 유지용 — scrubOfficialLetterBackgroundOnly 사용 */
+export function scrubOfficialLetterInlineMarkup(root: HTMLElement) {
+  scrubOfficialLetterBackgroundOnly(root);
+}
+
+/** 붙여넣기·드래그용 — 배경 제거, 줄바꿈은 tidy로 미리보기와 동일 규칙 */
 export function prepareNoticePasteContent(
   html: string,
   plainText: string,
@@ -376,7 +638,7 @@ export function prepareNoticePasteContent(
 
   if (typeof document === 'undefined') {
     const t = normalizePlainPasteText(plainText || html);
-    const body = collapseNoticeBreaks(escapeHtml(t).replace(/\n/g, '<br>'));
+    const body = tidyNoticeBreaks(escapeHtml(t).replace(/\n/g, '<br>'));
     return wrap ? wrapNoticeHtml(body) : body;
   }
 
@@ -392,7 +654,7 @@ export function prepareNoticePasteContent(
   sanitizeNoticeHtmlRoot(root);
 
   let body = flattenBlocks ? flattenNoticeHtmlRoot(root) : root.innerHTML.trim();
-  body = collapseNoticeBreaks(body.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''));
+  body = tidyNoticeBreaks(body.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''));
   return wrap ? wrapNoticeHtml(body) : body;
 }
 
@@ -405,21 +667,9 @@ export function sanitizeNoticeHtml(html: string): string {
 
   sanitizeNoticeHtmlRoot(root);
 
-  return collapseNoticeBreaks(
+  return tidyNoticeBreaks(
     root.innerHTML.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''),
   );
-}
-
-/** div 블록 나열 → br 줄 구조로 변환 (서식 유지 복사용) */
-export function normalizeHtmlForClipboard(html: string): string {
-  if (!html?.trim() || typeof document === 'undefined') return html;
-
-  const root = document.createElement('div');
-  root.innerHTML = html;
-  sanitizeNoticeHtmlRoot(root);
-
-  const body = collapseNoticeBreaks(flattenNoticeHtmlRoot(root));
-  return `<div style="margin:0;padding:0;line-height:1.8;color:${NOTICE_TEXT_COLOR};font-size:14px;">${brBodyToParagraphHtml(body)}</div>`;
 }
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {
@@ -717,20 +967,35 @@ export function buildPaymentNoticeTokens({
   };
 }
 
+/** 신고 결과 안내 — 서식 빈 줄(br×2) 유지, 과도한 연속만 정리 */
 function cleanupPaymentTemplate(html: string): string {
-  return html
-    .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
-    .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
+  return tidyNoticeBreaks(
+    html
+      .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>')
+      .replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''),
+  );
 }
 
 /** 사용자 서식(토큰)으로 신고 결과 안내 문구 생성 */
 export function renderPaymentNoticeTemplate(template: string, tokens: PaymentNoticeTokens): string {
   let out = (template || DEFAULT_PAYMENT_NOTICE_TEMPLATE).trim();
+
+  // 빈 토큰 제거 — 토큰과 바로 뒤 줄바꿈 1개만 (서두 뒤 빈 줄은 유지)
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [token, value] of Object.entries(tokens)) {
+    if (value) continue;
+    if (token === '{안내본문}') continue;
+    const t = escapeRe(token);
+    out = out
+      .replace(new RegExp(`<div[^>]*>\\s*${t}\\s*</div>(?:\\s*<br\\s*/?>)?`, 'gi'), '')
+      .replace(new RegExp(`${t}(?:\\s*<br\\s*/?>)?`, 'gi'), '');
+  }
+
   const entries = Object.entries(tokens).sort((a, b) => b[0].length - a[0].length);
   for (const [token, value] of entries) {
     out = out.split(token).join(value);
   }
-  return cleanupPaymentTemplate(out);
+  return finalizeNoticeHtml(cleanupPaymentTemplate(out));
 }
 
 // 신고 결과 안내문구(HTML) 생성. 금액이 음수면 환급으로 처리하며,
@@ -888,7 +1153,7 @@ function vatSummaryTable(
       : '';
 
   return (
-    `<table style="border-collapse:collapse;table-layout:fixed;width:420px;margin:6px 0;font-size:13px;">` +
+    `<table style="border-collapse:collapse;table-layout:fixed;width:420px;display:table;float:none;clear:both;margin:6px 0;font-size:13px;">` +
     `<colgroup><col style="width:160px;"><col style="width:130px;"><col style="width:130px;"></colgroup>` +
     `<thead><tr>${th('구분')}${th('공급가')}${th('부가세(세액)')}</tr></thead>` +
     `<tbody>` +
@@ -939,7 +1204,7 @@ function buildVatInstallmentBlock(
 ): string {
   if (!isPay || finalTax <= 0) return '';
   const parts: string[] = [];
-  parts.push(noticeBlank());
+  // 앞 빈 줄은 서식에서 처리 — 여기서 또 넣지 않음
   parts.push(noticeLine('💳 [분납(분할 납부) 안내]'));
   parts.push(
     noticeLine(
@@ -999,7 +1264,22 @@ function buildVatSupplementBlock(
   if (lines.length === 0) return '';
 
   const body = lines.map(l => noticeDash(escapeHtml(l))).join('');
-  return `${noticeBlank()}${noticeLine('📌 [검토 사항]')}${body}`;
+  return `${noticeLine('📌 [검토 사항]')}${body}`;
+}
+
+/**
+ * 선택 블록 토큰 — 없으면 줄바꿈만, 있으면 줄바꿈+내용+줄바꿈
+ * ({신고결과부가정보}, {분납안내})
+ */
+/** 없으면 줄바꿈만 / 있으면 줄바꿈+내용+줄바꿈 */
+function optionalBreakBlock(content: string): string {
+  // 내용 끝 br은 래퍼가 담당 — 이중 빈 줄 방지
+  const body = (content || '')
+    .trim()
+    .replace(/(?:<br\s*\/?>\s*)+$/i, '')
+    .trim();
+  if (!body) return '<br>';
+  return `<br>${body}<br>`;
 }
 
 // 사용자 서식(토큰)으로 부가세 신고 결과 보고 문구 생성
@@ -1025,8 +1305,8 @@ export function renderVatReportTemplate({
 
   const map: [string, string][] = [
     ['{신고결과요약표}', summaryTable],
-    ['{신고결과부가정보}', supplementBlock],
-    ['{분납안내}', installmentBlock],
+    ['{신고결과부가정보}', optionalBreakBlock(supplementBlock)],
+    ['{분납안내}', optionalBreakBlock(installmentBlock)],
     ['{귀속}', belong],
     ['{세목}', escapeHtml(name)],
   ];
@@ -1035,14 +1315,7 @@ export function renderVatReportTemplate({
   for (const [token, value] of map) {
     out = out.split(token).join(value);
   }
-  if (!installmentBlock) {
-    out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
-    out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
-  }
-  if (!supplementBlock) {
-    out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
-  }
-  return out;
+  return finalizeNoticeHtml(out);
 }
 
 // 부가세 전용: 신고 결과 보고 및 검토 안내문구(HTML). 납부서 안내문구 앞에 표시.
@@ -1086,8 +1359,40 @@ export function renderTemplate({
   // 하단 안내 멘트 (제출 마감 2일 전 안내), 미사용 시 빈 문자열
   materialDeadlineNote?: string;
 }): string {
+  const tpl = (template || '').trim();
+  const materialsEmpty = isNoticeFieldEmpty(materials);
+  const materialDeadlineEmpty = isNoticeFieldEmpty(materialDeadline);
+  const materialNoteEmpty = isNoticeFieldEmpty(materialDeadlineNote);
+
+  let prepared = tpl;
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const stripEmptyToken = (html: string, token: string) => {
+    const t = escapeRe(token);
+    return html
+      .replace(new RegExp(`<div[^>]*>\\s*${t}\\s*</div>(?:\\s*<br\\s*/?>)?`, 'gi'), '')
+      .replace(new RegExp(`${t}(?:\\s*<br\\s*/?>)?`, 'gi'), '');
+  };
+
+  // 안내문 서식 {특이사항}: 앞뒤 br·「특이사항」제목은 제거하고, 토큰이 간격 전부 담당
+  // 없음 → <br> / 있음 → <br>내용<br>
+  prepared = prepared.replace(
+    /(?:<br\s*\/?>\s*)*(?:<b\b[^>]*>\s*)?특이사항(?:\s*<\/b>)?\s*(?:<br\s*\/?>\s*)*(?=\{특이사항\})/gi,
+    '',
+  );
+  prepared = prepared.replace(
+    /(?:<br\s*\/?>\s*)*\{특이사항\}(?:\s*<br\s*\/?>)*/gi,
+    '{특이사항}',
+  );
+
+  if (materialsEmpty) prepared = stripEmptyToken(prepared, '{필요자료}');
+  if (materialDeadlineEmpty) prepared = stripEmptyToken(prepared, '{자료제출마감}');
+  if (materialNoteEmpty) prepared = stripEmptyToken(prepared, '{자료제출안내}');
+
+  // 필요자료 끝 br은 제거 — 특이사항 optionalBreak가 다음 간격 담당
+  const materialsHtml = noticeFieldToHtml(materials).replace(/(?:<br\s*\/?>\s*)+$/i, '');
+  const notesHtml = noticeFieldToHtml(notes);
+
   const map: [string, string][] = [
-    // 더 구체적인 토큰을 먼저 치환 (부분 일치 방지)
     ['{마감일짧게}', deadline ? escapeHtml(formatDottedDate(deadline.final)) : ''],
     ['{법정마감일}', deadline ? escapeHtml(deadline.statutoryText) : ''],
     ['{마감일}', deadline ? escapeHtml(deadline.finalText) : ''],
@@ -1099,33 +1404,19 @@ export function renderTemplate({
     ['{세목}', escapeHtml(NAME[taxType] || '')],
     ['{귀속}', deadline ? escapeHtml(deadline.periodLabel) : ''],
     ['{요일}', deadline ? escapeHtml(getWeekdayKo(deadline.final)) : ''],
-    ['{필요자료}', noticeFieldToHtml(materials)],
-    ['{특이사항}', noticeFieldToHtml(notes)],
+    ['{필요자료}', materialsHtml],
+    ['{특이사항}', optionalBreakBlock(notesHtml)],
     ['{휴일안내}', escapeHtml(adjustmentSentence(deadline))],
   ];
-
-  const tpl = (template || '').trim();
-  const notesTrimmed = (notes || '').trim();
-
-  // {특이사항} 데이터 없으면 해당 블록·인접 줄바꿈 없이 제거
-  let prepared = tpl;
-  if (!notesTrimmed) {
-    prepared = prepared
-      .replace(/<div[^>]*>\s*\{특이사항\}\s*<\/div>\s*/gi, '')
-      .replace(/\{특이사항\}\s*(<br\s*\/?>)?\s*/gi, '');
-  }
 
   let out = prepared;
   for (const [token, value] of map) {
     out = out.split(token).join(value);
   }
-  // 레거시 기본 서식의 청록색(세금 납부 기한 강조) 제거 — 저장된 옛 서식 마이그레이션
   out = out.replace(/color\s*:\s*#13a89e\s*;?/gi, '');
-  // 토큰이 비어 내용이 사라진 블록(<div>/<p>) 제거 — <br>만 있는 빈 줄은 유지
   out = out.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, '');
-  out = out.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
-  out = out.replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '<br>');
-  return out;
+
+  return finalizeNoticeHtml(out);
 }
 
 // 미리보기 HTML → 일반 텍스트 (메신저 붙여넣기용)

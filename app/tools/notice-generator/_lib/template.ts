@@ -19,20 +19,20 @@ export const TOKENS: TemplateToken[] = [
   { token: '{법정마감일}', desc: '보정 전 법정 기한' },
   { token: '{요일}', desc: '최종 기한의 요일 (예: 금)' },
   { token: '{필요자료}', desc: '업체별 제출자료 입력값' },
-  { token: '{특이사항}', desc: '업체 특이사항 입력값' },
+  { token: '{특이사항}', desc: '안내문: 없으면 줄바꿈만 / 있으면 줄바꿈+특이사항+줄바꿈' },
 ];
 
-// 기본 서식(HTML). 색상·이모지 예시 포함 — 사용자가 외부 서식으로 덮어쓰면 됩니다.
-export const DEFAULT_TEMPLATE = `<div style="line-height:1.8;">
+// 기본 서식(HTML). 이모지는 <b> 안에 넣어 외부 붙여넣기 시 줄이 갈라지지 않게 함.
+export const DEFAULT_TEMPLATE = `<div style="line-height:1.55;">
 {귀속} {세목} 신고를 위해 첨부된 공문을 확인하시고, 해당 자료 업로드를 부탁드립니다.<br>
-📢 <b>[ 중요 ] 신고 일정 안내</b><br>
+<br>
+<b>📢 [ 중요 ] 신고 일정 안내</b><br>
 대상 기간: {대상기간}<br>
 {자료제출마감}<br>
 세금 납부 기한: {세금납부기한}<br>
-📁 <b>기존 제출 자료</b><br>
-{필요자료}<br>
-{특이사항}<br>
-{자료제출안내}<br>
+<br>
+<b>📁 기존 제출 자료</b><br>
+{필요자료}{특이사항}{자료제출안내}
 </div>`;
 
 // 업체별 필요자료 기본 예시. 사용자가 자유롭게 수정.
@@ -55,23 +55,25 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
     mode: 'request',
     label: '자료요청',
     desc: '인건비 자료를 요청하는 안내',
-    html: `<div style="line-height:1.8;">
+    html: `<div style="line-height:1.55;">
 {귀속} {세목} 신고를 위해 아래 자료를 기한 내 제출 부탁드립니다.<br>
-📢 <b>신고 일정 안내</b><br>
+<br>
+<b>📢 신고 일정 안내</b><br>
 {자료제출마감}<br>
 세금 납부 기한: {세금납부기한}<br>
-📁 <b>요청자료</b><br>
-{필요자료}<br>
+<br>
+<b>📁 요청자료</b><br>
+{필요자료}
 </div>`,
   },
   filing: {
     mode: 'filing',
     label: '신고안내',
     desc: '신고 일정만 간단히 안내',
-    html: `<div style="line-height:1.8;">
-📢 <b>신고 일정 안내</b><br>
+    html: `<div style="line-height:1.55;">
+<b>📢 신고 일정 안내</b><br>
 신고 대상 : {귀속} {세목} 인건비 내역<br>
-세금 납부 기한: {세금납부기한}<br>
+세금 납부 기한: {세금납부기한}
 </div>`,
   },
 };
@@ -107,24 +109,20 @@ export const VAT_REPORT_TOKENS: TemplateToken[] = [
   { token: '{귀속}', desc: '과세기간 표기' },
   { token: '{세목}', desc: '세목명 (부가가치세)' },
   { token: '{신고결과요약표}', desc: '매출·매입·불공제·경감·가산·최종세액 요약 표' },
-  { token: '{신고결과부가정보}', desc: '부가율·직원·차량·종이계산서·환급사유·특이사항 (입력된 항목만)' },
-  { token: '{분납안내}', desc: '납부 세액 발생 시 분납 권장 일정 (없으면 자동 제거)' },
+  { token: '{신고결과부가정보}', desc: '없으면 줄바꿈만 / 있으면 줄바꿈+부가율·직원·차량 등+줄바꿈' },
+  { token: '{분납안내}', desc: '없으면 줄바꿈만 / 있으면 줄바꿈+분납 일정+줄바꿈' },
 ];
 
-export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.8;">
+export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.55;">
 📋 [신고 결과 보고 및 검토 안내]<br>
+<br>
 안녕하세요. {귀속} {세목} 신고 결과를 안내드립니다.<br>
 매입매출장과 결과 보고서를 함께 첨부했습니다.<br>
 아래 요약과 첨부 자료에 누락·오류가 없는지 검토 부탁드립니다.<br>
+<br>
 [신고 결과 요약]<br>
-{신고결과요약표}
-<br>
-{신고결과부가정보}
-<br>
-✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.<br>
-{분납안내}
-<br>
-감사합니다.<br>
+{신고결과요약표}{신고결과부가정보}✅ 이상이 없으시면 "확인 완료" 댓글을 남겨 주세요.<br>
+{분납안내}감사합니다.<br>
 </div>`;
 
 // 신고 결과 안내(납부세액) — 사용자 서식 토큰
@@ -149,8 +147,9 @@ export const PAYMENT_NOTICE_TOKENS: TemplateToken[] = [
   { token: '{연체안내}', desc: '납부지연 가산세 안내' },
 ];
 
-export const DEFAULT_PAYMENT_NOTICE_TEMPLATE = `<div style="line-height:1.8;">
-{안내본문}
+export const DEFAULT_PAYMENT_NOTICE_TEMPLATE = `<div style="line-height:1.55;">
+{서두}<br>
+{첨부안내}{납부요약}{납부내역}{분납회차목록}{납부기한줄}{연체안내}{환급요약}{환급내역}{환급시점}
 </div>`;
 
 import type { OfficialLetterKind } from './officialLetter';

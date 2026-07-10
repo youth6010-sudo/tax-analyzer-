@@ -361,29 +361,26 @@
 
 
 .official-letter-editor .formal-footer {
-
+  /* a4-page 좌우 패딩(40 / 24)이 달라 콘텐츠 박스 중앙 ≠ 페이지 중앙 → 패딩 상쇄 후 가운데 */
   margin-top: auto;
-
+  margin-left: -40px;
+  margin-right: -24px;
+  width: calc(100% + 64px);
   padding-top: 24px;
-
   display: flex;
-
   justify-content: center;
-
   align-items: center;
-
+  text-align: center;
+  box-sizing: border-box;
 }
 
-
-
 .official-letter-editor .formal-footer-logo {
-
+  display: block;
   width: 157px;
-
   max-height: 45px;
-
+  margin: 0 auto;
   object-fit: contain;
-
+  object-position: center;
 }
 
 

@@ -17,25 +17,20 @@ for (const name of ['.env.local', '.env']) {
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error('DATABASE_URL required (.env.local 또는 .env)');
+  console.error('DATABASE_URL required');
   process.exit(1);
 }
-
-const migrationPaths = [
-  path.join(root, 'drizzle', '0002_calendar.sql'),
-  path.join(root, 'drizzle', '0003_company_schedule_kind.sql'),
-  path.join(root, 'drizzle', '0004_company_event_checkoffs.sql'),
-  path.join(root, 'drizzle', '0005_personal_checklist_collab.sql'),
-];
 
 const sql = postgres(url, { max: 1, prepare: false });
 
 try {
-  for (const migrationPath of migrationPaths) {
-    if (!fs.existsSync(migrationPath)) continue;
-    await sql.unsafe(fs.readFileSync(migrationPath, 'utf8'));
-  }
-  console.log('✓ 캘린더 테이블 마이그레이션 완료 (personal_checklist_items, company_events)');
+  await sql.unsafe(`
+    ALTER TABLE personal_checklist_items
+      ADD COLUMN IF NOT EXISTS assignee_names jsonb NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE personal_checklist_items
+      ADD COLUMN IF NOT EXISTS memos jsonb NOT NULL DEFAULT '[]'::jsonb;
+  `);
+  console.log('✓ personal_checklist_items: assignee_names, memos');
 } catch (e) {
   console.error('마이그레이션 실패:', e);
   process.exitCode = 1;

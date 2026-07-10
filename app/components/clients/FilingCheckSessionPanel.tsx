@@ -66,7 +66,7 @@ export default function FilingCheckSessionPanel({
           <label className="text-sm font-semibold text-slate-700">특이사항 · 차이 사유</label>
           {carriedFrom && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              직전 신고({carriedFrom}) 제외·특이사항 불러옴
+              직전 신고({carriedFrom}) 완료처리 기준 제외·특이사항 불러옴
             </span>
           )}
         </div>
@@ -74,7 +74,7 @@ export default function FilingCheckSessionPanel({
           value={record.diffReason}
           onChange={e => onPatch({ diffReason: e.target.value })}
           readOnly={locked}
-          placeholder="예) 폐업 신고 예정 · 무실적 · 자료 미수취 등 — 다음 신고 때 자동으로 불러옵니다"
+          placeholder="예) 폐업 신고 예정 · 무실적 · 자료 미수취 등 — 완료 처리 후 다음 신고에 승계됩니다"
           rows={2}
           className={`w-full rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-300/40 ${locked ? 'cursor-default opacity-80' : ''}`}
         />

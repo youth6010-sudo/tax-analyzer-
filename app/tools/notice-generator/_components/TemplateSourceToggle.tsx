@@ -33,6 +33,8 @@ export function TemplateSourceToggle({
         : 'border-transparent bg-slate-100 text-slate-600 hover:bg-slate-200/80',
     ].join(' ');
 
+  const showSave = Boolean(onSave);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex items-center gap-0.5 rounded-xl bg-slate-100 p-0.5 ring-1 ring-slate-200">
@@ -48,7 +50,7 @@ export function TemplateSourceToggle({
           내 서식{hasCustom ? '' : ' (미저장)'}
         </button>
       </div>
-      {source === 'custom' && onSave && (
+      {showSave && (
         <button
           type="button"
           onClick={onSave}

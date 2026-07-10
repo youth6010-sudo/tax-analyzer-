@@ -2,6 +2,10 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { simplePayrollFilings } from '@/db/schema';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
+import { simplePayrollPeriodKeysForYear } from '@/lib/periodUtils';
+
+/** 연말정산과 공유하는 간이지급 소득유형 */
+const YEAR_END_SHARED_SIMPLE_TYPES = new Set<IncomeTypeKey>(['employed', 'bizIncome', 'otherTax']);
 
 export type SimplePayrollRow = {
   periodKey?: string;
@@ -156,6 +160,28 @@ export async function matchSimplePayrollFromExcel(
 
   if (rows.length > 0) await upsertSimplePayrollFilings(periodKey, rows, updatedBy);
   return { checkedCells, skippedInactive };
+}
+
+/**
+ * 해당 연도에 간이지급에서 접수(체크)된 소득유형 — 연말정산 표시용.
+ * 근로·사업·기타만 (연말과 공유).
+ */
+export async function listSimplePayrollFiledTypesByYear(
+  year: number,
+): Promise<Map<string, Set<IncomeTypeKey>>> {
+  const rows = await listSimplePayrollFilingsByKeys(simplePayrollPeriodKeysForYear(year));
+  const map = new Map<string, Set<IncomeTypeKey>>();
+  for (const r of rows) {
+    if (!r.filed) continue;
+    if (!YEAR_END_SHARED_SIMPLE_TYPES.has(r.incomeType)) continue;
+    let set = map.get(r.clientId);
+    if (!set) {
+      set = new Set();
+      map.set(r.clientId, set);
+    }
+    set.add(r.incomeType);
+  }
+  return map;
 }
 
 /** 접수(체크·근로내용확인 입력)만 초기화 — 소득유형 활성·제외는 유지 */

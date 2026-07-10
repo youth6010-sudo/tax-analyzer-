@@ -16,7 +16,7 @@ export const INCOME_TYPE_KEYS = [
 
 export type IncomeTypeKey = (typeof INCOME_TYPE_KEYS)[number];
 
-/** 연말정산지급명세서 — 그리드·저장 키 (근로·사업·기타는 간이지급 incomeTypes 연동) */
+/** 연말정산지급명세서 — 그리드·저장 키 (근로·사업·기타는 간이지급 월별 설정 OR 같은 해 접수 이력으로 표시) */
 export const YEAR_END_INCOME_KEYS = [
   'employed',
   'retirement',

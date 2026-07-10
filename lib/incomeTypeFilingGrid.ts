@@ -1,5 +1,6 @@
 import type { ClientRecord } from '@/app/types/client';
 import {
+  SIMPLE_PAYROLL_COLUMNS,
   SIMPLE_PAYROLL_GRID_COLUMNS,
   SIMPLE_PAYROLL_STAT_COLUMNS,
   YEAR_END_COLUMNS,
@@ -86,6 +87,7 @@ export function buildSimplePayrollGrid(
   filed: SimplePayrollFilingRecord[],
   excluded: Record<string, string> = {},
   rowNotes: Record<string, string> = {},
+  forceIncluded: Record<string, boolean> = {},
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
@@ -126,6 +128,13 @@ export function buildSimplePayrollGrid(
         acceptanceMethod: laborSaved?.acceptanceMethod ?? '',
       };
 
+      const manualExcluded = Object.prototype.hasOwnProperty.call(excluded, c.id);
+      const forced = Boolean(forceIncluded[c.id]);
+      const autoSemi =
+        !manualExcluded &&
+        !forced &&
+        isSemiAnnualOffMonthExcluded(intakeData, meta.month);
+
       return {
         clientId: c.id,
         companyName: c.companyName,
@@ -133,11 +142,11 @@ export function buildSimplePayrollGrid(
         businessNo: c.businessNo,
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
-        excludeReason:
-          excluded[c.id] ??
-          (isSemiAnnualOffMonthExcluded(intakeData, meta.month)
+        excludeReason: manualExcluded
+          ? (excluded[c.id] ?? '')
+          : autoSemi
             ? SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON
-            : null),
+            : null,
         rowNote: rowNotes[c.id] ?? '',
         semiAnnualTarget: whSettings.semiAnnualTarget,
         semiAnnualMonthlyDisplay: whSettings.semiAnnualMonthlyDisplay,
@@ -185,14 +194,20 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
   return { ...row, cells };
 }
 
-/** 연말정산 열 활성 — 근로·사업·기타는 간이지급(incomeTypes), 퇴직·이자배당은 yearEndTypes */
+/**
+ * 연말정산 열 활성
+ * - 근로·사업·기타: 간이지급 월별 설정(incomeTypes) OR 같은 해 간이지급 접수 이력
+ *   (월별로 꺼도 해당 연도 접수가 있으면 연말에 표시 — incomeTypes를 다시 켜지 않음)
+ * - 퇴직·이자배당: yearEndTypes
+ */
 export function yearEndColumnActive(
   key: YearEndIncomeKey,
   incomeTypes: ClientIncomeTypes,
   yearEndTypes: YearEndClientTypes,
+  yearSimplePayrollFiled?: ReadonlySet<string>,
 ): boolean {
   if (key === 'employed' || key === 'bizIncome' || key === 'otherTax') {
-    return Boolean(incomeTypes[key]);
+    return Boolean(incomeTypes[key]) || Boolean(yearSimplePayrollFiled?.has(key));
   }
   return Boolean(yearEndTypes[key]);
 }
@@ -201,12 +216,16 @@ export function patchYearEndRowFromTypes<T extends { cells: Record<string, Incom
   row: T,
   incomeTypes: ClientIncomeTypes,
   yearEndTypes: YearEndClientTypes,
+  yearSimplePayrollFiled?: ReadonlySet<string>,
 ): T {
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
   for (const col of YEAR_END_COLUMNS) {
-    const active = yearEndColumnActive(col.key, incomeTypes, yearEndTypes);
     const prev = cells[col.key] ?? { active: false, filed: false };
-    cells[col.key] = { ...prev, active, ...(active ? {} : { filed: false }) };
+    // 같은 해 간이지급·연말 접수 이력이 있으면 설정이 꺼져 있어도 표시·접수 유지
+    const active =
+      yearEndColumnActive(col.key, incomeTypes, yearEndTypes, yearSimplePayrollFiled) ||
+      Boolean(prev.filed);
+    cells[col.key] = { ...prev, active };
   }
   return { ...row, cells };
 }
@@ -217,6 +236,8 @@ export function buildYearEndGrid(
   filed: YearEndFilingRecord[],
   excluded: Record<string, string> = {},
   rowNotes: Record<string, string> = {},
+  /** 같은 해 간이지급에서 접수된 유형 (clientId → incomeType set) */
+  yearSimplePayrollFiled: Map<string, ReadonlySet<string>> = new Map(),
 ): IncomeTypeGridRow[] {
   const filedMap = new Map(filed.map(r => [`${r.clientId}|${r.incomeType}`, r]));
 
@@ -224,11 +245,14 @@ export function buildYearEndGrid(
     filingTargets(clients, 'yearEnd').map(c => {
       const incomeTypes = readIncomeTypes(c.intakeData);
       const yearEndTypes = readYearEndTypes(c.intakeData);
+      const simpleFiled = yearSimplePayrollFiled.get(c.id);
       const cells: Record<string, IncomeGridCell> = {};
 
       for (const col of YEAR_END_COLUMNS) {
-        const active = yearEndColumnActive(col.key, incomeTypes, yearEndTypes);
         const savedRow = filedMap.get(`${c.id}|${col.key}`);
+        const active =
+          yearEndColumnActive(col.key, incomeTypes, yearEndTypes, simpleFiled) ||
+          Boolean(savedRow?.filed);
         cells[col.key] = {
           active,
           filed: savedRow?.filed ?? false,
@@ -264,21 +288,39 @@ function isCellReceivedForStats(
   return cell.filed;
 }
 
+function incomeGridRowsForManager(
+  grid: IncomeTypeGridRow[],
+  manager?: string,
+): IncomeTypeGridRow[] {
+  return manager && manager !== '전체'
+    ? grid.filter(r => r.manager === manager)
+    : grid;
+}
+
+function incomeStatColumnKeys(mode: 'simplePayroll' | 'yearEnd'): string[] {
+  return mode === 'simplePayroll'
+    ? SIMPLE_PAYROLL_STAT_COLUMNS.map(c => c.key)
+    : YEAR_END_COLUMNS.map(c => c.key);
+}
+
+/** 미접수 안내용 열 — 간이지급은 근로내용확인신고 포함 */
+function incomeNoticeColumns(
+  mode: 'simplePayroll' | 'yearEnd',
+): { key: string; label: string }[] {
+  if (mode === 'simplePayroll') {
+    return SIMPLE_PAYROLL_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+  }
+  return YEAR_END_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+}
+
 /** 신고대상·접수완료 건수 — 열(체크 칸) 단위 합산 */
 export function computeIncomeGridStats(
   grid: IncomeTypeGridRow[],
   mode: 'simplePayroll' | 'yearEnd',
   manager?: string,
 ): { target: number; received: number; diff: number } {
-  const rows =
-    manager && manager !== '전체'
-      ? grid.filter(r => r.manager === manager)
-      : grid;
-
-  const columnKeys =
-    mode === 'simplePayroll'
-      ? SIMPLE_PAYROLL_STAT_COLUMNS.map(c => c.key)
-      : YEAR_END_COLUMNS.map(c => c.key);
+  const rows = incomeGridRowsForManager(grid, manager);
+  const columnKeys = incomeStatColumnKeys(mode);
 
   let target = 0;
   let received = 0;
@@ -291,4 +333,59 @@ export function computeIncomeGridStats(
     }
   }
   return { target, received, diff: target - received };
+}
+
+export type UnreceivedByColumn = {
+  key: string;
+  label: string;
+  names: string[];
+};
+
+/**
+ * 항목(근로·일용·근로내용확인신고…)별 미접수 상호.
+ * 활성인데 접수되지 않은 칸만.
+ */
+export function listUnreceivedByColumn(
+  grid: IncomeTypeGridRow[],
+  mode: 'simplePayroll' | 'yearEnd',
+  manager?: string,
+): UnreceivedByColumn[] {
+  const rows = incomeGridRowsForManager(grid, manager);
+  const columns = incomeNoticeColumns(mode);
+  const out: UnreceivedByColumn[] = [];
+
+  for (const { key, label } of columns) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      // 원천세 제외여도 간이지급·연말정산에서 활성 칸이면 미접수 안내에 포함
+      const cell = row.cells[key];
+      if (!cell?.active) continue;
+      if (isCellReceivedForStats(cell, key)) continue;
+      const name = row.companyName?.trim() || '(이름없음)';
+      if (seen.has(name)) continue;
+      seen.add(name);
+      names.push(name);
+    }
+    if (names.length > 0) out.push({ key, label, names });
+  }
+  return out;
+}
+
+/** @deprecated listUnreceivedByColumn 사용 — 상호만 평탄화 */
+export function listUnreceivedCompanyNames(
+  grid: IncomeTypeGridRow[],
+  mode: 'simplePayroll' | 'yearEnd',
+  manager?: string,
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const col of listUnreceivedByColumn(grid, mode, manager)) {
+    for (const n of col.names) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      names.push(n);
+    }
+  }
+  return names;
 }

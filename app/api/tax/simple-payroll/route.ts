@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { isMasterUser } from '@/lib/clientAccess';
-import { listClients } from '@/lib/clientsDb';
-import { readIncomeTypes } from '@/lib/incomeTypes';
+import { listClients, updateClientDetail } from '@/lib/clientsDb';
+import { patchIncomeTypes, readIncomeTypes } from '@/lib/incomeTypes';
 import {
   listSimplePayrollFilingsByKeys,
   matchSimplePayrollFromExcel,
   resetSimplePayrollReceipt,
   upsertSimplePayrollFilings,
 } from '@/lib/simplePayrollFilingsDb';
-import { getExcludedClientIds, getWithholdingRowNotesForPeriod } from '@/lib/taxFilingChecksDb';
+import {
+  getExcludedClientIds,
+  getForceIncludedClientIds,
+  getWithholdingRowNotesForPeriod,
+} from '@/lib/taxFilingChecksDb';
 import {
   employedSimplePayrollPeriodKey,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
-import { buildSimplePayrollGrid, computeIncomeGridStats, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
+import {
+  buildSimplePayrollGrid,
+  computeIncomeGridStats,
+  listUnreceivedByColumn,
+  listUnreceivedCompanyNames,
+  simplePayrollPeriodMeta,
+} from '@/lib/incomeTypeFilingGrid';
 import {
   buildSimplePayrollFilingTypeMap,
   filterSimplePayrollFilingTypes,
@@ -54,10 +64,18 @@ export async function GET(request: NextRequest) {
     });
 
     const excluded = await getExcludedClientIds(manager, 'withholding', monthlyPeriodKey);
+    const forceIncluded = await getForceIncludedClientIds(manager, monthlyPeriodKey);
     const rowNotes = await getWithholdingRowNotesForPeriod(manager, monthlyPeriodKey);
     const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const { grid } = buildSimplePayrollGrid(clients, periodKey, saved, excluded, rowNotes);
+    const { grid } = buildSimplePayrollGrid(
+      clients,
+      periodKey,
+      saved,
+      excluded,
+      rowNotes,
+      forceIncluded,
+    );
 
     return NextResponse.json({
       year: meta.year,
@@ -150,11 +168,93 @@ export async function POST(request: NextRequest) {
       userName: user.name,
     });
 
+    const manager = body.manager ?? user.name;
+    const effectiveManager = manager === '전체' ? user.name : manager;
+    let excluded = await getExcludedClientIds(effectiveManager, 'withholding', monthlyKey);
+
+    const targetClients = simplePayrollTargetsForPeriod(clients, month);
+    const clientByBiz = new Map<string, (typeof targetClients)[0]>();
+    for (const c of targetClients) {
+      const biz = normalizeBizNo(c.businessNo);
+      if (biz.length === 10 && !clientByBiz.has(biz)) clientByBiz.set(biz, c);
+    }
+
+    const { map: filingTypeMap, unmappedRows, parsedRows } = buildSimplePayrollFilingTypeMap(filings);
+    const fileBizSet = new Set(
+      filings.length > 0
+        ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
+        : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
+    );
+    const uploadNameByBiz = new Map<string, string>();
+    for (const f of filings) {
+      const biz = normalizeBizNo(f.bizNo);
+      if (biz.length === 10 && f.name?.trim() && !uploadNameByBiz.has(biz)) {
+        uploadNameByBiz.set(biz, f.name.trim());
+      }
+    }
+
+    const addedNames: string[] = [];
+    const stillMissing: string[] = [];
+
+    for (const biz of fileBizSet) {
+      const client = clientByBiz.get(biz);
+      const displayName = client?.companyName || uploadNameByBiz.get(biz) || biz;
+      if (!client) {
+        stillMissing.push(displayName);
+        continue;
+      }
+
+      let changed = false;
+      // 원천세 제외는 유지 — 간이지급 업로드가 원천세 신고대상확인을 지우지 않음
+
+      const receiptTypes = filingTypeMap.get(biz);
+      if (receiptTypes && receiptTypes.size > 0) {
+        const types = readIncomeTypes(client.intakeData);
+        const patch: Partial<Record<IncomeTypeKey, boolean>> = {};
+        for (const t of receiptTypes) {
+          if (t === 'laborContentReport') continue;
+          if (t === 'employed' && !employedKey) continue;
+          if (!types[t]) {
+            patch[t] = true;
+            changed = true;
+          }
+        }
+        if (Object.keys(patch).length > 0) {
+          const nextIntake = patchIncomeTypes(
+            (client.intakeData ?? {}) as Record<string, unknown>,
+            patch,
+          );
+          await updateClientDetail(client.id, { intakeData: nextIntake });
+          client.intakeData = nextIntake;
+        }
+      } else {
+        // 신고서명 없이 사업자만 온 경우 — 아무 유형도 없으면 기타로 활성화해 리스트에 올림
+        const types = readIncomeTypes(client.intakeData);
+        const hasAny =
+          types.daily || types.bizIncome || types.otherTax || (types.employed && Boolean(employedKey));
+        if (!hasAny) {
+          const patch = { otherTax: true } as Partial<Record<IncomeTypeKey, boolean>>;
+          const nextIntake = patchIncomeTypes(
+            (client.intakeData ?? {}) as Record<string, unknown>,
+            patch,
+          );
+          await updateClientDetail(client.id, { intakeData: nextIntake });
+          client.intakeData = nextIntake;
+          changed = true;
+        }
+      }
+
+      if (changed) addedNames.push(displayName);
+    }
+
+    excluded = await getExcludedClientIds(effectiveManager, 'withholding', monthlyKey);
+    const forceIncluded = await getForceIncludedClientIds(effectiveManager, monthlyKey);
+
     const bizMap = new Map<string, string>();
     const monthlyTypesMap = new Map<string, IncomeTypeKey[]>();
     const employedTypesMap = new Map<string, IncomeTypeKey[]>();
 
-    for (const c of simplePayrollTargetsForPeriod(clients, month)) {
+    for (const c of targetClients) {
       const biz = normalizeBizNo(c.businessNo);
       if (biz) bizMap.set(c.id, biz);
       const types = readIncomeTypes(c.intakeData);
@@ -166,19 +266,8 @@ export async function POST(request: NextRequest) {
       if (types.employed && employedKey) employedTypesMap.set(c.id, ['employed']);
     }
 
-    const { map: filingTypeMap, unmappedRows, parsedRows } = buildSimplePayrollFilingTypeMap(filings);
-    const fileBizSet = new Set(
-      filings.length > 0
-        ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
-        : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
-    );
-    const targetBizSet = new Set(
-      [...bizMap.values()].map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
-    );
-    let extraCount = 0;
-    for (const b of fileBizSet) {
-      if (!targetBizSet.has(b)) extraCount += 1;
-    }
+    const missingFromList = stillMissing;
+    const extraCount = missingFromList.length;
 
     let checkedCells = 0;
     let skippedInactive = 0;
@@ -211,16 +300,23 @@ export async function POST(request: NextRequest) {
       skippedInactive += employedResult.skippedInactive;
     }
 
-    const manager = body.manager ?? user.name;
     const meta = simplePayrollPeriodMeta(body.periodKey);
     const periodKeys = meta.employedPeriodKey
       ? [meta.monthlyPeriodKey, meta.employedPeriodKey]
       : [meta.monthlyPeriodKey];
-    const excluded = await getExcludedClientIds(manager, 'withholding', meta.monthlyPeriodKey);
-    const rowNotes = await getWithholdingRowNotesForPeriod(manager, meta.monthlyPeriodKey);
+    const rowNotes = await getWithholdingRowNotesForPeriod(effectiveManager, meta.monthlyPeriodKey);
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const { grid } = buildSimplePayrollGrid(clients, body.periodKey, saved, excluded, rowNotes);
+    const { grid } = buildSimplePayrollGrid(
+      clients,
+      body.periodKey,
+      saved,
+      excluded,
+      rowNotes,
+      forceIncluded,
+    );
     const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);
+    const unreceivedByColumn = listUnreceivedByColumn(grid, 'simplePayroll', manager);
+    const noReceiptNames = listUnreceivedCompanyNames(grid, 'simplePayroll', manager);
 
     return NextResponse.json({
       matched: checkedCells,
@@ -228,6 +324,10 @@ export async function POST(request: NextRequest) {
       total: fileBizSet.size,
       parsedRows: parsedRows || filings.length,
       extraCount,
+      missingFromList,
+      noReceiptNames,
+      unreceivedByColumn,
+      addedNames,
       unmappedRows,
       skippedInactive,
       target: stats.target,

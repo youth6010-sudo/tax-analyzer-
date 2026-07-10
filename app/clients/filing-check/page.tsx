@@ -45,6 +45,7 @@ import {
   readVatObligation,
   vatObligationBucket,
   vatObligationManagerCounts,
+  formatCompanyNameList,
   normalizeBizNo,
   parseHometaxFile,
   parsePeriodKey,
@@ -299,12 +300,15 @@ const inputCls =
 type CheckRecord = {
   overrides: Record<string, boolean>; // 수동 체크 오버라이드
   excelBizNos: string[]; // 홈택스 접수목록 사업자번호(10자리)
+  excelNamesByBiz?: Record<string, string>; // 사업자번호 → 상호
   fileName: string;
   diffReason: string;
   done: boolean;
   specialFilings: SpecialFiling[]; // 자동 감지된 수정·기한후 신고
   specialReasons: Record<string, string>; // 특이신고별 사유 (key = bizNo|type)
   excluded: Record<string, string>; // 신고목록 제외 (clientId → 제외사유)
+  /** 반기 자동제외 등을 수기로 다시 살린 업체 */
+  forceIncluded?: Record<string, boolean>;
   rowNotes: Record<string, string>; // 업체별 신고 특이사항 (clientId → 메모)
   extraClients: ManualClient[]; // 직접 추가한 업체 (다음 신고 때 자동 승계)
   siteDone?: Record<string, boolean>; // 종소세 사업장별 작업 완료
@@ -313,12 +317,14 @@ type CheckRecord = {
 const EMPTY_RECORD: CheckRecord = {
   overrides: {},
   excelBizNos: [],
+  excelNamesByBiz: {},
   fileName: '',
   diffReason: '',
   done: false,
   specialFilings: [],
   specialReasons: {},
   excluded: {},
+  forceIncluded: {},
   rowNotes: {},
   extraClients: [],
 };
@@ -544,9 +550,13 @@ function FilingCheckPageInner() {
     diff: 0,
     excludedRows: 0,
     byColumn: [],
+    unreceivedNames: [],
+    unreceivedByColumn: [],
   });
   const [incomeParsing, setIncomeParsing] = useState(false);
   const [incomeNotice, setIncomeNotice] = useState('');
+  /** 접수목록 업로드 후에만 미접수 안내 표시 */
+  const [incomeUploaded, setIncomeUploaded] = useState(false);
   const [employedFilingMonth, setEmployedFilingMonth] = useState(false);
   const [clientListSort] = useLocalStorage<ClientSortKey>(CLIENT_SORT_STORAGE_KEY, 'code');
   const [managerOrder] = useLocalStorage<string[]>(MANAGER_ORDER_STORAGE_KEY, [...MANAGER_DISPLAY_ORDER]);
@@ -575,6 +585,8 @@ function FilingCheckPageInner() {
     setStatFilter('all');
     setListScope('all');
     setIncomeNotice('');
+    setIncomeUploaded(false);
+    setUploadAddedNames([]);
   }, [tax, period.year, period.month, period.vatPhase, selManager]);
 
   useEffect(() => {
@@ -649,7 +661,7 @@ function FilingCheckPageInner() {
   }, [isMaster]);
 
   // 세목·기간이 바뀌면 저장된 기록을 불러오고,
-  // 저장된 게 없으면 직전 신고 기준으로 무조건 불러온다(특이사항·사유 승계).
+  // 직전 완료(done) 신고분의 제외·특이사항을 승계한다.
   // 단, 접수 자체(엑셀/체크)는 신고분마다 새로 받으므로 가져오지 않는다.
   useEffect(() => {
     if (!selManager) return;
@@ -979,9 +991,13 @@ function FilingCheckPageInner() {
   const isManualExcluded = (id: string) =>
     Object.prototype.hasOwnProperty.call(record.excluded, id);
 
+  const isForceIncluded = (id: string) => Boolean(record.forceIncluded?.[id]);
+
   // 연말정산·간이지급 제외는 원천세 세션에서 끌어옴 (IncomeTypeFilingSection)
   const excludeReasonOf = (c: ClientRecord): string | null => {
     if (isManualExcluded(c.id)) return record.excluded[c.id] ?? '';
+    // 수기로 다시 살린 업체는 반기 자동제외 무시
+    if (isForceIncluded(c.id)) return null;
     if (
       (tax === 'withholding' || tax === 'simplePayroll') &&
       isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, period.month)
@@ -995,12 +1011,12 @@ function FilingCheckPageInner() {
   const activeTargets = useMemo(
     () => targets.filter(c => excludeReasonOf(c) === null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded, tax],
+    [targets, record.excluded, record.forceIncluded, tax, period.month],
   );
   const excludedTargets = useMemo(
     () => targets.filter(c => excludeReasonOf(c) !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded, tax],
+    [targets, record.excluded, record.forceIncluded, tax, period.month],
   );
 
   const isGroupReceived = (g: ComprehensiveFilingGroup) => isGroupFilingReceived(g);
@@ -1171,10 +1187,18 @@ function FilingCheckPageInner() {
   }, []);
 
   const toggleExclude = (id: string, on: boolean) => {
-    const next = { ...record.excluded };
-    if (on) next[id] = next[id] ?? '';
-    else delete next[id];
-    patchRecord({ excluded: next });
+    const nextExcluded = { ...record.excluded };
+    const nextForce = { ...(record.forceIncluded ?? {}) };
+    if (on) {
+      // 제외 ON — 강제포함 해제 + 수동 제외
+      delete nextForce[id];
+      nextExcluded[id] = nextExcluded[id] ?? '';
+    } else {
+      // 제외 OFF — 수동 제외 해제 + 반기 자동제외도 수기로 살림
+      delete nextExcluded[id];
+      nextForce[id] = true;
+    }
+    patchRecord({ excluded: nextExcluded, forceIncluded: nextForce });
   };
 
   const setExcludeReason = (id: string, reason: string) => {
@@ -1186,51 +1210,73 @@ function FilingCheckPageInner() {
   };
 
   const patchWithholdingRowNote = useCallback(
-    (id: string, note: string) => {
+    async (id: string, note: string) => {
       if (!selManager) return;
       const whPk = simplePayrollMonthlyPeriodKey(period.year, period.month);
-      const whRec =
-        readLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk) ?? EMPTY_RECORD;
-      const next: CheckRecord = {
-        ...whRec,
-        rowNotes: { ...whRec.rowNotes, [id]: note },
-      };
-      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk, next);
-      void fetch('/api/filing-check/session', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manager: selManager,
-          taxType: 'withholding',
-          periodKey: whPk,
-          data: next,
-        }),
-      }).catch(() => {});
+      try {
+        const res = await fetch(
+          `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=withholding&periodKey=${encodeURIComponent(whPk)}`,
+          { cache: 'no-store' },
+        );
+        const json = res.ok ? ((await res.json()) as { data?: CheckRecord | null }) : null;
+        const base: CheckRecord = {
+          ...EMPTY_RECORD,
+          ...(json?.data ?? readLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk) ?? {}),
+        };
+        const next: CheckRecord = {
+          ...base,
+          rowNotes: { ...base.rowNotes, [id]: note },
+        };
+        writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk, next);
+        await fetch('/api/filing-check/session', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            manager: selManager,
+            taxType: 'withholding',
+            periodKey: whPk,
+            data: next,
+          }),
+        });
+      } catch {
+        /* ignore */
+      }
     },
     [selManager, period.year, period.month],
   );
 
   const patchWithholdingExcludeReason = useCallback(
-    (id: string, reason: string) => {
+    async (id: string, reason: string) => {
       if (!selManager) return;
       const whPk = simplePayrollMonthlyPeriodKey(period.year, period.month);
-      const whRec =
-        readLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk) ?? EMPTY_RECORD;
-      const next: CheckRecord = {
-        ...whRec,
-        excluded: { ...whRec.excluded, [id]: reason },
-      };
-      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk, next);
-      void fetch('/api/filing-check/session', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manager: selManager,
-          taxType: 'withholding',
-          periodKey: whPk,
-          data: next,
-        }),
-      }).catch(() => {});
+      try {
+        const res = await fetch(
+          `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=withholding&periodKey=${encodeURIComponent(whPk)}`,
+          { cache: 'no-store' },
+        );
+        const json = res.ok ? ((await res.json()) as { data?: CheckRecord | null }) : null;
+        const base: CheckRecord = {
+          ...EMPTY_RECORD,
+          ...(json?.data ?? readLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk) ?? {}),
+        };
+        const next: CheckRecord = {
+          ...base,
+          excluded: { ...base.excluded, [id]: reason },
+        };
+        writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, 'withholding', whPk, next);
+        await fetch('/api/filing-check/session', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            manager: selManager,
+            taxType: 'withholding',
+            periodKey: whPk,
+            data: next,
+          }),
+        });
+      } catch {
+        /* ignore */
+      }
     },
     [selManager, period.year, period.month],
   );
@@ -1409,11 +1455,61 @@ function FilingCheckPageInner() {
 
   const extraCount = useMemo(() => {
     if (excelSet.size === 0) return 0;
-    const targetBiz = new Set(targets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean));
+    const targetBiz = new Set(
+      activeTargets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean),
+    );
     let n = 0;
     for (const b of excelSet) if (!targetBiz.has(b)) n += 1;
     return n;
-  }, [excelSet, targets]);
+  }, [excelSet, activeTargets]);
+
+  const [uploadAddedNames, setUploadAddedNames] = useState<string[]>([]);
+
+  const missingFromListNames = useMemo(() => {
+    if (excelSet.size === 0) return [] as string[];
+    const targetBiz = new Set(
+      activeTargets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean),
+    );
+    const nameByBiz = new Map<string, string>();
+    for (const [biz, name] of Object.entries(record.excelNamesByBiz ?? {})) {
+      if (biz && name?.trim()) nameByBiz.set(biz, name.trim());
+    }
+    for (const c of targets) {
+      const b = normalizeBizNo(c.businessNo);
+      if (b && !nameByBiz.has(b)) nameByBiz.set(b, c.companyName || '(이름없음)');
+    }
+    for (const s of record.specialFilings) {
+      const b = normalizeBizNo(s.bizNo);
+      if (b && s.name?.trim() && !nameByBiz.has(b)) nameByBiz.set(b, s.name.trim());
+    }
+    const names: string[] = [];
+    for (const b of excelSet) {
+      if (targetBiz.has(b)) continue;
+      // 이번 업로드로 이미 추가한 상호는 missing에서 제외
+      const label = nameByBiz.get(b) || b;
+      if (uploadAddedNames.includes(label)) continue;
+      names.push(label);
+    }
+    return names;
+  }, [
+    excelSet,
+    activeTargets,
+    targets,
+    record.excelNamesByBiz,
+    record.specialFilings,
+    uploadAddedNames,
+  ]);
+
+  /** 활성 리스트에 있으나 접수(체크)되지 않은 상호 */
+  const noReceiptNames = useMemo(() => {
+    if (excelSet.size === 0) return [] as string[];
+    if (tax === 'comprehensive') {
+      return (notReceived as ComprehensiveFilingGroup[]).map(
+        g => g.representative || '(이름없음)',
+      );
+    }
+    return (notReceived as ClientRecord[]).map(c => c.companyName || '(이름없음)');
+  }, [excelSet, notReceived, tax]);
 
   const handleUpload = async (file: File | undefined) => {
     if (!file) return;
@@ -1422,19 +1518,84 @@ function FilingCheckPageInner() {
     try {
       const { bizNos, filings } = await parseHometaxFile(file);
       const special = extractSpecialFilings(filings);
+      const excelNamesByBiz: Record<string, string> = {};
+      for (const f of filings) {
+        const biz = normalizeBizNo(f.bizNo);
+        if (biz.length === 10 && f.name?.trim() && !excelNamesByBiz[biz]) {
+          excelNamesByBiz[biz] = f.name.trim();
+        }
+      }
+
+      const fileBizSet = new Set(bizNos.filter(b => b.length === 10));
+      const clientByBiz = new Map<string, ClientRecord>();
+      for (const c of clients) {
+        const b = normalizeBizNo(c.businessNo);
+        if (b.length === 10 && !clientByBiz.has(b)) clientByBiz.set(b, c);
+      }
+
+      const activeBiz = new Set(
+        activeTargets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean),
+      );
+      const nextExcluded = { ...record.excluded };
+      const nextForce = { ...(record.forceIncluded ?? {}) };
+      const nextExtra = [...record.extraClients];
+      const nextOrder = [...targetDisplayOrder];
+      const added: string[] = [];
+
+      for (const biz of fileBizSet) {
+        if (activeBiz.has(biz)) continue;
+        const client = clientByBiz.get(biz);
+        const displayName = client?.companyName || excelNamesByBiz[biz] || biz;
+        if (!client) continue;
+
+        let changed = false;
+        if (Object.prototype.hasOwnProperty.call(nextExcluded, client.id)) {
+          delete nextExcluded[client.id];
+          changed = true;
+        }
+        // 반기 자동제외 등이면 수기 강제포함으로 살려서 접수 체크 가능하게
+        const wouldAutoExclude =
+          (tax === 'withholding' || tax === 'simplePayroll') &&
+          isSemiAnnualOffMonthExcluded(client.intakeData ?? {}, period.month) &&
+          !nextForce[client.id];
+        if (wouldAutoExclude) {
+          nextForce[client.id] = true;
+          changed = true;
+        }
+        const alreadyTarget =
+          targets.some(t => t.id === client.id) || nextExtra.some(e => e.id === client.id);
+        if (!alreadyTarget) {
+          nextExtra.push({
+            id: client.id,
+            companyName: client.companyName,
+            businessNo: client.businessNo,
+            representative: client.representative || undefined,
+          });
+          if (!nextOrder.includes(client.id)) nextOrder.push(client.id);
+          changed = true;
+        }
+        if (changed) added.push(displayName);
+      }
+
       // 이전에 적어둔 사유 중 이번에도 존재하는 항목은 보존
       const keptReasons: Record<string, string> = {};
       for (const s of special) {
         const k = specialFilingKey(s.bizNo, s.type);
         if (record.specialReasons[k]) keptReasons[k] = record.specialReasons[k];
       }
+      setUploadAddedNames(added);
+      setTargetDisplayOrder(nextOrder);
       patchRecord({
         excelBizNos: bizNos,
+        excelNamesByBiz,
         overrides: {},
         fileName: file.name,
         done: false,
         specialFilings: special,
         specialReasons: keptReasons,
+        excluded: nextExcluded,
+        forceIncluded: nextForce,
+        extraClients: nextExtra,
       });
     } catch {
       setParseError('엑셀을 읽지 못했습니다. 홈택스 접수목록 파일(.xlsx/.xls)인지 확인해 주세요.');
@@ -1488,19 +1649,20 @@ function FilingCheckPageInner() {
           lines.push(`  - ${c.companyName || '(이름없음)'}: ${record.rowNotes[c.id].trim()}`);
         }
       }
-      if (notReceived.length > 0) {
-        if (tax === 'comprehensive') {
-          lines.push(
-            `· 미접수: ${(notReceived as ComprehensiveFilingGroup[]).map(g => g.representative).join(', ')}`,
-          );
-        } else {
-          lines.push(
-            `· 미접수: ${(notReceived as ClientRecord[]).map(c => c.companyName || '(이름없음)').join(', ')}`,
-          );
-        }
+      if (uploadAddedNames.length > 0) {
+        lines.push(`· ${formatCompanyNameList(uploadAddedNames)} 리스트에 없어 추가하였습니다.`);
       }
-      if (extraCount > 0) {
-        lines.push(`· 접수목록 중 비대상: ${extraCount}건`);
+      if (missingFromListNames.length > 0) {
+        lines.push(`· ${formatCompanyNameList(missingFromListNames)} 리스트에 없습니다.`);
+      }
+      if (noReceiptNames.length > 0) {
+        lines.push(`· ${formatCompanyNameList(noReceiptNames)} 접수내역이 없습니다.`);
+      }
+    } else if (incomeUploaded && incomeStats.unreceivedByColumn.length > 0) {
+      for (const col of incomeStats.unreceivedByColumn) {
+        lines.push(
+          `· ${col.label} ${formatCompanyNameList(col.names)} 접수내역이 없습니다.`,
+        );
       }
     }
     if (periodCompare) {
@@ -1537,8 +1699,10 @@ function FilingCheckPageInner() {
     record.rowNotes,
     activeTargets,
     excludedTargetsForSummary,
-    notReceived,
-    extraCount,
+    missingFromListNames,
+    noReceiptNames,
+    uploadAddedNames,
+    incomeUploaded,
     periodCompare,
     compareLabels,
   ]);
@@ -1829,6 +1993,7 @@ function FilingCheckPageInner() {
                 }
                 void upload
                   .then(() => {
+                    setIncomeUploaded(true);
                     showIncomeSavedTick();
                   })
                   .catch(err => {
@@ -1861,6 +2026,7 @@ function FilingCheckPageInner() {
               type="button"
               onClick={() => {
                 patchRecord(resetReceiptOnly(record));
+                setUploadAddedNames([]);
                 if (fileRef.current) fileRef.current.value = '';
               }}
               className={portalBtnSecondary}
@@ -1879,6 +2045,7 @@ function FilingCheckPageInner() {
                 void reset()
                   .then(() => {
                     setIncomeNotice('');
+                    setIncomeUploaded(false);
                     if (incomeFileRef.current) incomeFileRef.current.value = '';
                     showIncomeSavedTick();
                   })
@@ -1898,7 +2065,7 @@ function FilingCheckPageInner() {
       {isIncomeTypeTax ? (
         <>
           {incomeNotice && (
-            <p className={`${portalAlertInfo} mb-4`}>{incomeNotice}</p>
+            <p className={`${portalAlertInfo} mb-4 whitespace-pre-line`}>{incomeNotice}</p>
           )}
           {sessionPanel}
           <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
@@ -1928,10 +2095,18 @@ function FilingCheckPageInner() {
               onClick={() => toggleStatFilter('diff')}
             />
           </div>
-          {incomeStats.diff > 0 && (
-            <p className={`${portalAlertInfo} mb-4 border-rose-200 bg-rose-50 text-rose-800`}>
-              신고대상 {incomeStats.target}건 중 {incomeStats.diff}건이 아직 미접수입니다.
-            </p>
+          {incomeUploaded && incomeStats.unreceivedByColumn.length > 0 && (
+            <div className={`${portalAlertInfo} mb-4 space-y-1 border-rose-200 bg-rose-50 text-rose-800`}>
+              {incomeStats.unreceivedByColumn.map(col => (
+                <p key={col.key}>
+                  <span className="font-semibold text-rose-900">{col.label}</span>{' '}
+                  <span className="font-semibold text-rose-900">
+                    {formatCompanyNameList(col.names)}
+                  </span>{' '}
+                  접수내역이 없습니다.
+                </p>
+              ))}
+            </div>
           )}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <ScopeToggle
@@ -2055,10 +2230,42 @@ function FilingCheckPageInner() {
       )}
 
       {excelSet.size > 0 && (
-        <p className={`${portalAlertInfo} mb-4`}>
-          접수목록 {excelSet.size}건을 사업자번호로 대조했습니다.
-          {extraCount > 0 && ` 이 중 ${extraCount}건은 현재 ${taxLabel} 신고대상 수임처와 일치하지 않습니다.`}
-        </p>
+        <div className={`${portalAlertInfo} mb-4 space-y-1`}>
+          <p>
+            접수목록 {excelSet.size}건을 사업자번호로 대조했습니다.
+            {targetCount > 0 && (
+              <>
+                {' '}
+                신고대상 {targetCount}곳 중 접수완료 {receivedCount}곳
+                {diff > 0 ? ` — ${diff}건 차이가 있습니다.` : ' 모두 접수완료되었습니다.'}
+              </>
+            )}
+          </p>
+          {uploadAddedNames.length > 0 && (
+            <p>
+              <span className="font-semibold text-slate-800">
+                {formatCompanyNameList(uploadAddedNames)}
+              </span>{' '}
+              리스트에 없어 추가하였습니다.
+            </p>
+          )}
+          {missingFromListNames.length > 0 && (
+            <p>
+              <span className="font-semibold text-slate-800">
+                {formatCompanyNameList(missingFromListNames)}
+              </span>{' '}
+              리스트에 없습니다.
+            </p>
+          )}
+          {noReceiptNames.length > 0 && (
+            <p className="text-rose-800">
+              <span className="font-semibold text-rose-900">
+                {formatCompanyNameList(noReceiptNames)}
+              </span>{' '}
+              접수내역이 없습니다.
+            </p>
+          )}
+        </div>
       )}
 
       {/* 업체 추가 */}
@@ -2556,9 +2763,10 @@ function FilingCheckPageInner() {
                       </td>
                     )}
                     <td className="px-2 py-2">
-                      {autoExcluded ? (
+                      {autoExcluded && !isForceIncluded(c.id) ? (
                         <span className="inline-block truncate text-xs font-medium text-slate-400">
                           {reason}
+                          <span className="ml-1 text-slate-500">(제외 체크 해제 시 포함)</span>
                         </span>
                       ) : (
                         <input
@@ -2584,15 +2792,17 @@ function FilingCheckPageInner() {
                       <input
                         type="checkbox"
                         checked={excluded}
-                        disabled={autoExcluded || locked}
+                        disabled={locked}
                         onChange={e => toggleExclude(c.id, e.target.checked)}
                         className="h-4 w-4 accent-slate-400 disabled:opacity-40"
                         title={
                           semiAnnualAutoExcluded
-                            ? '반기 신고대상 — 이번 달은 신고월(6·12월)이 아니어서 자동 제외'
+                            ? '반기 자동제외 — 체크 해제하면 이번 달 신고대상에 포함됩니다'
                             : autoExcluded
                               ? reason || '자동 제외'
-                              : '신고목록에서 제외'
+                              : isForceIncluded(c.id)
+                                ? '수기로 다시 포함됨 — 체크하면 제외'
+                                : '신고목록에서 제외'
                         }
                       />
                     </td>

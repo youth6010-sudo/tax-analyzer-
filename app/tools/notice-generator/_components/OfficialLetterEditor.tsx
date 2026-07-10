@@ -8,7 +8,9 @@ import {
   OFFICIAL_LETTER_TOKENS,
   type OfficialLetterVars,
 } from '../_lib/officialLetter';
-import { prepareNoticePasteContent, scrubOfficialLetterInlineMarkup } from '../_lib/templates';
+import { prepareOfficialLetterPasteContent } from '../_lib/noticeFormatCommands';
+import { scrubOfficialLetterBackgroundOnly } from '../_lib/templates';
+import NoticeFormatToolbar from './NoticeFormatToolbar';
 import { TemplateSourceToggle } from './TemplateSourceToggle';
 import { noticeBtnSecondary, noticeSectionCompact, noticeSectionTitle } from './noticeUi';
 import '../_lib/officialLetter.scoped.css';
@@ -112,7 +114,7 @@ export default function OfficialLetterEditor({
     skipSyncRef.current = true;
     const html = applyOfficialLetterVars(template, vars);
     el.innerHTML = html;
-    scrubOfficialLetterInlineMarkup(el);
+    scrubOfficialLetterBackgroundOnly(el);
     baselineRef.current = el.innerHTML;
     requestAnimationFrame(() => {
       skipSyncRef.current = false;
@@ -125,9 +127,10 @@ export default function OfficialLetterEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, source, varsKey, defaultHtml, storageKey]);
 
-  const emitChange = (scrub = false) => {
+  const emitChange = (scrubBg = false) => {
     if (!pageRef.current || !isCustom || skipSyncRef.current) return;
-    if (scrub) scrubOfficialLetterInlineMarkup(pageRef.current);
+    // 굵게·색·크기는 유지하고 붙여넣기 배경만 정리
+    if (scrubBg) scrubOfficialLetterBackgroundOnly(pageRef.current);
     const normalized = normalizeOfficialLetterHtml(pageRef.current.innerHTML);
     onChange(normalized);
   };
@@ -150,7 +153,7 @@ export default function OfficialLetterEditor({
   };
 
   const insertSanitizedContent = (html: string, plain: string) => {
-    const fragment = prepareNoticePasteContent(html, plain);
+    const fragment = prepareOfficialLetterPasteContent(html, plain);
     if (!fragment) return;
     document.execCommand('insertHTML', false, fragment);
     scheduleEmit();
@@ -303,9 +306,17 @@ export default function OfficialLetterEditor({
           </div>
         )}
 
+        {isCustom && (
+          <NoticeFormatToolbar
+            editorRef={pageRef}
+            disabled={!isCustom}
+            onAfterFormat={() => scheduleEmit()}
+          />
+        )}
+
         <div className={`official-letter-editor layout-${layout} overflow-x-auto rounded-xl bg-slate-200/80 p-2 sm:p-3`}>
           <p className="mb-2 text-center text-xs text-slate-600">
-            <i className="fa-solid fa-pen-to-square" /> 각 영역을 클릭해 내용을 수정하세요
+            <i className="fa-solid fa-pen-to-square" /> 글자를 선택한 뒤 위 서식 툴바로 크기·굵게·색을 적용하세요
           </p>
           <div
             ref={pageRef}
