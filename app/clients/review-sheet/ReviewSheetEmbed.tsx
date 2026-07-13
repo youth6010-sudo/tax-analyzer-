@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useSearchParams } from 'next/navigation';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
+import ReviewHubTabs from '@/app/components/clients/ReviewHubTabs';
 
 const SCRIPT_GROUPS = [
   ['/review/review-auth.js'],
@@ -255,6 +256,9 @@ export default function ReviewSheetEmbed() {
         description={meta || '종소세 · 법인세 시즌 검토'}
         icon={<PageHeaderIcon name="filing-check" />}
       />
+      <div className="mb-3">
+        <ReviewHubTabs active="review" />
+      </div>
       {error && bootStatus === 'error' ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       ) : null}

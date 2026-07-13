@@ -231,6 +231,18 @@ export function readVatObligation(c: ClientRecord, phase: VatPhase): VatObligati
   return isCorporateClient(c) ? '예정신고' : '예정고지';
 }
 
+/**
+ * 연간 진행표에 보여줄 기수.
+ * 예정신고 대상만 예정 칸 표시. 예정고지·간이 등은 확정만.
+ */
+export function vatYearProgressPhases(c: ClientRecord): VatPhase[] {
+  return VAT_PHASES.filter(phase => {
+    if (!clientAppliesToVatPhase(c, phase)) return false;
+    if (!isVatProvisionalPhase(phase)) return true;
+    return readVatObligation(c, phase) === '예정신고';
+  });
+}
+
 /** 담당자별 신고·예정고지 대상 수 (예정 기간 전용) */
 export function vatObligationManagerCounts(
   clients: ClientRecord[],

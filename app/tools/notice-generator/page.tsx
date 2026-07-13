@@ -302,29 +302,39 @@ export default function NoticeGeneratorPage() {
 
   const handleSelectClient = async (picked: PickedClient | null) => {
     const leaving = selectedClientRef.current;
-    if (leaving) {
-      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
-      const entry = clientEntrySnapshot();
-      try {
-        await persistCurrentClient(leaving, taxTypeRef.current, entry);
-      } catch {
-        // 전환은 계속 — 실패 시 새 수임처 로드 후 다시 저장 가능
-      }
-    }
+    const entryToSave = leaving ? clientEntrySnapshot() : null;
+    const taxToSave = taxTypeRef.current;
 
+    if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
     clientLoadGen.current += 1;
     const loadGen = clientLoadGen.current;
 
+    // 저장을 기다리지 않고 화면을 먼저 비움 — 이전 거래처 데이터가 남아 보이지 않게
     if (!picked) {
-      clientLoadGen.current += 1;
-      if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
       setSelectedClient(null);
       clearClientFormState();
+      setCompanyName('');
+      setMaterials('');
+      setNotes('');
+      setLocalPayrollByUs(false);
       setSaveState('idle');
       setClientDirty(false);
+      if (leaving && entryToSave) {
+        void persistCurrentClient(leaving, taxToSave, entryToSave).catch(() => {});
+      }
       return;
     }
+
+    setSelectedClient({ id: picked.id, intakeData: {}, noticeMap: {} });
+    clearClientFormState();
+    setClientCompanyName(picked.companyName);
     setSaveState('idle');
+    setClientDirty(false);
+
+    if (leaving && entryToSave && leaving.id !== picked.id) {
+      void persistCurrentClient(leaving, taxToSave, entryToSave).catch(() => {});
+    }
+
     try {
       const fetched = await fetchClientNotice(picked.id);
       if (loadGen !== clientLoadGen.current) return;
@@ -374,6 +384,8 @@ export default function NoticeGeneratorPage() {
   };
 
   const handleSelectTax = (next: TaxTypeKey) => {
+    if (next === taxTypeRef.current) return;
+
     let noticeMap = selectedClient?.noticeMap ?? {};
     if (selectedClient) {
       const entry = clientEntrySnapshot();
@@ -391,7 +403,10 @@ export default function NoticeGeneratorPage() {
     }
 
     setTaxType(next);
-    if (!selectedClient) {
+    // 세목 전환 즉시 해당 세목 데이터로 교체 (이전 세목 값이 화면에 남지 않게)
+    if (selectedClient) {
+      loadForTax(noticeMap, next);
+    } else {
       setPayment(emptyPaymentForTax(next));
       setVatReport(EMPTY_VAT_REPORT);
       setVatPaymentLinked(next === TAX_TYPES.VAT);
@@ -404,7 +419,6 @@ export default function NoticeGeneratorPage() {
       lastAutoMaterialDate.current = def;
       setMaterialDeadline(prev => ({ ...prev, enabled: true, date: def }));
     }
-    if (selectedClient) loadForTax(noticeMap, next);
   };
 
   const handleCompanyNameChange = (value: string) => {
@@ -1149,6 +1163,7 @@ export default function NoticeGeneratorPage() {
       <div className={`${noticePageSplit} w-full`}>
         <div className="space-y-3 min-w-0">
           <CompanyNotesField
+            key={`${selectedClient?.id ?? 'local'}-${taxType}`}
             materials={effectiveMaterials}
             onMaterialsChange={handleMaterialsChange}
             materialsPlaceholder={DEFAULT_MATERIALS_BY_TAX[taxType]}

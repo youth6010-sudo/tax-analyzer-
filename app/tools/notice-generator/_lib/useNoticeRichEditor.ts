@@ -26,10 +26,15 @@ export function useNoticeRichEditor({
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    if (!ref.current || !enabled || focusedRef.current) return;
+    if (!ref.current || !enabled) return;
     if (internalChangeRef.current) {
       internalChangeRef.current = false;
       return;
+    }
+    // 거래처·세목 전환 등 외부 value 변경: 대기 중 debounce emit이 과거값을 덮어쓰지 않게 취소
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
     const html = toEditorHtml(value || '');
     if (ref.current.innerHTML !== html) {
@@ -97,12 +102,19 @@ export function useNoticeRichEditor({
   }, [emit]);
 
   const handleInput = useCallback(() => {
+    if (!ref.current || !enabled) return;
+    // 세목·거래처 전환 전에 ref/state가 최신이어야 하므로 입력 즉시 동기화 (sanitize는 blur/debounce)
+    internalChangeRef.current = true;
+    onChangeRef.current(ref.current.innerHTML);
     scheduleDebouncedEmit();
-  }, [scheduleDebouncedEmit]);
+  }, [enabled, scheduleDebouncedEmit]);
 
   const afterInsert = useCallback(() => {
+    if (!ref.current || !enabled) return;
+    internalChangeRef.current = true;
+    onChangeRef.current(ref.current.innerHTML);
     scheduleDebouncedEmit();
-  }, [scheduleDebouncedEmit]);
+  }, [enabled, scheduleDebouncedEmit]);
 
   return {
     ref,

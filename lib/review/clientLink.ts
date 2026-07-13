@@ -1,3 +1,4 @@
+import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import { getClientsByIds, listClients } from '@/lib/clientsDb';
 import {
   buildAltLinkKeys,
@@ -25,6 +26,8 @@ export type LinkedClient = {
   manager: string;
   status: string;
   href: string;
+  /** 세무사랑 코드 (intakeData.douzoneCode) */
+  douzoneCode: string;
 };
 
 export type ClientLinkEntry = {
@@ -81,6 +84,7 @@ function toLinkedClient(client: {
   companyName: string;
   manager: string;
   status: string;
+  intakeData?: Record<string, unknown>;
 }): LinkedClient {
   return {
     id: client.id,
@@ -88,6 +92,7 @@ function toLinkedClient(client: {
     manager: client.manager,
     status: client.status,
     href: `/clients/${client.id}`,
+    douzoneCode: getClientDouzoneCode(client as Parameters<typeof getClientDouzoneCode>[0]),
   };
 }
 

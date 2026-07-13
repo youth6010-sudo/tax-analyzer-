@@ -16,6 +16,7 @@ const LIST_INTAKE_KEYS = [
   'taxKind',
   /** 간이지급·연말정산 그리드 활성화 */
   'incomeTypes',
+  'yearEndTypes',
   'taxFlags',
   'withholdingSettings',
   'filingType',
@@ -26,6 +27,9 @@ const LIST_INTAKE_KEYS = [
   /** 수임처 목록 엑셀 — 필요자료·특이사항 */
   'notes',
   'noticeData',
+  /** 부가세 자료입력 진행도 */
+  'vatMaterialFlags',
+  'vatEntryProgress',
 ] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */

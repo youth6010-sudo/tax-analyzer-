@@ -658,26 +658,7 @@ function flattenNoticeElement(el: Element): string {
 
     const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
     if (blockChild) {
-      // children만 보면 사이 텍스트(※ 안내 문구 등)가 사라져 저장 시 내용이 날아감
-      const nodes = Array.from(block.childNodes);
-      const parts: string[] = [];
-      for (let i = 0; i < nodes.length; i += 1) {
-        const node = nodes[i];
-        if (node.nodeType === Node.TEXT_NODE) {
-          const t = (node.textContent ?? '').replace(/\u00a0/g, ' ').trim();
-          if (!t) continue;
-          const next = nodes[i + 1];
-          const nextIsBr =
-            next?.nodeType === Node.ELEMENT_NODE &&
-            (next as Element).tagName.toLowerCase() === 'br';
-          parts.push(nextIsBr ? escapeHtml(t) : `${escapeHtml(t)}<br>`);
-          continue;
-        }
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          parts.push(flattenNoticeElement(node as Element));
-        }
-      }
-      return parts.filter(Boolean).join('');
+      return flattenChildNodes(Array.from(block.childNodes));
     }
 
     const inner = block.innerHTML.trim();
@@ -687,6 +668,86 @@ function flattenNoticeElement(el: Element): string {
   }
 
   return (el as HTMLElement).outerHTML;
+}
+
+/**
+ * 인접 텍스트·인라인은 한 줄로 이어붙인다.
+ * 이모지 패널 삽입 시 브라우저가 텍스트 노드를 쪼개도 노드마다 <br>를 붙이지 않음.
+ */
+function isEmojiOnlyText(text: string): boolean {
+  const t = text.replace(/\s/g, '');
+  if (!t) return false;
+  const without = t
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/\p{Emoji_Component}/gu, '')
+    .replace(/[\uFE0F\u200D]/g, '');
+  return without.length === 0;
+}
+
+function flattenChildNodes(nodes: Node[]): string {
+  const parts: string[] = [];
+  let inline = '';
+
+  const flushInline = (withBr: boolean) => {
+    if (!inline) return;
+    // 양끝 공백만 정리 — 중간 공백·이모지 주변 간격은 유지
+    const line = inline.replace(/^\s+|\s+$/g, '');
+    inline = '';
+    if (!line) return;
+    parts.push(withBr ? `${line}<br>` : line);
+  };
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = (node.textContent ?? '').replace(/\u00a0/g, ' ');
+      if (!t) continue;
+      if (!t.trim() && !inline) continue;
+      inline += escapeHtml(t);
+      continue;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+    const el = node as Element;
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'br') {
+      flushInline(false);
+      parts.push('<br>');
+      continue;
+    }
+
+    if (tag === 'div' || tag === 'p') {
+      const blockText = (el.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+      // 이모지만 단독 블록으로 들어온 경우 다음 줄과 합침 (제목 앞 📢 등)
+      if (
+        blockText &&
+        isEmojiOnlyText(blockText) &&
+        !el.querySelector('div, p, table, ol, ul, br')
+      ) {
+        const piece = (el as HTMLElement).innerHTML.trim().replace(/(?:<br\s*\/?>\s*)+$/i, '');
+        inline += `${piece} `;
+        continue;
+      }
+      flushInline(true);
+      const flat = flattenNoticeElement(el);
+      if (flat) parts.push(flat);
+      continue;
+    }
+
+    if (tag === 'table' || tag === 'ol' || tag === 'ul') {
+      flushInline(true);
+      const flat = flattenNoticeElement(el);
+      if (flat) parts.push(flat);
+      continue;
+    }
+
+    // b/strong/em/u/span 등 인라인 — 같은 줄에 유지
+    inline += flattenNoticeElement(el);
+  }
+
+  flushInline(true);
+  return parts.join('');
 }
 
 function flattenNoticeHtmlRoot(root: HTMLElement): string {
@@ -700,26 +761,7 @@ function flattenNoticeHtmlRoot(root: HTMLElement): string {
     target = root.firstElementChild;
   }
 
-  const nodes = Array.from(target.childNodes);
-  const parts: string[] = [];
-  for (let i = 0; i < nodes.length; i += 1) {
-    const node = nodes[i];
-    if (node.nodeType === Node.TEXT_NODE) {
-      const t = (node.textContent ?? '').replace(/\u00a0/g, ' ').trim();
-      if (!t) continue;
-      // 다음이 이미 <br>이면 텍스트에 br을 또 붙이지 않음 (간격 2배 방지)
-      const next = nodes[i + 1];
-      const nextIsBr =
-        next?.nodeType === Node.ELEMENT_NODE &&
-        (next as Element).tagName.toLowerCase() === 'br';
-      parts.push(nextIsBr ? escapeHtml(t) : `${escapeHtml(t)}<br>`);
-      continue;
-    }
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      parts.push(flattenNoticeElement(node as Element));
-    }
-  }
-  return parts.join('');
+  return flattenChildNodes(Array.from(target.childNodes));
 }
 
 function sanitizeNoticeHtmlRoot(root: HTMLElement) {
