@@ -6,6 +6,7 @@ import {
   SINGO_DAERI,
   NON_BUSINESS_CATEGORY,
   UNUSED_CATEGORY,
+  JISUTAEK_CATEGORY,
   shouldShowComprehensiveOptionalClient,
 } from '@/app/utils/clientsGrouping';
 import {
@@ -267,7 +268,7 @@ export type FilingTargetOptions = {
 };
 
 // 세목별 최초 신고대상 산출
-// 공통: 미사용 대분류 제외, 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
+// 공통: 미사용·지주택 대분류 제외, 사업자번호가 없거나 000으로 시작하면 종소세에만 노출(나머지 전부 제외)
 // 원천세: 신고대리 제외한 모든 업체
 // 부가세: 비사업자·(개인)면세 제외 — 단 법인 면세는 합계표 제출 위해 포함
 // 면세(사업장현황): 개인 면세사업자
@@ -277,7 +278,10 @@ export function filingTargets(
   taxId: FilingTaxId,
   options?: FilingTargetOptions,
 ): ClientRecord[] {
-  const active = clients.filter(c => getClientCategory(c) !== UNUSED_CATEGORY);
+  const active = clients.filter(c => {
+    const cat = getClientCategory(c);
+    return cat !== UNUSED_CATEGORY && cat !== JISUTAEK_CATEGORY;
+  });
 
   if (taxId === 'comprehensive') {
     return active.filter(c => {
