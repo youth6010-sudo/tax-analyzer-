@@ -28,7 +28,7 @@ import {
 } from '@/lib/vatEntryProgress';
 import type { ClientRecord } from '@/app/types/client';
 
-export const VAT_LABOR_KEYS = [
+const VAT_LABOR_KEYS = [
   'employed',
   'daily',
   'retirement',
@@ -37,9 +37,9 @@ export const VAT_LABOR_KEYS = [
   'interestDividend',
 ] as const;
 
-export type VatLaborKey = (typeof VAT_LABOR_KEYS)[number];
+type VatLaborKey = (typeof VAT_LABOR_KEYS)[number];
 
-export type VatLaborStatus = Record<VatLaborKey, { target: boolean; filed: boolean }>;
+type VatLaborStatus = Record<VatLaborKey, { target: boolean; filed: boolean }>;
 
 function emptyLaborStatus(): VatLaborStatus {
   return {
@@ -73,34 +73,20 @@ async function laborFiledByClient(year: number, clientIds: string[]) {
     listYearEndFilings(year, clientIds),
   ]);
 
+  const addIfLabor = (clientId: string, incomeType: string) => {
+    if (!(VAT_LABOR_KEYS as readonly string[]).includes(incomeType)) return;
+    const set = map.get(clientId) ?? new Set<VatLaborKey>();
+    set.add(incomeType as VatLaborKey);
+    map.set(clientId, set);
+  };
+
   for (const r of spRows) {
     if (!r.filed) continue;
-    const set = map.get(r.clientId) ?? new Set();
-    if (
-      r.incomeType === 'employed' ||
-      r.incomeType === 'daily' ||
-      r.incomeType === 'bizIncome' ||
-      r.incomeType === 'otherTax' ||
-      r.incomeType === 'retirement' ||
-      r.incomeType === 'interestDividend'
-    ) {
-      set.add(r.incomeType);
-    }
-    map.set(r.clientId, set);
+    addIfLabor(r.clientId, r.incomeType);
   }
   for (const r of yeRows) {
     if (!r.filed) continue;
-    const set = map.get(r.clientId) ?? new Set();
-    if (
-      r.incomeType === 'employed' ||
-      r.incomeType === 'retirement' ||
-      r.incomeType === 'bizIncome' ||
-      r.incomeType === 'otherTax' ||
-      r.incomeType === 'interestDividend'
-    ) {
-      set.add(r.incomeType);
-    }
-    map.set(r.clientId, set);
+    addIfLabor(r.clientId, r.incomeType);
   }
   return map;
 }
@@ -146,7 +132,7 @@ async function loadFilingExcludedIds(
     year,
     month: 1,
     vatPhase: phase,
-    half: 'first',
+    half: 'H1',
   });
   const excluded = new Set<string>();
   const uniqueManagers = [...new Set(managers.map(m => m.trim()).filter(Boolean))];
