@@ -1880,6 +1880,9 @@ body.client-detail-modal-open {
   font-weight: 600;
   white-space: nowrap;
   transition: all 0.15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .tax-tab:hover {

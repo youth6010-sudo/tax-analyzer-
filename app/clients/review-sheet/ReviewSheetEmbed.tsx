@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
@@ -253,7 +254,7 @@ export default function ReviewSheetEmbed() {
     <div className="flex min-h-0 flex-1 flex-col">
       <PortalPageHeader
         title="검토표"
-        description={meta || '종소세 · 법인세 시즌 검토'}
+        description={meta || '종소세 · 법인세 · 부가가치세'}
         icon={<PageHeaderIcon name="filing-check" />}
       />
       <div className="mb-3">
@@ -269,7 +270,13 @@ export default function ReviewSheetEmbed() {
       >
         <div className="page-sticky-bar -mx-4 mb-3 px-4 pb-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="page-sticky-row page-sticky-row--tools">
-            <div className="tax-tabs" id="tax-tabs" />
+            {/* JS가 #tax-tabs만 비우고 종소/법인 버튼을 넣음 → 부가가치세는 형제로 유지 */}
+            <div className="tax-tabs">
+              <div id="tax-tabs" className="contents" />
+              <Link href="/clients/vat-progress" className="tax-tab" prefetch={false}>
+                부가가치세
+              </Link>
+            </div>
             <input
               type="search"
               className="search-input"
