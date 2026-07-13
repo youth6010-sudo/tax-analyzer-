@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 const TABS = [
-  { id: 'review' as const, label: '종소·법인', href: '/clients/review-sheet' },
+  { id: 'review' as const, label: '결산', href: '/clients/review-sheet' },
   { id: 'vat' as const, label: '부가가치세', href: '/clients/vat-progress' },
 ];
 
