@@ -7,6 +7,7 @@ const LIST_INTAKE_KEYS = [
   'category',
   'douzoneCode',
   'mobilePhone',
+  'address',
   'statusLabel',
   'closedDate',
   'bookkeepingFee',
@@ -22,6 +23,9 @@ const LIST_INTAKE_KEYS = [
   'employed',
   'daily',
   'payrollHistory',
+  /** 수임처 목록 엑셀 — 필요자료·특이사항 */
+  'notes',
+  'noticeData',
 ] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */

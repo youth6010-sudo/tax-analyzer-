@@ -173,7 +173,14 @@ export default function NoticeGeneratorPage() {
   const [paymentTemplateSaveState, setPaymentTemplateSaveState] = useState<SaveState>('idle');
   const [officialTemplateSaveState, setOfficialTemplateSaveState] = useState<SaveState>('idle');
   const templateStoreRef = useRef(templateStore);
-  templateStoreRef.current = templateStore;
+  // 매 렌더 ref=state 동기화 금지 — blur/저장 사이 중간 렌더가 옛 값으로 ref를 덮어 저장 실패함
+  const templateDirtyRef = useRef(false);
+
+  /** setState 전에 ref 즉시 갱신 — 저장 클릭 시 옛 값 저장 방지 */
+  const patchTemplateStore = (next: NoticeTemplateStore) => {
+    templateStoreRef.current = next;
+    setTemplateStore(next);
+  };
 
   // 원천세 급여대장 작성 여부 (수임처 미연결 시 localStorage)
   const [localPayrollByUs, setLocalPayrollByUs] = useLocalStorage('tng.payrollByUs', false);
@@ -206,8 +213,17 @@ export default function NoticeGeneratorPage() {
   const clientSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedClientRef = useRef<SelectedClient | null>(null);
   const taxTypeRef = useRef(taxType);
+  const clientMaterialsRef = useRef(clientMaterials);
+  const clientNotesRef = useRef(clientNotes);
+  const clientPayrollByUsRef = useRef(false);
+  const paymentRef = useRef(payment);
+  const vatReportRef = useRef(vatReport);
+  const vatPaymentLinkedRef = useRef(vatPaymentLinked);
   selectedClientRef.current = selectedClient;
   taxTypeRef.current = taxType;
+  paymentRef.current = payment;
+  vatReportRef.current = vatReport;
+  vatPaymentLinkedRef.current = vatPaymentLinked;
 
   const inClientMode = selectedClient !== null;
   const effectiveCompanyName = inClientMode ? clientCompanyName : companyName;
@@ -216,9 +232,15 @@ export default function NoticeGeneratorPage() {
 
   const loadForTax = (noticeMap: ClientNoticeMap, tax: TaxTypeKey) => {
     const entry = noticeMap[tax];
-    setClientMaterials(entry?.materials ?? '');
-    setClientNotes(entry?.notes ?? '');
-    setClientPayrollByUs(entry?.payrollByUs ?? false);
+    const materialsVal = entry?.materials ?? '';
+    const notesVal = entry?.notes ?? '';
+    const payrollVal = entry?.payrollByUs ?? false;
+    clientMaterialsRef.current = materialsVal;
+    clientNotesRef.current = notesVal;
+    clientPayrollByUsRef.current = payrollVal;
+    setClientMaterials(materialsVal);
+    setClientNotes(notesVal);
+    setClientPayrollByUs(payrollVal);
     setPayment(paymentFromNoticeEntry(entry, tax));
     setVatReport(vatReportFromNoticeEntry(entry));
     setVatPaymentLinked(entry?.vatPaymentLinked ?? tax === TAX_TYPES.VAT);
@@ -228,28 +250,23 @@ export default function NoticeGeneratorPage() {
   const clientEntrySnapshot = useCallback(
     (overrides?: Partial<{ materials: string; notes: string; payrollByUs: boolean }>) =>
       buildNoticeClientEntry(
-        overrides?.materials ?? clientMaterials,
-        overrides?.notes ?? clientNotes,
-        overrides?.payrollByUs ?? clientPayrollByUs,
-        payment,
-        vatReport,
-        vatPaymentLinked,
-        taxType,
+        overrides?.materials ?? clientMaterialsRef.current,
+        overrides?.notes ?? clientNotesRef.current,
+        overrides?.payrollByUs ?? clientPayrollByUsRef.current,
+        paymentRef.current,
+        vatReportRef.current,
+        vatPaymentLinkedRef.current,
+        taxTypeRef.current,
       ),
-    [
-      clientMaterials,
-      clientNotes,
-      clientPayrollByUs,
-      payment,
-      vatReport,
-      vatPaymentLinked,
-      taxType,
-    ],
+    [],
   );
 
   /** 수임처 해제 후 이전 업체 입력값이 화면에 남지 않도록 초기화 */
   const clearClientFormState = useCallback(() => {
     const tax = taxTypeRef.current;
+    clientMaterialsRef.current = '';
+    clientNotesRef.current = '';
+    clientPayrollByUsRef.current = false;
     setClientMaterials('');
     setClientNotes('');
     setClientPayrollByUs(false);
@@ -328,13 +345,27 @@ export default function NoticeGeneratorPage() {
   };
 
   // 수임처 데이터 저장 — 필요자료·특이사항·급여대장·첨부 서류 문구(세목별)
-  const handleSaveClient = async () => {
+  const handleSaveClient = async (flushed?: { materials: string; notes: string }) => {
     if (!selectedClient) return;
     const client = selectedClient;
     if (clientSaveTimer.current) clearTimeout(clientSaveTimer.current);
+    if (flushed) {
+      clientMaterialsRef.current = flushed.materials;
+      clientNotesRef.current = flushed.notes;
+      setClientMaterials(flushed.materials);
+      setClientNotes(flushed.notes);
+    }
     setSaveState('saving');
     try {
-      await persistCurrentClient(client, taxType, clientEntrySnapshot());
+      await persistCurrentClient(
+        client,
+        taxType,
+        clientEntrySnapshot(
+          flushed
+            ? { materials: flushed.materials, notes: flushed.notes }
+            : undefined,
+        ),
+      );
       setClientDirty(false);
       setSaveState('saved');
     } catch {
@@ -383,6 +414,7 @@ export default function NoticeGeneratorPage() {
 
   const handleMaterialsChange = (value: string) => {
     if (inClientMode) {
+      clientMaterialsRef.current = value;
       setClientMaterials(value);
       setClientDirty(true);
     } else {
@@ -392,6 +424,7 @@ export default function NoticeGeneratorPage() {
 
   const handleNotesChange = (value: string) => {
     if (inClientMode) {
+      clientNotesRef.current = value;
       setClientNotes(value);
       setClientDirty(true);
     } else {
@@ -401,6 +434,7 @@ export default function NoticeGeneratorPage() {
 
   const handlePayrollChange = (value: boolean) => {
     if (inClientMode) {
+      clientPayrollByUsRef.current = value;
       setClientPayrollByUs(value);
       setSelectedClient(prev => {
         if (!prev) return prev;
@@ -478,7 +512,12 @@ export default function NoticeGeneratorPage() {
       ),
     ])
       .then(([saved, defaultsJson]) => {
-        setTemplateStore(saved);
+        if (ac.signal.aborted) return;
+        // 사용자가 이미 편집·저장 중이면 늦게 도착한 초기 로드로 덮지 않음
+        if (!templateDirtyRef.current) {
+          templateStoreRef.current = saved;
+          setTemplateStore(saved);
+        }
         const d = defaultsJson?.defaults;
         if (d && typeof d === 'object') {
           setGlobalDefaults(prev => ({
@@ -525,6 +564,8 @@ export default function NoticeGeneratorPage() {
   }, []);
 
   const persistTemplateStore = useCallback(async (next: NoticeTemplateStore) => {
+    templateStoreRef.current = next;
+    templateDirtyRef.current = true;
     setTemplateSaveState('saving');
     setVatTemplateSaveState('saving');
     setPaymentTemplateSaveState('saving');
@@ -544,6 +585,7 @@ export default function NoticeGeneratorPage() {
   }, []);
 
   const markTemplateDirty = (kind: 'notice' | 'vat' | 'payment' | 'official') => {
+    templateDirtyRef.current = true;
     const setState =
       kind === 'vat'
         ? setVatTemplateSaveState
@@ -617,7 +659,7 @@ export default function NoticeGeneratorPage() {
       templates: { ...prev.templates, [scenario]: html },
       sources: { ...prev.sources, [scenario]: 'custom' },
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('notice');
   };
 
@@ -633,26 +675,55 @@ export default function NoticeGeneratorPage() {
         [scenario]: globalDefaultsRef.current[scenario],
       };
     }
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('notice');
   };
 
-  const handleNoticeTemplateSave = () => {
-    void persistTemplateStore(templateStoreRef.current);
+  const handleNoticeTemplateSave = (html?: string) => {
+    const prev = templateStoreRef.current;
+    const incoming = typeof html === 'string' ? html : undefined;
+    // emit 실패로 빈 문자열이 오면 기존 서식을 지우지 않음
+    const nextHtml =
+      incoming !== undefined && incoming.trim()
+        ? incoming
+        : (prev.templates[scenario] ?? '');
+    if (!nextHtml.trim()) {
+      setTemplateSaveState('error');
+      return;
+    }
+    const next: NoticeTemplateStore = {
+      ...prev,
+      templates: { ...prev.templates, [scenario]: nextHtml },
+      sources: { ...prev.sources, [scenario]: 'custom' },
+    };
+    patchTemplateStore(next);
+    void persistTemplateStore(next);
   };
 
   const handleGlobalDefaultChange = (html: string) => {
-    setGlobalDefaults(prev => ({ ...prev, [scenario]: html }));
+    setGlobalDefaults(prev => {
+      const next = { ...prev, [scenario]: html };
+      globalDefaultsRef.current = next;
+      return next;
+    });
     setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
   };
 
   const handleVatGlobalDefaultChange = (html: string) => {
-    setGlobalDefaults(prev => ({ ...prev, vatReport: html }));
+    setGlobalDefaults(prev => {
+      const next = { ...prev, vatReport: html };
+      globalDefaultsRef.current = next;
+      return next;
+    });
     setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
   };
 
   const handlePaymentGlobalDefaultChange = (html: string) => {
-    setGlobalDefaults(prev => ({ ...prev, paymentNotice: html }));
+    setGlobalDefaults(prev => {
+      const next = { ...prev, paymentNotice: html };
+      globalDefaultsRef.current = next;
+      return next;
+    });
     setDefaultSaveState(s => (s === 'saving' ? s : 'dirty'));
   };
 
@@ -681,7 +752,7 @@ export default function NoticeGeneratorPage() {
       vatReportTemplate: html,
       vatReportSource: 'custom',
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('vat');
   };
 
@@ -695,12 +766,28 @@ export default function NoticeGeneratorPage() {
           ? globalDefaultsRef.current.vatReport
           : prev.vatReportTemplate,
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('vat');
   };
 
-  const handleVatReportTemplateSave = () => {
-    void persistTemplateStore(templateStoreRef.current);
+  const handleVatReportTemplateSave = (html?: string) => {
+    const prev = templateStoreRef.current;
+    const incoming = typeof html === 'string' ? html : undefined;
+    const nextHtml =
+      incoming !== undefined && incoming.trim()
+        ? incoming
+        : (prev.vatReportTemplate ?? '');
+    if (!nextHtml.trim()) {
+      setVatTemplateSaveState('error');
+      return;
+    }
+    const next: NoticeTemplateStore = {
+      ...prev,
+      vatReportTemplate: nextHtml,
+      vatReportSource: 'custom',
+    };
+    patchTemplateStore(next);
+    void persistTemplateStore(next);
   };
 
   const handlePaymentNoticeTemplateChange = (html: string) => {
@@ -710,7 +797,7 @@ export default function NoticeGeneratorPage() {
       paymentNoticeTemplate: html,
       paymentNoticeSource: 'custom',
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('payment');
   };
 
@@ -724,12 +811,28 @@ export default function NoticeGeneratorPage() {
           ? globalDefaultsRef.current.paymentNotice
           : prev.paymentNoticeTemplate,
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('payment');
   };
 
-  const handlePaymentNoticeTemplateSave = () => {
-    void persistTemplateStore(templateStoreRef.current);
+  const handlePaymentNoticeTemplateSave = (html?: string) => {
+    const prev = templateStoreRef.current;
+    const incoming = typeof html === 'string' ? html : undefined;
+    const nextHtml =
+      incoming !== undefined && incoming.trim()
+        ? incoming
+        : (prev.paymentNoticeTemplate ?? '');
+    if (!nextHtml.trim()) {
+      setPaymentTemplateSaveState('error');
+      return;
+    }
+    const next: NoticeTemplateStore = {
+      ...prev,
+      paymentNoticeTemplate: nextHtml,
+      paymentNoticeSource: 'custom',
+    };
+    patchTemplateStore(next);
+    void persistTemplateStore(next);
   };
 
   const handleOfficialLetterChange = (kind: OfficialLetterKind, html: string) => {
@@ -739,7 +842,7 @@ export default function NoticeGeneratorPage() {
       officialLetters: { ...prev.officialLetters, [kind]: html },
       officialLetterSources: { ...prev.officialLetterSources, [kind]: 'custom' },
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('official');
   };
 
@@ -755,7 +858,7 @@ export default function NoticeGeneratorPage() {
         [kind]: DEFAULT_OFFICIAL_LETTER_BY_KIND[kind],
       };
     }
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('official');
   };
 
@@ -770,7 +873,7 @@ export default function NoticeGeneratorPage() {
       officialFormTemplates: { ...prev.officialFormTemplates, [formId]: html },
       officialFormSources: { ...prev.officialFormSources, [formId]: 'custom' },
     };
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('official');
   };
 
@@ -786,7 +889,7 @@ export default function NoticeGeneratorPage() {
         [formId]: defaultOfficialFormBodyForKind(taxKindFromFormId(formId)),
       };
     }
-    setTemplateStore(next);
+    patchTemplateStore(next);
     markTemplateDirty('official');
   };
 
@@ -998,6 +1101,9 @@ export default function NoticeGeneratorPage() {
             draftCompanyName={inClientMode ? '' : companyName}
             onDraftCompanyNameChange={inClientMode ? undefined : handleCompanyNameChange}
             filingTax={filingTaxId}
+            showReviewLink={
+              taxType === TAX_TYPES.CORPORATE || taxType === TAX_TYPES.INCOME
+            }
           />
         }
       />
@@ -1054,7 +1160,7 @@ export default function NoticeGeneratorPage() {
             showPayroll={isWithholding}
             payrollByUs={effectivePayrollByUs}
             onPayrollChange={handlePayrollChange}
-            onSave={() => void handleSaveClient()}
+            onSave={flushed => void handleSaveClient(flushed)}
           />
 
           {isVat && (
@@ -1085,7 +1191,7 @@ export default function NoticeGeneratorPage() {
             <NoticeCollapsibleSection title="담당자 서식 설정">
               <TemplateEditor
                 key={scenario}
-                html={noticeCustomHtml || scenarioDefaultHtml}
+                html={noticeCustomHtml}
                 onChange={handleNoticeTemplateChange}
                 source={noticeSource}
                 onSourceChange={handleNoticeSourceChange}
@@ -1102,7 +1208,7 @@ export default function NoticeGeneratorPage() {
               {isVat && (
                 <TemplateEditor
                   key="vat-report-template"
-                  html={vatReportCustomHtml || globalDefaults.vatReport}
+                  html={vatReportCustomHtml}
                   onChange={handleVatReportTemplateChange}
                   source={vatReportSource}
                   onSourceChange={handleVatReportSourceChange}
@@ -1121,7 +1227,7 @@ export default function NoticeGeneratorPage() {
               )}
               <TemplateEditor
                 key="payment-notice-template"
-                html={paymentNoticeCustomHtml || globalDefaults.paymentNotice}
+                html={paymentNoticeCustomHtml}
                 onChange={handlePaymentNoticeTemplateChange}
                 source={paymentNoticeSource}
                 onSourceChange={handlePaymentNoticeSourceChange}

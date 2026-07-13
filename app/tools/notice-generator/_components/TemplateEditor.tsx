@@ -20,7 +20,8 @@ type Props = {
   onChange: (html: string) => void;
   source: TemplateSource;
   onSourceChange: (source: TemplateSource) => void;
-  onSave: () => void;
+  /** 저장 시 에디터에서 flush한 HTML을 넘김 (옛 state 저장 방지) */
+  onSave: (html?: string) => void;
   hasCustomSaved: boolean;
   saveState?: SaveState;
   title?: string;
@@ -67,7 +68,7 @@ export default function TemplateEditor({
     else onDefaultChange?.(next);
   };
 
-  const { ref, handleFocus, handleBlur, handleInput, afterInsert } = useNoticeRichEditor({
+  const { ref, handleFocus, handleBlur, handleInput, afterInsert, emit } = useNoticeRichEditor({
     value: displayValue,
     onChange: handleEditorChange,
     toEditorHtml,
@@ -113,14 +114,29 @@ export default function TemplateEditor({
     afterInsert();
   };
 
+  // handleNoticeTemplateChange 등이 이미 source=custom 로 바꿈 — onSourceChange 연속 호출로 덮어쓰지 않음
   const loadDefaultIntoCustom = () => {
     onChange(defaultHtml);
-    onSourceChange('custom');
   };
 
   const activeSave = isCustom ? onSave : onDefaultSave;
   const activeSaveState = isCustom ? saveState : defaultSaveState;
   const saveLabel = isCustom ? '내 서식 저장' : '기본 서식 저장 (전체 적용)';
+
+  const handleSaveClick = () => {
+    if (!editable) {
+      activeSave?.();
+      return;
+    }
+    const flushed = emit(true);
+    if (isCustom) {
+      // 빈 flush면 기존 state 기준으로 저장 (서식 삭제 방지)
+      onSave(flushed.trim() ? flushed : undefined);
+    } else {
+      if (flushed.trim()) onDefaultChange?.(flushed);
+      onDefaultSave?.();
+    }
+  };
 
   return (
     <section className={noticeSectionCompact}>
@@ -139,7 +155,7 @@ export default function TemplateEditor({
             source={source}
             onSourceChange={onSourceChange}
             hasCustom={hasCustomSaved}
-            onSave={editable ? activeSave : undefined}
+            onSave={editable ? handleSaveClick : undefined}
             saveState={editable ? activeSaveState : 'idle'}
             saveLabel={saveLabel}
           />

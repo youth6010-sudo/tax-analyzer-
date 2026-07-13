@@ -27,6 +27,8 @@ type Props = {
   onDraftCompanyNameChange?: (name: string) => void;
   /** 신고대상확인 링크용 세목 */
   filingTax?: string;
+  /** 검토표 링크 표시 — 법인세·종소세만 (부가세·면세 등 제외) */
+  showReviewLink?: boolean;
 };
 
 function reviewSheetHref(hint: ReviewKeyHint): string {
@@ -48,6 +50,7 @@ export default function NoticeClientPicker({
   draftCompanyName = '',
   onDraftCompanyNameChange,
   filingTax = 'comprehensive',
+  showReviewLink = false,
 }: Props) {
   const isMaster = useIsMasterUser();
   const [query, setQuery] = useState('');
@@ -73,7 +76,7 @@ export default function NoticeClientPicker({
   }, []);
 
   useEffect(() => {
-    if (!value?.id) {
+    if (!value?.id || !showReviewLink) {
       setReviewHint(null);
       return;
     }
@@ -83,7 +86,11 @@ export default function NoticeClientPicker({
       .then(data => {
         if (cancelled) return;
         const hints = (data.byClientId?.[value.id] ?? []) as ReviewKeyHint[];
-        setReviewHint(hints[0] ?? null);
+        // 법인세·종소세 검토표만 사용
+        const eligible = hints.find(h =>
+          h.taxKinds?.some(k => k === 'income' || k === 'corp-tax' || k === 'corp-fee'),
+        );
+        setReviewHint(eligible ?? null);
       })
       .catch(() => {
         if (!cancelled) setReviewHint(null);
@@ -91,7 +98,7 @@ export default function NoticeClientPicker({
     return () => {
       cancelled = true;
     };
-  }, [value?.id]);
+  }, [value?.id, showReviewLink]);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -172,7 +179,7 @@ export default function NoticeClientPicker({
           <Link href={`/clients/${value.id}`} prefetch={false} className={actionLinkClass}>
             수임처
           </Link>
-          {reviewHref ? (
+          {showReviewLink && reviewHref ? (
             <Link href={reviewHref} prefetch={false} className={actionLinkClass}>
               검토표
             </Link>

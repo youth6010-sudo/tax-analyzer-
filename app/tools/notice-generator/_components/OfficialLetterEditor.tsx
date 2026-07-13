@@ -129,6 +129,10 @@ export default function OfficialLetterEditor({
 
   const emitChange = (scrubBg = false) => {
     if (!pageRef.current || !isCustom || skipSyncRef.current) return;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
     // 굵게·색·크기는 유지하고 붙여넣기 배경만 정리
     if (scrubBg) scrubOfficialLetterBackgroundOnly(pageRef.current);
     const normalized = normalizeOfficialLetterHtml(pageRef.current.innerHTML);
@@ -268,7 +272,10 @@ export default function OfficialLetterEditor({
           source={source}
           onSourceChange={onSourceChange}
           hasCustom={hasCustomSaved}
-          onSave={onSave}
+          onSave={() => {
+            emitChange(true);
+            onSave();
+          }}
           saveState={saveState}
         />
 

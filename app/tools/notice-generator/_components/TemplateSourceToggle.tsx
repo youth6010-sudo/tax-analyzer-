@@ -53,6 +53,7 @@ export function TemplateSourceToggle({
       {showSave && (
         <button
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={onSave}
           disabled={saveState === 'saving'}
           className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-60"

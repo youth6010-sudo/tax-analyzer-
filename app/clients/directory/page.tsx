@@ -8,17 +8,33 @@ import { portalCard, portalInput, portalBtnSecondary } from '@/app/components/po
 import type { ClientRecord } from '@/app/types/client';
 import {
   CLIENT_MAIN_CATEGORIES,
+  MANAGER_DISPLAY_ORDER,
   getClientCategory,
   getClientCategoryForFilter,
   getClientDouzoneCode,
 } from '@/app/utils/clientsGrouping';
 import { buildBizNoDuplicateCounts, isDuplicateBizNoClient } from '@/app/utils/clientBizNo';
+import {
+  clientNtsTaxTypeLabel,
+  downloadDirectoryExportExcel,
+} from '@/app/utils/clientDirectoryExport';
 import { formatBusinessNo } from '@/app/utils/idFormat';
 import { buildClientDetailUrl } from '@/app/utils/clientsListState';
+
+const MANAGER_NONE = '__none__';
+const TAX_UNKNOWN = '__unknown__';
 
 function formatDate(iso: string): string {
   if (!iso) return '-';
   return new Date(iso).toLocaleDateString('ko-KR');
+}
+
+function managerKey(client: ClientRecord): string {
+  return client.manager?.trim() || MANAGER_NONE;
+}
+
+function taxTypeKey(client: ClientRecord): string {
+  return clientNtsTaxTypeLabel(client) || TAX_UNKNOWN;
 }
 
 export default function ClientsDirectoryPage() {
@@ -40,10 +56,14 @@ function ClientsDirectoryContent() {
   const searchParams = useSearchParams();
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [q, setQ] = useState(searchParams.get('q') ?? '');
   const [duplicatesOnly, setDuplicatesOnly] = useState(searchParams.get('dup') === '1');
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get('catFilter') ?? '');
   const [includeChurned, setIncludeChurned] = useState(searchParams.get('includeChurned') === '1');
+  const [managerFilter, setManagerFilter] = useState(searchParams.get('manager') ?? '');
+  const [taxTypeFilter, setTaxTypeFilter] = useState(searchParams.get('taxType') ?? '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,11 +90,50 @@ function ClientsDirectoryContent() {
     if (duplicatesOnly) p.set('dup', '1');
     if (categoryFilter) p.set('catFilter', categoryFilter);
     if (includeChurned) p.set('includeChurned', '1');
+    if (managerFilter) p.set('manager', managerFilter);
+    if (taxTypeFilter) p.set('taxType', taxTypeFilter);
+    if (statusFilter) p.set('status', statusFilter);
     const qs = p.toString();
     router.replace(qs ? `/clients/directory?${qs}` : '/clients/directory', { scroll: false });
-  }, [q, duplicatesOnly, categoryFilter, includeChurned, router]);
+  }, [
+    q,
+    duplicatesOnly,
+    categoryFilter,
+    includeChurned,
+    managerFilter,
+    taxTypeFilter,
+    statusFilter,
+    router,
+  ]);
 
   const bizNoCounts = useMemo(() => buildBizNoDuplicateCounts(clients), [clients]);
+
+  const managerOptions = useMemo(() => {
+    const set = new Set<string>();
+    let hasNone = false;
+    for (const c of clients) {
+      const m = c.manager?.trim();
+      if (m) set.add(m);
+      else hasNone = true;
+    }
+    const ordered = MANAGER_DISPLAY_ORDER.filter(name => set.has(name));
+    const rest = [...set].filter(n => !MANAGER_DISPLAY_ORDER.includes(n)).sort((a, b) => a.localeCompare(b, 'ko'));
+    return { names: [...ordered, ...rest], hasNone };
+  }, [clients]);
+
+  const taxTypeOptions = useMemo(() => {
+    const set = new Set<string>();
+    let hasUnknown = false;
+    for (const c of clients) {
+      const t = clientNtsTaxTypeLabel(c);
+      if (t) set.add(t);
+      else hasUnknown = true;
+    }
+    const preferred = ['일반', '간이', '면세'];
+    const ordered = preferred.filter(t => set.has(t));
+    const rest = [...set].filter(t => !preferred.includes(t)).sort((a, b) => a.localeCompare(b, 'ko'));
+    return { types: [...ordered, ...rest], hasUnknown };
+  }, [clients]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -83,6 +142,25 @@ function ClientsDirectoryContent() {
     return clients.filter(c => {
       if (categoryFilter && getClientCategoryForFilter(c) !== categoryFilter) return false;
       if (duplicatesOnly && !isDuplicateBizNoClient(c, bizNoCounts)) return false;
+      if (managerFilter) {
+        if (managerFilter === MANAGER_NONE) {
+          if (c.manager?.trim()) return false;
+        } else if (managerKey(c) !== managerFilter) {
+          return false;
+        }
+      }
+      if (taxTypeFilter) {
+        if (taxTypeFilter === TAX_UNKNOWN) {
+          if (clientNtsTaxTypeLabel(c)) return false;
+        } else if (taxTypeKey(c) !== taxTypeFilter) {
+          return false;
+        }
+      }
+      if (statusFilter === 'active') {
+        if (c.status === 'churned') return false;
+      } else if (statusFilter === 'churned') {
+        if (c.status !== 'churned') return false;
+      }
       if (!query) return true;
 
       const hay = [c.companyName, c.representative, c.manager, c.businessNo, getClientDouzoneCode(c)]
@@ -95,23 +173,55 @@ function ClientsDirectoryContent() {
       }
       return false;
     });
-  }, [clients, q, categoryFilter, duplicatesOnly, bizNoCounts]);
+  }, [
+    clients,
+    q,
+    categoryFilter,
+    duplicatesOnly,
+    bizNoCounts,
+    managerFilter,
+    taxTypeFilter,
+    statusFilter,
+  ]);
 
   const duplicateTotal = useMemo(
     () => clients.filter(c => isDuplicateBizNoClient(c, bizNoCounts)).length,
     [clients, bizNoCounts],
   );
 
+  const handleExport = async () => {
+    if (filtered.length === 0) return;
+    setExporting(true);
+    try {
+      await downloadDirectoryExportExcel(filtered);
+    } catch {
+      alert('엑셀 내려받기에 실패했습니다.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const returnTo = '/clients/directory';
 
   return (
     <PortalPageShell className="!py-3 lg:!py-4">
-      <div className="mb-4 space-y-1">
-        <h1 className="text-lg font-bold text-slate-900 sm:text-xl">수임처 목록</h1>
-        <p className="text-xs text-slate-500">
-          전체 거래처 검색 · 번호 쌍 기준 중복 확인 (법인: 사업자+법인등록 / 개인·비사업자: 사업자+주민) ({clients.length}건
-          {duplicateTotal > 0 ? ` · 중복 의심 ${duplicateTotal}건` : ''})
-        </p>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-slate-900 sm:text-xl">수임처 목록</h1>
+          <p className="text-xs text-slate-500">
+            전체 거래처 검색 · 번호 쌍 기준 중복 확인 (법인: 사업자+법인등록 / 개인·비사업자: 사업자+주민) (
+            {clients.length}건
+            {duplicateTotal > 0 ? ` · 중복 의심 ${duplicateTotal}건` : ''})
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={exporting || loading || filtered.length === 0}
+          onClick={() => void handleExport()}
+          className={`${portalBtnSecondary} shrink-0 !py-1.5 text-xs disabled:opacity-60`}
+        >
+          {exporting ? '생성 중…' : `엑셀 내려받기 (${filtered.length})`}
+        </button>
       </div>
 
       <div className={`${portalCard} mb-3 flex flex-wrap items-center gap-2 p-2.5`}>
@@ -133,6 +243,41 @@ function ClientsDirectoryContent() {
               {cat}
             </option>
           ))}
+        </select>
+        <select
+          value={managerFilter}
+          onChange={e => setManagerFilter(e.target.value)}
+          className={`${portalInput} !w-auto text-sm`}
+        >
+          <option value="">담당자 전체</option>
+          {managerOptions.names.map(name => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+          {managerOptions.hasNone && <option value={MANAGER_NONE}>미지정</option>}
+        </select>
+        <select
+          value={taxTypeFilter}
+          onChange={e => setTaxTypeFilter(e.target.value)}
+          className={`${portalInput} !w-auto text-sm`}
+        >
+          <option value="">과세유형 전체</option>
+          {taxTypeOptions.types.map(t => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+          {taxTypeOptions.hasUnknown && <option value={TAX_UNKNOWN}>미확인</option>}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className={`${portalInput} !w-auto text-sm`}
+        >
+          <option value="">수임상태 전체</option>
+          <option value="active">정상·유입</option>
+          <option value="churned">해임</option>
         </select>
         <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
           <input

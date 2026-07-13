@@ -52,7 +52,7 @@ export function isNoticeFieldEmpty(str: string | null | undefined): boolean {
   return !text;
 }
 
-/** 수임처 정보 입력란 — 평문은 br 변환, HTML은 서식 정리 후 삽입 */
+/** 수임처 정보 입력란 — 평문은 br 변환, HTML은 서식 정리·평탄화 후 삽입 */
 export function noticeFieldToHtml(str: string): string {
   if (isNoticeFieldEmpty(str)) return '';
   let html = /<[a-z][\s\S]*>/i.test(str) ? sanitizeNoticeHtml(str) : multilineHtml(str);
@@ -328,6 +328,36 @@ function collapseNoticeBreaks(html: string): string {
 }
 
 /**
+ * "※ … 참고하시되, 변동사항…" 문장 중간 강제 줄바꿈/개행 복구.
+ * - 하드 <br> 제거
+ * - 쉼표 뒤 일반 공백 → &nbsp; 로 바꿔 미리보기 폭이 좁아도 여기서 줄바꿈되지 않게 함
+ */
+function joinBrokenSentenceBreaks(html: string): string {
+  let out = html;
+
+  // 이 문구는 항상 한 줄로 (사용자가 서식에 br을 넣었거나 에디터가 가른 경우)
+  out = out.replace(
+    /참고하시되\s*,(?:\s|&nbsp;|\u00a0)*(?:<\/?(?:span|font|mark|b|strong|em|u)[^>]*>)*\s*(?:<br\s*\/?>\s*)+/gi,
+    '참고하시되,&nbsp;',
+  );
+  // 이미 한 줄이어도 쉼표 뒤 일반 스페이스면 좁은 미리보기에서 여기서 개행됨 → nbsp
+  out = out.replace(/참고하시되\s*,(?:\s|\u00a0)+(?!&nbsp;)/gi, '참고하시되,&nbsp;');
+  out = out.replace(/참고하시되\s*,(?=[^\s&<])/gi, '참고하시되,&nbsp;');
+
+  // 그 외: 쉼표 뒤 한 줄 br + 이어지는 본문 (새 섹션 제외)
+  const sectionStart = '(?:▶|📢|📁|📂|📋|✅|📌|✔|※)';
+  out = out.replace(
+    new RegExp(
+      `([,，])(?:\\s|&nbsp;|\\u00a0)*(?:</?(?:span|font|mark|b|strong|em|u)[^>]*>)*\\s*<br\\s*/?>\\s*(?!<br\\s*/?>|${sectionStart})`,
+      'gi',
+    ),
+    '$1&nbsp;',
+  );
+
+  return out;
+}
+
+/**
  * 안내문 줄바꿈 정리 — 서식에 있는 빈 줄(br×2)은 유지.
  * br×3 이상만 줄이고, 제목 뒤 간격을 강제로 합치지 않음.
  */
@@ -338,6 +368,9 @@ export function tidyNoticeBreaks(html: string): string {
     // 완전 빈 문단만 제거 (&nbsp;만, br 없는 것)
     .replace(/<(p|div)\b[^>]*>\s*(?:&nbsp;|\u00a0|\s)*\s*<\/\1>/gi, '')
     .replace(/(<br\s*\/?>)\s*(?:&nbsp;|\u00a0)+\s*(<br\s*\/?>)/gi, '$1$2');
+
+  // 문장 중간(쉼표 뒤) 강제 줄바꿈 제거
+  out = joinBrokenSentenceBreaks(out);
 
   // 연속 br — 서식의 섹션 간격(br×2) 유지, 그 이상만 정리
   out = out.replace(/(<br\s*\/?>\s*){3,}/gi, '<br><br>');
@@ -422,8 +455,8 @@ export function finalizeNoticeHtml(html: string): string {
 }
 
 /**
- * 한글·워드 붙여넣기용 — <br> 줄을 margin:0 문단으로 바꿔 여분 줄바꿈 방지.
- * 미리보기 HTML과 시각적으로 동일하게 맞춤.
+ * 한글·워드 붙여넣기용 — 굵게/기울임/밑줄만 유지, 배경·글자색·크기 등 제거.
+ * <br> 줄은 margin:0 문단으로 바꿔 여분 줄바꿈 방지.
  */
 export function normalizeHtmlForClipboard(html: string): string {
   const finalized = finalizeNoticeHtml(html);
@@ -431,7 +464,6 @@ export function normalizeHtmlForClipboard(html: string): string {
 
   const root = document.createElement('div');
   root.innerHTML = finalized;
-  // 본문 추출
   let target: HTMLElement = root;
   if (
     root.children.length === 1 &&
@@ -440,13 +472,46 @@ export function normalizeHtmlForClipboard(html: string): string {
     target = root.firstElementChild as HTMLElement;
   }
 
+  /** 인라인은 b/i/u 만 — style·배경·색 전부 제거 */
+  const semanticInline = (el: HTMLElement): string => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'br') return '<br>';
+
+    let inner = '';
+    el.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        inner += child.textContent ?? '';
+        return;
+      }
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        inner += semanticInline(child as HTMLElement);
+      }
+    });
+    if (!inner) return '';
+
+    const bold = tag === 'b' || tag === 'strong' || isBoldLike(el);
+    const italic = tag === 'i' || tag === 'em' || isItalicLike(el);
+    const underline = tag === 'u' || isUnderlineLike(el);
+
+    // span/font/mark 등은 서식만 걷어내고 자식만 유지
+    if (!['b', 'strong', 'i', 'em', 'u'].includes(tag) && !bold && !italic && !underline) {
+      return inner;
+    }
+
+    let out = inner;
+    if (underline) out = `<u>${out}</u>`;
+    if (italic) out = `<em>${out}</em>`;
+    if (bold) out = `<strong>${out}</strong>`;
+    return out;
+  };
+
   const parts: string[] = [];
   let lineBuf = '';
 
   const flushLine = (asBlank: boolean) => {
     if (asBlank) {
       const last = parts[parts.length - 1] || '';
-      if (last.includes('>&nbsp;</p>')) return; // 연속 빈 문단 방지
+      if (last.includes('>&nbsp;</p>')) return;
       parts.push('<p style="margin:0;padding:0;line-height:1.55;">&nbsp;</p>');
       return;
     }
@@ -469,30 +534,67 @@ export function normalizeHtmlForClipboard(html: string): string {
     const el = node as HTMLElement;
     const tag = el.tagName.toLowerCase();
     if (tag === 'br') {
-      if (lineBuf.trim() || lineBuf.includes('<')) {
-        flushLine(false);
-      } else {
-        flushLine(true);
-      }
+      if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
+      else flushLine(true);
       return;
     }
     if (tag === 'table') {
       if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
-      const tableHtml = el.outerHTML
-        .replace(/\s*align\s*=\s*["']?[^"'\s>]+["']?/gi, '')
-        .replace(/float\s*:[^;]+;?/gi, 'float:none;');
+      // 표는 유지하되 셀 인라인 배경/하이라이트는 제거하지 않음(구분 색)
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.removeAttribute('align');
+      clone.querySelectorAll('[style]').forEach(node => {
+        const cell = node as HTMLElement;
+        const t = cell.tagName.toLowerCase();
+        if (t === 'td' || t === 'th') return; // 표 셀 배경 유지
+        cell.style.removeProperty('background');
+        cell.style.removeProperty('background-color');
+        cell.style.removeProperty('background-image');
+        // 인라인 텍스트 하이라이트만 제거
+        if (!['table', 'tr', 'thead', 'tbody', 'tfoot', 'colgroup', 'col'].includes(t)) {
+          cell.style.removeProperty('color');
+        }
+      });
       parts.push(
-        `<div style="clear:both;display:block;text-align:left;margin:6px 0;">${tableHtml}</div>`,
+        `<div style="clear:both;display:block;text-align:left;margin:6px 0;">${clone.outerHTML}</div>`,
       );
       return;
     }
     if (tag === 'ul' || tag === 'ol') {
       if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
-      parts.push(el.outerHTML);
+      const clone = el.cloneNode(true) as HTMLElement;
+      // 리스트: 배경·색·크기 속성 제거, span/font/mark는 서식만 남기고 언랩
+      const stripAttrs = (node: HTMLElement) => {
+        node.removeAttribute('style');
+        node.removeAttribute('bgcolor');
+        node.removeAttribute('color');
+        node.removeAttribute('face');
+        node.removeAttribute('size');
+        node.removeAttribute('class');
+      };
+      Array.from(clone.querySelectorAll('*')).forEach(n => stripAttrs(n as HTMLElement));
+      stripAttrs(clone);
+      // span/font/mark → 굵게/기울임/밑줄만 semantic 태그로
+      for (let pass = 0; pass < 8; pass++) {
+        const inlines = Array.from(clone.querySelectorAll('span,font,mark'));
+        if (!inlines.length) break;
+        for (const node of inlines) {
+          const inline = node as HTMLElement;
+          const parent = inline.parentNode;
+          if (!parent) continue;
+          const rebuilt = document.createElement('span');
+          rebuilt.innerHTML = semanticInline(inline);
+          while (rebuilt.firstChild) parent.insertBefore(rebuilt.firstChild, inline);
+          parent.removeChild(inline);
+        }
+      }
+      // b/i/u 등도 style 없이 순수 태그만
+      clone.querySelectorAll('b,strong,i,em,u').forEach(n => stripAttrs(n as HTMLElement));
+      parts.push(clone.outerHTML);
       return;
     }
-    if (['b', 'strong', 'i', 'em', 'u', 'span', 'a'].includes(tag)) {
-      lineBuf += el.outerHTML;
+    if (['b', 'strong', 'i', 'em', 'u', 'span', 'a', 'font', 'mark'].includes(tag)) {
+      lineBuf += semanticInline(el);
       return;
     }
     Array.from(el.childNodes).forEach(walk);
@@ -502,6 +604,8 @@ export function normalizeHtmlForClipboard(html: string): string {
   if (lineBuf.trim() || lineBuf.includes('<')) flushLine(false);
 
   let body = parts.join('');
+  // 표 셀 배경은 유지 — 본문 인라인 mark/font만 제거
+  body = body.replace(/<\/?mark\b[^>]*>/gi, '').replace(/<\/?font\b[^>]*>/gi, '');
   body = body.replace(
     /(?:<p style="margin:0;padding:0;line-height:1\.55;">&nbsp;<\/p>\s*){2,}/gi,
     '<p style="margin:0;padding:0;line-height:1.55;">&nbsp;</p>',
@@ -554,10 +658,26 @@ function flattenNoticeElement(el: Element): string {
 
     const blockChild = block.querySelector(':scope > div, :scope > p, :scope > table, :scope > ol, :scope > ul');
     if (blockChild) {
-      return Array.from(block.children)
-        .map(child => flattenNoticeElement(child))
-        .filter(Boolean)
-        .join('');
+      // children만 보면 사이 텍스트(※ 안내 문구 등)가 사라져 저장 시 내용이 날아감
+      const nodes = Array.from(block.childNodes);
+      const parts: string[] = [];
+      for (let i = 0; i < nodes.length; i += 1) {
+        const node = nodes[i];
+        if (node.nodeType === Node.TEXT_NODE) {
+          const t = (node.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+          if (!t) continue;
+          const next = nodes[i + 1];
+          const nextIsBr =
+            next?.nodeType === Node.ELEMENT_NODE &&
+            (next as Element).tagName.toLowerCase() === 'br';
+          parts.push(nextIsBr ? escapeHtml(t) : `${escapeHtml(t)}<br>`);
+          continue;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          parts.push(flattenNoticeElement(node as Element));
+        }
+      }
+      return parts.filter(Boolean).join('');
     }
 
     const inner = block.innerHTML.trim();
@@ -658,7 +778,7 @@ export function prepareNoticePasteContent(
   return wrap ? wrapNoticeHtml(body) : body;
 }
 
-/** 외부 HTML을 안내문 용도로 정리: 색상은 일반/볼드만 유지, 배경색 제거 */
+/** 외부 HTML을 안내문 용도로 정리: 색상은 일반/볼드만 유지, 배경색 제거, br 평탄화 */
 export function sanitizeNoticeHtml(html: string): string {
   if (!html?.trim() || typeof document === 'undefined') return html;
 
@@ -667,9 +787,9 @@ export function sanitizeNoticeHtml(html: string): string {
 
   sanitizeNoticeHtmlRoot(root);
 
-  return tidyNoticeBreaks(
-    root.innerHTML.replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, ''),
-  );
+  // div 줄 단위를 br로 평탄화 — 문장 중간 Enter/소프트브레이크가 두 블록으로 남는 것 방지
+  const body = flattenNoticeHtmlRoot(root).replace(/<(div|p)\b[^>]*>\s*<\/\1>/gi, '');
+  return tidyNoticeBreaks(body);
 }
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {
@@ -1361,6 +1481,7 @@ export function renderTemplate({
 }): string {
   const tpl = (template || '').trim();
   const materialsEmpty = isNoticeFieldEmpty(materials);
+  const notesEmpty = isNoticeFieldEmpty(notes);
   const materialDeadlineEmpty = isNoticeFieldEmpty(materialDeadline);
   const materialNoteEmpty = isNoticeFieldEmpty(materialDeadlineNote);
 
@@ -1373,23 +1494,30 @@ export function renderTemplate({
       .replace(new RegExp(`${t}(?:\\s*<br\\s*/?>)?`, 'gi'), '');
   };
 
-  // 안내문 서식 {특이사항}: 앞뒤 br·「특이사항」제목은 제거하고, 토큰이 간격 전부 담당
-  // 없음 → <br> / 있음 → <br>내용<br>
+  // 안내문 서식 {특이사항}
+  // 빈 토큰은 삭제만 하고 <br>를 넣지 않음 — "참고하시되,{특이사항}변동사항" 강제개행 방지
   prepared = prepared.replace(
     /(?:<br\s*\/?>\s*)*(?:<b\b[^>]*>\s*)?특이사항(?:\s*<\/b>)?\s*(?:<br\s*\/?>\s*)*(?=\{특이사항\})/gi,
     '',
   );
-  prepared = prepared.replace(
-    /(?:<br\s*\/?>\s*)*\{특이사항\}(?:\s*<br\s*\/?>)*/gi,
-    '{특이사항}',
-  );
+  if (notesEmpty) {
+    prepared = prepared.replace(/\{특이사항\}/g, '');
+  } else {
+    prepared = prepared.replace(
+      /(?:<br\s*\/?>\s*)*\{특이사항\}(?:\s*<br\s*\/?>)*/gi,
+      '{특이사항}',
+    );
+  }
 
   if (materialsEmpty) prepared = stripEmptyToken(prepared, '{필요자료}');
   if (materialDeadlineEmpty) prepared = stripEmptyToken(prepared, '{자료제출마감}');
   if (materialNoteEmpty) prepared = stripEmptyToken(prepared, '{자료제출안내}');
 
-  // 필요자료 끝 br은 제거 — 특이사항 optionalBreak가 다음 간격 담당
-  const materialsHtml = noticeFieldToHtml(materials).replace(/(?:<br\s*\/?>\s*)+$/i, '');
+  // 특이사항이 있을 때만 필요자료 끝 br 제거(optionalBreak가 간격 담당)
+  let materialsHtml = noticeFieldToHtml(materials);
+  if (!notesEmpty) {
+    materialsHtml = materialsHtml.replace(/(?:<br\s*\/?>\s*)+$/i, '');
+  }
   const notesHtml = noticeFieldToHtml(notes);
 
   const map: [string, string][] = [
@@ -1405,7 +1533,7 @@ export function renderTemplate({
     ['{귀속}', deadline ? escapeHtml(deadline.periodLabel) : ''],
     ['{요일}', deadline ? escapeHtml(getWeekdayKo(deadline.final)) : ''],
     ['{필요자료}', materialsHtml],
-    ['{특이사항}', optionalBreakBlock(notesHtml)],
+    ['{특이사항}', notesEmpty ? '' : optionalBreakBlock(notesHtml)],
     ['{휴일안내}', escapeHtml(adjustmentSentence(deadline))],
   ];
 

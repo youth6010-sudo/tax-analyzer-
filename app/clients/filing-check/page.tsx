@@ -2646,7 +2646,7 @@ function FilingCheckPageInner() {
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
                         )}
-                        {tax !== 'withholding' && <ReviewSheetBridge clientId={c.id} />}
+                        {tax === 'corporate' && <ReviewSheetBridge clientId={c.id} />}
                         {tax === 'vat' && isVatSummaryOnlyClient(c) && (
                           <span className="shrink-0 whitespace-nowrap rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                             합계표제출

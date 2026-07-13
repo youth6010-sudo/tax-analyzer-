@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { sanitizeNoticeHtml } from './templates';
+import { finalizeNoticeHtml, sanitizeNoticeHtml } from './templates';
 
 type Options = {
   value: string;
@@ -22,6 +22,8 @@ export function useNoticeRichEditor({
   const internalChangeRef = useRef(false);
   const focusedRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   useEffect(() => {
     if (!ref.current || !enabled || focusedRef.current) return;
@@ -42,17 +44,30 @@ export function useNoticeRichEditor({
     [],
   );
 
+  /** DOM 내용을 정리해 상위에 반영. 저장용으로 정리된 HTML을 반환한다. */
   const emit = useCallback(
-    (syncDom: boolean) => {
-      if (!ref.current || !enabled) return;
+    (syncDom: boolean): string => {
+      if (!ref.current || !enabled) return '';
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      // Enter가 <div> 대신 <br>가 되도록 (문장 중간 강제 분리 완화)
+      try {
+        document.execCommand('defaultParagraphSeparator', false, 'br');
+      } catch {
+        /* ignore */
+      }
       const sanitized = sanitizeNoticeHtml(ref.current.innerHTML);
-      if (syncDom && ref.current.innerHTML !== sanitized) {
-        ref.current.innerHTML = sanitized;
+      const display = finalizeNoticeHtml(sanitized);
+      if (syncDom && ref.current.innerHTML !== display) {
+        ref.current.innerHTML = display;
       }
       internalChangeRef.current = true;
-      onChange(sanitized);
+      onChangeRef.current(sanitized);
+      return sanitized;
     },
-    [enabled, onChange],
+    [enabled],
   );
 
   const scheduleDebouncedEmit = useCallback(() => {
@@ -65,6 +80,11 @@ export function useNoticeRichEditor({
 
   const handleFocus = useCallback(() => {
     focusedRef.current = true;
+    try {
+      document.execCommand('defaultParagraphSeparator', false, 'br');
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const handleBlur = useCallback(() => {

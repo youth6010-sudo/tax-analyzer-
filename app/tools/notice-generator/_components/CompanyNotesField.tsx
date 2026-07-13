@@ -1,4 +1,9 @@
-import NoticeRichTextField from './NoticeRichTextField';
+'use client';
+
+import { useRef } from 'react';
+import NoticeRichTextField, {
+  type NoticeRichTextFieldHandle,
+} from './NoticeRichTextField';
 import { NOTICE_EDITOR_SHORTCUT_HINT } from '../_lib/noticeEditorShortcuts';
 import {
   noticeBtnPrimary,
@@ -22,7 +27,8 @@ type Props = {
   showPayroll?: boolean;
   payrollByUs?: boolean;
   onPayrollChange?: (value: boolean) => void;
-  onSave?: () => void;
+  /** flush된 최신 materials/notes를 넘김 — 저장 레이스 방지 */
+  onSave?: (flushed?: { materials: string; notes: string }) => void;
 };
 
 function SaveBadge({ state }: { state: SaveState }) {
@@ -52,6 +58,15 @@ export default function CompanyNotesField({
   onPayrollChange,
   onSave,
 }: Props) {
+  const materialsRef = useRef<NoticeRichTextFieldHandle>(null);
+  const notesRef = useRef<NoticeRichTextFieldHandle>(null);
+
+  const handleSaveClick = () => {
+    const nextMaterials = materialsRef.current?.flush() ?? materials;
+    const nextNotes = notesRef.current?.flush() ?? notes;
+    onSave?.({ materials: nextMaterials, notes: nextNotes });
+  };
+
   return (
     <section className={noticeSection}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -68,6 +83,7 @@ export default function CompanyNotesField({
             )}
           </label>
           <NoticeRichTextField
+            ref={materialsRef}
             value={materials}
             onChange={onMaterialsChange}
             rows={5}
@@ -78,6 +94,7 @@ export default function CompanyNotesField({
         <div className="min-w-0">
           <label className={noticeLabel}>특이사항</label>
           <NoticeRichTextField
+            ref={notesRef}
             value={notes}
             onChange={onNotesChange}
             rows={5}
@@ -108,7 +125,8 @@ export default function CompanyNotesField({
             <SaveBadge state={saveState} />
             <button
               type="button"
-              onClick={onSave}
+              onMouseDown={e => e.preventDefault()}
+              onClick={handleSaveClick}
               disabled={saveState === 'saving'}
               className={`${noticeBtnPrimary} disabled:opacity-60`}
             >
