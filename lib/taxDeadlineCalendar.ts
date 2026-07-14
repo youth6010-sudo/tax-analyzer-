@@ -19,10 +19,12 @@ export const TAX_DEADLINE_TYPE_LABELS: Record<string, string> = {
   corporate: '법인세',
   corporate_interim: '법인세 중간예납',
   property: '종부세',
-  local_income: '지방소득세',
+  local_income: '개인지방소득세',
   corporate_local: '법인지방소득세',
-  year_end: '연말정산',
+  year_end: '지급명세서',
   simple_payroll: '간이지급명세서',
+  labor_content: '근로내용확인신고',
+  daily_payroll: '일용근로지급명세서',
 };
 
 function baseParams(overrides: Partial<DeadlineParams> & { year: number }): DeadlineParams {
@@ -42,7 +44,6 @@ function inRange(date: string, from: string, to: string): boolean {
 /**
  * 법인세 중간예납 법정 마감일
  * — 사업연도 개시일부터 6개월이 되는 날(중간예납기간 종료일)부터 2개월이 되는 달의 말일
- * · 12월 결산 → 8/31 · 3월 결산 → 전년 11/30 · 6월 결산 → 2월말 · 9월 결산 → 5/31
  */
 function corporateInterimStatutory(fyEndYear: number, fyEndMonth: number): Date {
   let interimEndMonth = fyEndMonth - 6;
@@ -58,6 +59,39 @@ function corporateInterimStatutory(fyEndYear: number, fyEndMonth: number): Date 
     dueYear += 1;
   }
   return lastDayOfMonth(dueYear, dueMonth);
+}
+
+/** 법인지방소득세 — 사업연도 종료월 말일부터 4개월이 되는 달의 말일 (= 법인세보다 1개월 뒤) */
+function corporateLocalStatutory(fyEndYear: number, fyEndMonth: number): Date {
+  let dueMonth = fyEndMonth + 4;
+  let dueYear = fyEndYear;
+  if (dueMonth > 12) {
+    dueMonth -= 12;
+    dueYear += 1;
+  }
+  return lastDayOfMonth(dueYear, dueMonth);
+}
+
+/** 지급월(year, month) → 다음 달 말일 */
+function nextMonthEnd(year: number, month: number): Date {
+  let y = year;
+  let m = month + 1;
+  if (m > 12) {
+    m = 1;
+    y += 1;
+  }
+  return lastDayOfMonth(y, m);
+}
+
+/** 지급월(year, month) → 다음 달 15일 (근로내용확인신고) */
+function nextMonthDay15(year: number, month: number): Date {
+  let y = year;
+  let m = month + 1;
+  if (m > 12) {
+    m = 1;
+    y += 1;
+  }
+  return new Date(y, m - 1, 15);
 }
 
 function pushDeadline(
@@ -104,6 +138,39 @@ export function listTaxDeadlines(from: string, to: string): TaxDeadlineDto[] {
       }
     }
 
+    // 간이지급명세서 — 지급일이 속하는 달의 다음 달 말일 (매월)
+    for (let month = 1; month <= 12; month++) {
+      pushDeadline(items, from, to, {
+        id: `tax-sp-m-${year}-${month}`,
+        taxType: 'simple_payroll',
+        title: `간이지급명세서 ${year}년 ${month}월분`,
+        periodLabel: `${year}년 ${month}월 지급`,
+        statutory: nextMonthEnd(year, month),
+      });
+    }
+
+    // 일용근로소득 지급명세서 — 지급월의 다음 달 말일 (매월)
+    for (let month = 1; month <= 12; month++) {
+      pushDeadline(items, from, to, {
+        id: `tax-daily-${year}-${month}`,
+        taxType: 'daily_payroll',
+        title: `일용근로지급명세서 ${year}년 ${month}월분`,
+        periodLabel: `${year}년 ${month}월 지급`,
+        statutory: nextMonthEnd(year, month),
+      });
+    }
+
+    // 근로내용확인신고 — 전월분 · 익월 15일 (근로복지공단)
+    for (let month = 1; month <= 12; month++) {
+      pushDeadline(items, from, to, {
+        id: `tax-labor-${year}-${month}`,
+        taxType: 'labor_content',
+        title: `근로내용확인신고 ${year}년 ${month}월분`,
+        periodLabel: `${year}년 ${month}월 근로`,
+        statutory: nextMonthDay15(year, month),
+      });
+    }
+
     // 부가세 — 1·2기 예정/확정
     for (const period of VAT_PERIODS) {
       if (!CALENDAR_VAT_PERIOD_IDS.has(period.id)) continue;
@@ -138,16 +205,23 @@ export function listTaxDeadlines(from: string, to: string): TaxDeadlineDto[] {
       });
     }
 
-    // 개인지방소득세 — 종소세와 동일 기한(일반)
+    // 개인지방소득세 — 종소세와 동일 기한
     pushDeadline(items, from, to, {
-      id: `tax-local-income-${year}`,
+      id: `tax-local-income-${year}-general`,
       taxType: 'local_income',
-      title: `지방소득세 ${year}년 귀속`,
-      periodLabel: `${year}년 귀속`,
+      title: `개인지방소득세 ${year}년 귀속 (일반)`,
+      periodLabel: `${year}년 귀속 · 일반`,
       statutory: new Date(year + 1, 4, 31), // 5/31
     });
+    pushDeadline(items, from, to, {
+      id: `tax-local-income-${year}-honest`,
+      taxType: 'local_income',
+      title: `개인지방소득세 ${year}년 귀속 (성실신고)`,
+      periodLabel: `${year}년 귀속 · 성실신고`,
+      statutory: new Date(year + 1, 5, 30), // 6/30
+    });
 
-    // 법인세 · 법인지방소득세 — 결산월별 (3·6·9·12월)
+    // 법인세 — 결산월별 (종료월+3개월 말일)
     for (const fy of CORPORATE_FY_END_MONTHS) {
       const corp = calculateDeadline(
         TAX_TYPES.CORPORATE,
@@ -155,20 +229,23 @@ export function listTaxDeadlines(from: string, to: string): TaxDeadlineDto[] {
       );
       if (!corp) continue;
       const date = toISODate(corp.final);
-      if (!inRange(date, from, to)) continue;
-      items.push({
-        id: `tax-corp-${year}-${fy.id}`,
-        taxType: 'corporate',
-        title: `법인세 ${corp.periodLabel}`,
-        date,
-        periodLabel: corp.periodLabel,
-      });
-      items.push({
+      if (inRange(date, from, to)) {
+        items.push({
+          id: `tax-corp-${year}-${fy.id}`,
+          taxType: 'corporate',
+          title: `법인세 ${corp.periodLabel}`,
+          date,
+          periodLabel: corp.periodLabel,
+        });
+      }
+
+      // 법인지방소득세 — 법인세보다 1개월 뒤 (종료월+4개월 말일)
+      pushDeadline(items, from, to, {
         id: `tax-corp-local-${year}-${fy.id}`,
         taxType: 'corporate_local',
-        title: `법인지방소득세 ${corp.periodLabel}`,
-        date,
-        periodLabel: corp.periodLabel,
+        title: `법인지방소득세 ${year}년 ${fy.id}월 결산`,
+        periodLabel: `${year}년 ${fy.id}월 결산`,
+        statutory: corporateLocalStatutory(year, fy.id),
       });
     }
 
@@ -193,32 +270,34 @@ export function listTaxDeadlines(from: string, to: string): TaxDeadlineDto[] {
       statutory: new Date(year, 11, 15), // 12/15
     });
 
-    // 연말정산 지급명세서 — 귀속 year → 익년 3/10 제출
-    pushDeadline(items, from, to, {
-      id: `tax-year-end-${year}`,
-      taxType: 'year_end',
-      title: `연말정산(지급명세서) ${year}년 귀속`,
-      periodLabel: `${year}년 귀속`,
-      statutory: new Date(year + 1, 2, 10), // 3/10
-    });
-
-    // 간이지급명세서 상반기(1~6월) — 7/31
-    pushDeadline(items, from, to, {
-      id: `tax-sp-h1-${year}`,
-      taxType: 'simple_payroll',
-      title: `간이지급명세서 ${year}년 상반기`,
-      periodLabel: `${year}년 1~6월`,
-      statutory: new Date(year, 6, 31), // 7/31
-    });
-
-    // 간이지급명세서 하반기(7~12월) — 익년 1/31
-    pushDeadline(items, from, to, {
-      id: `tax-sp-h2-${year}`,
-      taxType: 'simple_payroll',
-      title: `간이지급명세서 ${year}년 하반기`,
-      periodLabel: `${year}년 7~12월`,
-      statutory: new Date(year + 1, 0, 31), // 1/31
-    });
+    // 지급명세서 — 소득 종류별 제출시기 (귀속 year)
+    // 근로·퇴직·사업: 익년 3/10
+    for (const kind of [
+      { id: 'employed', label: '근로소득' },
+      { id: 'retirement', label: '퇴직소득' },
+      { id: 'biz', label: '사업소득' },
+    ] as const) {
+      pushDeadline(items, from, to, {
+        id: `tax-paystmt-${kind.id}-${year}`,
+        taxType: 'year_end',
+        title: `지급명세서(${kind.label}) ${year}년 귀속`,
+        periodLabel: `${year}년 귀속 · ${kind.label}`,
+        statutory: new Date(year + 1, 2, 10), // 3/10
+      });
+    }
+    // 이자·배당·기타: 익년 2월 말
+    for (const kind of [
+      { id: 'interest-div', label: '이자배당' },
+      { id: 'other', label: '기타소득' },
+    ] as const) {
+      pushDeadline(items, from, to, {
+        id: `tax-paystmt-${kind.id}-${year}`,
+        taxType: 'year_end',
+        title: `지급명세서(${kind.label}) ${year}년 귀속`,
+        periodLabel: `${year}년 귀속 · ${kind.label}`,
+        statutory: lastDayOfMonth(year + 1, 2), // 2월 말
+      });
+    }
   }
 
   return items.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title, 'ko'));
