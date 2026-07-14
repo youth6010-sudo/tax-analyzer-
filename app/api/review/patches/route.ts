@@ -6,7 +6,17 @@ import {
   isReviewMaster,
   reviewAccess,
 } from '@/lib/review/access';
+import {
+  clearReviewGridEdits,
+  listReviewNewRows,
+  listReviewPatches,
+  replaceReviewNewRows,
+  upsertReviewPatches,
+  type ReviewNewRowInput,
+  type ReviewPatchInput,
+} from '@/lib/review/reviewGridDb';
 
+/** 결산 엑셀 제목행 — 종소 1행, 법인·수수료 1~2행 */
 function isLayoutHeaderPatch(sheetName: string, row: number): boolean {
   if (!Number.isFinite(row) || row < 1) return false;
   const corpSheets = new Set<string>();
@@ -18,15 +28,6 @@ function isLayoutHeaderPatch(sheetName: string, row: number): boolean {
   if (corpSheets.has(sheetName)) return row <= 2;
   return row <= 1;
 }
-import {
-  clearReviewGridEdits,
-  listReviewNewRows,
-  listReviewPatches,
-  replaceReviewNewRows,
-  upsertReviewPatches,
-  type ReviewNewRowInput,
-  type ReviewPatchInput,
-} from '@/lib/review/reviewGridDb';
 
 function apiError(e: unknown) {
   if (e instanceof Error && e.message === 'UNAUTHORIZED') {
@@ -79,17 +80,15 @@ export async function PUT(request: NextRequest) {
     }
 
     if (Array.isArray(body.patches)) {
-      if (!access.canEditLayout) {
-        for (const patch of body.patches) {
-          if (isLayoutHeaderPatch(patch.sheetName, Number(patch.r))) {
-            return NextResponse.json(
-              { error: 'Forbidden: 제목행은 인디만 수정할 수 있습니다' },
-              { status: 403 },
-            );
-          }
-        }
+      // 클라이언트는 매번 전체 패치 목록을 보냄.
+      // 제목행 패치가 목록에 있어도(인디가 예전에 저장한 것 포함)
+      // 비인디는 본문만 upsert — 전체 저장을 막지 않음.
+      const patchesToSave = access.canEditLayout
+        ? body.patches
+        : body.patches.filter(p => !isLayoutHeaderPatch(p.sheetName, Number(p.r)));
+      if (patchesToSave.length) {
+        await upsertReviewPatches(patchesToSave, user.id);
       }
-      await upsertReviewPatches(body.patches, user.id);
     }
     if (Array.isArray(body.newRows)) {
       await replaceReviewNewRows(body.newRows, user.id);

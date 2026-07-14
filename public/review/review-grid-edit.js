@@ -15,7 +15,12 @@
   function reportSaveFailure(err) {
     lastSaveFailed = true;
     console.error("[review] patch save failed", err);
-    window.alert("검토표 저장에 실패했습니다. 네트워크를 확인한 뒤 다시 수정해 주세요.");
+    const msg = err && err.message ? String(err.message) : "";
+    window.alert(
+      msg
+        ? "검토표 저장에 실패했습니다.\n" + msg
+        : "검토표 저장에 실패했습니다. 네트워크를 확인한 뒤 다시 수정해 주세요."
+    );
   }
 
   function flushRemoteSave() {
