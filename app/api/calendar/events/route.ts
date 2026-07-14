@@ -13,7 +13,9 @@ export async function GET(req: Request) {
       ? ownersParam.split(',').map(s => s.trim()).filter(Boolean)
       : [user.name];
 
-    const items = await listCalendarEvents(ownerNames, from, to);
+    const items = await listCalendarEvents(ownerNames, from, to, {
+      viewerName: user.name,
+    });
     return NextResponse.json({ items });
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

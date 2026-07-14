@@ -9,6 +9,8 @@ type Props = {
   onChange: (names: string[]) => void;
   showCompany: boolean;
   onShowCompanyChange: (show: boolean) => void;
+  hideCompleted: boolean;
+  onHideCompletedChange: (hide: boolean) => void;
 };
 
 function sortMembers(names: string[]): string[] {
@@ -29,6 +31,8 @@ export default function CalendarTeamFilter({
   onChange,
   showCompany,
   onShowCompanyChange,
+  hideCompleted,
+  onHideCompletedChange,
 }: Props) {
   const toggle = (name: string) => {
     if (selected.includes(name)) {
@@ -62,7 +66,7 @@ export default function CalendarTeamFilter({
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2.5 border-b border-slate-100 pb-3">
         <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
           <input
             type="checkbox"
@@ -76,6 +80,17 @@ export default function CalendarTeamFilter({
           />
           <span className="font-medium text-slate-900">사내</span>
         </label>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={() => onHideCompletedChange(!hideCompleted)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          <span className="font-medium text-slate-900">완료일정 제외</span>
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-x-5 gap-y-2.5">
         {sortMembers(members).map(name => (
           <label
             key={name}

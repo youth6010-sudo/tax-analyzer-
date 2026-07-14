@@ -507,7 +507,13 @@
       const table = ReviewGridCore.renderSheet(targetSheet, gridHost, renderOpts);
 
       if (opts.canEdit && !opts.readOnly) {
-        ReviewGridEdit.enableEditOnTable(table, targetSheet.name, true, opts.onPatch);
+        const canEditLayout = !!(
+          window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout
+        );
+        ReviewGridEdit.enableEditOnTable(table, targetSheet.name, true, opts.onPatch, {
+          headerMaxR: targetSheet.minR || 1,
+          canEditHeader: canEditLayout,
+        });
       }
 
       if (opts.searchQuery && opts.applySearchFilter) {

@@ -1,14 +1,17 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 import { listCompanyEvents } from '@/lib/companyEvents';
+import { listCheckoffsForEvents } from '@/lib/companyEventCheckoffs';
 import { listPersonalChecklistInRange } from '@/lib/personalChecklist';
 
 export async function listCalendarEvents(
   ownerNames: string[],
   from: string,
   to: string,
+  opts?: { viewerName?: string },
 ): Promise<CalendarEventDto[]> {
   const events: CalendarEventDto[] = [];
   const names = ownerNames.map(n => n.trim()).filter(Boolean);
+  const viewer = (opts?.viewerName || '').trim();
 
   const [personal, company] = await Promise.all([
     listPersonalChecklistInRange(names, from, to),
@@ -28,11 +31,17 @@ export async function listCalendarEvents(
       subtitle: item.clientName,
       ownerName: item.ownerName,
       createdAt: item.createdAt,
+      completed: !!item.completed,
     });
   }
 
+  const companyIds = company.map(ev => ev.id);
+  const checkoffMap = await listCheckoffsForEvents(companyIds);
+
   for (const ev of company) {
     const kindLabel = ev.scheduleKind === 'deadline' ? '기한' : '범위';
+    const checkoffs = checkoffMap.get(ev.id) ?? {};
+    const myDone = viewer ? !!checkoffs[viewer] : false;
     events.push({
       id: `company-${ev.id}`,
       kind: 'company',
@@ -45,6 +54,7 @@ export async function listCalendarEvents(
       createdAt: ev.createdAt,
       companyScheduleKind: ev.scheduleKind,
       companyDescription: ev.description,
+      completed: myDone,
     });
   }
 

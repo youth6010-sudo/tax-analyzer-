@@ -367,7 +367,21 @@
 
     if (options.canEdit && !options.readOnly) {
 
-      ReviewGridEdit.enableEditOnTable(table, sheet.name, true, options.onPatch);
+      const canEditLayout = !!(
+
+        window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout
+
+      );
+
+      const headerMaxR = options.kind === "corp" ? 2 : options.kind === "fee" ? 1 : 1;
+
+      ReviewGridEdit.enableEditOnTable(table, sheet.name, true, options.onPatch, {
+
+        headerMaxR: headerMaxR,
+
+        canEditHeader: canEditLayout,
+
+      });
 
     }
 
@@ -401,6 +415,9 @@
       owner: panel.owner,
       readOnly: panel.readOnly,
       canEdit: options.canEdit,
+      canEditLayout: !!(
+        window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout
+      ),
       boardEditMode: options.boardEditMode,
       onPatch: options.onPatch,
       searchQuery: options.searchQuery,

@@ -322,7 +322,9 @@ declare global {
     __REVIEW_EMBED__?: boolean;
     __REVIEW_SESSION__?: {
       canEdit?: boolean;
+      canEditLayout?: boolean;
       isMaster?: boolean;
+      isIndie?: boolean;
       gridMeta?: { importedAt?: string };
       gridReady?: boolean;
     };

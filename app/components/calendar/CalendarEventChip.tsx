@@ -31,6 +31,7 @@ export default function CalendarEventChip({
   const label = displayTitle(event, currentUser);
   const lightText = isLightManagerChipColor(color);
   const canEdit = event.kind === 'personal' && Boolean(onDoubleClick);
+  const done = !!event.completed;
 
   const handleDoubleClick = (e: MouseEvent) => {
     if (!canEdit) return;
@@ -49,7 +50,7 @@ export default function CalendarEventChip({
         lightText ? 'text-slate-900' : 'text-white'
       } ${compact ? 'px-1.5 py-0.5 text-[11px] leading-snug' : 'px-2.5 py-1 text-sm leading-snug'} ${
         canEdit ? 'cursor-pointer' : ''
-      }`}
+      } ${done ? 'opacity-60 line-through decoration-2' : ''}`}
       title={canEdit ? `${label} (더블클릭: 수정)` : label}
       onDoubleClick={handleDoubleClick}
       onClick={handleClick}

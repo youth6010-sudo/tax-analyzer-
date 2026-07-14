@@ -217,6 +217,11 @@ export default function IncomeTypeGridTable({
     );
   };
 
+  const stickyTh =
+    'sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_#e2e8f0]';
+  const stickyThRow2 =
+    'sticky top-[2.25rem] z-20 bg-slate-50 shadow-[0_1px_0_0_#e2e8f0]';
+
   const simpleHeader = () => {
     const row1: ReactNode[] = [];
     const row2: ReactNode[] = [];
@@ -225,7 +230,7 @@ export default function IncomeTypeGridTable({
     for (const col of simpleCols) {
       if (col.kind === 'filed') {
         row1.push(
-          <th key={col.key} rowSpan={2} className="px-1 py-2 text-center font-semibold">
+          <th key={col.key} rowSpan={2} className={`${stickyTh} px-1 py-2 text-center font-semibold`}>
             {col.label}
             {renderColCount(col.key)}
           </th>,
@@ -235,7 +240,7 @@ export default function IncomeTypeGridTable({
           <th
             key="labor-group"
             colSpan={2}
-            className="border-l border-slate-200 px-1 py-1 text-center font-semibold text-violet-700"
+            className={`${stickyTh} border-l border-slate-200 px-1 py-1 text-center font-semibold text-violet-700`}
           >
             근로내용확인신고
             {renderColCount('laborContentReport')}
@@ -244,7 +249,7 @@ export default function IncomeTypeGridTable({
         row2.push(
           <th
             key="laborDate"
-            className="border-l border-slate-100 px-1 py-1 text-center font-medium text-violet-600"
+            className={`${stickyThRow2} border-l border-slate-100 px-1 py-1 text-center font-medium text-violet-600`}
           >
             {col.label}
           </th>,
@@ -252,7 +257,10 @@ export default function IncomeTypeGridTable({
         laborGroupStarted = true;
       } else if (col.kind === 'laborMethod' && laborGroupStarted) {
         row2.push(
-          <th key="laborMethod" className="px-1 py-1 text-center font-medium text-violet-600">
+          <th
+            key="laborMethod"
+            className={`${stickyThRow2} px-1 py-1 text-center font-medium text-violet-600`}
+          >
             {col.label}
           </th>,
         );
@@ -262,20 +270,40 @@ export default function IncomeTypeGridTable({
     return (
       <>
         <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
-          <th rowSpan={2} style={colStyle(COL_WIDTH.no)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th
+            rowSpan={2}
+            style={colStyle(COL_WIDTH.no)}
+            className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+          >
             순번
           </th>
-          <th rowSpan={2} style={colStyle(COL_WIDTH.code)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th
+            rowSpan={2}
+            style={colStyle(COL_WIDTH.code)}
+            className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+          >
             코드
           </th>
-          <th rowSpan={2} style={colStyle(COL_WIDTH.company)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th
+            rowSpan={2}
+            style={colStyle(COL_WIDTH.company)}
+            className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+          >
             업체명
           </th>
-          <th rowSpan={2} style={colStyle(COL_WIDTH.biz)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th
+            rowSpan={2}
+            style={colStyle(COL_WIDTH.biz)}
+            className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+          >
             사업자번호
           </th>
           {row1}
-          <th rowSpan={2} style={noteColStyle()} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+          <th
+            rowSpan={2}
+            style={noteColStyle()}
+            className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+          >
             특이사항
           </th>
         </tr>
@@ -326,17 +354,40 @@ export default function IncomeTypeGridTable({
           simpleHeader()
         ) : (
           <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-            <th style={colStyle(COL_WIDTH.no)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
-            <th style={colStyle(COL_WIDTH.code)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">코드</th>
-            <th style={colStyle(COL_WIDTH.company)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">업체명</th>
-            <th style={colStyle(COL_WIDTH.biz)} className="whitespace-nowrap px-2 py-2 text-center font-semibold">사업자번호</th>
+            <th
+              style={colStyle(COL_WIDTH.no)}
+              className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+            >
+              순번
+            </th>
+            <th
+              style={colStyle(COL_WIDTH.code)}
+              className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+            >
+              코드
+            </th>
+            <th
+              style={colStyle(COL_WIDTH.company)}
+              className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+            >
+              업체명
+            </th>
+            <th
+              style={colStyle(COL_WIDTH.biz)}
+              className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+            >
+              사업자번호
+            </th>
             {yearEndCols.map(col => (
-              <th key={col.key} className="px-1 py-2 text-center font-semibold">
+              <th key={col.key} className={`${stickyTh} px-1 py-2 text-center font-semibold`}>
                 {col.label}
                 {renderColCount(col.key)}
               </th>
             ))}
-            <th style={noteColStyle()} className="whitespace-nowrap px-2 py-2 text-center font-semibold">
+            <th
+              style={noteColStyle()}
+              className={`${stickyTh} whitespace-nowrap px-2 py-2 text-center font-semibold`}
+            >
               특이사항
             </th>
           </tr>

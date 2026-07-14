@@ -27,6 +27,14 @@ import {
   type VatProgressInputKind,
 } from '@/lib/vatEntryProgress';
 import ReviewHubTabs from '@/app/components/clients/ReviewHubTabs';
+import {
+  applyFilingCheckOrderToRows,
+  FILING_CHECK_CLIENT_ORDER_STORAGE_KEY,
+  filingCheckOrderTaxKey,
+  MANAGER_CLIENT_ORDER_STORAGE_KEY,
+  MANAGER_ORDER_STORAGE_KEY,
+  readManagerOrder,
+} from '@/app/utils/clientListPrefs';
 
 const LABOR_COLS = [
   { key: 'employed', label: '상용' },
@@ -256,8 +264,32 @@ export default function VatEntryProgressBoard() {
   const [layoutSaving, setLayoutSaving] = useState(false);
   const [newColLabel, setNewColLabel] = useState('');
   const [newColInput, setNewColInput] = useState<VatProgressInputKind>('text');
+  const [orderTick, setOrderTick] = useState(0);
 
   const years = useMemo(() => Array.from({ length: 8 }, (_, i) => 2024 + i), []);
+
+  useEffect(() => {
+    const bump = () => setOrderTick(v => v + 1);
+    const onStorage = (e: StorageEvent) => {
+      if (
+        e.key === FILING_CHECK_CLIENT_ORDER_STORAGE_KEY ||
+        e.key === MANAGER_CLIENT_ORDER_STORAGE_KEY ||
+        e.key === MANAGER_ORDER_STORAGE_KEY
+      ) {
+        bump();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, bump);
+    window.addEventListener(`local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`, bump);
+    window.addEventListener(`local-storage:${MANAGER_ORDER_STORAGE_KEY}`, bump);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, bump);
+      window.removeEventListener(`local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`, bump);
+      window.removeEventListener(`local-storage:${MANAGER_ORDER_STORAGE_KEY}`, bump);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -324,7 +356,7 @@ export default function VatEntryProgressBoard() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return rows.filter(r => {
+    const matched = rows.filter(r => {
       if (canViewAll && managerFilter && r.manager.trim() !== managerFilter) return false;
       if (!needle) return true;
       const hay = [r.companyName, r.douzoneCode, r.businessNo, r.manager, r.representative]
@@ -332,7 +364,11 @@ export default function VatEntryProgressBoard() {
         .toLowerCase();
       return hay.includes(needle);
     });
-  }, [rows, q, canViewAll, managerFilter]);
+    return applyFilingCheckOrderToRows(matched, filingCheckOrderTaxKey('vat', phase), {
+      managerFilter: canViewAll && managerFilter ? managerFilter : undefined,
+      managerOrder: readManagerOrder(),
+    });
+  }, [rows, q, canViewAll, managerFilter, phase, orderTick]);
 
   const yearPhaseCols = useMemo(() => {
     const needed = new Set<VatPhase>();
@@ -510,23 +546,34 @@ export default function VatEntryProgressBoard() {
       <p className="text-[11px] text-slate-500">
         O/X/△ 열은 클릭으로 전환, 자유서식 열은 글자 입력(자료요청일·특이사항 등). Alt+클릭 색칠.
         열 형식·구성은 본인 계정에 저장되며 찰리·인디 전체 조회에도 본인 열이 적용됩니다.
+        업체 순서는 신고대상확인(부가가치세 · 동일 기수) 순서를 따릅니다.
         {view === 'year' ? ' 연간 진행표는 예정신고 대상만 예정 칸이 보입니다.' : ''}
       </p>
 
-      <div className={`${portalCard} overflow-auto`}>
+      <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-auto`}>
         {view === 'year' ? (
           <table className="w-max min-w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-                <th className="sticky left-0 z-10 bg-slate-50 px-2 py-2 text-left font-semibold">세무사랑</th>
-                <th className="sticky left-[4.5rem] z-10 bg-slate-50 px-2 py-2 text-left font-semibold">거래처</th>
+                <th className="sticky left-0 top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
+                  세무사랑
+                </th>
+                <th className="sticky left-[4.5rem] top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
+                  거래처
+                </th>
                 {yearPhaseCols.map(p => (
-                  <th key={p} className="px-2 py-2 text-center font-semibold">
+                  <th
+                    key={p}
+                    className="sticky top-0 z-20 bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
+                  >
                     {p}
                   </th>
                 ))}
                 {LABOR_COLS.map(col => (
-                  <th key={col.key} className="px-1.5 py-2 text-center font-semibold">
+                  <th
+                    key={col.key}
+                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
+                  >
                     {col.label}
                   </th>
                 ))}
@@ -598,15 +645,25 @@ export default function VatEntryProgressBoard() {
           <table className="w-max min-w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-                <th className="sticky left-0 z-10 bg-slate-50 px-2 py-2 text-left font-semibold">세무사랑</th>
-                <th className="sticky left-[4.5rem] z-10 bg-slate-50 px-2 py-2 text-left font-semibold">거래처</th>
+                <th className="sticky left-0 top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
+                  세무사랑
+                </th>
+                <th className="sticky left-[4.5rem] top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
+                  거래처
+                </th>
                 {layout.map(col => (
-                  <th key={col.key} className="px-1.5 py-2 text-center font-semibold">
+                  <th
+                    key={col.key}
+                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
+                  >
                     {col.label}
                   </th>
                 ))}
                 {LABOR_COLS.map(col => (
-                  <th key={col.key} className="px-1.5 py-2 text-center font-semibold">
+                  <th
+                    key={col.key}
+                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
+                  >
                     {col.label}
                   </th>
                 ))}

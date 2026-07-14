@@ -264,12 +264,23 @@
     return t;
   }
 
-  function enableEditOnTable(table, sheetName, canEdit, onPatch) {
-    if (!canEdit) return;
+  function enableEditOnTable(table, sheetName, canEdit, onPatch, options) {
+    options = options || {};
+    const headerMaxR = typeof options.headerMaxR === "number" ? options.headerMaxR : 0;
+    const canEditHeader = !!options.canEditHeader;
+    if (!canEdit && !(headerMaxR > 0 && canEditHeader)) return;
     const tds = table.querySelectorAll("td");
     tds.forEach(function (td) {
+      const r = parseInt(td.dataset.r, 10);
+      const isHeader = headerMaxR > 0 && r > 0 && r <= headerMaxR;
+      if (isHeader) {
+        if (!canEditHeader) return;
+      } else if (!canEdit) {
+        return;
+      }
       td.contentEditable = "true";
       td.classList.add("cell-editable");
+      if (isHeader) td.classList.add("cell-editable-header");
       td.addEventListener("keydown", function (e) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -277,11 +288,11 @@
         }
       });
       td.addEventListener("blur", function () {
-        const r = parseInt(td.dataset.r, 10);
+        const row = parseInt(td.dataset.r, 10);
         const c = parseInt(td.dataset.c, 10);
-        if (!r || !c) return;
+        if (!row || !c) return;
         const v = parseCellValue(td.textContent || "");
-        const count = upsertPatch(sheetName, r, c, v);
+        const count = upsertPatch(sheetName, row, c, v);
         if (onPatch) onPatch(count);
       });
     });

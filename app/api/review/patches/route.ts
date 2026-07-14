@@ -4,7 +4,20 @@ import {
   getEditableSheetNamesForOwner,
   getReviewAccessForUser,
   isReviewMaster,
+  reviewAccess,
 } from '@/lib/review/access';
+
+function isLayoutHeaderPatch(sheetName: string, row: number): boolean {
+  if (!Number.isFinite(row) || row < 1) return false;
+  const corpSheets = new Set<string>();
+  if (reviewAccess.corpSheet) corpSheets.add(reviewAccess.corpSheet);
+  if (reviewAccess.corpFeeSheet) corpSheets.add(reviewAccess.corpFeeSheet);
+  for (const ver of reviewAccess.corpTaxVersions || []) {
+    if (ver.sheet) corpSheets.add(ver.sheet);
+  }
+  if (corpSheets.has(sheetName)) return row <= 2;
+  return row <= 1;
+}
 import {
   clearReviewGridEdits,
   listReviewNewRows,
@@ -66,6 +79,16 @@ export async function PUT(request: NextRequest) {
     }
 
     if (Array.isArray(body.patches)) {
+      if (!access.canEditLayout) {
+        for (const patch of body.patches) {
+          if (isLayoutHeaderPatch(patch.sheetName, Number(patch.r))) {
+            return NextResponse.json(
+              { error: 'Forbidden: 제목행은 인디만 수정할 수 있습니다' },
+              { status: 403 },
+            );
+          }
+        }
+      }
       await upsertReviewPatches(body.patches, user.id);
     }
     if (Array.isArray(body.newRows)) {

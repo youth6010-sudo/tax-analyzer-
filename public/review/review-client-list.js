@@ -1529,11 +1529,49 @@
   }
 
   function enableBoardEditOnList(table, sheetName, options) {
-    if (!options.boardEditMode || !options.canEdit || options.readOnly) return;
-    ReviewGridEdit.enableEditOnTable(table, sheetName, true, options.onPatch);
+    if (!options.boardEditMode || options.readOnly) return;
+    const canEditLayout = !!(
+      options.canEditLayout != null
+        ? options.canEditLayout
+        : window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout
+    );
+    if (options.canEdit) {
+      ReviewGridEdit.enableEditOnTable(table, sheetName, true, options.onPatch, {
+        headerMaxR: 0,
+        canEditHeader: false,
+      });
+    }
+    if (!canEditLayout) return;
+    const headerR = options.kind === "corp" ? 2 : 1;
+    table.querySelectorAll("thead th[data-sheet-c] .th-label-text").forEach(function (label) {
+      const th = label.closest("th");
+      if (!th) return;
+      label.contentEditable = "true";
+      label.classList.add("cell-editable", "cell-editable-header");
+      label.title = "제목 수정 (인디) · Enter로 확정";
+      label.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          label.blur();
+        }
+      });
+      label.addEventListener("blur", function () {
+        const c = parseInt(th.getAttribute("data-sheet-c"), 10);
+        if (!c || !sheetName) return;
+        const text = (label.textContent || "").trim();
+        ReviewGridEdit.applyFieldEdit(sheetName, headerR, c, text, options.onPatch);
+      });
+    });
   }
 
-  function buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader) {
+  function buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader, options) {
+    options = options || {};
+    const canEditLayout = !!(
+      options.boardEditMode &&
+      (options.canEditLayout != null
+        ? options.canEditLayout
+        : window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout)
+    );
     const thead = document.createElement("thead");
     const headTr = document.createElement("tr");
     if (showSectionColumn) {
@@ -1544,14 +1582,54 @@
       if (accentOnlyColumn) thGroup.setAttribute("aria-label", "구분색");
       headTr.appendChild(thGroup);
     }
-    visibleCols.forEach(function (col) {
+    visibleCols.forEach(function (col, colIndex) {
       const th = document.createElement("th");
-      th.textContent = listColDisplayLabel(col, kind, listKind);
       th.classList.add("col-id-" + String(ReviewReadable.listColId(col)).replace(/[^a-zA-Z0-9_-]/g, "-"));
       if (col.highlight) th.classList.add("col-highlight");
       if (col.wrap) th.classList.add("wrap");
       if (isAccentPersonColumn(col, kind)) th.classList.add("col-sticky-person");
       if (isAccentNameColumn(col, kind)) th.classList.add("col-sticky-name");
+      if (typeof col.c === "number") th.setAttribute("data-sheet-c", String(col.c));
+
+      const label = document.createElement("span");
+      label.className = "th-label-text";
+      label.textContent = listColDisplayLabel(col, kind, listKind);
+      th.appendChild(label);
+
+      if (canEditLayout) {
+        const tools = document.createElement("span");
+        tools.className = "th-layout-tools";
+        const leftBtn = document.createElement("button");
+        leftBtn.type = "button";
+        leftBtn.className = "th-layout-btn";
+        leftBtn.textContent = "◀";
+        leftBtn.title = "열 왼쪽 이동";
+        leftBtn.disabled = colIndex === 0;
+        leftBtn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (ReviewReadable.moveVisibleListCol(listKind, ReviewReadable.listColId(col), -1) && options.onRerender) {
+            options.onRerender();
+          }
+        });
+        const rightBtn = document.createElement("button");
+        rightBtn.type = "button";
+        rightBtn.className = "th-layout-btn";
+        rightBtn.textContent = "▶";
+        rightBtn.title = "열 오른쪽 이동";
+        rightBtn.disabled = colIndex >= visibleCols.length - 1;
+        rightBtn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (ReviewReadable.moveVisibleListCol(listKind, ReviewReadable.listColId(col), 1) && options.onRerender) {
+            options.onRerender();
+          }
+        });
+        tools.appendChild(leftBtn);
+        tools.appendChild(rightBtn);
+        th.appendChild(tools);
+      }
+
       headTr.appendChild(th);
     });
     thead.appendChild(headTr);
@@ -1609,13 +1687,13 @@
       tableClass += " client-list-table--board-edit";
     }
     table.className = tableClass;
-    buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader);
+    buildListHeader(table, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader, options);
 
     const stickyHead = document.createElement("div");
     stickyHead.className = "client-list-sticky-head";
     const stickyTable = document.createElement("table");
     stickyTable.className = tableClass + " client-list-table--sticky-head";
-    buildListHeader(stickyTable, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader);
+    buildListHeader(stickyTable, visibleCols, kind, listKind, showSectionColumn, accentOnlyColumn, sectionHeader, options);
     stickyHead.appendChild(stickyTable);
     wrap.appendChild(stickyHead);
     shell.appendChild(wrap);
@@ -1786,6 +1864,7 @@
     wrap.appendChild(table);
     if (options.boardEditMode && options.sheet && options.sheet.name) {
       enableBoardEditOnList(table, options.sheet.name, options);
+      enableBoardEditOnList(stickyTable, options.sheet.name, options);
     }
     requestAnimationFrame(function () {
       applyStickyOffsets(table, kind);

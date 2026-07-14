@@ -77,6 +77,8 @@ export type CalendarEventDto = {
   createdAt?: string;
   companyScheduleKind?: CompanyScheduleKind;
   companyDescription?: string;
+  /** 개인 완료 또는 회사 일정 본인 체크 완료 */
+  completed?: boolean;
 };
 
 /** 캘린더·체크리스트 등록일시 표시 */

@@ -22,6 +22,7 @@ import {
   CLIENT_SORT_STORAGE_KEY,
   commitFilingCheckClientReorder,
   FILING_CHECK_CLIENT_ORDER_STORAGE_KEY,
+  filingCheckOrderTaxKey,
   MANAGER_ORDER_STORAGE_KEY,
   compareManagersByOrder,
   type ClientSortKey,
@@ -581,6 +582,8 @@ function FilingCheckPageInner() {
 
   const cycle = getCycle(tax);
   const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
+  /** 부가세는 기수별 순서 키 — ▲▼ 저장/조회 */
+  const orderTaxKey = filingCheckOrderTaxKey(tax, tax === 'vat' ? period.vatPhase : null);
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
@@ -959,14 +962,23 @@ function FilingCheckPageInner() {
             ALL_MANAGERS,
             managerOrder,
           )
-        : applyFilingCheckClientOrder(scoped, clientListSort, selManager, tax);
+        : applyFilingCheckClientOrder(scoped, clientListSort, selManager, orderTaxKey);
     const manual = resolveExtraClients(
       record.extraClients,
       clients,
       new Set(ordered.map(c => c.id)),
     );
     return [...ordered, ...manual];
-  }, [taxTargetsAll, selManager, record.extraClients, clientListSort, managerOrder, tax, clientOrderVersion, clients]);
+  }, [
+    taxTargetsAll,
+    selManager,
+    record.extraClients,
+    clientListSort,
+    managerOrder,
+    orderTaxKey,
+    clientOrderVersion,
+    clients,
+  ]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const isReceived = (id: string, bizNo: string) =>
@@ -1320,7 +1332,13 @@ function FilingCheckPageInner() {
   const handleTargetOrderCommit = useCallback(
     (nextIds: string[]) => {
       if (!canReorderTargets) return;
-      commitFilingCheckClientReorder(selManager, tax, nextIds, managerScopedClients, clientListSort);
+      commitFilingCheckClientReorder(
+        selManager,
+        orderTaxKey,
+        nextIds,
+        managerScopedClients,
+        clientListSort,
+      );
       setClientOrderVersion(v => v + 1);
       if (tax === 'comprehensive') {
         setGroupDisplayOrder(prev => {
@@ -1340,7 +1358,15 @@ function FilingCheckPageInner() {
         });
       }
     },
-    [canReorderTargets, selManager, tax, managerScopedClients, clientListSort, comprehensiveGroups],
+    [
+      canReorderTargets,
+      selManager,
+      orderTaxKey,
+      tax,
+      managerScopedClients,
+      clientListSort,
+      comprehensiveGroups,
+    ],
   );
   const { orderedIds: reorderableOrderedIds, moveUp, moveDown } =
     useTriangleListReorder(reorderableTargetIds, handleTargetOrderCommit);
@@ -2308,7 +2334,7 @@ function FilingCheckPageInner() {
       )}
 
       {/* 대상 목록 */}
-      <div className={`${portalCard} overflow-hidden`}>
+      <div className={portalCard}>
         {tax === 'comprehensive' ? (
         <>
           {canReorderTargets && (
@@ -2319,14 +2345,14 @@ function FilingCheckPageInner() {
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">접수</th>
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
-              <th className="w-20 whitespace-nowrap px-2 py-2 text-center font-semibold">코드</th>
-              <th className="w-28 whitespace-nowrap px-2 py-2 text-center font-semibold">대표자명</th>
-              <th className="w-32 whitespace-nowrap px-2 py-2 text-center font-semibold">주민등록번호</th>
-              <th className="w-48 whitespace-nowrap px-2 py-2 text-center font-semibold">상호</th>
-              <th className="whitespace-nowrap px-2 py-2 text-center font-semibold">특이사항(제외사유 등)</th>
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">제외</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">접수</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
+              <th className="sticky top-0 z-20 w-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">코드</th>
+              <th className="sticky top-0 z-20 w-28 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">대표자명</th>
+              <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">주민등록번호</th>
+              <th className="sticky top-0 z-20 w-48 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">상호</th>
+              <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">특이사항(제외사유 등)</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">제외</th>
             </tr>
           </thead>
           <tbody>
@@ -2549,19 +2575,19 @@ function FilingCheckPageInner() {
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">접수</th>
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">순번</th>
-              <th className="w-20 whitespace-nowrap px-2 py-2 text-center font-semibold">코드</th>
-              <th className="w-64 whitespace-nowrap px-2 py-2 text-center font-semibold">업체명</th>
-              <th className="w-32 whitespace-nowrap px-2 py-2 text-center font-semibold">사업자번호</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">접수</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
+              <th className="sticky top-0 z-20 w-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">코드</th>
+              <th className="sticky top-0 z-20 w-64 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">업체명</th>
+              <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">사업자번호</th>
               {tax === 'withholding' && (
-                <th className="w-28 whitespace-nowrap px-2 py-2 text-center font-semibold">신고유형</th>
+                <th className="sticky top-0 z-20 w-28 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">신고유형</th>
               )}
               {vatProvisional && (
-                <th className="w-32 whitespace-nowrap px-2 py-2 text-center font-semibold">구분</th>
+                <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">구분</th>
               )}
-              <th className="whitespace-nowrap px-2 py-2 text-center font-semibold">특이사항(제외사유 등)</th>
-              <th className="w-12 whitespace-nowrap px-2 py-2 text-center font-semibold">제외</th>
+              <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">특이사항(제외사유 등)</th>
+              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">제외</th>
             </tr>
           </thead>
           <tbody>

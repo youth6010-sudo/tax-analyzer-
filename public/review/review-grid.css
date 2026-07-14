@@ -1578,8 +1578,32 @@ body.client-detail-modal-open {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.client-list-table td.has-cell-tooltip {
-  cursor: help;
+.client-list-table th .th-layout-tools {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.client-list-table th .th-layout-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 3px;
+  cursor: pointer;
+}
+
+.client-list-table th .th-layout-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.client-list-table th.cell-editable-header {
+  outline: 1px dashed #94a3b8;
+  cursor: text;
 }
 
 .client-list-table th.wrap,

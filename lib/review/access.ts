@@ -20,10 +20,17 @@ export type ReviewAccessConfig = {
 export const reviewAccess = reviewAccessConfig;
 
 const REVIEW_MASTER_LOGIN_IDS = new Set(['charlie', 'indie']);
+const REVIEW_INDIE_LOGIN_ID = 'indie';
 
 export function isReviewMaster(user: Pick<SessionUser, 'loginId'> | null | undefined): boolean {
   const loginId = user?.loginId?.trim().toLowerCase() ?? '';
   return REVIEW_MASTER_LOGIN_IDS.has(loginId);
+}
+
+/** 결산 제목행(엑셀 헤더)·열 구성 — 인디만 */
+export function isReviewIndie(user: Pick<SessionUser, 'loginId'> | null | undefined): boolean {
+  const loginId = user?.loginId?.trim().toLowerCase() ?? '';
+  return loginId === REVIEW_INDIE_LOGIN_ID;
 }
 
 export function allReviewOwners(): string[] {
@@ -73,13 +80,18 @@ export function getEditableSheetNamesForOwner(
 export function getReviewAccessForUser(user: SessionUser) {
   const reviewOwner = resolveReviewOwner(user);
   const isMaster = isReviewMaster(user);
+  const isIndie = isReviewIndie(user);
   const sheetMapping = reviewAccess.sheetMap[reviewOwner] ?? null;
 
   return {
     reviewOwner,
     isMaster,
+    isIndie,
     access: reviewAccess,
     sheetMapping,
+    /** 본문(데이터) 셀 — 담당자 · 관리자(찰리/인디) */
     canEdit: isMaster || staffCanEditReview(reviewOwner),
+    /** 제목행·열 순서 — 인디만 */
+    canEditLayout: isIndie,
   };
 }

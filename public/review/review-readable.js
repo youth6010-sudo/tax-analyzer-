@@ -701,11 +701,57 @@
   }
 
   function getVisibleListCols(kind) {
-    return getColCatalog(kind || "income");
+    kind = kind || "income";
+    const catalog = getColCatalog(kind);
+    try {
+      const raw = sessionStorage.getItem(listColStorageKey(kind));
+      if (!raw) return catalog.slice();
+      const ids = JSON.parse(raw);
+      if (!Array.isArray(ids) || !ids.length) return catalog.slice();
+      const byId = new Map(
+        catalog.map(function (col) {
+          return [String(listColId(col)), col];
+        })
+      );
+      const out = [];
+      const seen = new Set();
+      ids.forEach(function (id) {
+        const key = String(id);
+        const col = byId.get(key);
+        if (col && !seen.has(key)) {
+          out.push(col);
+          seen.add(key);
+        }
+      });
+      catalog.forEach(function (col) {
+        const key = String(listColId(col));
+        if (!seen.has(key)) out.push(col);
+      });
+      return out;
+    } catch {
+      return catalog.slice();
+    }
   }
 
   function setVisibleListCols(colNumbers, kind) {
     sessionStorage.setItem(listColStorageKey(kind || "income"), JSON.stringify(colNumbers));
+  }
+
+  function moveVisibleListCol(kind, colId, dir) {
+    const cols = getVisibleListCols(kind);
+    const ids = cols.map(function (col) {
+      return listColId(col);
+    });
+    const i = ids.findIndex(function (id) {
+      return String(id) === String(colId);
+    });
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return false;
+    const tmp = ids[i];
+    ids[i] = ids[j];
+    ids[j] = tmp;
+    setVisibleListCols(ids, kind);
+    return true;
   }
 
   function listColId(col) {
@@ -2401,6 +2447,7 @@
     getDefaultVisibleListCols,
     getVisibleListCols,
     setVisibleListCols,
+    moveVisibleListCol,
     getListExcludedCols,
     getFeeStaffFilters,
     setFeeStaffFilters,

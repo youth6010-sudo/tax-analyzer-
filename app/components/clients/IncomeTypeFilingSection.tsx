@@ -859,7 +859,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     ) : null;
 
   const tableBlock = (
-    <div className={`${portalCard} overflow-hidden`}>
+    <div className={portalCard}>
       <IncomeTypeGridTable
         mode={mode}
         rows={filteredGrid}

@@ -151,6 +151,15 @@ export const FILING_CHECK_CLIENT_ORDER_STORAGE_KEY = 'filingCheck.clientOrder.v1
 
 export type FilingCheckClientOrderStore = Record<string, string[]>;
 
+/**
+ * 부가세는 기수마다 대상이 달라 기수를 키에 포함 (`vat` | `vat:1기 확정`).
+ * 그 외 세목은 taxType 그대로.
+ */
+export function filingCheckOrderTaxKey(taxType: string, vatPhase?: string | null): string {
+  if (taxType === 'vat' && vatPhase) return `vat:${vatPhase}`;
+  return taxType;
+}
+
 export function filingCheckOrderScopeKey(manager: string, taxType: string): string {
   return `${manager}\t${taxType}`;
 }
@@ -169,8 +178,15 @@ export function readFilingCheckClientOrderStore(): FilingCheckClientOrderStore {
 }
 
 export function readFilingCheckClientOrder(manager: string, taxType: string): string[] | null {
-  const order = readFilingCheckClientOrderStore()[filingCheckOrderScopeKey(manager, taxType)];
-  return order?.length ? order : null;
+  const store = readFilingCheckClientOrderStore();
+  const order = store[filingCheckOrderScopeKey(manager, taxType)];
+  if (order?.length) return order;
+  // 부가세 기수 키 → 예전 `vat` 키 fallback
+  if (taxType.startsWith('vat:')) {
+    const legacy = store[filingCheckOrderScopeKey(manager, 'vat')];
+    if (legacy?.length) return legacy;
+  }
+  return null;
 }
 
 export function writeFilingCheckClientOrder(manager: string, taxType: string, ids: string[]): void {
@@ -183,6 +199,69 @@ export function writeFilingCheckClientOrder(manager: string, taxType: string, id
   } catch {
     /* ignore */
   }
+}
+
+/** id 배열 커스텀 순서로 재배열 (없는 id는 맨 뒤 유지 순) */
+export function applyIdDisplayOrder<T extends { id: string }>(
+  items: T[],
+  customOrder?: string[] | null,
+): T[] {
+  if (!customOrder?.length) return items;
+  const byId = new Map(items.map(item => [item.id, item]));
+  const result: T[] = [];
+  for (const id of customOrder) {
+    const item = byId.get(id);
+    if (item) {
+      result.push(item);
+      byId.delete(id);
+    }
+  }
+  for (const item of items) {
+    if (byId.has(item.id)) result.push(item);
+  }
+  return result;
+}
+
+/** 검토표 부가세 등 — 신고대상확인(담당자·세목) 순서로 정렬 */
+export function applyFilingCheckOrderToRows<T extends { id: string; manager?: string }>(
+  items: T[],
+  taxType: string,
+  options?: {
+    managerFilter?: string;
+    managerOrder?: readonly string[];
+  },
+): T[] {
+  if (!items.length) return items;
+  const managerOrder = options?.managerOrder?.length
+    ? options.managerOrder
+    : readManagerOrder();
+  const filter = options?.managerFilter?.trim();
+
+  const sortOneManager = (list: T[], manager: string): T[] => {
+    const custom = readFilingCheckClientOrder(manager, taxType);
+    if (custom?.length) return applyIdDisplayOrder(list, custom);
+    return applyIdDisplayOrder(list, readManagerClientOrder(manager));
+  };
+
+  if (filter) {
+    return sortOneManager(items, filter);
+  }
+
+  const byMgr = new Map<string, T[]>();
+  for (const item of items) {
+    const m = (item.manager || '').trim() || UNCategorized;
+    const arr = byMgr.get(m) ?? [];
+    arr.push(item);
+    byMgr.set(m, arr);
+  }
+  const mgrs = [...byMgr.keys()].sort((a, b) =>
+    compareManagersByOrder(a, b, managerOrder, UNCategorized),
+  );
+  const result: T[] = [];
+  for (const m of mgrs) {
+    result.push(...sortOneManager(byMgr.get(m) ?? [], m));
+  }
+  return result;
 }
 
 function mergeSubsetIntoOrder(

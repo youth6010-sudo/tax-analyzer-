@@ -22,6 +22,7 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
+const HIDE_COMPLETED_KEY = 'calendarHideCompleted.v1';
 
 function monthRange(year: number, month: number): { from: string; to: string } {
   const from = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -61,6 +62,16 @@ function readStoredShowCompany(): boolean {
   return true;
 }
 
+function readStoredHideCompleted(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(HIDE_COMPLETED_KEY);
+    if (raw === '1') return true;
+    if (raw === '0') return false;
+  } catch { /* ignore */ }
+  return false;
+}
+
 function readStoredTeam(currentUser: string): string[] | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -93,6 +104,7 @@ export default function CalendarPageClient() {
   const [currentUser, setCurrentUser] = useState('');
   const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
   const [showCompany, setShowCompany] = useState(true);
+  const [hideCompleted, setHideCompleted] = useState(false);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDto | null>(null);
@@ -118,6 +130,7 @@ export default function CalendarPageClient() {
         setMembers(team);
         setCurrentUser(me);
         setShowCompany(readStoredShowCompany());
+        setHideCompleted(readStoredHideCompleted());
         const stored = readStoredTeam(me);
         const valid = (stored || [me]).filter(n => team.includes(n));
         setSelectedOwners(valid.length > 0 ? valid : [me]);
@@ -133,6 +146,13 @@ export default function CalendarPageClient() {
     setShowCompany(show);
     try {
       localStorage.setItem(SHOW_COMPANY_KEY, show ? '1' : '0');
+    } catch { /* ignore */ }
+  };
+
+  const handleHideCompletedChange = (hide: boolean) => {
+    setHideCompleted(hide);
+    try {
+      localStorage.setItem(HIDE_COMPLETED_KEY, hide ? '1' : '0');
     } catch { /* ignore */ }
   };
 
@@ -199,8 +219,13 @@ export default function CalendarPageClient() {
   };
 
   const visibleEvents = useMemo(
-    () => events.filter(ev => ev.kind !== 'company' || showCompany),
-    [events, showCompany],
+    () =>
+      events.filter(ev => {
+        if (ev.kind === 'company' && !showCompany) return false;
+        if (hideCompleted && ev.completed) return false;
+        return true;
+      }),
+    [events, showCompany, hideCompleted],
   );
 
   const scheduleEvents = useMemo(
@@ -281,10 +306,21 @@ export default function CalendarPageClient() {
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-slate-900">{title}</p>
+                  <p
+                    className={`text-sm font-semibold ${
+                      ev.completed ? 'text-slate-400 line-through' : 'text-slate-900'
+                    }`}
+                  >
+                    {title}
+                  </p>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
                     {ev.kind === 'company' ? '사내' : '개인'}
                   </span>
+                  {ev.completed ? (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                      완료
+                    </span>
+                  ) : null}
                 </div>
                 {ev.subtitle && (
                   <p className="mt-1 text-sm text-slate-600 leading-relaxed">{ev.subtitle}</p>
@@ -326,6 +362,8 @@ export default function CalendarPageClient() {
             onChange={handleOwnersChange}
             showCompany={showCompany}
             onShowCompanyChange={handleShowCompanyChange}
+            hideCompleted={hideCompleted}
+            onHideCompletedChange={handleHideCompletedChange}
           />
         )}
 
