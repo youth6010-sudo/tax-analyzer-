@@ -1,54 +1,46 @@
 import type { ClientRecord } from '@/app/types/client';
 
 /** 부가세 자료입력 진행도 — 세목 기간별 */
-export const VAT_PROGRESS_MARKS = ['', 'O', 'X', '△'] as const;
-export type VatProgressMark = (typeof VAT_PROGRESS_MARKS)[number];
-
 export const VAT_PROGRESS_COLORS = ['', '#BFDBFE', '#FEF08A', '#BBF7D0', '#FBCFE8'] as const;
 
 export type VatProgressCell = {
-  mark?: VatProgressMark | string;
+  /** 자유 텍스트 (엑셀처럼) */
+  text?: string;
+  /** @deprecated 이전 O/X/△ — 표시 시 text로 승계 */
+  mark?: string;
   bg?: string;
 };
 
-/** 항상 표시되는 자료 열 (수기·불공제·신용매출 등은 해당 시에만) */
-export const VAT_PROGRESS_ALWAYS_KEYS = [
-  'taxInvoice',
-  'invoice',
-  'card',
-  'cashReceipt',
-  'otherEvidence',
-] as const;
+export type VatProgressInputKind = 'mark' | 'text';
 
-export type VatProgressAlwaysKey = (typeof VAT_PROGRESS_ALWAYS_KEYS)[number];
-
-/** 조건부 열 — 계산서 다음 수기·불공제, 이후 신용매출·영세율·통장 */
-export const VAT_PROGRESS_OPTIONAL_KEYS = [
-  'manualEntry',
-  'nonDeductible',
-  'agencySales',
-  'zeroRateSales',
-  'bankStatement',
-] as const;
-export type VatProgressOptionalKey = (typeof VAT_PROGRESS_OPTIONAL_KEYS)[number];
-
-export type VatProgressItemKey = VatProgressAlwaysKey | VatProgressOptionalKey;
-
-/** @deprecated 호환 — ALWAYS + 조건부는 visibleVatProgressKeys 사용 */
-export const VAT_PROGRESS_CORE_KEYS = VAT_PROGRESS_ALWAYS_KEYS;
-
-export const VAT_PROGRESS_LABELS: Record<VatProgressItemKey, string> = {
-  taxInvoice: '세금계산서',
-  invoice: '계산서',
-  manualEntry: '수기',
-  nonDeductible: '불공제',
-  card: '카드',
-  cashReceipt: '현금영수증',
-  otherEvidence: '기타증빙',
-  agencySales: '신용매출',
-  zeroRateSales: '영세율매출',
-  bankStatement: '통장내역',
+export type VatProgressColumnDef = {
+  key: string;
+  label: string;
+  /** mark = O/X/△ 클릭 · text = 자유 입력 */
+  input: VatProgressInputKind;
 };
+
+/** 표준 기본 틀 — 자료 열은 O/X/△ */
+export const VAT_PROGRESS_DEFAULT_COLUMNS: VatProgressColumnDef[] = [
+  { key: 'taxInvoice', label: '세금계산서', input: 'mark' },
+  { key: 'invoice', label: '계산서', input: 'mark' },
+  { key: 'manualEntry', label: '수기', input: 'mark' },
+  { key: 'nonDeductible', label: '불공제', input: 'mark' },
+  { key: 'card', label: '카드', input: 'mark' },
+  { key: 'cashReceipt', label: '현금영수증', input: 'mark' },
+  { key: 'otherEvidence', label: '기타증빙', input: 'mark' },
+  { key: 'agencySales', label: '신용매출', input: 'mark' },
+  { key: 'zeroRateSales', label: '영세율매출', input: 'mark' },
+  { key: 'bankStatement', label: '통장내역', input: 'mark' },
+];
+
+/** @deprecated 호환 */
+export const VAT_PROGRESS_DEFAULT_COLUMN_ORDER = VAT_PROGRESS_DEFAULT_COLUMNS.map(c => c.key);
+export const VAT_PROGRESS_LABELS: Record<string, string> = Object.fromEntries(
+  VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c.label]),
+);
+
+export type VatProgressItemKey = string;
 
 export type VatMaterialFlags = {
   agencySales: boolean;
@@ -57,12 +49,18 @@ export type VatMaterialFlags = {
   manualEntry: boolean;
 };
 
-export type VatPeriodProgress = Partial<Record<VatProgressItemKey, VatProgressCell>>;
-
+export type VatPeriodProgress = Partial<Record<string, VatProgressCell>>;
 export type VatEntryProgressMap = Record<string, VatPeriodProgress>;
 
 export function vatProgressPeriodKey(year: number, vatPhase: string): string {
   return `${year}:${vatPhase}`;
+}
+
+export function cellDisplayValue(cell: VatProgressCell | undefined): string {
+  if (!cell) return '';
+  const text = String(cell.text ?? '').trim();
+  if (text) return text;
+  return String(cell.mark ?? '').trim();
 }
 
 export function readVatMaterialFlags(
@@ -92,102 +90,65 @@ export function readVatPeriodProgress(
   return { ...entry };
 }
 
-export function cycleVatMark(current: string | undefined): VatProgressMark {
-  const cur = (current || '') as VatProgressMark;
-  const idx = VAT_PROGRESS_MARKS.indexOf(cur);
-  return VAT_PROGRESS_MARKS[(idx + 1) % VAT_PROGRESS_MARKS.length];
-}
-
 export function cycleVatColor(current: string | undefined): string {
   const cur = current || '';
   const idx = (VAT_PROGRESS_COLORS as readonly string[]).indexOf(cur);
   return VAT_PROGRESS_COLORS[(idx + 1) % VAT_PROGRESS_COLORS.length];
 }
 
-function isCorporateEntity(client: Pick<ClientRecord, 'businessEntityType'>): boolean {
-  return client.businessEntityType === 'corporate';
-}
-
-/**
- * 표준 열 순서 (세금계산서~통장). 사용자 조정 시 이 목록 기준 정렬.
- */
-export const VAT_PROGRESS_DEFAULT_COLUMN_ORDER: VatProgressItemKey[] = [
-  'taxInvoice',
-  'invoice',
-  'manualEntry',
-  'nonDeductible',
-  'card',
-  'cashReceipt',
-  'otherEvidence',
-  'agencySales',
-  'zeroRateSales',
-  'bankStatement',
-];
-
-export function normalizeVatProgressColumnOrder(
-  order: readonly string[] | null | undefined,
-): VatProgressItemKey[] {
-  const known = new Set<string>(VAT_PROGRESS_DEFAULT_COLUMN_ORDER);
-  const out: VatProgressItemKey[] = [];
-  for (const k of order ?? []) {
-    if (!known.has(k)) continue;
-    const key = k as VatProgressItemKey;
-    if (!out.includes(key)) out.push(key);
+export function normalizeVatProgressLayout(
+  columns: readonly VatProgressColumnDef[] | null | undefined,
+): VatProgressColumnDef[] {
+  const defaultInput = new Map(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c.input]));
+  const out: VatProgressColumnDef[] = [];
+  const seen = new Set<string>();
+  for (const col of columns ?? []) {
+    const key = String(col?.key ?? '').trim();
+    const label = String(col?.label ?? '').trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const rawInput = (col as { input?: string })?.input;
+    const input: VatProgressInputKind =
+      rawInput === 'text' || rawInput === 'mark'
+        ? rawInput
+        : (defaultInput.get(key) ?? 'text');
+    out.push({ key, label: label || key, input });
   }
-  for (const k of VAT_PROGRESS_DEFAULT_COLUMN_ORDER) {
-    if (!out.includes(k)) out.push(k);
-  }
+  if (out.length === 0) return VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c }));
   return out;
 }
 
-export function isVatProgressColumnActive(
-  key: VatProgressItemKey,
-  row: { flags: VatMaterialFlags; isCorporate?: boolean },
-): boolean {
-  if (key === 'manualEntry') return row.flags.manualEntry;
-  if (key === 'nonDeductible') return row.flags.nonDeductible;
-  if (key === 'agencySales') return row.flags.agencySales;
-  if (key === 'zeroRateSales') return row.flags.zeroRateSales;
-  if (key === 'bankStatement') return !!row.isCorporate;
-  return true;
-}
-
-/** 목록에 표시할 자료 열 (사용자 순서 × 현재 화면에 필요한 조건부 열) */
-export function materialColumnsForRows(
-  rows: readonly { flags: VatMaterialFlags; isCorporate?: boolean }[],
-  columnOrder: readonly VatProgressItemKey[],
-): VatProgressItemKey[] {
-  const order = normalizeVatProgressColumnOrder(columnOrder);
-  const needed = new Set<VatProgressItemKey>();
+/** 예전 키 배열 저장 → 레이아웃 승계 */
+export function layoutFromLegacyOrder(order: readonly string[] | null | undefined): VatProgressColumnDef[] {
+  if (!order?.length) return VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c }));
+  const byKey = new Map(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c]));
+  const out: VatProgressColumnDef[] = [];
+  const seen = new Set<string>();
   for (const key of order) {
-    if (
-      key === 'taxInvoice' ||
-      key === 'invoice' ||
-      key === 'card' ||
-      key === 'cashReceipt' ||
-      key === 'otherEvidence'
-    ) {
-      needed.add(key);
-      continue;
-    }
-    if (rows.some(r => isVatProgressColumnActive(key, r))) needed.add(key);
+    const k = String(key).trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const def = byKey.get(k);
+    out.push(def ? { ...def } : { key: k, label: VAT_PROGRESS_LABELS[k] || k, input: 'text' });
   }
-  return order.filter(k => needed.has(k));
+  for (const c of VAT_PROGRESS_DEFAULT_COLUMNS) {
+    if (!seen.has(c.key)) {
+      out.push({ ...c });
+      seen.add(c.key);
+    }
+  }
+  return out.length ? out : VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c }));
 }
 
-/**
- * 표시 순서: 세금계산서 → 계산서 → (수기) → (불공제) → 카드 → 현금영수증 → 기타증빙
- * → (신용매출) → (영세율) → (통장·법인)
- * columnOrder가 있으면 그 순서로 재배열.
- */
+export function createVatProgressColumnKey(): string {
+  return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export function visibleVatProgressKeys(
-  client: Pick<ClientRecord, 'businessEntityType' | 'intakeData'>,
-  columnOrder?: readonly VatProgressItemKey[],
-): VatProgressItemKey[] {
-  const flags = readVatMaterialFlags(client.intakeData);
-  const row = { flags, isCorporate: isCorporateEntity(client) };
-  const order = normalizeVatProgressColumnOrder(columnOrder);
-  return order.filter(k => isVatProgressColumnActive(k, row));
+  _client: Pick<ClientRecord, 'businessEntityType' | 'intakeData'>,
+  layout?: readonly VatProgressColumnDef[],
+): string[] {
+  return normalizeVatProgressLayout(layout).map(c => c.key);
 }
 
 export function mergeVatPeriodProgressPatch(
@@ -201,31 +162,46 @@ export function mergeVatPeriodProgressPatch(
       : ({} as VatEntryProgressMap);
   const prev = { ...(prevMap[periodKey] || {}) };
   for (const [k, v] of Object.entries(patch)) {
-    const key = k as VatProgressItemKey;
-    if (!v || (!v.mark && !v.bg)) delete prev[key];
-    else prev[key] = { mark: v.mark || '', bg: v.bg || '' };
+    if (!v) {
+      delete prev[k];
+      continue;
+    }
+    const text = String(v.text ?? '').trim();
+    const mark = String(v.mark ?? '').trim();
+    const bg = (v.bg || '').trim();
+    if (!text && !mark && !bg) delete prev[k];
+    else prev[k] = { text, mark, bg };
   }
   prevMap[periodKey] = prev;
   return { ...intakeData, vatEntryProgress: prevMap };
 }
 
-/** 셀에 입력(체크·색)이 있으면 완료로 집계 */
 export function isVatProgressCellFilled(cell: VatProgressCell | undefined): boolean {
   if (!cell) return false;
-  return Boolean((cell.mark && String(cell.mark).trim()) || (cell.bg && String(cell.bg).trim()));
+  return Boolean(cellDisplayValue(cell) || (cell.bg && String(cell.bg).trim()));
 }
 
 export function summarizeVatPeriodProgress(
   progress: VatPeriodProgress,
-  keys: readonly VatProgressItemKey[],
+  columns: readonly VatProgressColumnDef[],
 ): { done: number; total: number; filledLabels: string[] } {
+  const cols = normalizeVatProgressLayout(columns);
   let done = 0;
   const filledLabels: string[] = [];
-  for (const key of keys) {
-    if (isVatProgressCellFilled(progress[key])) {
+  for (const col of cols) {
+    if (isVatProgressCellFilled(progress[col.key])) {
       done += 1;
-      filledLabels.push(VAT_PROGRESS_LABELS[key]);
+      filledLabels.push(col.label);
     }
   }
-  return { done, total: keys.length, filledLabels };
+  return { done, total: cols.length, filledLabels };
+}
+
+/** @deprecated */
+export const VAT_PROGRESS_MARKS = ['', 'O', 'X', '△'] as const;
+export function cycleVatMark(current: string | undefined): string {
+  const marks = VAT_PROGRESS_MARKS;
+  const cur = (current || '') as (typeof marks)[number];
+  const idx = marks.indexOf(cur);
+  return marks[(idx + 1) % marks.length];
 }

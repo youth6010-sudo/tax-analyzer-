@@ -2232,7 +2232,11 @@
           if (col.sticky) td.classList.add("sticky-col", "sticky-col-" + idx);
           if (typeof data.v === "number" || col.c === 12 || col.c === 13 || col.c === 14 || col.c === 6)
             td.classList.add("num");
-          if (col.c === 5 || col.c === 21) td.classList.add("wrap");
+          if (col.wrap || col.c === 5 || col.c === 21) td.classList.add("wrap");
+          if (hasValue(data.v)) {
+            td.setAttribute("title", String(formatVal(data.v)));
+            td.classList.add("has-cell-tooltip");
+          }
           if (col.companyLink && hasValue(data.v)) td.classList.add("name-col");
           tr.appendChild(td);
         });

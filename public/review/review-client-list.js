@@ -287,11 +287,8 @@
   function attachCellTooltip(td, text, col, listKind) {
     if (!text || text === "—") return;
     const str = String(text);
-    const alwaysTooltip = listKind === "corp-sheet";
-    if (alwaysTooltip || (col && col.wrap) || str.length > 24) {
-      td.setAttribute("title", str);
-      td.classList.add("has-cell-tooltip");
-    }
+    td.setAttribute("title", str);
+    td.classList.add("has-cell-tooltip");
   }
 
   function formatShareholderInline(val, key) {
@@ -1552,6 +1549,7 @@
       th.textContent = listColDisplayLabel(col, kind, listKind);
       th.classList.add("col-id-" + String(ReviewReadable.listColId(col)).replace(/[^a-zA-Z0-9_-]/g, "-"));
       if (col.highlight) th.classList.add("col-highlight");
+      if (col.wrap) th.classList.add("wrap");
       if (isAccentPersonColumn(col, kind)) th.classList.add("col-sticky-person");
       if (isAccentNameColumn(col, kind)) th.classList.add("col-sticky-name");
       headTr.appendChild(th);
@@ -1746,6 +1744,9 @@
             td.style.backgroundColor = data.bg;
           }
           paintListCellEmphasis(td, data, kind, row, col);
+          td.classList.add(
+            "col-id-" + String(ReviewReadable.listColId(col)).replace(/[^a-zA-Z0-9_-]/g, "-")
+          );
           if (col.highlight) td.classList.add("col-highlight");
           if (col.num || typeof data.v === "number") td.classList.add("num");
           if (col.wrap || col.c === 5 || col.c === 11 || col.c === 21) td.classList.add("wrap");

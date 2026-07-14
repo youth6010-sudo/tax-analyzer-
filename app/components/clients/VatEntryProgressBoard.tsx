@@ -13,19 +13,18 @@ import {
 } from '@/app/components/portal/uiClasses';
 import { VAT_PHASES, type VatPhase } from '@/app/utils/filingCheck';
 import { formatBusinessNo } from '@/app/utils/idFormat';
-import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import {
-  VAT_PROGRESS_DEFAULT_COLUMN_ORDER,
-  VAT_PROGRESS_LABELS,
+  VAT_PROGRESS_DEFAULT_COLUMNS,
+  VAT_PROGRESS_MARKS,
+  cellDisplayValue,
+  createVatProgressColumnKey,
   cycleVatColor,
   cycleVatMark,
-  isVatProgressColumnActive,
-  materialColumnsForRows,
-  normalizeVatProgressColumnOrder,
-  type VatMaterialFlags,
+  normalizeVatProgressLayout,
   type VatPeriodProgress,
   type VatProgressCell,
-  type VatProgressItemKey,
+  type VatProgressColumnDef,
+  type VatProgressInputKind,
 } from '@/lib/vatEntryProgress';
 import ReviewHubTabs from '@/app/components/clients/ReviewHubTabs';
 
@@ -37,11 +36,6 @@ const LABOR_COLS = [
   { key: 'otherTax', label: '기타' },
   { key: 'interestDividend', label: '이자배당' },
 ] as const;
-
-function columnOrderStorageKey(loginId: string) {
-  const id = loginId.trim().toLowerCase() || 'anon';
-  return `vatProgress.columnOrder.v1.${id}`;
-}
 
 type LaborKey = (typeof LABOR_COLS)[number]['key'];
 type LaborSlot = { target: boolean; filed: boolean };
@@ -60,91 +54,11 @@ type VatProgressRow = {
   douzoneCode: string;
   manager: string;
   isCorporate?: boolean;
-  flags: VatMaterialFlags;
   yearPhases?: VatPhase[];
   progress?: VatPeriodProgress;
   progressByPhase?: Record<string, PhaseSummary>;
-  summary?: { done: number; total: number; filledLabels: string[] };
   labor: Record<LaborKey, LaborSlot>;
 };
-
-function FlagPills({ flags }: { flags: VatMaterialFlags }) {
-  if (!flags.manualEntry && !flags.nonDeductible && !flags.agencySales && !flags.zeroRateSales) {
-    return null;
-  }
-  return (
-    <span className="mt-0.5 flex flex-wrap gap-1">
-      {flags.manualEntry ? (
-        <span className="rounded bg-amber-50 px-1 text-[9px] font-medium text-amber-800">수기</span>
-      ) : null}
-      {flags.nonDeductible ? (
-        <span className="rounded bg-rose-50 px-1 text-[9px] font-medium text-rose-700">불공제</span>
-      ) : null}
-      {flags.agencySales ? (
-        <span className="rounded bg-sky-50 px-1 text-[9px] font-medium text-sky-700">신용매출</span>
-      ) : null}
-      {flags.zeroRateSales ? (
-        <span className="rounded bg-violet-50 px-1 text-[9px] font-medium text-violet-700">영세율</span>
-      ) : null}
-    </span>
-  );
-}
-
-function CheckChip({ mark }: { mark: string }) {
-  if (!mark) return <span className="text-slate-300">—</span>;
-  const cls =
-    mark === 'O'
-      ? 'bg-emerald-100 text-emerald-800'
-      : mark === 'X'
-        ? 'bg-red-100 text-red-700'
-        : 'bg-amber-100 text-amber-800';
-  return (
-    <span className={`inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] font-bold ${cls}`}>
-      {mark}
-    </span>
-  );
-}
-
-function ProgressCell({
-  cell,
-  onChange,
-}: {
-  cell: VatProgressCell | undefined;
-  onChange: (next: VatProgressCell) => void;
-}) {
-  const mark = cell?.mark || '';
-  const bg = cell?.bg || '';
-  return (
-    <button
-      type="button"
-      title="클릭: O/X/△ · Alt+클릭: 색칠"
-      onClick={e => {
-        e.preventDefault();
-        if (e.altKey) onChange({ mark, bg: cycleVatColor(bg) });
-        else onChange({ mark: cycleVatMark(mark), bg });
-      }}
-      className={`mx-auto flex h-8 w-10 items-center justify-center rounded border border-slate-200/80 transition hover:border-slate-300 ${
-        bg ? '' : 'bg-white'
-      }`}
-      style={bg ? { backgroundColor: bg } : undefined}
-    >
-      <CheckChip mark={mark} />
-    </button>
-  );
-}
-
-function OptionalProgressCell({
-  enabled,
-  cell,
-  onChange,
-}: {
-  enabled: boolean;
-  cell: VatProgressCell | undefined;
-  onChange: (next: VatProgressCell) => void;
-}) {
-  if (!enabled) return <span className="text-slate-300">—</span>;
-  return <ProgressCell cell={cell} onChange={onChange} />;
-}
 
 function LaborBadge({ slot, label }: { slot: LaborSlot | undefined; label: string }) {
   if (!slot?.target) return <span className="text-[10px] text-slate-300">—</span>;
@@ -195,40 +109,153 @@ function PhaseSummaryCell({
   );
 }
 
+function MarkChip({ mark }: { mark: string }) {
+  if (!mark) return <span className="text-slate-300">—</span>;
+  const cls =
+    mark === 'O'
+      ? 'bg-emerald-100 text-emerald-800'
+      : mark === 'X'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-amber-100 text-amber-800';
+  return (
+    <span className={`inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] font-bold ${cls}`}>
+      {mark}
+    </span>
+  );
+}
+
+function MarkCell({
+  cell,
+  onChange,
+}: {
+  cell: VatProgressCell | undefined;
+  onChange: (next: VatProgressCell) => void;
+}) {
+  const mark = (cell?.mark || cellDisplayValue(cell) || '') as string;
+  const bg = cell?.bg || '';
+  const shown = VAT_PROGRESS_MARKS.includes(mark as (typeof VAT_PROGRESS_MARKS)[number])
+    ? mark
+    : mark
+      ? mark
+      : '';
+  return (
+    <button
+      type="button"
+      title="클릭: O/X/△ · Alt+클릭: 색칠"
+      onClick={e => {
+        e.preventDefault();
+        if (e.altKey) onChange({ mark: shown, text: '', bg: cycleVatColor(bg) });
+        else onChange({ mark: cycleVatMark(shown), text: '', bg });
+      }}
+      className={`mx-auto flex h-8 w-10 items-center justify-center rounded border border-slate-200/80 transition hover:border-slate-300 ${
+        bg ? '' : 'bg-white'
+      }`}
+      style={bg ? { backgroundColor: bg } : undefined}
+    >
+      <MarkChip mark={shown} />
+    </button>
+  );
+}
+
+function TextCell({
+  cell,
+  onChange,
+}: {
+  cell: VatProgressCell | undefined;
+  onChange: (next: VatProgressCell) => void;
+}) {
+  const value = cellDisplayValue(cell);
+  const bg = cell?.bg || '';
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className="mx-auto block h-8 w-[5.5rem] rounded border border-blue-300 px-1 text-center text-[11px] outline-none"
+        style={bg ? { backgroundColor: bg } : undefined}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          onChange({ text: draft.trim(), mark: '', bg });
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="클릭: 글자 입력 · Alt+클릭: 색칠"
+      onClick={e => {
+        e.preventDefault();
+        if (e.altKey) {
+          onChange({ text: value, mark: '', bg: cycleVatColor(bg) });
+          return;
+        }
+        setDraft(value);
+        setEditing(true);
+      }}
+      className={`mx-auto flex h-8 min-w-[3.5rem] max-w-[7rem] items-center justify-center truncate rounded border border-slate-200/80 px-1 text-[11px] transition hover:border-slate-300 ${
+        bg ? '' : 'bg-white'
+      }`}
+      style={bg ? { backgroundColor: bg } : undefined}
+    >
+      {value ? (
+        <span className="truncate font-medium text-slate-800">{value}</span>
+      ) : (
+        <span className="text-slate-300">—</span>
+      )}
+    </button>
+  );
+}
+
+function ProgressCellByKind({
+  input,
+  cell,
+  onChange,
+}: {
+  input: VatProgressInputKind;
+  cell: VatProgressCell | undefined;
+  onChange: (next: VatProgressCell) => void;
+}) {
+  if (input === 'mark') return <MarkCell cell={cell} onChange={onChange} />;
+  return <TextCell cell={cell} onChange={onChange} />;
+}
+
 export default function VatEntryProgressBoard() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [phase, setPhase] = useState<VatPhase>('1기 확정');
   const [view, setView] = useState<'period' | 'year'>('period');
   const [rows, setRows] = useState<VatProgressRow[]>([]);
+  const [layout, setLayout] = useState<VatProgressColumnDef[]>(() =>
+    VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c })),
+  );
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [detailRow, setDetailRow] = useState<VatProgressRow | null>(null);
-  const [flagDraft, setFlagDraft] = useState<VatMaterialFlags>({
-    agencySales: false,
-    zeroRateSales: false,
-    nonDeductible: false,
-    manualEntry: false,
-  });
-  const [flagSaving, setFlagSaving] = useState(false);
   const [canViewAll, setCanViewAll] = useState(false);
-  const [loginId, setLoginId] = useState('');
   const [managerFilter, setManagerFilter] = useState('');
   const [orderOpen, setOrderOpen] = useState(false);
-  const [orderDraft, setOrderDraft] = useState<VatProgressItemKey[]>([
-    ...VAT_PROGRESS_DEFAULT_COLUMN_ORDER,
-  ]);
-
-  const orderStorageKey = columnOrderStorageKey(loginId);
-  const [savedColumnOrder, setSavedColumnOrder] = useLocalStorage<string[]>(
-    orderStorageKey,
-    [...VAT_PROGRESS_DEFAULT_COLUMN_ORDER],
-  );
-  const columnOrder = useMemo(
-    () => normalizeVatProgressColumnOrder(savedColumnOrder),
-    [savedColumnOrder],
-  );
+  const [orderDraft, setOrderDraft] = useState<VatProgressColumnDef[]>([]);
+  const [layoutSaving, setLayoutSaving] = useState(false);
+  const [newColLabel, setNewColLabel] = useState('');
+  const [newColInput, setNewColInput] = useState<VatProgressInputKind>('text');
 
   const years = useMemo(() => Array.from({ length: 8 }, (_, i) => 2024 + i), []);
 
@@ -246,7 +273,9 @@ export default function VatEntryProgressBoard() {
       if (!res.ok) throw new Error(data.error || '불러오기 실패');
       setRows((data.rows as VatProgressRow[]) ?? []);
       setCanViewAll(!!data.canViewAll);
-      if (typeof data.loginId === 'string') setLoginId(data.loginId);
+      if (Array.isArray(data.layout)) {
+        setLayout(normalizeVatProgressLayout(data.layout as VatProgressColumnDef[]));
+      }
     } catch (e) {
       setRows([]);
       setError(e instanceof Error ? e.message : '불러오기 실패');
@@ -259,70 +288,31 @@ export default function VatEntryProgressBoard() {
     void load();
   }, [load]);
 
-  const patchRow = async (
-    clientId: string,
-    body: { progress?: VatPeriodProgress; flags?: Partial<VatMaterialFlags>; phaseOverride?: VatPhase },
-  ) => {
+  const patchProgress = async (clientId: string, progress: VatPeriodProgress) => {
     const res = await fetch('/api/clients/vat-progress', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientId,
-        year,
-        phase: body.phaseOverride ?? phase,
-        progress: body.progress,
-        flags: body.flags,
-      }),
+      body: JSON.stringify({ clientId, year, phase, progress }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
-    return data as { flags: VatMaterialFlags; progress: VatPeriodProgress };
+    return data as { progress: VatPeriodProgress };
   };
 
-  const updateProgress = async (row: VatProgressRow, key: VatProgressItemKey, cell: VatProgressCell) => {
+  const updateProgress = async (row: VatProgressRow, key: string, cell: VatProgressCell) => {
     setRows(prev =>
       prev.map(r =>
         r.id === row.id ? { ...r, progress: { ...(r.progress ?? {}), [key]: cell } } : r,
       ),
     );
     try {
-      const saved = await patchRow(row.id, { progress: { [key]: cell } });
+      const saved = await patchProgress(row.id, { [key]: cell });
       setRows(prev =>
-        prev.map(r => (r.id === row.id ? { ...r, progress: saved.progress, flags: saved.flags } : r)),
+        prev.map(r => (r.id === row.id ? { ...r, progress: saved.progress } : r)),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
       void load();
-    }
-  };
-
-  const openDetail = (row: VatProgressRow) => {
-    setDetailRow(row);
-    setFlagDraft({
-      agencySales: !!row.flags.agencySales,
-      zeroRateSales: !!row.flags.zeroRateSales,
-      nonDeductible: !!row.flags.nonDeductible,
-      manualEntry: !!row.flags.manualEntry,
-    });
-  };
-
-  const saveFlags = async () => {
-    if (!detailRow) return;
-    setFlagSaving(true);
-    setError('');
-    try {
-      const saved = await patchRow(detailRow.id, { flags: flagDraft });
-      setRows(prev =>
-        prev.map(r =>
-          r.id === detailRow.id ? { ...r, flags: saved.flags, progress: saved.progress } : r,
-        ),
-      );
-      setDetailRow(null);
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '저장 실패');
-    } finally {
-      setFlagSaving(false);
     }
   };
 
@@ -344,11 +334,6 @@ export default function VatEntryProgressBoard() {
     });
   }, [rows, q, canViewAll, managerFilter]);
 
-  const materialCols = useMemo(
-    () => materialColumnsForRows(filtered, columnOrder),
-    [filtered, columnOrder],
-  );
-
   const yearPhaseCols = useMemo(() => {
     const needed = new Set<VatPhase>();
     for (const r of filtered) {
@@ -358,11 +343,23 @@ export default function VatEntryProgressBoard() {
     return VAT_PHASES.filter(p => needed.has(p));
   }, [filtered]);
 
-  const periodColSpan = 2 + materialCols.length + LABOR_COLS.length;
+  const periodColSpan = 2 + layout.length + LABOR_COLS.length;
 
-  const openColumnOrder = () => {
-    setOrderDraft([...columnOrder]);
+  const openColumnEditor = () => {
+    setOrderDraft(layout.map(c => ({ ...c })));
+    setNewColLabel('');
+    setNewColInput('text');
     setOrderOpen(true);
+  };
+
+  const addDraftColumn = () => {
+    const label = newColLabel.trim();
+    if (!label) return;
+    setOrderDraft(prev => [
+      ...prev,
+      { key: createVatProgressColumnKey(), label, input: newColInput },
+    ]);
+    setNewColLabel('');
   };
 
   const moveOrderDraft = (index: number, dir: -1 | 1) => {
@@ -377,13 +374,37 @@ export default function VatEntryProgressBoard() {
     });
   };
 
-  const saveColumnOrder = () => {
-    setSavedColumnOrder(normalizeVatProgressColumnOrder(orderDraft));
-    setOrderOpen(false);
-  };
-
-  const resetColumnOrder = () => {
-    setOrderDraft([...VAT_PROGRESS_DEFAULT_COLUMN_ORDER]);
+  const saveLayout = async () => {
+    setLayoutSaving(true);
+    setError('');
+    try {
+        const cleaned = normalizeVatProgressLayout(
+        orderDraft
+          .map(c => ({
+            key: c.key.trim(),
+            label: c.label.trim(),
+            input: (c.input === 'mark' ? 'mark' : 'text') as VatProgressInputKind,
+          }))
+          .filter(c => c.key && c.label),
+      );
+      const res = await fetch('/api/clients/vat-progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout: cleaned }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '열 저장 실패');
+      const next = normalizeVatProgressLayout(
+        (data as { layout?: VatProgressColumnDef[] }).layout ?? cleaned,
+      );
+      setLayout(next);
+      setOrderOpen(false);
+      if (view === 'year') void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '열 저장 실패');
+    } finally {
+      setLayoutSaving(false);
+    }
   };
 
   return (
@@ -392,7 +413,7 @@ export default function VatEntryProgressBoard() {
         title="검토표"
         description={
           canViewAll
-            ? '부가세 자료입력 진행도 — 전체 담당자 (관리자·찰리·인디)'
+            ? '부가세 자료입력 진행도 — 전체 담당자 (본인 열 구성 적용)'
             : '부가세 자료입력 진행도 — 내 담당 수임처'
         }
         icon={<PageHeaderIcon name="filing-check" />}
@@ -474,8 +495,8 @@ export default function VatEntryProgressBoard() {
           value={q}
           onChange={e => setQ(e.target.value)}
         />
-        <button type="button" className={portalBtnSecondary} onClick={openColumnOrder}>
-          열 순서
+        <button type="button" className={portalBtnSecondary} onClick={openColumnEditor}>
+          열 편집
         </button>
         <button type="button" className={portalBtnSecondary} onClick={() => void load()}>
           새로고침
@@ -487,10 +508,9 @@ export default function VatEntryProgressBoard() {
       ) : null}
 
       <p className="text-[11px] text-slate-500">
-        거래처명 → 사업자번호·수기/불공제/신용매출/영세율 해당 설정. 신고대상확인에서 제외한 업체는 목록에 없습니다.
-        {view === 'year'
-          ? ' 연간 진행표는 예정신고 대상만 예정 칸이 보이고, 예정고지·그 외는 확정만 표시됩니다. 칸을 누르면 해당 신고분으로 이동합니다.'
-          : ' 진행 칸: 클릭 O/X/△ · Alt+클릭 색칠 · 열 순서는 본인 계정 기준으로 저장됩니다.'}
+        O/X/△ 열은 클릭으로 전환, 자유서식 열은 글자 입력(자료요청일·특이사항 등). Alt+클릭 색칠.
+        열 형식·구성은 본인 계정에 저장되며 찰리·인디 전체 조회에도 본인 열이 적용됩니다.
+        {view === 'year' ? ' 연간 진행표는 예정신고 대상만 예정 칸이 보입니다.' : ''}
       </p>
 
       <div className={`${portalCard} overflow-auto`}>
@@ -515,13 +535,19 @@ export default function VatEntryProgressBoard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={2 + yearPhaseCols.length + LABOR_COLS.length} className="px-3 py-10 text-center text-slate-400">
+                  <td
+                    colSpan={2 + yearPhaseCols.length + LABOR_COLS.length}
+                    className="px-3 py-10 text-center text-slate-400"
+                  >
                     불러오는 중…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={2 + yearPhaseCols.length + LABOR_COLS.length} className="px-3 py-10 text-center text-slate-400">
+                  <td
+                    colSpan={2 + yearPhaseCols.length + LABOR_COLS.length}
+                    className="px-3 py-10 text-center text-slate-400"
+                  >
                     표시할 수임처가 없습니다.
                   </td>
                 </tr>
@@ -534,12 +560,11 @@ export default function VatEntryProgressBoard() {
                     <td className="sticky left-[4.5rem] z-[1] max-w-[14rem] bg-white px-2 py-1.5">
                       <button
                         type="button"
-                        onClick={() => openDetail(row)}
+                        onClick={() => setDetailRow(row)}
                         className="text-left font-medium text-slate-800 hover:text-blue-700"
                       >
                         {row.companyName}
                       </button>
-                      <FlagPills flags={row.flags} />
                     </td>
                     {yearPhaseCols.map(p => {
                       const applies = (row.yearPhases ?? []).includes(p);
@@ -575,9 +600,9 @@ export default function VatEntryProgressBoard() {
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-600">
                 <th className="sticky left-0 z-10 bg-slate-50 px-2 py-2 text-left font-semibold">세무사랑</th>
                 <th className="sticky left-[4.5rem] z-10 bg-slate-50 px-2 py-2 text-left font-semibold">거래처</th>
-                {materialCols.map(k => (
-                  <th key={k} className="px-1.5 py-2 text-center font-semibold">
-                    {VAT_PROGRESS_LABELS[k]}
+                {layout.map(col => (
+                  <th key={col.key} className="px-1.5 py-2 text-center font-semibold">
+                    {col.label}
                   </th>
                 ))}
                 {LABOR_COLS.map(col => (
@@ -609,19 +634,18 @@ export default function VatEntryProgressBoard() {
                     <td className="sticky left-[4.5rem] z-[1] max-w-[14rem] bg-white px-2 py-1.5">
                       <button
                         type="button"
-                        onClick={() => openDetail(row)}
+                        onClick={() => setDetailRow(row)}
                         className="text-left font-medium text-slate-800 hover:text-blue-700"
                       >
                         {row.companyName}
                       </button>
-                      <FlagPills flags={row.flags} />
                     </td>
-                    {materialCols.map(k => (
-                      <td key={k} className="px-1 py-1 text-center">
-                        <OptionalProgressCell
-                          enabled={isVatProgressColumnActive(k, row)}
-                          cell={row.progress?.[k]}
-                          onChange={cell => void updateProgress(row, k, cell)}
+                    {layout.map(col => (
+                      <td key={col.key} className="px-1 py-1 text-center">
+                        <ProgressCellByKind
+                          input={col.input}
+                          cell={row.progress?.[col.key]}
+                          onChange={cell => void updateProgress(row, col.key, cell)}
                         />
                       </td>
                     ))}
@@ -640,18 +664,40 @@ export default function VatEntryProgressBoard() {
 
       <CenterModal
         open={orderOpen}
-        title="자료 열 순서"
-        description="세금계산서부터의 표시 순서입니다. 본인 계정에만 저장되며, 찰리·인디가 전체 조회할 때도 본인 순서가 적용됩니다."
+        title="열 편집"
+        description="열을 추가할 때 O/X/△ 또는 자유서식(날짜·특이사항 등)을 고를 수 있습니다. 기존 열도 형식·이름을 바꿀 수 있습니다."
         onClose={() => setOrderOpen(false)}
       >
         <div className="space-y-3">
-          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-            {orderDraft.map((key, index) => (
-              <li key={key} className="flex items-center gap-2 px-3 py-2 text-sm">
-                <span className="w-6 text-center text-[11px] text-slate-400">{index + 1}</span>
-                <span className="min-w-0 flex-1 font-medium text-slate-800">
-                  {VAT_PROGRESS_LABELS[key]}
-                </span>
+          <ul className="max-h-[22rem] divide-y divide-slate-100 overflow-auto rounded-xl border border-slate-200 bg-white">
+            {orderDraft.map((col, index) => (
+              <li key={col.key} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                <span className="w-5 text-center text-[11px] text-slate-400">{index + 1}</span>
+                <input
+                  className={`${portalInput} min-w-[7rem] flex-1 py-1 text-sm`}
+                  value={col.label}
+                  onChange={e =>
+                    setOrderDraft(prev =>
+                      prev.map((c, i) => (i === index ? { ...c, label: e.target.value } : c)),
+                    )
+                  }
+                />
+                <select
+                  className={`${portalInput} w-[7.5rem] py-1 text-xs`}
+                  value={col.input}
+                  onChange={e =>
+                    setOrderDraft(prev =>
+                      prev.map((c, i) =>
+                        i === index
+                          ? { ...c, input: e.target.value as VatProgressInputKind }
+                          : c,
+                      ),
+                    )
+                  }
+                >
+                  <option value="mark">O / X / △</option>
+                  <option value="text">자유서식</option>
+                </select>
                 <button
                   type="button"
                   className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-30"
@@ -668,18 +714,61 @@ export default function VatEntryProgressBoard() {
                 >
                   ↓
                 </button>
+                <button
+                  type="button"
+                  className="rounded border border-red-200 px-2 py-0.5 text-[11px] text-red-600"
+                  onClick={() => setOrderDraft(prev => prev.filter((_, i) => i !== index))}
+                >
+                  삭제
+                </button>
               </li>
             ))}
           </ul>
+
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+            <input
+              className={`${portalInput} min-w-[10rem] flex-1`}
+              placeholder="예: 자료요청일, 특이사항, 입력여부"
+              value={newColLabel}
+              onChange={e => setNewColLabel(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addDraftColumn();
+                }
+              }}
+            />
+            <select
+              className={`${portalInput} w-[7.5rem]`}
+              value={newColInput}
+              onChange={e => setNewColInput(e.target.value as VatProgressInputKind)}
+            >
+              <option value="text">자유서식</option>
+              <option value="mark">O / X / △</option>
+            </select>
+            <button type="button" className={portalBtnSecondary} onClick={addDraftColumn}>
+              열 추가
+            </button>
+          </div>
+
           <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" className={portalBtnSecondary} onClick={resetColumnOrder}>
-              표준 순서로
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              onClick={() => setOrderDraft(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c })))}
+            >
+              표준 틀로
             </button>
             <button type="button" className={portalBtnSecondary} onClick={() => setOrderOpen(false)}>
               취소
             </button>
-            <button type="button" className={portalBtnPrimary} onClick={saveColumnOrder}>
-              저장
+            <button
+              type="button"
+              className={portalBtnPrimary}
+              disabled={layoutSaving || orderDraft.length === 0}
+              onClick={() => void saveLayout()}
+            >
+              {layoutSaving ? '저장 중…' : '저장'}
             </button>
           </div>
         </div>
@@ -688,7 +777,7 @@ export default function VatEntryProgressBoard() {
       <CenterModal
         open={!!detailRow}
         title={detailRow?.companyName || '거래처'}
-        description="사업자번호 확인 · 수기/불공제/신용매출/영세율 해당 시 진행 열이 활성화됩니다."
+        description="사업자번호·담당 확인"
         onClose={() => setDetailRow(null)}
       >
         {detailRow ? (
@@ -703,71 +792,6 @@ export default function VatEntryProgressBoard() {
               <dt className="text-slate-500">담당</dt>
               <dd className="text-slate-800">{detailRow.manager || '—'}</dd>
             </dl>
-
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold text-slate-700">부가세 해당 항목</p>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={flagDraft.manualEntry}
-                  onChange={e => setFlagDraft(prev => ({ ...prev, manualEntry: e.target.checked }))}
-                />
-                수기 해당
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={flagDraft.nonDeductible}
-                  onChange={e => setFlagDraft(prev => ({ ...prev, nonDeductible: e.target.checked }))}
-                />
-                불공제 해당
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={flagDraft.agencySales}
-                  onChange={e => setFlagDraft(prev => ({ ...prev, agencySales: e.target.checked }))}
-                />
-                신용매출 해당
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={flagDraft.zeroRateSales}
-                  onChange={e => setFlagDraft(prev => ({ ...prev, zeroRateSales: e.target.checked }))}
-                />
-                영세율매출 해당
-              </label>
-            </div>
-
-            {view === 'year' && detailRow.progressByPhase ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-700">연간 입력 요약</p>
-                <ul className="space-y-1.5 text-xs text-slate-600">
-                  {(detailRow.yearPhases ?? Object.keys(detailRow.progressByPhase)).map(p => {
-                    const s = detailRow.progressByPhase?.[p]?.summary;
-                    return (
-                      <li key={p} className="flex justify-between gap-2 border-b border-slate-100 pb-1">
-                        <span>{p}</span>
-                        <span className="text-right">
-                          {s ? `${s.done}/${s.total}` : '0'}
-                          {s?.filledLabels?.length ? (
-                            <span className="mt-0.5 block text-[10px] text-slate-400">
-                              {s.filledLabels.join(' · ')}
-                            </span>
-                          ) : null}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
             <div className="flex justify-end gap-2">
               <button type="button" className={portalBtnSecondary} onClick={() => setDetailRow(null)}>
                 닫기
@@ -775,14 +799,6 @@ export default function VatEntryProgressBoard() {
               <Link href={`/clients/${detailRow.id}`} className={`${portalBtnSecondary} text-center`}>
                 수임처 상세
               </Link>
-              <button
-                type="button"
-                className={portalBtnPrimary}
-                disabled={flagSaving}
-                onClick={() => void saveFlags()}
-              >
-                {flagSaving ? '저장 중…' : '저장'}
-              </button>
             </div>
           </div>
         ) : null}

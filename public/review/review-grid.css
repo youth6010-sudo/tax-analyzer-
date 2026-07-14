@@ -640,6 +640,28 @@ body,
   vertical-align: middle;
   text-align: center;
   color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.client-list-table td.section-divider-cell,
+.client-list-table td.section-summary-cell,
+.client-list-table td.empty-row {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.client-list-table--income th.col-id-7,
+.client-list-table--income td.col-id-7 {
+  min-width: 7.5rem;
+  width: 9rem;
+  max-width: 14rem;
+}
+
+.client-list-table--income td.col-id-7.wrap {
+  max-width: 14rem;
 }
 
 .client-list-table tbody tr:nth-child(even):not(.shareholder-inline-row) {
@@ -1560,11 +1582,12 @@ body.client-detail-modal-open {
   cursor: help;
 }
 
+.client-list-table th.wrap,
 .client-list-table td.wrap {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 140px;
+  max-width: 180px;
 }
 
 .client-list-table--board-edit tbody td.cell-editable {
@@ -1741,8 +1764,10 @@ body.client-detail-modal-open {
   height: auto;
   line-height: 1.35;
   font-size: 13px;
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
   border-color: #e2e8f0;
 }
 
@@ -3158,10 +3183,11 @@ body.client-detail-modal-open {
 .readable-table tbody td {
   border: 1px solid #e8e8e8;
   padding: 9px 12px;
-  vertical-align: top;
+  vertical-align: middle;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.45;
 }
 
@@ -3189,7 +3215,9 @@ body.client-detail-modal-open {
 }
 
 .readable-table tbody td.wrap {
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   max-width: 280px;
 }
 

@@ -21,11 +21,11 @@ import {
   readVatPeriodProgress,
   summarizeVatPeriodProgress,
   vatProgressPeriodKey,
-  visibleVatProgressKeys,
   type VatMaterialFlags,
   type VatPeriodProgress,
-  type VatProgressItemKey,
+  type VatProgressColumnDef,
 } from '@/lib/vatEntryProgress';
+import { getVatProgressLayout, saveVatProgressLayout } from '@/lib/vatProgressLayoutDb';
 import type { ClientRecord } from '@/app/types/client';
 
 const VAT_LABOR_KEYS = [
@@ -150,10 +150,6 @@ async function loadFilingExcludedIds(
   return excluded;
 }
 
-function progressKeysForClient(c: ClientRecord): VatProgressItemKey[] {
-  return visibleVatProgressKeys(c);
-}
-
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser();
@@ -166,6 +162,7 @@ export async function GET(request: NextRequest) {
     const view = sp.get('view') === 'year' ? 'year' : 'period';
     // 일반 담당자: 본인 수임처만 / 관리자모드·찰리·인디: 전체
     const canViewAll = isDataViewer(user);
+    const layout = await getVatProgressLayout(user.loginId || '');
 
     const all = await listClients({
       mineOnly: !canViewAll,
@@ -203,7 +200,6 @@ export async function GET(request: NextRequest) {
 
     const rows = targets.map(c => {
       const flags = readVatMaterialFlags(c.intakeData);
-      const keys = progressKeysForClient(c);
       const labor = laborStatusForClient(c.intakeData, laborFiled.get(c.id));
       const yearPhases = vatYearProgressPhases(c);
       const base = {
@@ -217,7 +213,7 @@ export async function GET(request: NextRequest) {
         isCorporate: isCorporateClient(c),
         flags,
         labor,
-        progressKeys: keys,
+        progressKeys: layout.map(col => col.key),
         yearPhases,
       };
 
@@ -234,7 +230,7 @@ export async function GET(request: NextRequest) {
           const progress = readVatPeriodProgress(c.intakeData, pk);
           byPhase[p] = {
             progress,
-            summary: summarizeVatPeriodProgress(progress, keys),
+            summary: summarizeVatPeriodProgress(progress, layout),
           };
         }
         return { ...base, progressByPhase: byPhase };
@@ -245,7 +241,7 @@ export async function GET(request: NextRequest) {
       return {
         ...base,
         progress,
-        summary: summarizeVatPeriodProgress(progress, keys),
+        summary: summarizeVatPeriodProgress(progress, layout),
       };
     });
 
@@ -264,6 +260,7 @@ export async function GET(request: NextRequest) {
       view,
       canViewAll,
       loginId: user.loginId || '',
+      layout,
       periodKey: vatProgressPeriodKey(year, phase),
       phases: [...VAT_PHASES],
       rows,
@@ -275,14 +272,21 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const body = (await request.json()) as {
       clientId?: string;
       year?: number;
       phase?: string;
       progress?: VatPeriodProgress;
       flags?: Partial<VatMaterialFlags>;
+      layout?: VatProgressColumnDef[];
     };
+
+    if (body.layout) {
+      const layout = await saveVatProgressLayout(user.loginId || '', body.layout, user.id);
+      return NextResponse.json({ ok: true, layout });
+    }
+
     const clientId = body.clientId?.trim();
     if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 });
     const year = Number(body.year || new Date().getFullYear());
