@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { filingCheckSessions, taxFilingChecks } from '@/db/schema';
 import type { FilingTaxId } from '@/app/utils/filingCheck';
@@ -113,21 +113,19 @@ export async function findPreviousCompletedFilingCheckSession(
       and(
         eq(filingCheckSessions.manager, manager),
         eq(filingCheckSessions.taxType, taxType),
+        lt(filingCheckSessions.periodKey, currentPeriodKey),
+        sql`(${filingCheckSessions.data}->>'done') = 'true'`,
       ),
-    );
+    )
+    .orderBy(desc(filingCheckSessions.periodKey))
+    .limit(1);
 
-  let bestKey = '';
-  let bestData: FilingCheckSessionData | null = null;
-  for (const row of rows) {
-    if (row.periodKey >= currentPeriodKey) continue;
-    const data = { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) };
-    if (!data.done) continue;
-    if (row.periodKey > bestKey) {
-      bestKey = row.periodKey;
-      bestData = data;
-    }
-  }
-  return bestData ? { data: bestData, periodKey: bestKey } : null;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    data: { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) },
+    periodKey: row.periodKey,
+  };
 }
 
 export type FilingCheckLoadResult = {
@@ -318,10 +316,15 @@ export async function getWithholdingRowNotesForYear(
   manager: string,
   year: number,
 ): Promise<Record<string, string>> {
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const notesByMonth = await Promise.all(
+    months.map(m => {
+      const pk = `${year}-${String(m).padStart(2, '0')}`;
+      return getWithholdingRowNotesForPeriod(manager, pk);
+    }),
+  );
   const merged: Record<string, string> = {};
-  for (let m = 1; m <= 12; m += 1) {
-    const pk = `${year}-${String(m).padStart(2, '0')}`;
-    const notes = await getWithholdingRowNotesForPeriod(manager, pk);
+  for (const notes of notesByMonth) {
     for (const [id, note] of Object.entries(notes)) {
       if (note.trim()) merged[id] = note;
     }
@@ -410,10 +413,15 @@ export async function getWithholdingExclusionsForYear(
   manager: string,
   year: number,
 ): Promise<Record<string, string>> {
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const exclusByMonth = await Promise.all(
+    months.map(m => {
+      const pk = `${year}-${String(m).padStart(2, '0')}`;
+      return getExcludedClientIds(manager, 'withholding', pk);
+    }),
+  );
   const merged: Record<string, string> = {};
-  for (let m = 1; m <= 12; m += 1) {
-    const pk = `${year}-${String(m).padStart(2, '0')}`;
-    const ex = await getExcludedClientIds(manager, 'withholding', pk);
+  for (const ex of exclusByMonth) {
     for (const [id, reason] of Object.entries(ex)) {
       if (!merged[id]) merged[id] = reason;
     }

@@ -64,7 +64,7 @@ import {
   type VatPhase,
   type VatObligation,
 } from '@/app/utils/filingCheck';
-import { hydratePortal, patchPortalClient, usePortalClients } from '@/app/utils/portalStore';
+import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
 import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
 import {
@@ -147,16 +147,21 @@ function ReviewClientIdMapProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/review/client-id-review-map')
-      .then(r => r.json())
-      .then(data => {
-        if (!cancelled) setMap(data.byClientId || {});
-      })
-      .catch(() => {
-        if (!cancelled) setMap({});
-      });
+    const run = () => {
+      fetch('/api/review/client-id-review-map')
+        .then(r => r.json())
+        .then(data => {
+          if (!cancelled) setMap(data.byClientId || {});
+        })
+        .catch(() => {
+          if (!cancelled) setMap({});
+        });
+    };
+    // 첫 페인트 이후 지연 — 수임처·세션 로딩과 경쟁하지 않음
+    const t = window.setTimeout(run, 800);
     return () => {
       cancelled = true;
+      window.clearTimeout(t);
     };
   }, []);
 
@@ -641,24 +646,39 @@ function FilingCheckPageInner() {
 
   useEffect(() => {
     hydratePortal();
-    fetch('/api/auth/me')
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (d?.user?.name) setCurrentUserName(String(d.user.name).trim());
-        if (d?.isMaster) setIsMaster(true);
-      })
-      .catch(() => {});
-  }, []);
+    let cancelled = false;
+    void (async () => {
+      let master = false;
+      try {
+        const meRes = await fetch('/api/auth/me');
+        const me = meRes.ok ? await meRes.json() : null;
+        if (cancelled) return;
+        if (me?.user?.name) setCurrentUserName(String(me.user.name).trim());
+        master = !!me?.isMaster;
+        setIsMaster(master);
+      } catch {
+        if (cancelled) return;
+      }
 
-  useEffect(() => {
-    const url = isMaster ? '/api/clients' : '/api/clients?mine=1&scope=filing';
-    fetch(url, { cache: 'no-store' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (d?.clients) setAllClients(d.clients as ClientRecord[]);
-      })
-      .catch(() => {});
-  }, [isMaster]);
+      // 포털 bootstrap에 이미 수임처가 있으면 먼저 쓰고, 백그라운드로 최신만 갱신
+      const portalClients = getPortalClients();
+      if (portalClients.length > 0) {
+        setAllClients(portalClients);
+      }
+
+      const url = master ? '/api/clients' : '/api/clients?mine=1&scope=filing';
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const d = res.ok ? await res.json() : null;
+        if (!cancelled && d?.clients) setAllClients(d.clients as ClientRecord[]);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 세목·기간이 바뀌면 저장된 기록을 불러오고,
   // 직전 완료(done) 신고분의 제외·특이사항을 승계한다.

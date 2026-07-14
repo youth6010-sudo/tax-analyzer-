@@ -11,7 +11,7 @@ export type VatProgressCell = {
   bg?: string;
 };
 
-/** 항상 표시되는 자료 열 (불공제·신용매출 등은 해당 시에만) */
+/** 항상 표시되는 자료 열 (수기·불공제·신용매출 등은 해당 시에만) */
 export const VAT_PROGRESS_ALWAYS_KEYS = [
   'taxInvoice',
   'invoice',
@@ -22,8 +22,9 @@ export const VAT_PROGRESS_ALWAYS_KEYS = [
 
 export type VatProgressAlwaysKey = (typeof VAT_PROGRESS_ALWAYS_KEYS)[number];
 
-/** 조건부 열 — 표시 순서: 계산서 다음 불공제, 이후 신용매출·영세율·통장 */
+/** 조건부 열 — 계산서 다음 수기·불공제, 이후 신용매출·영세율·통장 */
 export const VAT_PROGRESS_OPTIONAL_KEYS = [
+  'manualEntry',
   'nonDeductible',
   'agencySales',
   'zeroRateSales',
@@ -39,6 +40,7 @@ export const VAT_PROGRESS_CORE_KEYS = VAT_PROGRESS_ALWAYS_KEYS;
 export const VAT_PROGRESS_LABELS: Record<VatProgressItemKey, string> = {
   taxInvoice: '세금계산서',
   invoice: '계산서',
+  manualEntry: '수기',
   nonDeductible: '불공제',
   card: '카드',
   cashReceipt: '현금영수증',
@@ -52,6 +54,7 @@ export type VatMaterialFlags = {
   agencySales: boolean;
   zeroRateSales: boolean;
   nonDeductible: boolean;
+  manualEntry: boolean;
 };
 
 export type VatPeriodProgress = Partial<Record<VatProgressItemKey, VatProgressCell>>;
@@ -67,13 +70,14 @@ export function readVatMaterialFlags(
 ): VatMaterialFlags {
   const raw = intakeData?.vatMaterialFlags;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { agencySales: false, zeroRateSales: false, nonDeductible: false };
+    return { agencySales: false, zeroRateSales: false, nonDeductible: false, manualEntry: false };
   }
   const o = raw as Record<string, unknown>;
   return {
     agencySales: o.agencySales === true,
     zeroRateSales: o.zeroRateSales === true,
     nonDeductible: o.nonDeductible === true,
+    manualEntry: o.manualEntry === true,
   };
 }
 
@@ -105,20 +109,85 @@ function isCorporateEntity(client: Pick<ClientRecord, 'businessEntityType'>): bo
 }
 
 /**
- * 표시 순서: 세금계산서 → 계산서 → (불공제) → 카드 → 현금영수증 → 기타증빙
+ * 표준 열 순서 (세금계산서~통장). 사용자 조정 시 이 목록 기준 정렬.
+ */
+export const VAT_PROGRESS_DEFAULT_COLUMN_ORDER: VatProgressItemKey[] = [
+  'taxInvoice',
+  'invoice',
+  'manualEntry',
+  'nonDeductible',
+  'card',
+  'cashReceipt',
+  'otherEvidence',
+  'agencySales',
+  'zeroRateSales',
+  'bankStatement',
+];
+
+export function normalizeVatProgressColumnOrder(
+  order: readonly string[] | null | undefined,
+): VatProgressItemKey[] {
+  const known = new Set<string>(VAT_PROGRESS_DEFAULT_COLUMN_ORDER);
+  const out: VatProgressItemKey[] = [];
+  for (const k of order ?? []) {
+    if (!known.has(k)) continue;
+    const key = k as VatProgressItemKey;
+    if (!out.includes(key)) out.push(key);
+  }
+  for (const k of VAT_PROGRESS_DEFAULT_COLUMN_ORDER) {
+    if (!out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
+export function isVatProgressColumnActive(
+  key: VatProgressItemKey,
+  row: { flags: VatMaterialFlags; isCorporate?: boolean },
+): boolean {
+  if (key === 'manualEntry') return row.flags.manualEntry;
+  if (key === 'nonDeductible') return row.flags.nonDeductible;
+  if (key === 'agencySales') return row.flags.agencySales;
+  if (key === 'zeroRateSales') return row.flags.zeroRateSales;
+  if (key === 'bankStatement') return !!row.isCorporate;
+  return true;
+}
+
+/** 목록에 표시할 자료 열 (사용자 순서 × 현재 화면에 필요한 조건부 열) */
+export function materialColumnsForRows(
+  rows: readonly { flags: VatMaterialFlags; isCorporate?: boolean }[],
+  columnOrder: readonly VatProgressItemKey[],
+): VatProgressItemKey[] {
+  const order = normalizeVatProgressColumnOrder(columnOrder);
+  const needed = new Set<VatProgressItemKey>();
+  for (const key of order) {
+    if (
+      key === 'taxInvoice' ||
+      key === 'invoice' ||
+      key === 'card' ||
+      key === 'cashReceipt' ||
+      key === 'otherEvidence'
+    ) {
+      needed.add(key);
+      continue;
+    }
+    if (rows.some(r => isVatProgressColumnActive(key, r))) needed.add(key);
+  }
+  return order.filter(k => needed.has(k));
+}
+
+/**
+ * 표시 순서: 세금계산서 → 계산서 → (수기) → (불공제) → 카드 → 현금영수증 → 기타증빙
  * → (신용매출) → (영세율) → (통장·법인)
+ * columnOrder가 있으면 그 순서로 재배열.
  */
 export function visibleVatProgressKeys(
   client: Pick<ClientRecord, 'businessEntityType' | 'intakeData'>,
+  columnOrder?: readonly VatProgressItemKey[],
 ): VatProgressItemKey[] {
   const flags = readVatMaterialFlags(client.intakeData);
-  const keys: VatProgressItemKey[] = ['taxInvoice', 'invoice'];
-  if (flags.nonDeductible) keys.push('nonDeductible');
-  keys.push('card', 'cashReceipt', 'otherEvidence');
-  if (flags.agencySales) keys.push('agencySales');
-  if (flags.zeroRateSales) keys.push('zeroRateSales');
-  if (isCorporateEntity(client)) keys.push('bankStatement');
-  return keys;
+  const row = { flags, isCorporate: isCorporateEntity(client) };
+  const order = normalizeVatProgressColumnOrder(columnOrder);
+  return order.filter(k => isVatProgressColumnActive(k, row));
 }
 
 export function mergeVatPeriodProgressPatch(

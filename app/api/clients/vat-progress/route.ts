@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth';
+import { isDataViewer, requireUser } from '@/lib/auth';
 import { getClientById, listClients, updateClientDetail } from '@/lib/clientsDb';
 import { listSimplePayrollFilingsByKeys } from '@/lib/simplePayrollFilingsDb';
 import { listYearEndFilings } from '@/lib/yearEndFilingsDb';
@@ -163,11 +163,12 @@ export async function GET(request: NextRequest) {
     if (!VAT_PHASES.includes(phase)) {
       return NextResponse.json({ error: 'Invalid phase' }, { status: 400 });
     }
-    const mine = sp.get('mine') !== '0';
     const view = sp.get('view') === 'year' ? 'year' : 'period';
+    // 일반 담당자: 본인 수임처만 / 관리자모드·찰리·인디: 전체
+    const canViewAll = isDataViewer(user);
 
     const all = await listClients({
-      mineOnly: mine,
+      mineOnly: !canViewAll,
       userId: user.id,
       userName: user.name || '',
       includeChurned: false,
@@ -261,6 +262,8 @@ export async function GET(request: NextRequest) {
       year,
       phase,
       view,
+      canViewAll,
+      loginId: user.loginId || '',
       periodKey: vatProgressPeriodKey(year, phase),
       phases: [...VAT_PHASES],
       rows,
@@ -301,6 +304,7 @@ export async function PATCH(request: NextRequest) {
           agencySales: body.flags.agencySales ?? prev.agencySales,
           zeroRateSales: body.flags.zeroRateSales ?? prev.zeroRateSales,
           nonDeductible: body.flags.nonDeductible ?? prev.nonDeductible,
+          manualEntry: body.flags.manualEntry ?? prev.manualEntry,
         },
       };
     }
