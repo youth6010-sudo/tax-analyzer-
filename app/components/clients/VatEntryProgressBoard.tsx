@@ -25,6 +25,7 @@ import {
   cycleReceiveEntryMark,
   cycleVatColor,
   cycleVatMark,
+  isVatProgressColumnLocked,
   normalizeVatProgressLayout,
   type VatMaterialFlags,
   type VatPeriodProgress,
@@ -648,7 +649,7 @@ export default function VatEntryProgressBoard() {
       <CenterModal
         open={orderOpen}
         title="열 편집"
-        description="열을 추가할 때 O/X/△ 또는 자유서식(날짜·특이사항 등)을 고를 수 있습니다. 기존 열도 형식·이름을 바꿀 수 있습니다."
+        description="연간진행표와 연동되는 열(세금계산서·계산서·카드·현금·통장·기타증빙)은 삭제할 수 없고 순서만 바꿉니다. 그 외 기본·추가 열은 삭제할 수 있습니다."
         onClose={() => setOrderOpen(false)}
       >
         <div className="space-y-3">
@@ -697,13 +698,22 @@ export default function VatEntryProgressBoard() {
                 >
                   ↓
                 </button>
-                <button
-                  type="button"
-                  className="rounded border border-red-200 px-2 py-0.5 text-[11px] text-red-600"
-                  onClick={() => setOrderDraft(prev => prev.filter((_, i) => i !== index))}
-                >
-                  삭제
-                </button>
+                {isVatProgressColumnLocked(col.key) ? (
+                  <span
+                    className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500"
+                    title="연간진행표 연동 열 — 삭제 불가"
+                  >
+                    연동
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded border border-red-200 px-2 py-0.5 text-[11px] text-red-600"
+                    onClick={() => setOrderDraft(prev => prev.filter((_, i) => i !== index))}
+                  >
+                    삭제
+                  </button>
+                )}
               </li>
             ))}
           </ul>

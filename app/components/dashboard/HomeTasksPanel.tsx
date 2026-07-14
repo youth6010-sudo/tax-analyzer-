@@ -26,6 +26,7 @@ const TYPE_LABEL: Record<DashboardTask['type'], string> = {
 };
 
 const SECTION_KEY = 'portalTasksSections.v1';
+const SHOW_COMPLETED_KEY = 'portalTasksShowCompleted.v1';
 
 type SectionState = { personal: boolean; company: boolean; client: boolean };
 type AddModal = 'personal' | 'company' | null;
@@ -38,6 +39,14 @@ function readSectionState(): SectionState {
     if (raw) return JSON.parse(raw) as SectionState;
   } catch { /* ignore */ }
   return { personal: true, company: true, client: true };
+}
+
+function readShowCompleted(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(SHOW_COMPLETED_KEY) === '1';
+  } catch { /* ignore */ }
+  return false;
 }
 
 function taxLabel(taxType: ChecklistTaxType): string {
@@ -103,6 +112,7 @@ export default function HomeTasksPanel() {
     [rawClientTasks],
   );
   const [sections, setSections] = useState<SectionState>(readSectionState);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
   const [addModal, setAddModal] = useState<AddModal>(null);
@@ -117,6 +127,15 @@ export default function HomeTasksPanel() {
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
 
+  const personalVisible = useMemo(
+    () => (showCompleted ? personal : personal.filter(p => !p.completed)),
+    [personal, showCompleted],
+  );
+  const companyVisible = useMemo(
+    () => (showCompleted ? companyEvents : companyEvents.filter(e => !e.myCheckoff)),
+    [companyEvents, showCompleted],
+  );
+
   const personalPending = useMemo(
     () => personal.filter(p => !p.completed).length,
     [personal],
@@ -126,6 +145,13 @@ export default function HomeTasksPanel() {
     [companyEvents],
   );
   const totalPending = personalPending + companyPending + clientTasks.length;
+
+  const handleShowCompletedChange = (show: boolean) => {
+    setShowCompleted(show);
+    try {
+      localStorage.setItem(SHOW_COMPLETED_KEY, show ? '1' : '0');
+    } catch { /* ignore */ }
+  };
 
   const toggleSection = (key: keyof SectionState) => {
     setSections(prev => {
@@ -163,6 +189,7 @@ export default function HomeTasksPanel() {
   }, []);
 
   useEffect(() => {
+    setShowCompleted(readShowCompleted());
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
@@ -258,6 +285,15 @@ export default function HomeTasksPanel() {
             <h2 className="text-sm font-bold text-slate-800">To Do List</h2>
             <CountBadge count={totalPending} />
           </div>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={e => handleShowCompletedChange(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300"
+            />
+            완료일정 표시
+          </label>
         </div>
 
         {loading ? (
@@ -271,11 +307,13 @@ export default function HomeTasksPanel() {
               onToggle={() => toggleSection('personal')}
               onAdd={() => setAddModal('personal')}
             >
-                {personal.length === 0 ? (
-                  <p className="py-3 text-center text-sm text-slate-400">항목 없음</p>
+                {personalVisible.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">
+                    {showCompleted ? '항목 없음' : '미완료 항목 없음'}
+                  </p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {personal.map(item => (
+                    {personalVisible.map(item => (
                       <li
                         key={item.id}
                         onDoubleClick={() => openPersonalEdit(item)}
@@ -350,11 +388,13 @@ export default function HomeTasksPanel() {
               onToggle={() => toggleSection('company')}
               onAdd={canAddCompany ? () => setAddModal('company') : undefined}
             >
-                {companyEvents.length === 0 ? (
-                  <p className="py-3 text-center text-sm text-slate-400">이번 달 일정 없음</p>
+                {companyVisible.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">
+                    {showCompleted ? '이번 달 일정 없음' : '미완료 일정 없음'}
+                  </p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {companyEvents.map(ev => {
+                    {companyVisible.map(ev => {
                       const isTax = ev.source === 'tax_deadline';
                       return (
                       <li

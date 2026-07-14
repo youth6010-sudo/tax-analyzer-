@@ -35,6 +35,23 @@ export const VAT_PROGRESS_DEFAULT_COLUMNS: VatProgressColumnDef[] = [
 ];
 
 /**
+ * 연간진행표·부가가치세 상호연동 열만 삭제 불가(순서 조정은 가능)
+ * — 수기·불공제·신용매출·영세율 등 기본 열이어도 연동 없으면 삭제 가능
+ */
+export const VAT_PROGRESS_LOCKED_KEYS = new Set([
+  'taxInvoice',
+  'invoice',
+  'card',
+  'cashReceipt',
+  'bankStatement',
+  'otherEvidence',
+]);
+
+export function isVatProgressColumnLocked(key: string): boolean {
+  return VAT_PROGRESS_LOCKED_KEYS.has(String(key || '').trim());
+}
+
+/**
  * △ = 자료수취 / O = 입력(수취+입력) — 통장·기타증빙
  * (레이아웃에서 열 숨기려면 구성에서 제거)
  */
@@ -126,7 +143,12 @@ export function normalizeVatProgressLayout(
   const defaultLabel = new Map(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c.label]));
   const out: VatProgressColumnDef[] = [];
   const seen = new Set<string>();
-  for (const col of columns ?? []) {
+
+  // 저장본 없으면 표준 기본 틀 전체로 시작
+  const source =
+    columns && columns.length > 0 ? columns : VAT_PROGRESS_DEFAULT_COLUMNS;
+
+  for (const col of source) {
     const key = String(col?.key ?? '').trim();
     const label = String(col?.label ?? '').trim();
     if (!key || seen.has(key)) continue;
@@ -138,8 +160,9 @@ export function normalizeVatProgressLayout(
         : (defaultInput.get(key) ?? 'text');
     out.push({ key, label: label || defaultLabel.get(key) || key, input });
   }
-  // 저장된 레이아웃에 기본 열이 없으면 뒤에 보충 (통장거래내역 등)
+  // 연간진행표 연동 열이 레이아웃에서 빠지면 뒤에 보충 (삭제한 비연동 기본 열은 복구하지 않음)
   for (const c of VAT_PROGRESS_DEFAULT_COLUMNS) {
+    if (!isVatProgressColumnLocked(c.key)) continue;
     if (seen.has(c.key)) continue;
     out.push({ ...c });
     seen.add(c.key);
