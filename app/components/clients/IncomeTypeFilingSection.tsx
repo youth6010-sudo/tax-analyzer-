@@ -560,6 +560,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           filed: boolean;
           acceptanceDate: string;
           acceptanceMethod: string;
+          notes: string;
         }[] = [];
 
         for (const row of grid) {
