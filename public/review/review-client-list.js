@@ -1627,6 +1627,23 @@
         });
         tools.appendChild(leftBtn);
         tools.appendChild(rightBtn);
+        if (!col.sticky && visibleCols.length > 1) {
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "th-layout-btn th-layout-btn--danger";
+          delBtn.textContent = "×";
+          delBtn.title = "항목 삭제";
+          delBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const name = listColDisplayLabel(col, kind, listKind);
+            if (!confirm("「" + name + "」 항목을 목록에서 제거할까요?")) return;
+            if (ReviewReadable.removeVisibleListCol(listKind, ReviewReadable.listColId(col)) && options.onRerender) {
+              options.onRerender();
+            }
+          });
+          tools.appendChild(delBtn);
+        }
         th.appendChild(tools);
       }
 
@@ -1663,6 +1680,51 @@
 
     const shell = document.createElement("div");
     shell.className = "client-list-shell";
+
+    const canEditLayout = !!(
+      options.boardEditMode &&
+      (options.canEditLayout != null
+        ? options.canEditLayout
+        : window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout)
+    );
+    if (canEditLayout) {
+      const layoutBar = document.createElement("div");
+      layoutBar.className = "client-list-layout-bar";
+      const hint = document.createElement("span");
+      hint.className = "client-list-layout-hint";
+      hint.textContent = "제목·순서·항목 추가/삭제 (인디)";
+      layoutBar.appendChild(hint);
+
+      const hidden = ReviewReadable.getHiddenListCols(listKind);
+      if (hidden.length) {
+        const select = document.createElement("select");
+        select.className = "client-list-layout-add-select";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "항목 추가…";
+        select.appendChild(placeholder);
+        hidden.forEach(function (col) {
+          const opt = document.createElement("option");
+          opt.value = String(ReviewReadable.listColId(col));
+          opt.textContent = listColDisplayLabel(col, kind, listKind);
+          select.appendChild(opt);
+        });
+        select.addEventListener("change", function () {
+          const id = select.value;
+          if (!id) return;
+          if (ReviewReadable.addVisibleListCol(listKind, id) && options.onRerender) {
+            options.onRerender();
+          }
+        });
+        layoutBar.appendChild(select);
+      } else {
+        const none = document.createElement("span");
+        none.className = "client-list-layout-hint";
+        none.textContent = "추가할 숨김 항목 없음";
+        layoutBar.appendChild(none);
+      }
+      shell.appendChild(layoutBar);
+    }
 
     const topScroll = document.createElement("div");
     topScroll.className = "client-list-top-scroll client-list-top-scroll--dock";

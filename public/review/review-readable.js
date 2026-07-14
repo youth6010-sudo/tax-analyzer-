@@ -723,18 +723,18 @@
           seen.add(key);
         }
       });
-      catalog.forEach(function (col) {
-        const key = String(listColId(col));
-        if (!seen.has(key)) out.push(col);
-      });
-      return out;
+      // 저장된 순서가 있으면 그 목록만 표시(삭제된 열은 복구하지 않음)
+      return out.length ? out : catalog.slice();
     } catch {
       return catalog.slice();
     }
   }
 
-  function setVisibleListCols(colNumbers, kind) {
-    sessionStorage.setItem(listColStorageKey(kind || "income"), JSON.stringify(colNumbers));
+  function setVisibleListCols(colNumbers, kind, options) {
+    kind = kind || "income";
+    sessionStorage.setItem(listColStorageKey(kind), JSON.stringify(colNumbers));
+    if (options && options.persist === false) return;
+    schedulePersistListLayout(kind);
   }
 
   function moveVisibleListCol(kind, colId, dir) {
@@ -752,6 +752,93 @@
     ids[j] = tmp;
     setVisibleListCols(ids, kind);
     return true;
+  }
+
+  function getHiddenListCols(kind) {
+    kind = kind || "income";
+    const visible = new Set(
+      getVisibleListCols(kind).map(function (col) {
+        return String(listColId(col));
+      })
+    );
+    return getColCatalog(kind).filter(function (col) {
+      return !visible.has(String(listColId(col)));
+    });
+  }
+
+  function removeVisibleListCol(kind, colId) {
+    const cols = getVisibleListCols(kind);
+    const target = cols.find(function (col) {
+      return String(listColId(col)) === String(colId);
+    });
+    if (!target) return false;
+    if (target.sticky) return false;
+    if (cols.length <= 1) return false;
+    const ids = cols
+      .map(function (col) {
+        return listColId(col);
+      })
+      .filter(function (id) {
+        return String(id) !== String(colId);
+      });
+    setVisibleListCols(ids, kind);
+    return true;
+  }
+
+  function addVisibleListCol(kind, colId) {
+    const catalog = getColCatalog(kind);
+    const col = catalog.find(function (c) {
+      return String(listColId(c)) === String(colId);
+    });
+    if (!col) return false;
+    const cols = getVisibleListCols(kind);
+    if (
+      cols.some(function (c) {
+        return String(listColId(c)) === String(colId);
+      })
+    ) {
+      return false;
+    }
+    const ids = cols
+      .map(function (c) {
+        return listColId(c);
+      })
+      .concat([listColId(col)]);
+    setVisibleListCols(ids, kind);
+    return true;
+  }
+
+  var persistLayoutTimers = {};
+
+  function schedulePersistListLayout(kind) {
+    if (typeof window === "undefined") return;
+    if (!(window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout)) return;
+    clearTimeout(persistLayoutTimers[kind]);
+    persistLayoutTimers[kind] = setTimeout(function () {
+      const order = getVisibleListCols(kind).map(function (col) {
+        return listColId(col);
+      });
+      fetch("/api/review/list-layout", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: kind, order: order }),
+      }).catch(function (err) {
+        console.warn("[review] list-layout save failed", err);
+      });
+    }, 350);
+  }
+
+  function applyServerListLayouts(layouts) {
+    if (!layouts || typeof layouts !== "object") return;
+    Object.keys(layouts).forEach(function (kind) {
+      const ids = layouts[kind];
+      if (!Array.isArray(ids) || !ids.length) return;
+      try {
+        sessionStorage.setItem(listColStorageKey(kind), JSON.stringify(ids));
+      } catch {
+        /* ignore */
+      }
+    });
   }
 
   function listColId(col) {
@@ -2448,6 +2535,10 @@
     getVisibleListCols,
     setVisibleListCols,
     moveVisibleListCol,
+    getHiddenListCols,
+    removeVisibleListCol,
+    addVisibleListCol,
+    applyServerListLayouts,
     getListExcludedCols,
     getFeeStaffFilters,
     setFeeStaffFilters,

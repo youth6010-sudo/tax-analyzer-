@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { getReviewAccessForUser } from '@/lib/review/access';
+import { getReviewListLayouts } from '@/lib/reviewListLayoutDb';
 import { getReviewGridMetaAsync, isReviewGridReady } from '@/lib/review/gridData';
 
 function apiError(e: unknown) {
@@ -15,7 +16,11 @@ export async function GET() {
   try {
     const user = await requireUser();
     const access = getReviewAccessForUser(user);
-    const meta = await getReviewGridMetaAsync();
+    const [meta, listLayouts, gridReady] = await Promise.all([
+      getReviewGridMetaAsync(),
+      getReviewListLayouts(),
+      isReviewGridReady(),
+    ]);
 
     return NextResponse.json({
       user: {
@@ -30,8 +35,9 @@ export async function GET() {
       canEditLayout: access.canEditLayout,
       access: access.access,
       sheetMapping: access.sheetMapping,
+      listLayouts,
       gridMeta: meta,
-      gridReady: await isReviewGridReady(),
+      gridReady,
       gridFromDb: meta.fromDb === true,
       embed: true,
     });

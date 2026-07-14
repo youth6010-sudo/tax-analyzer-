@@ -1601,6 +1601,36 @@ body.client-detail-modal-open {
   cursor: default;
 }
 
+.client-list-table th .th-layout-btn--danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.client-list-layout-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.client-list-layout-hint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.client-list-layout-add-select {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: #0f172a;
+}
+
 .client-list-table th.cell-editable-header {
   outline: 1px dashed #94a3b8;
   cursor: text;

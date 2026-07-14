@@ -325,6 +325,7 @@ declare global {
       canEditLayout?: boolean;
       isMaster?: boolean;
       isIndie?: boolean;
+      listLayouts?: Record<string, Array<string | number>>;
       gridMeta?: { importedAt?: string };
       gridReady?: boolean;
     };

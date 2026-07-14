@@ -415,11 +415,20 @@
           const sessionRes = await fetch("/api/review/session");
           if (sessionRes.ok) {
             const session = await sessionRes.json();
+            window.__REVIEW_SESSION__ = session;
             await ReviewAuth.initFromPortal(session);
           }
         } catch (e) {
           /* session preloaded by embed host */
         }
+      }
+      if (
+        window.__REVIEW_SESSION__ &&
+        window.__REVIEW_SESSION__.listLayouts &&
+        window.ReviewReadable &&
+        ReviewReadable.applyServerListLayouts
+      ) {
+        ReviewReadable.applyServerListLayouts(window.__REVIEW_SESSION__.listLayouts);
       }
       if (ReviewGridEdit.initStorage && !window.__REVIEW_PATCHES_READY__) {
         void ReviewGridEdit.initStorage();
