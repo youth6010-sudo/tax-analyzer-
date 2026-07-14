@@ -1,6 +1,11 @@
 'use client';
 
-import { COMPANY_CHIP_COLOR, managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
+import {
+  COMPANY_CHIP_COLOR,
+  TAX_DEADLINE_CHIP_COLOR,
+  managerChipColor,
+  MANAGER_LEGEND_ORDER,
+} from '@/lib/calendarManagerColors';
 
 type Props = {
   members: string[];
@@ -9,6 +14,8 @@ type Props = {
   onChange: (names: string[]) => void;
   showCompany: boolean;
   onShowCompanyChange: (show: boolean) => void;
+  showTax: boolean;
+  onShowTaxChange: (show: boolean) => void;
   hideCompleted: boolean;
   onHideCompletedChange: (hide: boolean) => void;
 };
@@ -31,6 +38,8 @@ export default function CalendarTeamFilter({
   onChange,
   showCompany,
   onShowCompanyChange,
+  showTax,
+  onShowTaxChange,
   hideCompleted,
   onHideCompletedChange,
 }: Props) {
@@ -79,6 +88,19 @@ export default function CalendarTeamFilter({
             aria-hidden
           />
           <span className="font-medium text-slate-900">사내</span>
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showTax}
+            onChange={() => onShowTaxChange(!showTax)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          <span
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ${TAX_DEADLINE_CHIP_COLOR}`}
+            aria-hidden
+          />
+          <span className="font-medium text-slate-900">세무신고</span>
         </label>
         <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
           <input

@@ -377,6 +377,17 @@ export const companyEventCheckoffs = pgTable('company_event_checkoffs', {
   index('company_event_checkoffs_member_idx').on(t.memberName),
 ]);
 
+/** 세무신고 자동일정 — 담당자별 완료 체크 (deadline_id = tax-… 고정 키) */
+export const taxDeadlineCheckoffs = pgTable('tax_deadline_checkoffs', {
+  deadlineId: text('deadline_id').notNull(),
+  memberName: text('member_name').notNull(),
+  completed: boolean('completed').notNull().default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, t => [
+  primaryKey({ columns: [t.deadlineId, t.memberName] }),
+  index('tax_deadline_checkoffs_member_idx').on(t.memberName),
+]);
+
 /** 검토표 셀 패치 (마스터 편집) */
 export const reviewGridPatches = pgTable(
   'review_grid_patches',
@@ -471,6 +482,7 @@ export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
 export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
 export type CompanyEvent = typeof companyEvents.$inferSelect;
 export type CompanyEventCheckoff = typeof companyEventCheckoffs.$inferSelect;
+export type TaxDeadlineCheckoff = typeof taxDeadlineCheckoffs.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;

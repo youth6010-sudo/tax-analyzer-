@@ -173,11 +173,24 @@ export async function createPersonalChecklistItem(
   ownerName: string,
   input: CreateChecklistInput,
 ): Promise<PersonalChecklistDto> {
+  const [item] = await createPersonalChecklistItems(ownerName, input, [
+    input.dueDate?.trim() || '',
+  ]);
+  return item;
+}
+
+/** 동일 내용으로 여러 마감일 일괄 등록 */
+export async function createPersonalChecklistItems(
+  ownerName: string,
+  input: CreateChecklistInput,
+  dueDates: string[],
+): Promise<PersonalChecklistDto[]> {
   const db = getDb();
   const title = input.title.trim();
   if (!title) throw new Error('제목을 입력하세요.');
-  const dueDate = input.dueDate?.trim() || '';
-  if (!dueDate) throw new Error('마감기한을 지정하세요.');
+
+  const uniqueDates = [...new Set(dueDates.map(d => d.trim()).filter(Boolean))].sort();
+  if (uniqueDates.length === 0) throw new Error('마감기한을 지정하세요.');
 
   const normalized = normalizeChecklistTaxType(input.taxType);
   const assigneeNames = normalizeAssignees(input.assigneeNames, ownerName);
@@ -192,35 +205,39 @@ export async function createPersonalChecklistItem(
     });
   }
 
-  const [row] = await db
+  const rows = await db
     .insert(personalChecklistItems)
-    .values({
-      ownerName,
-      title,
-      category: normalized.category,
-      taxType: normalized.taxType,
-      clientId: input.clientId || null,
-      dueDate,
-      reflectInNotes: Boolean(input.reflectInNotes),
-      assigneeNames,
-      memos,
-    })
+    .values(
+      uniqueDates.map(dueDate => ({
+        ownerName,
+        title,
+        category: normalized.category,
+        taxType: normalized.taxType,
+        clientId: input.clientId || null,
+        dueDate,
+        reflectInNotes: Boolean(input.reflectInNotes),
+        assigneeNames,
+        memos,
+      })),
+    )
     .returning();
 
   if (input.reflectInNotes && input.clientId) {
     const client = await getClientById(input.clientId);
     if (client) {
-      await syncChecklistToClientNotes(client, row);
+      for (const row of rows) {
+        await syncChecklistToClientNotes(client, row);
+      }
     }
   }
 
   let clientName: string | undefined;
-  if (row.clientId) {
-    const client = await getClientById(row.clientId);
+  if (input.clientId) {
+    const client = await getClientById(input.clientId);
     clientName = client?.companyName;
   }
 
-  return toDto(row, clientName);
+  return rows.map(row => toDto(row, clientName));
 }
 
 export type UpdateChecklistInput = Partial<{

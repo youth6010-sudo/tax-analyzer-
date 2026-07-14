@@ -8,7 +8,7 @@ import {
 import type { ClientIncomeTypes, IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import { filingTargets, simplePayrollTargetsForPeriod } from '@/app/utils/filingCheck';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
-import { readIncomeTypes, readYearEndTypes, isLaborContentReportActive } from '@/lib/incomeTypes';
+import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
   isEmployedColumnApplicable,
@@ -27,6 +27,10 @@ export type IncomeGridCell = {
   filed: boolean;
   acceptanceDate?: string;
   acceptanceMethod?: string;
+  /** 해당 월만 비활성(전월 미신고 이월·수동 끔) — DB notes */
+  monthInactive?: boolean;
+  /** 해당 월 수동 활성화 — 미접수 시 차이 집계 */
+  monthForcedActive?: boolean;
 };
 
 export type IncomeTypeGridRow = {
@@ -52,7 +56,30 @@ export type SimplePayrollFilingRecord = {
   filed: boolean;
   acceptanceDate?: string;
   acceptanceMethod?: string;
+  notes?: string;
 };
+
+/** 해당 월만 체크란 숨김(전월 미신고 이월·수동 비활성) — filed 값은 유지 */
+export const SP_MONTH_INACTIVE_NOTE = '__inactive__';
+/** 전월 미신고인데 이번 달 수동으로 켠 상태 — 차이(미접수) 집계 대상 */
+export const SP_MONTH_ACTIVE_NOTE = '__active__';
+
+export function isSimplePayrollMonthInactive(notes?: string | null): boolean {
+  return String(notes || '').includes(SP_MONTH_INACTIVE_NOTE);
+}
+
+export function isSimplePayrollMonthForcedActive(notes?: string | null): boolean {
+  return String(notes || '').includes(SP_MONTH_ACTIVE_NOTE);
+}
+
+export function simplePayrollMonthNotes(opts: {
+  monthInactive?: boolean;
+  monthForcedActive?: boolean;
+}): string {
+  if (opts.monthInactive) return SP_MONTH_INACTIVE_NOTE;
+  if (opts.monthForcedActive) return SP_MONTH_ACTIVE_NOTE;
+  return '';
+}
 
 export type YearEndFilingRecord = {
   clientId: string;
@@ -88,6 +115,8 @@ export function buildSimplePayrollGrid(
   excluded: Record<string, string> = {},
   rowNotes: Record<string, string> = {},
   forceIncluded: Record<string, boolean> = {},
+  /** 전월(또는 근로 직전 반기) 접수 완료 — clientId|incomeType */
+  prevFiledKeys: ReadonlySet<string> = new Set(),
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
@@ -97,7 +126,6 @@ export function buildSimplePayrollGrid(
 
   const grid = sortIncomeGridRows(
     simplePayrollTargetsForPeriod(clients, meta.month).map(c => {
-      const types = readIncomeTypes(c.intakeData);
       const intakeData = c.intakeData ?? {};
       const whSettings = readWithholdingSettings(intakeData);
       const cells: Record<string, IncomeGridCell> = {};
@@ -108,24 +136,42 @@ export function buildSimplePayrollGrid(
         const isEmployed = key === 'employed';
         const storageKey = isEmployed && employedPeriodKey ? employedPeriodKey : monthlyPeriodKey;
         const saved = filedMap.get(`${storageKey}|${c.id}|${key}`);
-        const typeOn = types[key as IncomeTypeKey];
         const applicable = isEmployed ? isEmployedColumnApplicable(meta.month, intakeData) : true;
+        const monthInactive = isSimplePayrollMonthInactive(saved?.notes);
+        const monthForcedActive = isSimplePayrollMonthForcedActive(saved?.notes);
+        const prevFiled = prevFiledKeys.has(`${c.id}|${key}`);
+        const hasFiled = !!saved?.filed;
+        // 전월 신고(접수)됐을 때만 이월 활성. 전월 미신고 → 비활성.
+        // 수동 활성화(__active__)면 전월 없어도 활성 → 미접수는 차이.
+        // 수동 비활성(__inactive__)이면 전월 신고분이 있어도 숨김.
+        const active =
+          applicable &&
+          !monthInactive &&
+          !!(hasFiled || monthForcedActive || prevFiled);
         cells[key] = {
           applicable,
-          active: typeOn && applicable,
-          filed: saved?.filed ?? false,
+          active,
+          filed: hasFiled,
           acceptanceDate: saved?.acceptanceDate ?? '',
           acceptanceMethod: saved?.acceptanceMethod ?? '',
+          monthInactive,
+          monthForcedActive,
         };
       }
 
       const laborSaved = filedMap.get(`${monthlyPeriodKey}|${c.id}|laborContentReport`);
+      const laborInactive = isSimplePayrollMonthInactive(laborSaved?.notes);
+      const laborForced = isSimplePayrollMonthForcedActive(laborSaved?.notes);
+      const laborPrev = prevFiledKeys.has(`${c.id}|laborContentReport`);
+      const laborFiled = !!laborSaved?.filed;
       cells.laborContentReport = {
         applicable: true,
-        active: isLaborContentReportActive(types),
-        filed: laborSaved?.filed ?? false,
+        active: !laborInactive && !!(laborFiled || laborForced || laborPrev),
+        filed: laborFiled,
         acceptanceDate: laborSaved?.acceptanceDate ?? '',
         acceptanceMethod: laborSaved?.acceptanceMethod ?? '',
+        monthInactive: laborInactive,
+        monthForcedActive: laborForced,
       };
 
       const manualExcluded = Object.prototype.hasOwnProperty.call(excluded, c.id);
@@ -158,13 +204,14 @@ export function buildSimplePayrollGrid(
   return { grid, meta };
 }
 
-/** 설정 저장 후 한 업체 행만 소득유형 반영 */
+/** 설정 저장 후 한 업체 행 — 접수(filed)·월 강제활성/비활성 플래그 유지 */
 export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string, IncomeGridCell> }>(
   row: T,
   types: ClientIncomeTypes,
   month: number,
   intakeData: Record<string, unknown> = {},
 ): T {
+  void types;
   const cells: Record<string, IncomeGridCell> = { ...row.cells };
 
   for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
@@ -172,23 +219,26 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
     const key = col.key;
     const isEmployed = key === 'employed';
     const applicable = isEmployed ? isEmployedColumnApplicable(month, intakeData) : true;
-    const typeOn = types[key as IncomeTypeKey];
     const prev = cells[key] ?? { active: false, filed: false };
+    const monthInactive = !!prev.monthInactive;
+    const monthForcedActive = !!prev.monthForcedActive;
     cells[key] = {
       ...prev,
       applicable,
-      active: typeOn && applicable,
-      ...(typeOn && applicable ? {} : { filed: false, acceptanceDate: '', acceptanceMethod: '' }),
+      active:
+        applicable &&
+        !monthInactive &&
+        !!(prev.filed || monthForcedActive || prev.active),
     };
   }
 
-  const laborActive = isLaborContentReportActive(types);
   const prevLabor = cells.laborContentReport ?? { active: false, filed: false };
+  const laborInactive = !!prevLabor.monthInactive;
+  const laborForced = !!prevLabor.monthForcedActive;
   cells.laborContentReport = {
     ...prevLabor,
     applicable: true,
-    active: laborActive,
-    ...(laborActive ? {} : { filed: false, acceptanceDate: '', acceptanceMethod: '' }),
+    active: !laborInactive && !!(prevLabor.filed || laborForced || prevLabor.active),
   };
 
   return { ...row, cells };
@@ -196,8 +246,8 @@ export function patchSimplePayrollRowFromTypes<T extends { cells: Record<string,
 
 /**
  * 연말정산 열 활성
- * - 근로·사업·기타: 간이지급 월별 설정(incomeTypes) OR 같은 해 간이지급 접수 이력
- *   (월별로 꺼도 해당 연도 접수가 있으면 연말에 표시 — incomeTypes를 다시 켜지 않음)
+ * - 근로·사업·기타: 같은 해 간이지급 접수 1회라도 있으면 필수 표시
+ *   (+ incomeTypes ON 이거나 연말에 이미 접수한 경우)
  * - 퇴직·이자배당: yearEndTypes
  */
 export function yearEndColumnActive(
@@ -207,7 +257,8 @@ export function yearEndColumnActive(
   yearSimplePayrollFiled?: ReadonlySet<string>,
 ): boolean {
   if (key === 'employed' || key === 'bizIncome' || key === 'otherTax') {
-    return Boolean(incomeTypes[key]) || Boolean(yearSimplePayrollFiled?.has(key));
+    // 당해 간이지급 접수가 있으면 연말정산 대상 (incomeTypes를 꺼도 유지)
+    return Boolean(yearSimplePayrollFiled?.has(key)) || Boolean(incomeTypes[key]);
   }
   return Boolean(yearEndTypes[key]);
 }

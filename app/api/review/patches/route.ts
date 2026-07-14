@@ -4,8 +4,9 @@ import {
   getEditableSheetNamesForOwner,
   getReviewAccessForUser,
   isReviewMaster,
-  reviewAccess,
+  type ReviewAccessConfig,
 } from '@/lib/review/access';
+import { DEFAULT_REVIEW_TAX_YEAR } from '@/lib/review/taxYear';
 import {
   clearReviewGridEdits,
   listReviewNewRows,
@@ -16,13 +17,27 @@ import {
   type ReviewPatchInput,
 } from '@/lib/review/reviewGridDb';
 
+function taxYearFromPatches(patches: ReviewPatchInput[] | undefined): number {
+  for (const p of patches || []) {
+    const m = String(p.sheetName || '').match(/종소세\s*(\d{2})년/);
+    if (m) return 2000 + Number(m[1]);
+    const fee = String(p.sheetName || '').match(/조정료(\d{2})/);
+    if (fee) return 2000 + Number(fee[1]);
+  }
+  return DEFAULT_REVIEW_TAX_YEAR;
+}
+
 /** 결산 엑셀 제목행 — 종소 1행, 법인·수수료 1~2행 */
-function isLayoutHeaderPatch(sheetName: string, row: number): boolean {
+function isLayoutHeaderPatch(
+  sheetName: string,
+  row: number,
+  accessCfg: ReviewAccessConfig,
+): boolean {
   if (!Number.isFinite(row) || row < 1) return false;
   const corpSheets = new Set<string>();
-  if (reviewAccess.corpSheet) corpSheets.add(reviewAccess.corpSheet);
-  if (reviewAccess.corpFeeSheet) corpSheets.add(reviewAccess.corpFeeSheet);
-  for (const ver of reviewAccess.corpTaxVersions || []) {
+  if (accessCfg.corpSheet) corpSheets.add(accessCfg.corpSheet);
+  if (accessCfg.corpFeeSheet) corpSheets.add(accessCfg.corpFeeSheet);
+  for (const ver of accessCfg.corpTaxVersions || []) {
     if (ver.sheet) corpSheets.add(ver.sheet);
   }
   if (corpSheets.has(sheetName)) return row <= 2;
@@ -51,18 +66,19 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireUser();
-    const access = getReviewAccessForUser(user);
-    if (!access.canEdit) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = (await request.json()) as {
       patches?: ReviewPatchInput[];
       newRows?: ReviewNewRowInput[];
     };
+    const access = getReviewAccessForUser(user, taxYearFromPatches(body.patches));
+    if (!access.canEdit) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     if (!access.isMaster && Array.isArray(body.patches)) {
-      const allowed = new Set(getEditableSheetNamesForOwner(access.reviewOwner));
+      const allowed = new Set(
+        getEditableSheetNamesForOwner(access.reviewOwner, access.access),
+      );
       for (const patch of body.patches) {
         if (!allowed.has(patch.sheetName)) {
           return NextResponse.json({ error: 'Forbidden: sheet' }, { status: 403 });
@@ -85,7 +101,9 @@ export async function PUT(request: NextRequest) {
       // 비인디는 본문만 upsert — 전체 저장을 막지 않음.
       const patchesToSave = access.canEditLayout
         ? body.patches
-        : body.patches.filter(p => !isLayoutHeaderPatch(p.sheetName, Number(p.r)));
+        : body.patches.filter(
+            p => !isLayoutHeaderPatch(p.sheetName, Number(p.r), access.access),
+          );
       if (patchesToSave.length) {
         await upsertReviewPatches(patchesToSave, user.id);
       }

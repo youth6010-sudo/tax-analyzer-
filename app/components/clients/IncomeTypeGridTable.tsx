@@ -10,6 +10,10 @@ export type GridCellState = {
   filed: boolean;
   acceptanceDate?: string;
   acceptanceMethod?: string;
+  /** 해당 월만 비활성 — 접수 자료는 유지 */
+  monthInactive?: boolean;
+  /** 해당 월 수동 활성화 — 미접수 시 차이 */
+  monthForcedActive?: boolean;
 };
 
 export type IncomeGridRow = {

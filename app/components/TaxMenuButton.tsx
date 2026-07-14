@@ -10,13 +10,20 @@ export default function TaxMenuButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canCharlieFeatures, setCanCharlieFeatures] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(data => setIsAdmin(!!data?.isDeveloper))
-      .catch(() => setIsAdmin(false));
+      .then(data => {
+        setIsAdmin(!!data?.isDeveloper);
+        setCanCharlieFeatures(!!data?.canUseCharlieFeatures);
+      })
+      .catch(() => {
+        setIsAdmin(false);
+        setCanCharlieFeatures(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -95,7 +102,9 @@ export default function TaxMenuButton() {
               </p>
               {group.items.length > 0 && (
                 <ul role="none" className="mt-0.5 space-y-0.5">
-                  {group.items.map(item => {
+                  {group.items
+                    .filter(item => !('charlieOnly' in item && item.charlieOnly) || canCharlieFeatures)
+                    .map(item => {
                     const active = isNavHrefActive(pathname, item.href);
                     return (
                       <li key={item.href} role="none">

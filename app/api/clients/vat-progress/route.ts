@@ -3,9 +3,9 @@ import { isDataViewer, requireUser } from '@/lib/auth';
 import { getClientById, listClients, updateClientDetail } from '@/lib/clientsDb';
 import { listSimplePayrollFilingsByKeys } from '@/lib/simplePayrollFilingsDb';
 import { listYearEndFilings } from '@/lib/yearEndFilingsDb';
-import { getFilingCheckSession } from '@/lib/taxFilingChecksDb';
-import { simplePayrollPeriodKeysForYear } from '@/lib/periodUtils';
-import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
+import { loadFilingCheckSessionWithCarry } from '@/lib/taxFilingChecksDb';
+import { simplePayrollMonthlyPeriodKey, simplePayrollPeriodKeysForYear } from '@/lib/periodUtils';
+import { getClientCategoryForFilter, getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import {
   filingTargets,
   isCorporateClient,
@@ -15,8 +15,9 @@ import {
   VAT_PHASES,
 } from '@/app/utils/filingCheck';
 import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
+import { yearEndColumnActive } from '@/lib/incomeTypeFilingGrid';
+import { YEAR_END_INCOME_KEYS, type YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
-  mergeVatPeriodProgressPatch,
   readVatMaterialFlags,
   readVatPeriodProgress,
   summarizeVatPeriodProgress,
@@ -25,6 +26,16 @@ import {
   type VatPeriodProgress,
   type VatProgressColumnDef,
 } from '@/lib/vatEntryProgress';
+import {
+  computeVatAnnualProgressForClient,
+  mergeVatAnnualYearStatePatch,
+  mergePhaseMarksPatch,
+  mergeReceiveEntryQuartersPatch,
+  mergeVatProgressMarkWrites,
+  readVatAnnualYearState,
+  type VatAnnualMarkStatus,
+  type VatAnnualYearState,
+} from '@/lib/vatAnnualProgress';
 import { getVatProgressLayout, saveVatProgressLayout } from '@/lib/vatProgressLayoutDb';
 import type { ClientRecord } from '@/app/types/client';
 
@@ -91,9 +102,44 @@ async function laborFiledByClient(year: number, clientIds: string[]) {
   return map;
 }
 
+/** 원천 월별 접수(간이지급 월 period) — 연간진행표 1~12월 칸 */
+async function laborFiledMonthsByClient(year: number, clientIds: string[]) {
+  const map = new Map<string, boolean[]>();
+  for (const id of clientIds) map.set(id, Array.from({ length: 12 }, () => false));
+
+  const periodKeys = Array.from({ length: 12 }, (_, i) =>
+    simplePayrollMonthlyPeriodKey(year, i + 1),
+  );
+  const rows = await listSimplePayrollFilingsByKeys(periodKeys, clientIds);
+  for (const r of rows) {
+    if (!r.filed) continue;
+    const m = Number(String(r.periodKey || '').split('-')[1]);
+    if (!m || m < 1 || m > 12) continue;
+    const arr = map.get(r.clientId);
+    if (arr) arr[m - 1] = true;
+  }
+  return map;
+}
+
+/** 해당 연도 간이지급에서 접수된 소득유형 (연말정산 열 활성용) */
+async function yearSimplePayrollFiledByClient(year: number, clientIds: string[]) {
+  const map = new Map<string, Set<string>>();
+  for (const id of clientIds) map.set(id, new Set());
+  const periodKeys = simplePayrollPeriodKeysForYear(year);
+  const rows = await listSimplePayrollFilingsByKeys(periodKeys, clientIds);
+  for (const r of rows) {
+    if (!r.filed) continue;
+    const set = map.get(r.clientId) ?? new Set<string>();
+    set.add(r.incomeType);
+    map.set(r.clientId, set);
+  }
+  return map;
+}
+
 function laborStatusForClient(
   intakeData: Record<string, unknown> | undefined,
   filed: Set<VatLaborKey> | undefined,
+  opts?: { annual?: boolean; yearSpFiled?: ReadonlySet<string> },
 ): VatLaborStatus {
   const income = readIncomeTypes(intakeData);
   const yearEnd = readYearEndTypes(intakeData);
@@ -102,6 +148,21 @@ function laborStatusForClient(
       ? (intakeData.taxFlags as Record<string, boolean>)
       : {};
   const filedSet = filed ?? new Set<VatLaborKey>();
+
+  if (opts?.annual) {
+    const out = emptyLaborStatus();
+    for (const key of YEAR_END_INCOME_KEYS) {
+      const yeKey = key as YearEndIncomeKey;
+      const active =
+        yearEndColumnActive(yeKey, income, yearEnd, opts.yearSpFiled) || filedSet.has(key);
+      out[key] = { target: active, filed: filedSet.has(key) };
+    }
+    // 간이지급 일용 있으면 원천에 같이 표시
+    const dailyActive =
+      !!income.daily || !!flags.daily || !!opts.yearSpFiled?.has('daily') || filedSet.has('daily');
+    out.daily = { target: dailyActive, filed: filedSet.has('daily') };
+    return out;
+  }
 
   const targetOf = (key: VatLaborKey): boolean => {
     if (key === 'employed') return !!(income.employed || yearEnd.employed || flags.employed);
@@ -122,32 +183,78 @@ function laborStatusForClient(
   return out;
 }
 
-/** 신고대상확인(부가세) 세션에서 수동 제외된 clientId */
-async function loadFilingExcludedIds(
+/** 신고대상확인(부가세) 세션 — 담당자별 (직전 완료분 제외·추가 승계 포함) */
+async function loadVatFilingSessions(
   managers: string[],
   year: number,
   phase: VatPhase,
-): Promise<Set<string>> {
+): Promise<Map<string, Awaited<ReturnType<typeof loadFilingCheckSessionWithCarry>>['data']>> {
   const pk = filingPeriodKey('vat', {
     year,
     month: 1,
     vatPhase: phase,
     half: 'H1',
   });
-  const excluded = new Set<string>();
+  const map = new Map<
+    string,
+    Awaited<ReturnType<typeof loadFilingCheckSessionWithCarry>>['data']
+  >();
   const uniqueManagers = [...new Set(managers.map(m => m.trim()).filter(Boolean))];
   await Promise.all(
     uniqueManagers.map(async manager => {
-      const session = await getFilingCheckSession(manager, 'vat', pk);
-      if (!session) return;
-      for (const [id, reason] of Object.entries(session.excluded ?? {})) {
-        if (session.forceIncluded?.[id]) continue;
-        if (id) excluded.add(id);
-        void reason;
-      }
+      const loaded = await loadFilingCheckSessionWithCarry(manager, 'vat', pk);
+      map.set(manager, loaded.data);
     }),
   );
-  return excluded;
+  return map;
+}
+
+function isExcludedByVatSession(
+  session:
+    | Awaited<ReturnType<typeof loadFilingCheckSessionWithCarry>>['data']
+    | null
+    | undefined,
+  clientId: string,
+): boolean {
+  if (!session) return false;
+  if (session.forceIncluded?.[clientId]) return false;
+  return Object.prototype.hasOwnProperty.call(session.excluded ?? {}, clientId);
+}
+
+/**
+ * 신고대상확인 부가세 활성 목록과 동일:
+ * filingTargets + 수동추가 − 해당 담당 세션에서 제외된 업체
+ */
+function resolveVatReviewTargets(
+  all: ClientRecord[],
+  phase: VatPhase,
+  sessionsByManager: Map<
+    string,
+    Awaited<ReturnType<typeof loadFilingCheckSessionWithCarry>>['data']
+  >,
+): ClientRecord[] {
+  const base = filingTargets(all, 'vat', { vatPhase: phase });
+  const byId = new Map<string, ClientRecord>();
+  for (const c of base) {
+    const mgr = c.manager?.trim() || '';
+    const session = sessionsByManager.get(mgr);
+    if (isExcludedByVatSession(session, c.id)) continue;
+    byId.set(c.id, c);
+  }
+  for (const session of sessionsByManager.values()) {
+    if (!session?.extraClients?.length) continue;
+    for (const m of session.extraClients) {
+      if (!m?.id || byId.has(m.id)) continue;
+      if (isExcludedByVatSession(session, m.id)) continue;
+      const full = all.find(c => c.id === m.id);
+      if (full) {
+        const mgr = full.manager?.trim() || '';
+        if (isExcludedByVatSession(sessionsByManager.get(mgr), full.id)) continue;
+        byId.set(full.id, full);
+      }
+    }
+  }
+  return [...byId.values()];
 }
 
 export async function GET(request: NextRequest) {
@@ -159,8 +266,9 @@ export async function GET(request: NextRequest) {
     if (!VAT_PHASES.includes(phase)) {
       return NextResponse.json({ error: 'Invalid phase' }, { status: 400 });
     }
-    const view = sp.get('view') === 'year' ? 'year' : 'period';
-    // 일반 담당자: 본인 수임처만 / 관리자모드·찰리·인디: 전체
+    const viewRaw = sp.get('view');
+    const view = viewRaw === 'year' || viewRaw === 'annual' ? 'annual' : 'period';
+    // 신고대상확인과 동일: 데이터뷰어=전체 수임처 / 그 외=담당 수임처
     const canViewAll = isDataViewer(user);
     const layout = await getVatProgressLayout(user.loginId || '');
 
@@ -171,36 +279,40 @@ export async function GET(request: NextRequest) {
       includeChurned: false,
     });
 
-    const managersSeed = [user.name || '', ...all.map(c => c.manager || '')];
+    const managersSeed = [
+      user.name || '',
+      ...all.map(c => c.manager || ''),
+      ...[...new Set(all.map(c => c.manager?.trim() || '').filter(Boolean))],
+    ];
 
     let targets: ClientRecord[];
-    if (view === 'year') {
-      // 연간: 기수별 신고대상 합집합 (해당 기수에서 제외된 건은 그 기수만 빠짐)
+    if (view === 'annual') {
       const byId = new Map<string, ClientRecord>();
       for (const p of VAT_PHASES) {
-        const list = filingTargets(all, 'vat', { vatPhase: p });
-        const excludedIds = await loadFilingExcludedIds(managersSeed, year, p);
-        for (const c of list) {
-          if (excludedIds.has(c.id)) continue;
+        const sessions = await loadVatFilingSessions(managersSeed, year, p);
+        for (const c of resolveVatReviewTargets(all, p, sessions)) {
           byId.set(c.id, c);
         }
       }
       targets = [...byId.values()];
     } else {
-      // 신고분별: 해당 기수 신고대상확인 기준
-      targets = filingTargets(all, 'vat', { vatPhase: phase });
-      const excludedIds = await loadFilingExcludedIds(managersSeed, year, phase);
-      targets = targets.filter(c => !excludedIds.has(c.id));
+      const sessions = await loadVatFilingSessions(managersSeed, year, phase);
+      targets = resolveVatReviewTargets(all, phase, sessions);
     }
 
-    const laborFiled = await laborFiledByClient(
-      year,
-      targets.map(c => c.id),
-    );
+    const targetIds = targets.map(c => c.id);
+    const [laborFiled, laborMonths, yearSpFiled] = await Promise.all([
+      laborFiledByClient(year, targetIds),
+      view === 'annual' ? laborFiledMonthsByClient(year, targetIds) : Promise.resolve(null),
+      view === 'annual' ? yearSimplePayrollFiledByClient(year, targetIds) : Promise.resolve(null),
+    ]);
 
     const rows = targets.map(c => {
       const flags = readVatMaterialFlags(c.intakeData);
-      const labor = laborStatusForClient(c.intakeData, laborFiled.get(c.id));
+      const labor = laborStatusForClient(c.intakeData, laborFiled.get(c.id), {
+        annual: view === 'annual',
+        yearSpFiled: yearSpFiled?.get(c.id),
+      });
       const yearPhases = vatYearProgressPhases(c);
       const base = {
         id: c.id,
@@ -211,29 +323,25 @@ export async function GET(request: NextRequest) {
         douzoneCode: getClientDouzoneCode(c),
         manager: c.manager || '',
         isCorporate: isCorporateClient(c),
+        mainCategory: getClientCategoryForFilter(c),
         flags,
         labor,
         progressKeys: layout.map(col => col.key),
         yearPhases,
       };
 
-      if (view === 'year') {
-        const byPhase: Record<
-          string,
-          {
-            progress: VatPeriodProgress;
-            summary: { done: number; total: number; filledLabels: string[] };
-          }
-        > = {};
-        for (const p of yearPhases) {
-          const pk = vatProgressPeriodKey(year, p);
-          const progress = readVatPeriodProgress(c.intakeData, pk);
-          byPhase[p] = {
-            progress,
-            summary: summarizeVatPeriodProgress(progress, layout),
-          };
-        }
-        return { ...base, progressByPhase: byPhase };
+      if (view === 'annual') {
+        const annual = readVatAnnualYearState(c.intakeData, year);
+        const annualSummary = computeVatAnnualProgressForClient(
+          c,
+          labor,
+          year,
+          VAT_PHASES,
+          c.intakeData,
+          laborMonths?.get(c.id),
+          isCorporateClient(c),
+        );
+        return { ...base, annual, annualSummary };
       }
 
       const periodKey = vatProgressPeriodKey(year, phase);
@@ -280,6 +388,17 @@ export async function PATCH(request: NextRequest) {
       progress?: VatPeriodProgress;
       flags?: Partial<VatMaterialFlags>;
       layout?: VatProgressColumnDef[];
+      annual?: Partial<VatAnnualYearState>;
+      /** 연간진행표 자료수취·입력 분기 (통장·기타증빙 → 부가세 OX) */
+      dualQuarter?: {
+        progressKey: string;
+        receiveQuarters?: boolean[];
+        entryQuarters?: boolean[];
+        /** 기타증빙 X 포함 기수 마크 */
+        phaseMarks?: VatAnnualMarkStatus[];
+      };
+      /** 연간진행표에서 OX 수정 후 summary 반환 */
+      includeAnnual?: boolean;
     };
 
     if (body.layout) {
@@ -290,16 +409,83 @@ export async function PATCH(request: NextRequest) {
     const clientId = body.clientId?.trim();
     if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 });
     const year = Number(body.year || new Date().getFullYear());
+    const client = await getClientById(clientId);
+    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    let intakeData = { ...(client.intakeData ?? {}) };
+
+    const buildAnnualResponse = async (updated: ClientRecord) => {
+      const [laborFiled, yearSpFiled] = await Promise.all([
+        laborFiledByClient(year, [clientId]),
+        yearSimplePayrollFiledByClient(year, [clientId]),
+      ]);
+      const labor = laborStatusForClient(updated.intakeData, laborFiled.get(clientId), {
+        annual: true,
+        yearSpFiled: yearSpFiled.get(clientId),
+      });
+      return {
+        annual: readVatAnnualYearState(updated.intakeData, year),
+        annualSummary: computeVatAnnualProgressForClient(
+          updated,
+          labor,
+          year,
+          VAT_PHASES,
+          updated.intakeData,
+          undefined,
+          isCorporateClient(updated),
+        ),
+      };
+    };
+
+    if (body.dualQuarter?.progressKey) {
+      if (body.dualQuarter.phaseMarks) {
+        intakeData = mergePhaseMarksPatch(
+          intakeData,
+          year,
+          body.dualQuarter.progressKey,
+          body.dualQuarter.phaseMarks,
+        );
+      } else {
+        intakeData = mergeReceiveEntryQuartersPatch(
+          intakeData,
+          year,
+          body.dualQuarter.progressKey,
+          body.dualQuarter.receiveQuarters ?? [],
+          body.dualQuarter.entryQuarters ?? [],
+        );
+      }
+      const updated = await updateClientDetail(clientId, { intakeData });
+      const annualPayload = await buildAnnualResponse(updated);
+      return NextResponse.json({ ok: true, ...annualPayload });
+    }
+
+    if (body.annual) {
+      intakeData = mergeVatAnnualYearStatePatch(intakeData, year, body.annual);
+      // 연간 통장 분기 → 부가세 bankStatement OX 동기화 (+확정→예정)
+      if (
+        body.annual.bankReceiveQuarters !== undefined ||
+        body.annual.bankEntryQuarters !== undefined
+      ) {
+        const st = readVatAnnualYearState(intakeData, year);
+        intakeData = mergeReceiveEntryQuartersPatch(
+          intakeData,
+          year,
+          'bankStatement',
+          st.bankReceiveQuarters ?? [],
+          st.bankEntryQuarters ?? [],
+        );
+      }
+      const updated = await updateClientDetail(clientId, { intakeData });
+      const annualPayload = await buildAnnualResponse(updated);
+      return NextResponse.json({ ok: true, ...annualPayload });
+    }
+
     const phase = String(body.phase || '1기 확정');
     if (!VAT_PHASES.includes(phase as VatPhase)) {
       return NextResponse.json({ error: 'Invalid phase' }, { status: 400 });
     }
     const periodKey = vatProgressPeriodKey(year, phase);
 
-    const client = await getClientById(clientId);
-    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    let intakeData = { ...(client.intakeData ?? {}) };
     if (body.flags) {
       const prev = readVatMaterialFlags(intakeData);
       intakeData = {
@@ -313,15 +499,27 @@ export async function PATCH(request: NextRequest) {
       };
     }
     if (body.progress) {
-      intakeData = mergeVatPeriodProgressPatch(intakeData, periodKey, body.progress);
+      // 확정 체크 시 대응 예정이 비어 있으면 예정까지 함께 기록
+      intakeData = mergeVatProgressMarkWrites(
+        intakeData,
+        year,
+        phase as VatPhase,
+        body.progress,
+      );
     }
 
     const updated = await updateClientDetail(clientId, { intakeData });
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       ok: true,
       flags: readVatMaterialFlags(updated.intakeData),
       progress: readVatPeriodProgress(updated.intakeData, periodKey),
-    });
+    };
+
+    if (body.includeAnnual) {
+      Object.assign(response, await buildAnnualResponse(updated));
+    }
+
+    return NextResponse.json(response);
   } catch (e) {
     return apiError(e);
   }

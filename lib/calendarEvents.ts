@@ -1,21 +1,34 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 import { listCompanyEvents } from '@/lib/companyEvents';
-import { listCheckoffsForEvents } from '@/lib/companyEventCheckoffs';
+import {
+  checkoffsFromDetails,
+  listCheckoffDetailsForEvents,
+} from '@/lib/companyEventCheckoffs';
 import { listPersonalChecklistInRange } from '@/lib/personalChecklist';
+import { listTaxDeadlines, taxDeadlinesToCalendarEvents } from '@/lib/taxDeadlineCalendar';
+import { listCheckoffDetailsForTaxDeadlines } from '@/lib/taxDeadlineCheckoffs';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 
 export async function listCalendarEvents(
   ownerNames: string[],
   from: string,
   to: string,
-  opts?: { viewerName?: string },
+  opts?: { viewerName?: string; includeCheckoffDetails?: boolean },
 ): Promise<CalendarEventDto[]> {
   const events: CalendarEventDto[] = [];
   const names = ownerNames.map(n => n.trim()).filter(Boolean);
   const viewer = (opts?.viewerName || '').trim();
 
-  const [personal, company] = await Promise.all([
+  const [personal, company, team] = await Promise.all([
     listPersonalChecklistInRange(names, from, to),
     listCompanyEvents({ from, to }),
+    listCalendarTeamMembers(),
+  ]);
+
+  const taxEvents = taxDeadlinesToCalendarEvents(listTaxDeadlines(from, to));
+  const [companyDetails, taxDetails] = await Promise.all([
+    listCheckoffDetailsForEvents(company.map(ev => ev.id)),
+    listCheckoffDetailsForTaxDeadlines(taxEvents.map(ev => ev.id)),
   ]);
 
   for (const item of personal) {
@@ -35,13 +48,11 @@ export async function listCalendarEvents(
     });
   }
 
-  const companyIds = company.map(ev => ev.id);
-  const checkoffMap = await listCheckoffsForEvents(companyIds);
-
   for (const ev of company) {
-    const kindLabel = ev.scheduleKind === 'deadline' ? '기한' : '범위';
-    const checkoffs = checkoffMap.get(ev.id) ?? {};
+    const details = companyDetails.get(ev.id) ?? {};
+    const checkoffs = checkoffsFromDetails(details);
     const myDone = viewer ? !!checkoffs[viewer] : false;
+    const kindLabel = ev.scheduleKind === 'deadline' ? '기한' : '범위';
     events.push({
       id: `company-${ev.id}`,
       kind: 'company',
@@ -55,6 +66,22 @@ export async function listCalendarEvents(
       companyScheduleKind: ev.scheduleKind,
       companyDescription: ev.description,
       completed: myDone,
+      checkoffDone: team.filter(n => checkoffs[n]).length,
+      checkoffTotal: team.length,
+      checkoffDetails: opts?.includeCheckoffDetails ? details : undefined,
+    });
+  }
+
+  for (const ev of taxEvents) {
+    const details = taxDetails.get(ev.id) ?? {};
+    const checkoffs = checkoffsFromDetails(details);
+    const myDone = viewer ? !!checkoffs[viewer] : false;
+    events.push({
+      ...ev,
+      completed: myDone,
+      checkoffDone: team.filter(n => checkoffs[n]).length,
+      checkoffTotal: team.length,
+      checkoffDetails: opts?.includeCheckoffDetails ? details : undefined,
     });
   }
 

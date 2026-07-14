@@ -186,62 +186,85 @@ function reviewSheetHrefFromContext(ctx: {
   return `/clients/review-sheet?${params.toString()}`;
 }
 
-function ReviewSheetBridge({ clientId }: { clientId: string }) {
+function reviewSheetHrefFromHints(
+  clientId: string,
+  map: Record<string, ReviewKeyHint[]> | null,
+): string | null {
+  if (!map) return null;
+  const hints = map[clientId];
+  if (!hints?.length) return null;
+  const ctx = hints[0];
+  return reviewSheetHrefFromContext({
+    reviewKey: ctx.reviewKey,
+    owners: ctx.owners,
+    taxKinds: ctx.taxKinds,
+    sources: ctx.focusOwner
+      ? [{ owner: ctx.focusOwner, row: ctx.focusRow }]
+      : undefined,
+  });
+}
+
+/** 종소·법인 — 상호 자체에 검토표 링크 (「검토표」글자 뱃지 사용 안 함) */
+function ReviewLinkedCompanyName({
+  clientId,
+  name,
+  className,
+  title,
+}: {
+  clientId: string;
+  name: string;
+  className?: string;
+  title?: string;
+}) {
   const map = useContext(ReviewClientIdMapContext);
-  const [href, setHref] = useState<string | null>(null);
-  const [label, setLabel] = useState('검토표');
-  const [missing, setMissing] = useState(false);
-
-  useEffect(() => {
-    if (map === null) return;
-    const hints = map[clientId];
-    if (hints?.length) {
-      const ctx = hints[0];
-      setHref(
-        reviewSheetHrefFromContext({
-          reviewKey: ctx.reviewKey,
-          owners: ctx.owners,
-          taxKinds: ctx.taxKinds,
-          sources: ctx.focusOwner
-            ? [{ owner: ctx.focusOwner, row: ctx.focusRow }]
-            : undefined,
-        }),
-      );
-      setLabel(ctx.reviewName ? '검토표' : '검토표');
-      setMissing(false);
-    } else {
-      setHref(null);
-      setMissing(true);
-    }
-  }, [clientId, map]);
-
-  if (map === null) return null;
-
+  const href = reviewSheetHrefFromHints(clientId, map);
+  const display = name || '(이름 없음)';
+  if (map === null) {
+    return <span className={className}>{display}</span>;
+  }
   if (href) {
     return (
       <a
         href={href}
-        className="shrink-0 text-xs font-semibold text-violet-600 hover:underline"
-        title="검토표 해당 행으로 이동"
+        className={`${className ?? ''} hover:text-violet-700 hover:underline`}
+        title={title || '검토표로 이동'}
         onClick={e => e.stopPropagation()}
       >
-        {label}
+        {display}
       </a>
     );
   }
-  if (missing) {
-    return (
-      <a
-        href="/admin/review-client-links"
-        className="shrink-0 text-xs text-slate-400 hover:underline"
-        title="검토표 미연결 — 연결 Admin"
-        onClick={e => e.stopPropagation()}
-      >
-        미연결
-      </a>
-    );
-  }
-  return null;
+  return (
+    <a
+      href={`/clients/${clientId}`}
+      className={`${className ?? ''} hover:text-blue-600 hover:underline`}
+      title={title || '수임처 상세'}
+      onClick={e => e.stopPropagation()}
+    >
+      {display}
+    </a>
+  );
+}
+
+function ClientDetailCompanyName({
+  clientId,
+  name,
+  className,
+}: {
+  clientId: string;
+  name: string;
+  className?: string;
+}) {
+  return (
+    <a
+      href={`/clients/${clientId}`}
+      className={`${className ?? ''} hover:text-blue-600 hover:underline`}
+      title="수임처 상세"
+      onClick={e => e.stopPropagation()}
+    >
+      {name || '(이름 없음)'}
+    </a>
+  );
 }
 
 /** 세션 진입 시 제외 업체를 맨 아래로 — 세션 중 제외 토글 시에는 순서 유지 */
@@ -1086,18 +1109,21 @@ function FilingCheckPageInner() {
     );
   }, [activeTargets, vatProvisional, period.vatPhase]);
 
+  /** 접수 집계 대상 — 예정고지·합계표제출 제외 */
+  const receiptActiveTargets = useMemo(() => {
+    const base = tax === 'vat' && vatProvisional ? vatFilingActiveTargets : activeTargets;
+    if (tax !== 'vat') return base;
+    return base.filter(c => !isVatSummaryOnlyClient(c));
+  }, [tax, vatProvisional, vatFilingActiveTargets, activeTargets]);
+
   const receivedCount =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.filter(g => isGroupReceived(g)).length
-      : tax === 'vat' && vatProvisional
-        ? vatFilingActiveTargets.filter(c => isReceived(c.id, c.businessNo)).length
-        : activeTargets.filter(c => isReceived(c.id, c.businessNo)).length;
+      : receiptActiveTargets.filter(c => isReceived(c.id, c.businessNo)).length;
   const targetCount =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.length
-      : tax === 'vat' && vatProvisional
-        ? vatFilingActiveTargets.length
-        : activeTargets.length;
+      : receiptActiveTargets.length;
   const vatNoticeTargetCount = vatProvisional ? vatNoticeActiveTargets.length : 0;
   const tableExtraCols = (tax === 'withholding' ? 1 : 0) + (vatProvisional ? 1 : 0);
   const tableColSpan = 7 + tableExtraCols;
@@ -1109,7 +1135,7 @@ function FilingCheckPageInner() {
   const notReceived =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.filter(g => !isGroupReceived(g))
-      : activeTargets.filter(c => !isReceived(c.id, c.businessNo));
+      : receiptActiveTargets.filter(c => !isReceived(c.id, c.businessNo));
   const excludedTargetsForSummary =
     tax === 'comprehensive'
       ? excludedComprehensiveGroups.map(g => g.clients[0])
@@ -1193,13 +1219,28 @@ function FilingCheckPageInner() {
     return base.filter(c => {
       const excluded = excludeReasonOf(c) !== null;
       if (statFilter === 'target') return !excluded;
+      const skipReceipt =
+        tax === 'vat' &&
+        (isVatSummaryOnlyClient(c) ||
+          (vatProvisional && isVatNoticeObligation(readVatObligation(c, period.vatPhase))));
+      if (skipReceipt && (statFilter === 'received' || statFilter === 'diff')) return false;
       const received = isReceived(c.id, c.businessNo);
       if (statFilter === 'received') return !excluded && received;
       if (statFilter === 'diff') return !excluded && !received;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetsInDisplayOrder, listScope, statFilter, record.excluded, record.overrides, excelSet, tax]);
+  }, [
+    targetsInDisplayOrder,
+    listScope,
+    statFilter,
+    record.excluded,
+    record.overrides,
+    excelSet,
+    tax,
+    vatProvisional,
+    period.vatPhase,
+  ]);
 
   const statFilterBanner =
     statFilter !== 'all' ? (
@@ -2415,15 +2456,16 @@ function FilingCheckPageInner() {
                             disabled={excluded || locked}
                             onChange={checked => setGroupSiteDone(g, checked)}
                           />
-                          <TruncateWithTooltip
-                            text={siteLabel}
+                          <ReviewLinkedCompanyName
+                            clientId={g.primaryClientId}
+                            name={siteLabel}
                             title={comprehensiveSiteTooltip(g)}
                             className={
                               excluded
-                                ? 'font-medium text-slate-400 line-through'
+                                ? 'min-w-0 truncate font-medium text-slate-400 line-through'
                                 : siteState.checked
-                                  ? 'font-medium text-emerald-700'
-                                  : 'font-medium text-slate-800'
+                                  ? 'min-w-0 truncate font-medium text-emerald-700'
+                                  : 'min-w-0 truncate font-medium text-slate-800'
                             }
                           />
                           {restCount > 0 && (
@@ -2437,7 +2479,6 @@ function FilingCheckPageInner() {
                               외 {restCount}
                             </button>
                           )}
-                          <ReviewSheetBridge clientId={g.primaryClientId} />
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -2610,12 +2651,19 @@ function FilingCheckPageInner() {
                 const vatObligation =
                   tax === 'vat' ? readVatObligation(c, period.vatPhase) : null;
                 const vatNoticeOnly = vatObligation === '예정고지';
-                const received = !excluded && !vatNoticeOnly && isReceived(c.id, c.businessNo);
+                const vatSummaryOnly = tax === 'vat' && isVatSummaryOnlyClient(c);
+                const skipReceipt = vatNoticeOnly || vatSummaryOnly;
+                const received = !excluded && !skipReceipt && isReceived(c.id, c.businessNo);
                 const reorderableCount = displayedTargetsForTable.filter(x => !isManualId(x.id)).length;
                 const reorderIndex = displayedTargetsForTable
                   .slice(0, i + 1)
                   .filter(x => !isManualId(x.id)).length - 1;
                 const canReorderRow = canReorderTargets && !isManualId(c.id);
+                const nameCls = `min-w-0 break-words text-sm font-semibold ${
+                  excluded
+                    ? 'text-slate-400 line-through decoration-slate-400'
+                    : 'text-slate-800'
+                }`;
                 return (
                   <tr
                     key={c.id}
@@ -2625,8 +2673,11 @@ function FilingCheckPageInner() {
                     }`}
                   >
                     <td className="px-2 py-2 text-center">
-                      {vatNoticeOnly ? (
-                        <span className="text-xs text-slate-300" title="예정고지 대상">
+                      {skipReceipt ? (
+                        <span
+                          className="text-xs text-slate-300"
+                          title={vatSummaryOnly ? '합계표제출 대상' : '예정고지 대상'}
+                        >
                           —
                         </span>
                       ) : (
@@ -2657,14 +2708,8 @@ function FilingCheckPageInner() {
                     <td className="px-2 py-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {isManualId(c.id) ? (
-                          <span
-                            className={`min-w-0 break-words text-sm font-semibold ${
-                              excluded ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'
-                            }`}
-                          >
-                            {c.companyName || '(이름 없음)'}
-                          </span>
-                        ) : !isManualId(c.id) && tax === 'withholding' ? (
+                          <span className={nameCls}>{c.companyName || '(이름 없음)'}</span>
+                        ) : tax === 'withholding' ? (
                           <button
                             type="button"
                             disabled={locked}
@@ -2678,21 +2723,22 @@ function FilingCheckPageInner() {
                           >
                             {c.companyName || '(이름 없음)'}
                           </button>
+                        ) : tax === 'corporate' ? (
+                          <ReviewLinkedCompanyName
+                            clientId={c.id}
+                            name={c.companyName || '(이름 없음)'}
+                            className={nameCls}
+                          />
                         ) : (
-                          <span
-                            className={`min-w-0 break-words text-sm font-semibold ${
-                              excluded
-                                ? 'text-slate-400 line-through decoration-slate-400'
-                                : 'text-slate-800'
-                            }`}
-                          >
-                            {c.companyName || '(이름 없음)'}
-                          </span>
+                          <ClientDetailCompanyName
+                            clientId={c.id}
+                            name={c.companyName || '(이름 없음)'}
+                            className={nameCls}
+                          />
                         )}
                         {c.representative && (
                           <span className="shrink-0 text-xs text-slate-400">{c.representative}</span>
                         )}
-                        {tax === 'corporate' && <ReviewSheetBridge clientId={c.id} />}
                         {tax === 'vat' && isVatSummaryOnlyClient(c) && (
                           <span className="shrink-0 whitespace-nowrap rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                             합계표제출

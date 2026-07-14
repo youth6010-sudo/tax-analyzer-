@@ -20,7 +20,7 @@ export type VatProgressColumnDef = {
   input: VatProgressInputKind;
 };
 
-/** 표준 기본 틀 — 자료 열은 O/X/△ */
+/** 표준 기본 틀 — 자료 열은 O/X/△ (통장 뒤 기타증빙) */
 export const VAT_PROGRESS_DEFAULT_COLUMNS: VatProgressColumnDef[] = [
   { key: 'taxInvoice', label: '세금계산서', input: 'mark' },
   { key: 'invoice', label: '계산서', input: 'mark' },
@@ -28,11 +28,34 @@ export const VAT_PROGRESS_DEFAULT_COLUMNS: VatProgressColumnDef[] = [
   { key: 'nonDeductible', label: '불공제', input: 'mark' },
   { key: 'card', label: '카드', input: 'mark' },
   { key: 'cashReceipt', label: '현금영수증', input: 'mark' },
+  { key: 'bankStatement', label: '통장거래내역', input: 'mark' },
   { key: 'otherEvidence', label: '기타증빙', input: 'mark' },
   { key: 'agencySales', label: '신용매출', input: 'mark' },
   { key: 'zeroRateSales', label: '영세율매출', input: 'mark' },
-  { key: 'bankStatement', label: '통장내역', input: 'mark' },
 ];
+
+/**
+ * △ = 자료수취 / O = 입력(수취+입력) — 통장·기타증빙
+ * (레이아웃에서 열 숨기려면 구성에서 제거)
+ */
+export const VAT_RECEIVE_ENTRY_KEYS = new Set(['otherEvidence', 'bankStatement']);
+
+/** 상호 클릭으로 업체별 활성화 — 수기·불공제·신용매출·영세율 */
+export const VAT_OPTIONAL_FLAG_COLUMNS = [
+  { key: 'manualEntry', label: '수기', flag: 'manualEntry' as const },
+  { key: 'nonDeductible', label: '불공제', flag: 'nonDeductible' as const },
+  { key: 'agencySales', label: '신용매출', flag: 'agencySales' as const },
+  { key: 'zeroRateSales', label: '영세율매출', flag: 'zeroRateSales' as const },
+] as const;
+
+export type VatOptionalFlagKey = (typeof VAT_OPTIONAL_FLAG_COLUMNS)[number]['flag'];
+
+export const VAT_OPTIONAL_FLAG_KEY_SET = new Set<string>(
+  VAT_OPTIONAL_FLAG_COLUMNS.map(c => c.key),
+);
+
+/** @deprecated 이전에 숨기던 키 — 지금은 기본 표시 */
+export const VAT_PROGRESS_HIDDEN_KEYS = new Set<string>();
 
 /** @deprecated 호환 */
 export const VAT_PROGRESS_DEFAULT_COLUMN_ORDER = VAT_PROGRESS_DEFAULT_COLUMNS.map(c => c.key);
@@ -100,6 +123,7 @@ export function normalizeVatProgressLayout(
   columns: readonly VatProgressColumnDef[] | null | undefined,
 ): VatProgressColumnDef[] {
   const defaultInput = new Map(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c.input]));
+  const defaultLabel = new Map(VAT_PROGRESS_DEFAULT_COLUMNS.map(c => [c.key, c.label]));
   const out: VatProgressColumnDef[] = [];
   const seen = new Set<string>();
   for (const col of columns ?? []) {
@@ -112,7 +136,21 @@ export function normalizeVatProgressLayout(
       rawInput === 'text' || rawInput === 'mark'
         ? rawInput
         : (defaultInput.get(key) ?? 'text');
-    out.push({ key, label: label || key, input });
+    out.push({ key, label: label || defaultLabel.get(key) || key, input });
+  }
+  // 저장된 레이아웃에 기본 열이 없으면 뒤에 보충 (통장거래내역 등)
+  for (const c of VAT_PROGRESS_DEFAULT_COLUMNS) {
+    if (seen.has(c.key)) continue;
+    out.push({ ...c });
+    seen.add(c.key);
+  }
+  // 통장거래내역 바로 뒤에 기타증빙이 오도록 순서 보정
+  const bankIdx = out.findIndex(c => c.key === 'bankStatement');
+  const otherIdx = out.findIndex(c => c.key === 'otherEvidence');
+  if (bankIdx >= 0 && otherIdx >= 0 && otherIdx !== bankIdx + 1) {
+    const [otherCol] = out.splice(otherIdx, 1);
+    const insertAt = out.findIndex(c => c.key === 'bankStatement') + 1;
+    out.splice(insertAt, 0, otherCol!);
   }
   if (out.length === 0) return VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c }));
   return out;
@@ -203,5 +241,15 @@ export function cycleVatMark(current: string | undefined): string {
   const marks = VAT_PROGRESS_MARKS;
   const cur = (current || '') as (typeof marks)[number];
   const idx = marks.indexOf(cur);
+  return marks[(idx + 1) % marks.length];
+}
+
+/** 통장·기타증빙: 빈칸 → △(자료수취) → O(입력) → X(수취없음) → 빈칸 */
+export const VAT_RECEIVE_ENTRY_MARKS = ['', '△', 'O', 'X'] as const;
+export function cycleReceiveEntryMark(current: string | undefined): string {
+  const marks = VAT_RECEIVE_ENTRY_MARKS;
+  const raw = String(current || '').trim();
+  const cur = raw === '×' ? 'X' : raw === '○' ? 'O' : raw === 'Δ' ? '△' : raw;
+  const idx = (marks as readonly string[]).indexOf(cur);
   return marks[(idx + 1) % marks.length];
 }

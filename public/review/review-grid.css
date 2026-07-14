@@ -1606,6 +1606,30 @@ body.client-detail-modal-open {
   color: #b91c1c;
 }
 
+.client-list-table thead th {
+  position: relative;
+}
+
+.client-list-table th .th-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.client-list-table th .th-resize-handle:hover,
+body.review-col-resizing .client-list-table th .th-resize-handle {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+body.review-col-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
 .client-list-layout-bar {
   display: flex;
   flex-wrap: wrap;

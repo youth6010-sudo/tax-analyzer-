@@ -14,13 +14,19 @@ import {
 import { VAT_PHASES, type VatPhase } from '@/app/utils/filingCheck';
 import { formatBusinessNo } from '@/app/utils/idFormat';
 import {
+  VAT_OPTIONAL_FLAG_COLUMNS,
+  VAT_OPTIONAL_FLAG_KEY_SET,
   VAT_PROGRESS_DEFAULT_COLUMNS,
+  VAT_PROGRESS_HIDDEN_KEYS,
   VAT_PROGRESS_MARKS,
+  VAT_RECEIVE_ENTRY_KEYS,
   cellDisplayValue,
   createVatProgressColumnKey,
+  cycleReceiveEntryMark,
   cycleVatColor,
   cycleVatMark,
   normalizeVatProgressLayout,
+  type VatMaterialFlags,
   type VatPeriodProgress,
   type VatProgressCell,
   type VatProgressColumnDef,
@@ -48,10 +54,10 @@ const LABOR_COLS = [
 type LaborKey = (typeof LABOR_COLS)[number]['key'];
 type LaborSlot = { target: boolean; filed: boolean };
 
-type PhaseSummary = {
-  progress: VatPeriodProgress;
-  summary: { done: number; total: number; filledLabels: string[] };
-};
+/** 신고분별 표시용 — 숨김 키만 제외 */
+function visibleVatLayout(layout: VatProgressColumnDef[]) {
+  return layout.filter(c => !VAT_PROGRESS_HIDDEN_KEYS.has(c.key));
+}
 
 type VatProgressRow = {
   id: string;
@@ -62,11 +68,24 @@ type VatProgressRow = {
   douzoneCode: string;
   manager: string;
   isCorporate?: boolean;
-  yearPhases?: VatPhase[];
   progress?: VatPeriodProgress;
-  progressByPhase?: Record<string, PhaseSummary>;
+  flags?: VatMaterialFlags;
   labor: Record<LaborKey, LaborSlot>;
 };
+
+function emptyFlags(): VatMaterialFlags {
+  return { agencySales: false, zeroRateSales: false, nonDeductible: false, manualEntry: false };
+}
+
+function isOptionalColumnActive(flags: VatMaterialFlags | undefined, columnKey: string): boolean {
+  if (!VAT_OPTIONAL_FLAG_KEY_SET.has(columnKey)) return true;
+  const f = flags ?? emptyFlags();
+  if (columnKey === 'manualEntry') return f.manualEntry;
+  if (columnKey === 'nonDeductible') return f.nonDeductible;
+  if (columnKey === 'agencySales') return f.agencySales;
+  if (columnKey === 'zeroRateSales') return f.zeroRateSales;
+  return true;
+}
 
 function LaborBadge({ slot, label }: { slot: LaborSlot | undefined; label: string }) {
   if (!slot?.target) return <span className="text-[10px] text-slate-300">—</span>;
@@ -79,41 +98,6 @@ function LaborBadge({ slot, label }: { slot: LaborSlot | undefined; label: strin
     >
       {slot.filed ? '신고' : '대상'}
     </span>
-  );
-}
-
-function PhaseSummaryCell({
-  summary,
-  onOpen,
-}: {
-  summary: PhaseSummary | undefined;
-  onOpen: () => void;
-}) {
-  if (!summary || summary.summary.total === 0) {
-    return (
-      <button type="button" onClick={onOpen} className="text-[11px] text-slate-300 hover:text-slate-500">
-        —
-      </button>
-    );
-  }
-  const { done, total, filledLabels } = summary.summary;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title={filledLabels.length ? filledLabels.join(', ') : '미입력'}
-      className={`mx-auto block min-w-[3.5rem] rounded-lg border px-1.5 py-1 text-[11px] font-semibold transition hover:border-slate-400 ${
-        done === 0
-          ? 'border-slate-200 bg-white text-slate-400'
-          : done >= total
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            : 'border-amber-200 bg-amber-50 text-amber-800'
-      }`}
-    >
-      {done}/{total}
-      <span className="block text-[9px] font-normal opacity-80">{pct}%</span>
-    </button>
   );
 }
 
@@ -135,9 +119,12 @@ function MarkChip({ mark }: { mark: string }) {
 function MarkCell({
   cell,
   onChange,
+  receiveEntry,
 }: {
   cell: VatProgressCell | undefined;
   onChange: (next: VatProgressCell) => void;
+  /** 통장·기타증빙: △=자료수취 / O=입력 */
+  receiveEntry?: boolean;
 }) {
   const mark = (cell?.mark || cellDisplayValue(cell) || '') as string;
   const bg = cell?.bg || '';
@@ -149,13 +136,22 @@ function MarkCell({
   return (
     <button
       type="button"
-      title="클릭: O/X/△ · Alt+클릭: 색칠"
+      title={
+        receiveEntry
+          ? '클릭: 빈칸→△(자료수취)→O(입력)→X(수취없음) · Alt+클릭: 색칠 · 확정 시 예정 비어있으면 예정 동시 기록'
+          : '클릭: O/X/△ · Alt+클릭: 색칠 · 확정 시 예정 비어있으면 예정 동시 기록'
+      }
       onClick={e => {
         e.preventDefault();
         if (e.altKey) onChange({ mark: shown, text: '', bg: cycleVatColor(bg) });
-        else onChange({ mark: cycleVatMark(shown), text: '', bg });
+        else
+          onChange({
+            mark: receiveEntry ? cycleReceiveEntryMark(shown) : cycleVatMark(shown),
+            text: '',
+            bg,
+          });
       }}
-      className={`mx-auto flex h-8 w-10 items-center justify-center rounded border border-slate-200/80 transition hover:border-slate-300 ${
+      className={`mx-auto flex h-7 w-full max-w-[2.5rem] items-center justify-center rounded border border-slate-200/80 transition hover:border-slate-300 ${
         bg ? '' : 'bg-white'
       }`}
       style={bg ? { backgroundColor: bg } : undefined}
@@ -185,7 +181,7 @@ function TextCell({
     return (
       <input
         autoFocus
-        className="mx-auto block h-8 w-[5.5rem] rounded border border-blue-300 px-1 text-center text-[11px] outline-none"
+        className="mx-auto block h-7 w-full max-w-[4.5rem] rounded border border-blue-300 px-0.5 text-center text-[10px] outline-none"
         style={bg ? { backgroundColor: bg } : undefined}
         value={draft}
         onChange={e => setDraft(e.target.value)}
@@ -217,7 +213,7 @@ function TextCell({
         setDraft(value);
         setEditing(true);
       }}
-      className={`mx-auto flex h-8 min-w-[3.5rem] max-w-[7rem] items-center justify-center truncate rounded border border-slate-200/80 px-1 text-[11px] transition hover:border-slate-300 ${
+      className={`mx-auto flex h-7 w-full max-w-[4.5rem] items-center justify-center truncate rounded border border-slate-200/80 px-0.5 text-[10px] transition hover:border-slate-300 ${
         bg ? '' : 'bg-white'
       }`}
       style={bg ? { backgroundColor: bg } : undefined}
@@ -234,21 +230,53 @@ function TextCell({
 function ProgressCellByKind({
   input,
   cell,
+  columnKey,
+  active,
+  disabledReason,
   onChange,
 }: {
   input: VatProgressInputKind;
   cell: VatProgressCell | undefined;
+  columnKey: string;
+  active?: boolean;
+  disabledReason?: string;
   onChange: (next: VatProgressCell) => void;
 }) {
-  if (input === 'mark') return <MarkCell cell={cell} onChange={onChange} />;
+  if (disabledReason) {
+    return (
+      <span
+        className="mx-auto inline-flex h-7 w-full max-w-[2.5rem] items-center justify-center text-[10px] text-slate-300"
+        title={disabledReason}
+      >
+        —
+      </span>
+    );
+  }
+  if (VAT_OPTIONAL_FLAG_KEY_SET.has(columnKey) && !active) {
+    return (
+      <span
+        className="mx-auto inline-flex h-7 w-full max-w-[2.5rem] items-center justify-center text-[10px] text-slate-300"
+        title="거래처명을 눌러 활성화"
+      >
+        —
+      </span>
+    );
+  }
+  if (input === 'mark') {
+    return (
+      <MarkCell
+        cell={cell}
+        onChange={onChange}
+        receiveEntry={VAT_RECEIVE_ENTRY_KEYS.has(columnKey)}
+      />
+    );
+  }
   return <TextCell cell={cell} onChange={onChange} />;
 }
 
 export default function VatEntryProgressBoard() {
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
+  const [year, setYear] = useState(2026);
   const [phase, setPhase] = useState<VatPhase>('1기 확정');
-  const [view, setView] = useState<'period' | 'year'>('period');
   const [rows, setRows] = useState<VatProgressRow[]>([]);
   const [layout, setLayout] = useState<VatProgressColumnDef[]>(() =>
     VAT_PROGRESS_DEFAULT_COLUMNS.map(c => ({ ...c })),
@@ -298,7 +326,7 @@ export default function VatEntryProgressBoard() {
       const params = new URLSearchParams({
         year: String(year),
         phase,
-        view,
+        view: 'period',
       });
       const res = await fetch(`/api/clients/vat-progress?${params}`, { cache: 'no-store' });
       const data = await res.json();
@@ -314,7 +342,7 @@ export default function VatEntryProgressBoard() {
     } finally {
       setLoading(false);
     }
-  }, [year, phase, view]);
+  }, [year, phase]);
 
   useEffect(() => {
     void load();
@@ -348,6 +376,27 @@ export default function VatEntryProgressBoard() {
     }
   };
 
+  const patchFlags = async (row: VatProgressRow, nextFlags: Partial<VatMaterialFlags>) => {
+    const merged: VatMaterialFlags = { ...(row.flags ?? emptyFlags()), ...nextFlags };
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, flags: merged } : r)));
+    setDetailRow(prev => (prev && prev.id === row.id ? { ...prev, flags: merged } : prev));
+    try {
+      const res = await fetch('/api/clients/vat-progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: row.id, year, phase, flags: merged }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
+      const saved = (data as { flags?: VatMaterialFlags }).flags ?? merged;
+      setRows(prev => prev.map(r => (r.id === row.id ? { ...r, flags: saved } : r)));
+      setDetailRow(prev => (prev && prev.id === row.id ? { ...prev, flags: saved } : prev));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장 실패');
+      void load();
+    }
+  };
+
   const managerOptions = useMemo(() => {
     const names = [...new Set(rows.map(r => r.manager.trim()).filter(Boolean))];
     names.sort((a, b) => a.localeCompare(b, 'ko'));
@@ -370,19 +419,11 @@ export default function VatEntryProgressBoard() {
     });
   }, [rows, q, canViewAll, managerFilter, phase, orderTick]);
 
-  const yearPhaseCols = useMemo(() => {
-    const needed = new Set<VatPhase>();
-    for (const r of filtered) {
-      for (const p of r.yearPhases ?? []) needed.add(p);
-    }
-    if (needed.size === 0) return [...VAT_PHASES.filter(p => p.includes('확정'))];
-    return VAT_PHASES.filter(p => needed.has(p));
-  }, [filtered]);
-
-  const periodColSpan = 2 + layout.length + LABOR_COLS.length;
+  const displayLayout = useMemo(() => visibleVatLayout(layout), [layout]);
+  const periodColSpan = 2 + displayLayout.length;
 
   const openColumnEditor = () => {
-    setOrderDraft(layout.map(c => ({ ...c })));
+    setOrderDraft(visibleVatLayout(layout).map(c => ({ ...c })));
     setNewColLabel('');
     setNewColInput('text');
     setOrderOpen(true);
@@ -421,7 +462,7 @@ export default function VatEntryProgressBoard() {
             label: c.label.trim(),
             input: (c.input === 'mark' ? 'mark' : 'text') as VatProgressInputKind,
           }))
-          .filter(c => c.key && c.label),
+          .filter(c => c.key && c.label && !VAT_PROGRESS_HIDDEN_KEYS.has(c.key)),
       );
       const res = await fetch('/api/clients/vat-progress', {
         method: 'PATCH',
@@ -435,7 +476,6 @@ export default function VatEntryProgressBoard() {
       );
       setLayout(next);
       setOrderOpen(false);
-      if (view === 'year') void load();
     } catch (e) {
       setError(e instanceof Error ? e.message : '열 저장 실패');
     } finally {
@@ -449,8 +489,8 @@ export default function VatEntryProgressBoard() {
         title="검토표"
         description={
           canViewAll
-            ? '부가세 자료입력 진행도 — 전체 담당자 (본인 열 구성 적용)'
-            : '부가세 자료입력 진행도 — 내 담당 수임처'
+            ? '부가세 자료입력 진행도 — 신고대상확인(부가세) 활성 업체 · 전체 담당자'
+            : '부가세 자료입력 진행도 — 신고대상확인(부가세) 활성 업체 · 내 담당 수임처'
         }
         icon={<PageHeaderIcon name="filing-check" />}
       />
@@ -458,26 +498,6 @@ export default function VatEntryProgressBoard() {
       <ReviewHubTabs active="vat" />
 
       <div className="flex flex-wrap items-end gap-2">
-        <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
-          <button
-            type="button"
-            className={`rounded-md px-3 py-1.5 font-semibold ${
-              view === 'period' ? 'bg-slate-900 text-white' : 'text-slate-600'
-            }`}
-            onClick={() => setView('period')}
-          >
-            신고분별
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-3 py-1.5 font-semibold ${
-              view === 'year' ? 'bg-slate-900 text-white' : 'text-slate-600'
-            }`}
-            onClick={() => setView('year')}
-          >
-            연간 진행표
-          </button>
-        </div>
         <label className="text-xs text-slate-500">
           연도
           <select
@@ -492,22 +512,20 @@ export default function VatEntryProgressBoard() {
             ))}
           </select>
         </label>
-        {view === 'period' ? (
-          <label className="text-xs text-slate-500">
-            신고분
-            <select
-              className={`${portalInput} ml-1 mt-0.5`}
-              value={phase}
-              onChange={e => setPhase(e.target.value as VatPhase)}
-            >
-              {VAT_PHASES.map(p => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        <label className="text-xs text-slate-500">
+          신고분
+          <select
+            className={`${portalInput} ml-1 mt-0.5`}
+            value={phase}
+            onChange={e => setPhase(e.target.value as VatPhase)}
+          >
+            {VAT_PHASES.map(p => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
         {canViewAll ? (
           <label className="text-xs text-slate-500">
             담당자
@@ -544,179 +562,87 @@ export default function VatEntryProgressBoard() {
       ) : null}
 
       <p className="text-[11px] text-slate-500">
-        O/X/△ 열은 클릭으로 전환, 자유서식 열은 글자 입력(자료요청일·특이사항 등). Alt+클릭 색칠.
-        열 형식·구성은 본인 계정에 저장되며 찰리·인디 전체 조회에도 본인 열이 적용됩니다.
-        업체 순서는 신고대상확인(부가가치세 · 동일 기수) 순서를 따릅니다.
-        {view === 'year' ? ' 연간 진행표는 예정신고 대상만 예정 칸이 보입니다.' : ''}
+        O/X/△ 열은 클릭으로 전환. 기타증빙·통장거래내역은 빈칸→△(자료수취)→O(입력). 수기·불공제·신용매출·영세율매출은
+        거래처명을 눌러 체크박스로 활성화. 확정 기수에 체크 시 예정이 비어 있으면 예정까지 함께
+        기록(연간진행표 상호연동). Alt+클릭 색칠.
       </p>
 
-      <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-auto`}>
-        {view === 'year' ? (
-          <table className="w-max min-w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-                <th className="sticky left-0 top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
-                  세무사랑
+      <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-y-auto overflow-x-hidden`}>
+        <table className="w-full table-fixed border-collapse text-sm">
+          <colgroup>
+            <col className="w-[4.5rem]" />
+            <col className="w-[12rem]" />
+            {displayLayout.map(col => (
+              <col key={col.key} />
+            ))}
+          </colgroup>
+          <thead className="sticky top-0 z-20">
+            <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-600 shadow-[0_1px_0_0_rgb(226,232,240)]">
+              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">코드</th>
+              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">
+                거래처
+              </th>
+              {displayLayout.map(col => (
+                <th
+                  key={col.key}
+                  className="sticky top-0 z-20 break-keep bg-slate-50 px-0.5 py-2 text-center font-semibold leading-tight"
+                  title={col.label}
+                >
+                  {col.label}
                 </th>
-                <th className="sticky left-[4.5rem] top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
-                  거래처
-                </th>
-                {yearPhaseCols.map(p => (
-                  <th
-                    key={p}
-                    className="sticky top-0 z-20 bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
-                  >
-                    {p}
-                  </th>
-                ))}
-                {LABOR_COLS.map(col => (
-                  <th
-                    key={col.key}
-                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
-                  >
-                    {col.label}
-                  </th>
-                ))}
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={periodColSpan} className="px-3 py-10 text-center text-slate-400">
+                  불러오는 중…
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td
-                    colSpan={2 + yearPhaseCols.length + LABOR_COLS.length}
-                    className="px-3 py-10 text-center text-slate-400"
-                  >
-                    불러오는 중…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={2 + yearPhaseCols.length + LABOR_COLS.length}
-                    className="px-3 py-10 text-center text-slate-400"
-                  >
-                    표시할 수임처가 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(row => (
-                  <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/60">
-                    <td className="sticky left-0 z-[1] bg-white px-2 py-1.5 font-mono text-[11px] text-slate-600">
-                      {row.douzoneCode || '—'}
-                    </td>
-                    <td className="sticky left-[4.5rem] z-[1] max-w-[14rem] bg-white px-2 py-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setDetailRow(row)}
-                        className="text-left font-medium text-slate-800 hover:text-blue-700"
-                      >
-                        {row.companyName}
-                      </button>
-                    </td>
-                    {yearPhaseCols.map(p => {
-                      const applies = (row.yearPhases ?? []).includes(p);
-                      return (
-                        <td key={p} className="px-1 py-1 text-center">
-                          {applies ? (
-                            <PhaseSummaryCell
-                              summary={row.progressByPhase?.[p]}
-                              onOpen={() => {
-                                setPhase(p);
-                                setView('period');
-                              }}
-                            />
-                          ) : (
-                            <span className="text-[11px] text-slate-300">—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    {LABOR_COLS.map(col => (
-                      <td key={col.key} className="px-1 py-1 text-center">
-                        <LaborBadge slot={row.labor?.[col.key]} label={col.label} />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        ) : (
-          <table className="w-max min-w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-                <th className="sticky left-0 top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
-                  세무사랑
-                </th>
-                <th className="sticky left-[4.5rem] top-0 z-30 bg-slate-50 px-2 py-2 text-left font-semibold shadow-[0_1px_0_0_#e2e8f0]">
-                  거래처
-                </th>
-                {layout.map(col => (
-                  <th
-                    key={col.key}
-                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
-                  >
-                    {col.label}
-                  </th>
-                ))}
-                {LABOR_COLS.map(col => (
-                  <th
-                    key={col.key}
-                    className="sticky top-0 z-20 bg-slate-50 px-1.5 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]"
-                  >
-                    {col.label}
-                  </th>
-                ))}
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={periodColSpan} className="px-3 py-10 text-center text-slate-400">
+                  표시할 수임처가 없습니다.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={periodColSpan} className="px-3 py-10 text-center text-slate-400">
-                    불러오는 중…
+            ) : (
+              filtered.map(row => (
+                <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <td className="px-1 py-1 font-mono text-[10px] text-slate-500">
+                    {row.douzoneCode || '—'}
                   </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={periodColSpan} className="px-3 py-10 text-center text-slate-400">
-                    표시할 수임처가 없습니다.
+                  <td className="px-1 py-1">
+                    <button
+                      type="button"
+                      onClick={() => setDetailRow(row)}
+                      className="block w-full truncate text-left text-[13px] font-medium text-slate-800 hover:text-blue-700"
+                      title={row.companyName}
+                    >
+                      {row.companyName}
+                    </button>
                   </td>
+                  {displayLayout.map(col => (
+                    <td key={col.key} className="px-0.5 py-1 text-center">
+                      <ProgressCellByKind
+                        input={col.input}
+                        columnKey={col.key}
+                        active={isOptionalColumnActive(row.flags, col.key)}
+                        disabledReason={
+                          col.key === 'bankStatement' && !row.isCorporate
+                            ? '개인은 통장거래내역 해당없음'
+                            : undefined
+                        }
+                        cell={row.progress?.[col.key]}
+                        onChange={cell => void updateProgress(row, col.key, cell)}
+                      />
+                    </td>
+                  ))}
                 </tr>
-              ) : (
-                filtered.map(row => (
-                  <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/60">
-                    <td className="sticky left-0 z-[1] bg-white px-2 py-1.5 font-mono text-[11px] text-slate-600">
-                      {row.douzoneCode || '—'}
-                    </td>
-                    <td className="sticky left-[4.5rem] z-[1] max-w-[14rem] bg-white px-2 py-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setDetailRow(row)}
-                        className="text-left font-medium text-slate-800 hover:text-blue-700"
-                      >
-                        {row.companyName}
-                      </button>
-                    </td>
-                    {layout.map(col => (
-                      <td key={col.key} className="px-1 py-1 text-center">
-                        <ProgressCellByKind
-                          input={col.input}
-                          cell={row.progress?.[col.key]}
-                          onChange={cell => void updateProgress(row, col.key, cell)}
-                        />
-                      </td>
-                    ))}
-                    {LABOR_COLS.map(col => (
-                      <td key={col.key} className="px-1 py-1 text-center">
-                        <LaborBadge slot={row.labor?.[col.key]} label={col.label} />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       <CenterModal
@@ -834,11 +760,39 @@ export default function VatEntryProgressBoard() {
       <CenterModal
         open={!!detailRow}
         title={detailRow?.companyName || '거래처'}
-        description="사업자번호·담당 확인"
+        description="선택 열 활성화 · 사업처 확인"
         onClose={() => setDetailRow(null)}
       >
         {detailRow ? (
           <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-slate-700">선택 열 활성화</p>
+              <p className="mb-2 text-[11px] text-slate-500">
+                체크한 항목만 해당 업체의 수기·불공제·신용매출·영세율매출 칸에 입력할 수 있습니다.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {VAT_OPTIONAL_FLAG_COLUMNS.map(col => {
+                  const flags = detailRow.flags ?? emptyFlags();
+                  const checked = flags[col.flag];
+                  return (
+                    <label
+                      key={col.key}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={checked}
+                        onChange={e =>
+                          void patchFlags(detailRow, { [col.flag]: e.target.checked })
+                        }
+                      />
+                      {col.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
             <dl className="grid grid-cols-[5.5rem_1fr] gap-y-2 text-sm">
               <dt className="text-slate-500">세무사랑</dt>
               <dd className="font-mono text-slate-800">{detailRow.douzoneCode || '—'}</dd>

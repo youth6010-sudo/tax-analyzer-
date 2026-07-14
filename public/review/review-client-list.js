@@ -1590,6 +1590,13 @@
       if (isAccentPersonColumn(col, kind)) th.classList.add("col-sticky-person");
       if (isAccentNameColumn(col, kind)) th.classList.add("col-sticky-name");
       if (typeof col.c === "number") th.setAttribute("data-sheet-c", String(col.c));
+      th.setAttribute("data-col-id", String(ReviewReadable.listColId(col)));
+      const savedW = ReviewReadable.getListColWidths(listKind)[String(ReviewReadable.listColId(col))];
+      if (savedW) {
+        th.style.width = savedW + "px";
+        th.style.minWidth = savedW + "px";
+        th.style.maxWidth = savedW + "px";
+      }
 
       const label = document.createElement("span");
       label.className = "th-label-text";
@@ -1645,6 +1652,43 @@
           tools.appendChild(delBtn);
         }
         th.appendChild(tools);
+
+        const handle = document.createElement("span");
+        handle.className = "th-resize-handle";
+        handle.title = "너비 조절 (인디)";
+        handle.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const colId = String(ReviewReadable.listColId(col));
+          const startX = e.clientX;
+          const startW = th.getBoundingClientRect().width;
+          function applyWidth(px) {
+            const w = Math.max(40, Math.min(800, Math.round(px)));
+            const nodes = document.querySelectorAll(
+              '.client-list-table [data-col-id="' + colId.replace(/"/g, "") + '"]'
+            );
+            nodes.forEach(function (node) {
+              node.style.width = w + "px";
+              node.style.minWidth = w + "px";
+              node.style.maxWidth = w + "px";
+            });
+            return w;
+          }
+          function onMove(ev) {
+            applyWidth(startW + (ev.clientX - startX));
+          }
+          function onUp() {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("review-col-resizing");
+            const finalW = applyWidth(th.getBoundingClientRect().width);
+            ReviewReadable.setListColWidth(listKind, colId, finalW);
+          }
+          document.body.classList.add("review-col-resizing");
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+        th.appendChild(handle);
       }
 
       headTr.appendChild(th);
@@ -1692,7 +1736,7 @@
       layoutBar.className = "client-list-layout-bar";
       const hint = document.createElement("span");
       hint.className = "client-list-layout-hint";
-      hint.textContent = "제목·순서·항목 추가/삭제 (인디)";
+      hint.textContent = "제목·순서·너비·항목 추가/삭제 (인디)";
       layoutBar.appendChild(hint);
 
       const hidden = ReviewReadable.getHiddenListCols(listKind);
@@ -1887,6 +1931,13 @@
           td.classList.add(
             "col-id-" + String(ReviewReadable.listColId(col)).replace(/[^a-zA-Z0-9_-]/g, "-")
           );
+          td.setAttribute("data-col-id", String(ReviewReadable.listColId(col)));
+          const cellW = ReviewReadable.getListColWidths(listKind)[String(ReviewReadable.listColId(col))];
+          if (cellW) {
+            td.style.width = cellW + "px";
+            td.style.minWidth = cellW + "px";
+            td.style.maxWidth = cellW + "px";
+          }
           if (col.highlight) td.classList.add("col-highlight");
           if (col.num || typeof data.v === "number") td.classList.add("num");
           if (col.wrap || col.c === 5 || col.c === 11 || col.c === 21) td.classList.add("wrap");

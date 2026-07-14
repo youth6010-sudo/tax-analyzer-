@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { handleApiError } from '@/lib/apiError';
 import { setCompanyEventCheckoff } from '@/lib/companyEventCheckoffs';
+import {
+  isTaxDeadlineEventId,
+  setTaxDeadlineCheckoff,
+} from '@/lib/taxDeadlineCheckoffs';
 import { getDb } from '@/db';
 import { companyEvents } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -14,6 +18,13 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'eventId 필요' }, { status: 400 });
     }
 
+    const completed = Boolean(body.completed);
+
+    if (isTaxDeadlineEventId(body.eventId)) {
+      await setTaxDeadlineCheckoff(body.eventId, user.name, completed);
+      return NextResponse.json({ ok: true });
+    }
+
     const db = getDb();
     const [event] = await db
       .select({ id: companyEvents.id })
@@ -24,7 +35,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    await setCompanyEventCheckoff(body.eventId, user.name, Boolean(body.completed));
+    await setCompanyEventCheckoff(body.eventId, user.name, completed);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return handleApiError(e);

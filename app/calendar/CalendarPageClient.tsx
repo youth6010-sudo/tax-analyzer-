@@ -9,8 +9,12 @@ import CalendarView from '@/app/components/calendar/CalendarView';
 import CalendarTeamFilter from '@/app/components/calendar/CalendarTeamFilter';
 import { eventDisplayTitle } from '@/app/components/calendar/CalendarEventChip';
 import type { CalendarEventDto, CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
-import { formatCalendarCreatedAt } from '@/app/types/calendar';
-import { formatCalendarDateLabel, resolveEventChipColor } from '@/lib/calendarManagerColors';
+import { formatCalendarCreatedAt, formatCheckoffCompletedAt } from '@/app/types/calendar';
+import {
+  formatCalendarDateLabel,
+  resolveEventChipColor,
+  isTaxDeadlineChipColor,
+} from '@/lib/calendarManagerColors';
 import {
   canDeleteCalendarEvent,
   companyEventFromCalendar,
@@ -22,7 +26,15 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
+const SHOW_TAX_KEY = 'calendarShowTax.v1';
 const HIDE_COMPLETED_KEY = 'calendarHideCompleted.v1';
+
+function kindBadgeLabel(kind: CalendarEventDto['kind']): string {
+  if (kind === 'company') return '사내';
+  if (kind === 'tax_deadline') return '세무신고';
+  if (kind === 'client_task') return '수임처';
+  return '개인';
+}
 
 function monthRange(year: number, month: number): { from: string; to: string } {
   const from = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -56,6 +68,16 @@ function readStoredShowCompany(): boolean {
   if (typeof window === 'undefined') return true;
   try {
     const raw = localStorage.getItem(SHOW_COMPANY_KEY);
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+  } catch { /* ignore */ }
+  return true;
+}
+
+function readStoredShowTax(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const raw = localStorage.getItem(SHOW_TAX_KEY);
     if (raw === '0') return false;
     if (raw === '1') return true;
   } catch { /* ignore */ }
@@ -104,11 +126,13 @@ export default function CalendarPageClient() {
   const [currentUser, setCurrentUser] = useState('');
   const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
   const [showCompany, setShowCompany] = useState(true);
+  const [showTax, setShowTax] = useState(true);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const range = useMemo(
@@ -130,6 +154,7 @@ export default function CalendarPageClient() {
         setMembers(team);
         setCurrentUser(me);
         setShowCompany(readStoredShowCompany());
+        setShowTax(readStoredShowTax());
         setHideCompleted(readStoredHideCompleted());
         const stored = readStoredTeam(me);
         const valid = (stored || [me]).filter(n => team.includes(n));
@@ -138,7 +163,10 @@ export default function CalendarPageClient() {
       .catch(() => { /* ignore */ });
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper))
+      .then(d => {
+        setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper);
+        setCanViewCheckoffDetails(!!(d as { isMaster?: boolean })?.isMaster);
+      })
       .catch(() => { /* ignore */ });
   }, []);
 
@@ -146,6 +174,13 @@ export default function CalendarPageClient() {
     setShowCompany(show);
     try {
       localStorage.setItem(SHOW_COMPANY_KEY, show ? '1' : '0');
+    } catch { /* ignore */ }
+  };
+
+  const handleShowTaxChange = (show: boolean) => {
+    setShowTax(show);
+    try {
+      localStorage.setItem(SHOW_TAX_KEY, show ? '1' : '0');
     } catch { /* ignore */ }
   };
 
@@ -176,7 +211,18 @@ export default function CalendarPageClient() {
         `/api/calendar/events?from=${fetchRange.from}&to=${fetchRange.to}&owners=${owners}`,
       );
       const data = await res.json();
-      if (res.ok) setEvents((data as { items: CalendarEventDto[] }).items || []);
+      if (res.ok) {
+        const payload = data as { items: CalendarEventDto[]; canViewCheckoffDetails?: boolean };
+        const items = payload.items || [];
+        setEvents(items);
+        if (typeof payload.canViewCheckoffDetails === 'boolean') {
+          setCanViewCheckoffDetails(payload.canViewCheckoffDetails);
+        }
+        setSelectedEvent(prev => {
+          if (!prev) return prev;
+          return items.find(e => e.id === prev.id) ?? prev;
+        });
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [fetchRange.from, fetchRange.to, selectedOwners]);
@@ -222,10 +268,11 @@ export default function CalendarPageClient() {
     () =>
       events.filter(ev => {
         if (ev.kind === 'company' && !showCompany) return false;
+        if (ev.kind === 'tax_deadline' && !showTax) return false;
         if (hideCompleted && ev.completed) return false;
         return true;
       }),
-    [events, showCompany, hideCompleted],
+    [events, showCompany, showTax, hideCompleted],
   );
 
   const scheduleEvents = useMemo(
@@ -271,6 +318,26 @@ export default function CalendarPageClient() {
     }
   };
 
+  const checkoffApiId = (ev: CalendarEventDto): string | null => {
+    if (ev.kind === 'tax_deadline') return ev.id;
+    if (ev.kind === 'company' && ev.id.startsWith('company-')) {
+      return ev.id.slice('company-'.length);
+    }
+    return null;
+  };
+
+  const toggleSelectedCheckoff = async (completed: boolean) => {
+    if (!selectedEvent) return;
+    const eventId = checkoffApiId(selectedEvent);
+    if (!eventId) return;
+    await fetch('/api/calendar/company-events/checkoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId, completed }),
+    });
+    void loadEvents();
+  };
+
   const renderEventList = (list: CalendarEventDto[], emptyText: string) => {
     if (list.length === 0) {
       return <p className="text-sm text-slate-500">{emptyText}</p>;
@@ -301,7 +368,11 @@ export default function CalendarPageClient() {
               title="클릭하여 선택 · 더블클릭하여 수정"
             >
               <span
-                className={`mt-1 h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10 ${color}`}
+                className={`mt-1 h-3 w-3 shrink-0 rounded-full ${
+                  isTaxDeadlineChipColor(color)
+                    ? color
+                    : `ring-1 ring-black/10 ${color}`
+                }`}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
@@ -314,7 +385,7 @@ export default function CalendarPageClient() {
                     {title}
                   </p>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                    {ev.kind === 'company' ? '사내' : '개인'}
+                    {kindBadgeLabel(ev.kind)}
                   </span>
                   {ev.completed ? (
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -362,6 +433,8 @@ export default function CalendarPageClient() {
             onChange={handleOwnersChange}
             showCompany={showCompany}
             onShowCompanyChange={handleShowCompanyChange}
+            showTax={showTax}
+            onShowTaxChange={handleShowTaxChange}
             hideCompleted={hideCompleted}
             onHideCompletedChange={handleHideCompletedChange}
           />
@@ -404,13 +477,53 @@ export default function CalendarPageClient() {
                   {eventDisplayTitle(selectedEvent, currentUser)}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {selectedEvent.kind === 'company' ? '사내 일정' : '개인 체크리스트'}
+                  {selectedEvent.kind === 'company'
+                    ? '사내 일정'
+                    : selectedEvent.kind === 'tax_deadline'
+                      ? '세무신고일정'
+                      : '개인 체크리스트'}
                   {selectedEvent.subtitle ? ` · ${selectedEvent.subtitle}` : ''}
                 </p>
                 {selectedEvent.createdAt && (
                   <p className="mt-1 text-xs text-slate-400">
                     등록 {formatCalendarCreatedAt(selectedEvent.createdAt)}
                   </p>
+                )}
+                {(selectedEvent.kind === 'company' || selectedEvent.kind === 'tax_deadline') && (
+                  <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={!!selectedEvent.completed}
+                      onChange={e => void toggleSelectedCheckoff(e.target.checked)}
+                    />
+                    내 업무 완료
+                  </label>
+                )}
+                {(selectedEvent.kind === 'company' || selectedEvent.kind === 'tax_deadline') &&
+                  (selectedEvent.checkoffTotal ?? 0) > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    팀 완료 {selectedEvent.checkoffDone ?? 0}/{selectedEvent.checkoffTotal}
+                  </p>
+                )}
+                {canViewCheckoffDetails &&
+                  (selectedEvent.kind === 'company' || selectedEvent.kind === 'tax_deadline') &&
+                  members.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                    {members.map(name => {
+                      const detail = selectedEvent.checkoffDetails?.[name];
+                      const done = detail?.completed ?? false;
+                      const at = formatCheckoffCompletedAt(detail?.completedAt);
+                      return (
+                        <li
+                          key={name}
+                          className={`text-xs ${done ? 'text-emerald-700' : 'text-slate-400'}`}
+                        >
+                          {done ? '✓' : '○'} {name}
+                          {done && at ? ` · ${at}` : done ? ' · 완료' : ' · 미완료'}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">

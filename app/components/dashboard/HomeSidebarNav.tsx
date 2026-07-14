@@ -23,19 +23,18 @@ function isActive(pathname: string, href: string): boolean {
 export default function HomeSidebarNav() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isCharlie, setIsCharlie] = useState(false);
+  const [canCharlieFeatures, setCanCharlieFeatures] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         setIsAdmin(!!data?.isDeveloper);
-        const loginId = String(data?.user?.loginId ?? '').trim().toLowerCase();
-        setIsCharlie(loginId === 'charlie');
+        setCanCharlieFeatures(!!data?.canUseCharlieFeatures);
       })
       .catch(() => {
         setIsAdmin(false);
-        setIsCharlie(false);
+        setCanCharlieFeatures(false);
       });
   }, []);
 
@@ -64,7 +63,7 @@ export default function HomeSidebarNav() {
             <p className="px-2 text-[11px] font-bold tracking-wide text-slate-400">{group.label}</p>
             <ul className="mt-1 space-y-0.5">
               {group.items
-                .filter(item => !('charlieOnly' in item && item.charlieOnly) || isCharlie)
+                .filter(item => !('charlieOnly' in item && item.charlieOnly) || canCharlieFeatures)
                 .map(item => {
                 const active = isActive(pathname, item.href);
                 return (

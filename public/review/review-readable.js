@@ -828,17 +828,84 @@
     }, 350);
   }
 
-  function applyServerListLayouts(layouts) {
-    if (!layouts || typeof layouts !== "object") return;
-    Object.keys(layouts).forEach(function (kind) {
-      const ids = layouts[kind];
-      if (!Array.isArray(ids) || !ids.length) return;
-      try {
-        sessionStorage.setItem(listColStorageKey(kind), JSON.stringify(ids));
-      } catch {
-        /* ignore */
-      }
-    });
+  function listColWidthStorageKey(kind) {
+    return listColStorageKey(kind) + ":widths";
+  }
+
+  function getListColWidths(kind) {
+    kind = kind || "income";
+    try {
+      const raw = sessionStorage.getItem(listColWidthStorageKey(kind));
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return {};
+      const out = {};
+      Object.keys(parsed).forEach(function (id) {
+        const n = Number(parsed[id]);
+        if (Number.isFinite(n) && n >= 40 && n <= 800) out[id] = Math.round(n);
+      });
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  function setListColWidth(kind, colId, widthPx, options) {
+    kind = kind || "income";
+    const n = Math.round(Number(widthPx));
+    if (!Number.isFinite(n)) return;
+    const clamped = Math.max(40, Math.min(800, n));
+    const map = getListColWidths(kind);
+    map[String(colId)] = clamped;
+    try {
+      sessionStorage.setItem(listColWidthStorageKey(kind), JSON.stringify(map));
+    } catch {
+      /* ignore */
+    }
+    if (options && options.persist === false) return;
+    schedulePersistListWidths(kind);
+  }
+
+  var persistWidthTimers = {};
+
+  function schedulePersistListWidths(kind) {
+    if (typeof window === "undefined") return;
+    if (!(window.__REVIEW_SESSION__ && window.__REVIEW_SESSION__.canEditLayout)) return;
+    clearTimeout(persistWidthTimers[kind]);
+    persistWidthTimers[kind] = setTimeout(function () {
+      fetch("/api/review/list-layout", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: kind, widths: getListColWidths(kind) }),
+      }).catch(function (err) {
+        console.warn("[review] list-widths save failed", err);
+      });
+    }, 400);
+  }
+
+  function applyServerListLayouts(layouts, widthsByKind) {
+    if (layouts && typeof layouts === "object") {
+      Object.keys(layouts).forEach(function (kind) {
+        const ids = layouts[kind];
+        if (!Array.isArray(ids) || !ids.length) return;
+        try {
+          sessionStorage.setItem(listColStorageKey(kind), JSON.stringify(ids));
+        } catch {
+          /* ignore */
+        }
+      });
+    }
+    if (widthsByKind && typeof widthsByKind === "object") {
+      Object.keys(widthsByKind).forEach(function (kind) {
+        const map = widthsByKind[kind];
+        if (!map || typeof map !== "object") return;
+        try {
+          sessionStorage.setItem(listColWidthStorageKey(kind), JSON.stringify(map));
+        } catch {
+          /* ignore */
+        }
+      });
+    }
   }
 
   function listColId(col) {
@@ -2538,6 +2605,8 @@
     getHiddenListCols,
     removeVisibleListCol,
     addVisibleListCol,
+    getListColWidths,
+    setListColWidth,
     applyServerListLayouts,
     getListExcludedCols,
     getFeeStaffFilters,

@@ -1,7 +1,12 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 
-/** 사내 일정 — 남색 */
+/** 사내 일정 — 남색 채움 */
 export const COMPANY_CHIP_COLOR = 'bg-[#1e3a8a]';
+
+/** 세무신고일정 — 배경 없음 · 남색 테두리 */
+export const TAX_DEADLINE_NAVY = '#1e3a8a';
+export const TAX_DEADLINE_CHIP_COLOR =
+  'border border-[#1e3a8a] bg-transparent text-[#1e3a8a] shadow-none ring-0';
 
 /** 담당자 고정 색 (팀 닉네임 기준) — `app/globals.css` `.cal-mgr-*` */
 export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
@@ -63,9 +68,13 @@ const FALLBACK_MANAGER_COLORS = [
 const KIND_CHIP_COLORS: Record<CalendarEventDto['kind'], string> = {
   personal: MANAGER_COLOR_BY_NAME.다야,
   company: COMPANY_CHIP_COLOR,
-  tax_deadline: 'bg-emerald-600',
+  tax_deadline: TAX_DEADLINE_CHIP_COLOR,
   client_task: 'bg-rose-600',
 };
+
+export function isTaxDeadlineChipColor(color: string): boolean {
+  return color === TAX_DEADLINE_CHIP_COLOR;
+}
 
 export function managerChipColor(ownerName: string, members: readonly string[]): string {
   const name = ownerName.trim();
@@ -105,6 +114,7 @@ export function buildCalendarLegend(
 ): { key: string; label: string; color: string }[] {
   const legend: { key: string; label: string; color: string }[] = [
     { key: 'company', label: '사내', color: COMPANY_CHIP_COLOR },
+    { key: 'tax_deadline', label: '세무신고', color: TAX_DEADLINE_CHIP_COLOR },
   ];
 
   const owners =

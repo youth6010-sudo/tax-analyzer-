@@ -2,7 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { simplePayrollFilings } from '@/db/schema';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
-import { simplePayrollPeriodKeysForYear } from '@/lib/periodUtils';
+import { simplePayrollPeriodKeysForYear, prevSimplePayrollCarryPeriodKeys } from '@/lib/periodUtils';
 
 /** 연말정산과 공유하는 간이지급 소득유형 */
 const YEAR_END_SHARED_SIMPLE_TYPES = new Set<IncomeTypeKey>(['employed', 'bizIncome', 'otherTax']);
@@ -68,6 +68,23 @@ export async function listSimplePayrollFilings(
   }));
 }
 
+/** 전월·직전 반기 접수 완료 키 — `clientId|incomeType` */
+export async function listSimplePayrollPrevFiledKeys(
+  year: number,
+  month: number,
+): Promise<Set<string>> {
+  const { monthly, employed } = prevSimplePayrollCarryPeriodKeys(year, month);
+  const keys = [monthly, employed].filter((k): k is string => !!k);
+  if (keys.length === 0) return new Set();
+  const rows = await listSimplePayrollFilingsByKeys(keys);
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (!r.filed) continue;
+    out.add(`${r.clientId}|${r.incomeType}`);
+  }
+  return out;
+}
+
 export async function upsertSimplePayrollFilings(
   periodKey: string,
   rows: SimplePayrollRow[],
@@ -87,13 +104,24 @@ export async function upsertSimplePayrollFilings(
       )
       .limit(1);
 
+    // 월 비활성 저장이더라도 기존 접수완료(filed)는 절대 false로 덮지 않음
+    const keepFiled =
+      !!existing[0]?.filed && String(row.notes || '').includes('__inactive__');
+    const nextFiled = keepFiled ? true : row.filed;
+    const nextDate = keepFiled
+      ? row.acceptanceDate || existing[0]!.acceptanceDate
+      : row.acceptanceDate;
+    const nextMethod = keepFiled
+      ? row.acceptanceMethod || existing[0]!.acceptanceMethod
+      : row.acceptanceMethod;
+
     if (existing[0]) {
       await db
         .update(simplePayrollFilings)
         .set({
-          filed: row.filed,
-          acceptanceDate: row.acceptanceDate,
-          acceptanceMethod: row.acceptanceMethod,
+          filed: nextFiled,
+          acceptanceDate: nextDate,
+          acceptanceMethod: nextMethod,
           notes: row.notes,
           updatedBy,
           updatedAt: new Date(),
@@ -104,9 +132,9 @@ export async function upsertSimplePayrollFilings(
         clientId: row.clientId,
         periodKey,
         incomeType: row.incomeType,
-        filed: row.filed,
-        acceptanceDate: row.acceptanceDate,
-        acceptanceMethod: row.acceptanceMethod,
+        filed: nextFiled,
+        acceptanceDate: nextDate,
+        acceptanceMethod: nextMethod,
         notes: row.notes,
         updatedBy,
       });

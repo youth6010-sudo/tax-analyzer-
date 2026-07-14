@@ -4,6 +4,8 @@ import { personalChecklistItems } from '@/db/schema';
 import { listCompanyEvents } from '@/lib/companyEvents';
 import { countUserCompletedCheckoffs } from '@/lib/companyEventCheckoffs';
 import { currentMonthRange } from '@/lib/calendarMonth';
+import { listTaxDeadlines } from '@/lib/taxDeadlineCalendar';
+import { countUserCompletedTaxDeadlineCheckoffs } from '@/lib/taxDeadlineCheckoffs';
 
 export type DashboardCalendarProgress = {
   personalRegistered: number;
@@ -31,14 +33,19 @@ export async function getDashboardCalendarProgress(
     ));
 
   const companyEvents = await listCompanyEvents({ from, to });
+  const taxDeadlines = listTaxDeadlines(from, to);
   const companyIds = companyEvents.map(e => e.id);
-  const companyCompleted = await countUserCompletedCheckoffs(userName, companyIds);
+  const taxIds = taxDeadlines.map(d => d.id);
+  const [companyCompleted, taxCompleted] = await Promise.all([
+    countUserCompletedCheckoffs(userName, companyIds),
+    countUserCompletedTaxDeadlineCheckoffs(userName, taxIds),
+  ]);
 
   return {
     personalRegistered: personalRows.length,
     personalCompleted: personalRows.filter(r => r.completed).length,
-    companyTotal: companyEvents.length,
-    companyCompleted,
+    companyTotal: companyEvents.length + taxDeadlines.length,
+    companyCompleted: companyCompleted + taxCompleted,
     monthLabel: `${year}년 ${month}월`,
   };
 }

@@ -30,6 +30,7 @@ const LIST_INTAKE_KEYS = [
   /** 부가세 자료입력 진행도 */
   'vatMaterialFlags',
   'vatEntryProgress',
+  'vatAnnualProgress',
 ] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */

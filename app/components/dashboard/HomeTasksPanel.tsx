@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
-import { formatCompanyEventSchedule, formatChecklistDueDate, getChecklistTypeLabel, isChecklistPastDue } from '@/app/types/calendar';
+import {
+  formatCompanyEventSchedule,
+  formatChecklistDueDate,
+  formatCheckoffCompletedAt,
+  getChecklistTypeLabel,
+  isChecklistPastDue,
+} from '@/app/types/calendar';
 import type { ChecklistTaxType } from '@/app/types/calendar';
 import { prefetchPortal, usePortalTasks, getPortalChurnRecords, getPortalClients, filterNtsTasksForHandledChurn, refreshPortalBootstrap } from '@/app/utils/portalStore';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
@@ -107,6 +113,7 @@ export default function HomeTasksPanel() {
   const [currentUser, setCurrentUser] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [canAddCompany, setCanAddCompany] = useState(false);
+  const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
 
@@ -144,10 +151,12 @@ export default function HomeTasksPanel() {
           items: CompanyEventDto[];
           team?: string[];
           month?: { year: number; month: number };
+          canViewCheckoffDetails?: boolean;
         };
         setCompanyEvents(payload.items || []);
         setTeamMembers(payload.team || []);
         setCompanyMonth(payload.month ?? null);
+        setCanViewCheckoffDetails(!!payload.canViewCheckoffDetails);
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -157,10 +166,22 @@ export default function HomeTasksPanel() {
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        const user = (d as { user?: { name?: string; loginId?: string } })?.user;
-        setCurrentUser(user?.name || '');
-        setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper);
-        setCanAddCompany(canCreateCompanyEvent(user));
+        const user = (d as {
+          user?: {
+            name?: string;
+            loginId?: string;
+            role?: string | null;
+            adminMode?: boolean | null;
+          };
+          isMaster?: boolean;
+          isDeveloper?: boolean;
+        });
+        setCurrentUser(user.user?.name || '');
+        setIsAdmin(!!user.isDeveloper);
+        // 서버 isMaster(결재권자·개발자)와 동일 기준으로 회사일정 추가 허용
+        setCanAddCompany(
+          !!user.isMaster || canCreateCompanyEvent(user.user),
+        );
       })
       .catch(() => { /* ignore */ });
   }, []);
@@ -333,10 +354,16 @@ export default function HomeTasksPanel() {
                   <p className="py-3 text-center text-sm text-slate-400">이번 달 일정 없음</p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {companyEvents.map(ev => (
+                    {companyEvents.map(ev => {
+                      const isTax = ev.source === 'tax_deadline';
+                      return (
                       <li
                         key={ev.id}
-                        className="relative rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm"
+                        className={`relative rounded-lg px-3 py-2.5 text-sm ${
+                          isTax
+                            ? 'border border-[#1e3a8a] bg-transparent'
+                            : 'border border-slate-200 bg-white shadow-sm'
+                        }`}
                       >
                         {!ev.myCheckoff && (
                           <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
@@ -352,23 +379,64 @@ export default function HomeTasksPanel() {
                             title="내 업무 완료"
                           />
                           <div
-                            className={`min-w-0 flex-1 ${canEditCompany(ev) ? 'cursor-pointer' : ''}`}
-                            onClick={() => canEditCompany(ev) && openCompanyEdit(ev)}
-                            title={canEditCompany(ev) ? '클릭하여 수정·삭제' : undefined}
+                            className={`min-w-0 flex-1 ${!isTax && canEditCompany(ev) ? 'cursor-pointer' : ''}`}
+                            onClick={() => !isTax && canEditCompany(ev) && openCompanyEdit(ev)}
+                            title={!isTax && canEditCompany(ev) ? '클릭하여 수정·삭제' : undefined}
                           >
-                            <p className="font-semibold leading-snug text-slate-800">{ev.title}</p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p
+                                className={`font-semibold leading-snug ${
+                                  ev.myCheckoff
+                                    ? 'text-slate-400 line-through'
+                                    : isTax
+                                      ? 'text-[#1e3a8a]'
+                                      : 'text-slate-800'
+                                }`}
+                              >
+                                {ev.title}
+                              </p>
+                              {isTax && (
+                                <span className="rounded border border-[#1e3a8a]/40 px-1.5 py-0.5 text-[10px] font-bold text-[#1e3a8a]">
+                                  세무신고
+                                </span>
+                              )}
+                            </div>
                             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                              {formatCompanyEventSchedule(ev)}
+                              {isTax && ev.description
+                                ? `${ev.description} · ${formatCompanyEventSchedule(ev)}`
+                                : formatCompanyEventSchedule(ev)}
                             </p>
                             {(ev.checkoffTotal ?? teamMembers.length) > 0 && (
                               <p className="mt-1 text-[10px] text-slate-400">
                                 팀 완료 {ev.checkoffDone ?? 0}/{ev.checkoffTotal ?? teamMembers.length}
                               </p>
                             )}
+                            {canViewCheckoffDetails && teamMembers.length > 0 && (
+                              <ul
+                                className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {teamMembers.map(name => {
+                                  const detail = ev.checkoffDetails?.[name];
+                                  const done = detail?.completed ?? ev.checkoffs?.[name] ?? false;
+                                  const at = formatCheckoffCompletedAt(detail?.completedAt);
+                                  return (
+                                    <li
+                                      key={name}
+                                      className={`text-[10px] ${done ? 'text-emerald-700' : 'text-slate-400'}`}
+                                    >
+                                      {done ? '✓' : '○'} {name}
+                                      {done && at ? ` · ${at}` : done ? ' · 완료' : ' · 미완료'}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
                           </div>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </SectionCard>

@@ -3,9 +3,11 @@ import { requireUser } from '@/lib/auth';
 import { handleApiError } from '@/lib/apiError';
 import {
   createPersonalChecklistItem,
+  createPersonalChecklistItems,
   listPersonalChecklistForOwner,
 } from '@/lib/personalChecklist';
 import type { ChecklistTaxType } from '@/app/types/calendar';
+import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
 
 export async function GET() {
   try {
@@ -28,16 +30,27 @@ export async function POST(req: Request) {
       reflectInNotes?: boolean;
       assigneeNames?: string[];
       memo?: string;
+      repeat?: CalendarRepeatInput;
     };
 
-    const item = await createPersonalChecklistItem(user.name, {
+    const base = {
       title: body.title || '',
       taxType: body.taxType || 'other',
       clientId: body.clientId,
-      dueDate: body.dueDate,
       reflectInNotes: body.reflectInNotes,
       assigneeNames: body.assigneeNames,
       memo: body.memo,
+    };
+
+    if (body.repeat) {
+      const dates = expandRepeatDates(body.repeat);
+      const items = await createPersonalChecklistItems(user.name, { ...base, dueDate: dates[0] }, dates);
+      return NextResponse.json({ items, count: items.length });
+    }
+
+    const item = await createPersonalChecklistItem(user.name, {
+      ...base,
+      dueDate: body.dueDate,
     });
 
     return NextResponse.json({ item });

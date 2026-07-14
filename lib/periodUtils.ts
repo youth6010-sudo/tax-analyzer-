@@ -155,3 +155,18 @@ export function simplePayrollPeriodKeysForYear(year: number): string[] {
   keys.push(simplePayrollPeriodKey(year, 'H2'));
   return keys;
 }
+
+/**
+ * 간이지급 전월(이월) 조회용 period_key.
+ * 일반 유형: 직전 달 YYYY-MM / 근로: 직전 반기 H1·H2
+ */
+export function prevSimplePayrollCarryPeriodKeys(
+  year: number,
+  month: number,
+): { monthly: string | null; employed: string | null } {
+  const monthly = prevWithholdingPeriodKey(simplePayrollMonthlyPeriodKey(year, month));
+  let employed: string | null = null;
+  if (month === 12) employed = simplePayrollPeriodKey(year, 'H1');
+  else if (month === 6) employed = simplePayrollPeriodKey(year - 1, 'H2');
+  return { monthly, employed };
+}

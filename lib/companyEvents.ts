@@ -65,29 +65,42 @@ export async function createCompanyEvent(
   createdBy: string,
   input: CreateCompanyEventInput,
 ): Promise<CompanyEventDto> {
+  const [item] = await createCompanyEvents(createdBy, input, [input.startDate.trim()]);
+  return item;
+}
+
+/** 동일 제목·설명으로 여러 마감일 일괄 등록 */
+export async function createCompanyEvents(
+  createdBy: string,
+  input: Omit<CreateCompanyEventInput, 'startDate' | 'endDate'> & {
+    startDate?: string;
+    endDate?: string;
+  },
+  dates: string[],
+): Promise<CompanyEventDto[]> {
   const db = getDb();
   const title = input.title.trim();
-  const startDate = input.startDate.trim();
   if (!title) throw new Error('제목을 입력하세요.');
-  if (!startDate) throw new Error('마감기한을 지정하세요.');
 
-  const scheduleKind: CompanyScheduleKind = 'deadline';
-  const endDate = startDate;
+  const uniqueDates = [...new Set(dates.map(d => d.trim()).filter(Boolean))].sort();
+  if (uniqueDates.length === 0) throw new Error('마감기한을 지정하세요.');
 
-  const [row] = await db
+  const rows = await db
     .insert(companyEvents)
-    .values({
-      title,
-      description: input.description?.trim() || '',
-      startDate,
-      endDate,
-      scheduleKind,
-      allDay: input.allDay ?? true,
-      createdBy,
-    })
+    .values(
+      uniqueDates.map(startDate => ({
+        title,
+        description: input.description?.trim() || '',
+        startDate,
+        endDate: startDate,
+        scheduleKind: 'deadline' as const,
+        allDay: input.allDay ?? true,
+        createdBy,
+      })),
+    )
     .returning();
 
-  return toDto(row);
+  return rows.map(toDto);
 }
 
 export async function updateCompanyEvent(

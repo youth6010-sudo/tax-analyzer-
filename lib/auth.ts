@@ -13,10 +13,12 @@ export {
   DEVELOPER_LOGIN_IDS,
   DATA_VIEWER_LOGIN_IDS,
   canToggleAdminMode,
+  canUseCharlieFeatures,
+  canUseIndieFeatures,
+  isRiaAdminMode,
 } from './masterAccess';
 
-import { isPortalAdmin } from './masterAccess';
-import { isReviewMaster } from './review/access';
+import { canUseCharlieFeatures, isPortalAdmin } from './masterAccess';
 
 export async function getServerSession() {
   const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());
@@ -48,19 +50,19 @@ export async function requireAdmin() {
   return user;
 }
 
+/** 찰리·개발자 전용 API */
 export async function requireCharlie() {
   const user = await requireUser();
-  const loginId = user.loginId?.trim().toLowerCase() ?? '';
-  if (loginId !== 'charlie') {
+  if (!canUseCharlieFeatures(user)) {
     throw new Error('FORBIDDEN');
   }
   return user;
 }
 
-/** 검토표 수임처 연결 Admin — 인디·찰리 */
+/** 검토표 수임처 연결 Admin — 개발자만 (인디 메뉴 비공개) */
 export async function requireReviewLinkAdmin() {
   const user = await requireUser();
-  if (!isReviewMaster(user)) {
+  if (!isPortalAdmin(user)) {
     throw new Error('FORBIDDEN');
   }
   return user;

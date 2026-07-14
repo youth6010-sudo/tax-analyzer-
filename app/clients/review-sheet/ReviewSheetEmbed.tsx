@@ -5,6 +5,13 @@ import { useSearchParams } from 'next/navigation';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 import ReviewHubTabs from '@/app/components/clients/ReviewHubTabs';
+import {
+  DEFAULT_REVIEW_TAX_YEAR,
+  REVIEW_TAX_YEARS,
+  normalizeReviewTaxYear,
+} from '@/lib/review/taxYear';
+
+const REVIEW_TAX_YEAR_STORAGE_KEY = 'reviewTaxYear';
 
 const SCRIPT_GROUPS = [
   ['/review/review-auth.js'],
@@ -30,6 +37,14 @@ type MountOpts = {
   onReady?: () => void;
   onError?: (message: string) => void;
 };
+
+function readStoredTaxYear(): number {
+  try {
+    return normalizeReviewTaxYear(sessionStorage.getItem(REVIEW_TAX_YEAR_STORAGE_KEY));
+  } catch {
+    return DEFAULT_REVIEW_TAX_YEAR;
+  }
+}
 
 async function loadReviewScripts(): Promise<void> {
   for (const group of SCRIPT_GROUPS) {
@@ -71,6 +86,11 @@ export default function ReviewSheetEmbed() {
   const [meta, setMeta] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [bootStatus, setBootStatus] = useState<BootStatus>('loading');
+  const [taxYear, setTaxYear] = useState(DEFAULT_REVIEW_TAX_YEAR);
+
+  useEffect(() => {
+    setTaxYear(readStoredTaxYear());
+  }, []);
 
   const setBootStatusSafe = useCallback((status: BootStatus) => {
     bootStatusRef.current = status;
@@ -135,11 +155,13 @@ export default function ReviewSheetEmbed() {
   useLayoutEffect(() => {
     let cancelled = false;
     const isCancelled = () => cancelled;
+    const year = taxYear;
 
     (async () => {
       try {
         window.__REVIEW_EMBED__ = true;
         window.__REVIEW_CLIENT_LINKS_INDEX__ = window.__REVIEW_CLIENT_LINKS_INDEX__ || {};
+        window.__REVIEW_PATCHES_READY__ = false;
         ensureReviewStylesheet();
 
         const INDEX_FETCH_MS = 10_000;
@@ -171,7 +193,7 @@ export default function ReviewSheetEmbed() {
 
         void indexPromise;
 
-        const sessionRes = await fetch('/api/review/session');
+        const sessionRes = await fetch(`/api/review/session?year=${year}`);
         if (!sessionRes.ok) {
           let detail = '';
           try {
@@ -199,9 +221,11 @@ export default function ReviewSheetEmbed() {
             : session.canEdit
               ? '본인 시트 편집'
               : '읽기 전용';
-          setMeta(`데이터: ${d.toLocaleString('ko-KR')} · ${modeLabel}`);
+          setMeta(`${year}년 귀속 · ${modeLabel} · ${d.toLocaleString('ko-KR')}`);
         } else if (session.gridReady === false) {
-          setMeta('검토표 데이터 없음 — tax-analyzer에서 npm run import:review 실행');
+          setMeta(`${year}년 귀속 · 검토표 데이터 없음 — npm run import:review`);
+        } else {
+          setMeta(`${year}년 귀속`);
         }
 
         if (window.ReviewGridEdit?.initStorage) {
@@ -239,7 +263,7 @@ export default function ReviewSheetEmbed() {
       window.ReviewGridEdit?.resetEmbed?.();
       window.ReviewGridApp?.reset?.();
     };
-  }, [runMount]);
+  }, [runMount, taxYear]);
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
@@ -249,6 +273,16 @@ export default function ReviewSheetEmbed() {
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
+  const onTaxYearChange = (next: number) => {
+    const y = normalizeReviewTaxYear(next);
+    try {
+      sessionStorage.setItem(REVIEW_TAX_YEAR_STORAGE_KEY, String(y));
+    } catch {
+      /* ignore */
+    }
+    setTaxYear(y);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PortalPageHeader
@@ -256,8 +290,22 @@ export default function ReviewSheetEmbed() {
         description={meta || '결산 · 부가가치세'}
         icon={<PageHeaderIcon name="filing-check" />}
       />
-      <div className="mb-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <ReviewHubTabs active="review" />
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          귀속연도
+          <select
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800"
+            value={taxYear}
+            onChange={e => onTaxYearChange(Number(e.target.value))}
+          >
+            {REVIEW_TAX_YEARS.map(y => (
+              <option key={y} value={y}>
+                {y}년{y === DEFAULT_REVIEW_TAX_YEAR ? ' (현재자료)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {error && bootStatus === 'error' ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
@@ -326,6 +374,7 @@ declare global {
       isMaster?: boolean;
       isIndie?: boolean;
       listLayouts?: Record<string, Array<string | number>>;
+      listWidths?: Record<string, Record<string, number>>;
       gridMeta?: { importedAt?: string };
       gridReady?: boolean;
     };

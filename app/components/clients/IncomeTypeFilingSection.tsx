@@ -39,6 +39,7 @@ import {
   buildYearEndGrid,
   patchSimplePayrollRowFromTypes,
   patchYearEndRowFromTypes,
+  simplePayrollMonthNotes,
 } from '@/lib/incomeTypeFilingGrid';
 import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
 
@@ -568,13 +569,18 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
             if (!cell) continue;
             const pk = col.key === 'employed' && employedKey ? employedKey : monthlyKey;
             if (col.key === 'employed' && !employedKey) continue;
+            // 접수(filed)·일자·방법은 유지. 월 비활성은 명시적으로 끈 경우만 notes 기록.
             rows.push({
               clientId: row.clientId,
               incomeType: col.key,
               periodKey: pk,
-              filed: cell.active ? cell.filed : false,
-              acceptanceDate: cell.active ? (cell.acceptanceDate ?? '') : '',
-              acceptanceMethod: cell.active ? (cell.acceptanceMethod ?? '') : '',
+              filed: cell.filed,
+              acceptanceDate: cell.acceptanceDate ?? '',
+              acceptanceMethod: cell.acceptanceMethod ?? '',
+              notes: simplePayrollMonthNotes({
+                monthInactive: cell.monthInactive,
+                monthForcedActive: cell.monthForcedActive,
+              }),
             });
           }
           const labor = row.cells.laborContentReport;
@@ -585,9 +591,13 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
               clientId: row.clientId,
               incomeType: 'laborContentReport',
               periodKey: monthlyKey,
-              filed: labor.active ? !!(date || method) : false,
-              acceptanceDate: labor.active ? date : '',
-              acceptanceMethod: labor.active ? method : '',
+              filed: !!(date || method) || labor.filed,
+              acceptanceDate: date,
+              acceptanceMethod: method,
+              notes: simplePayrollMonthNotes({
+                monthInactive: labor.monthInactive,
+                monthForcedActive: labor.monthForcedActive,
+              }),
             });
           }
         }
@@ -737,10 +747,20 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         } else {
           await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: true });
         }
+        updateCell(clientId, incomeType, {
+          active: true,
+          monthInactive: false,
+          monthForcedActive: true,
+        });
       } else {
         await patchIncomeType(clientId, { [incomeType]: true });
+        // 수동 활성 → 전월 미신고여도 차이(미접수) 대상. 접수자료는 유지.
+        updateCell(clientId, incomeType, {
+          active: true,
+          monthInactive: false,
+          monthForcedActive: true,
+        });
       }
-      updateCell(clientId, incomeType, { active: true, filed: false });
       if (!embedded) setMessage(`${labelOf(incomeType)} 활성화`);
       scheduleSave();
     } catch (e) {
@@ -767,11 +787,11 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         updateCell(clientId, incomeType, { active: false });
       } else {
         await patchIncomeType(clientId, { [incomeType]: false });
+        // 접수 완료 자료는 유지 — 비활성 이월(다음달도 전월 미신고로 비활성)
         updateCell(clientId, incomeType, {
           active: false,
-          filed: false,
-          acceptanceDate: '',
-          acceptanceMethod: '',
+          monthInactive: true,
+          monthForcedActive: false,
         });
       }
       if (!embedded) setMessage(`${labelOf(incomeType)} 비활성화`);

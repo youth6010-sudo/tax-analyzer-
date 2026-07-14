@@ -1,8 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { getReviewAccessForUser } from '@/lib/review/access';
-import { getReviewListLayouts } from '@/lib/reviewListLayoutDb';
+import { getReviewListLayoutFull } from '@/lib/reviewListLayoutDb';
 import { getReviewGridMetaAsync, isReviewGridReady } from '@/lib/review/gridData';
+import {
+  DEFAULT_REVIEW_TAX_YEAR,
+  normalizeReviewTaxYear,
+  REVIEW_TAX_YEARS,
+} from '@/lib/review/taxYear';
 
 function apiError(e: unknown) {
   if (e instanceof Error && e.message === 'UNAUTHORIZED') {
@@ -12,13 +17,16 @@ function apiError(e: unknown) {
   return NextResponse.json({ error: 'Server error' }, { status: 500 });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireUser();
-    const access = getReviewAccessForUser(user);
-    const [meta, listLayouts, gridReady] = await Promise.all([
+    const taxYear = normalizeReviewTaxYear(
+      request.nextUrl.searchParams.get('year') || DEFAULT_REVIEW_TAX_YEAR,
+    );
+    const access = getReviewAccessForUser(user, taxYear);
+    const [meta, listLayoutFull, gridReady] = await Promise.all([
       getReviewGridMetaAsync(),
-      getReviewListLayouts(),
+      getReviewListLayoutFull(),
       isReviewGridReady(),
     ]);
 
@@ -28,6 +36,9 @@ export async function GET() {
         name: user.name,
         loginId: user.loginId,
       },
+      taxYear: access.taxYear,
+      taxYears: [...REVIEW_TAX_YEARS],
+      defaultTaxYear: DEFAULT_REVIEW_TAX_YEAR,
       reviewOwner: access.reviewOwner,
       isMaster: access.isMaster,
       isIndie: access.isIndie,
@@ -35,7 +46,8 @@ export async function GET() {
       canEditLayout: access.canEditLayout,
       access: access.access,
       sheetMapping: access.sheetMapping,
-      listLayouts,
+      listLayouts: listLayoutFull.layouts,
+      listWidths: listLayoutFull.widths,
       gridMeta: meta,
       gridReady,
       gridFromDb: meta.fromDb === true,

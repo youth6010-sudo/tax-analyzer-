@@ -1016,7 +1016,7 @@ export default function ReviewClientLinksAdmin() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">검토표 수임처 연결</h1>
             <p className="mt-1 text-sm text-slate-500">
-              종소·법인 전 시트 업체와 포털 수임처를 연결합니다. (인디·찰리)
+              종소·법인 전 시트 업체와 포털 수임처를 연결합니다. (개발자)
             </p>
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
               담당자·성명 기준 연결 규칙 적용 후에는 「자동연결 초기화·재연결」을 한 번 실행해 주세요.

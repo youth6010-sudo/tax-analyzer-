@@ -1,5 +1,7 @@
 import { reviewAccessConfig } from '@/lib/review/accessConfig';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { canUseIndieFeatures, isDataViewer } from '@/lib/masterAccess';
+import { accessConfigForTaxYear, DEFAULT_REVIEW_TAX_YEAR } from '@/lib/review/taxYear';
 import type { SessionUser } from '@/lib/session';
 
 export type ReviewSheetMapping = {
@@ -19,27 +21,31 @@ export type ReviewAccessConfig = {
 
 export const reviewAccess = reviewAccessConfig;
 
-const REVIEW_MASTER_LOGIN_IDS = new Set(['charlie', 'indie']);
-const REVIEW_INDIE_LOGIN_ID = 'indie';
+type ReviewAccessUser =
+  | (Pick<SessionUser, 'loginId'> & Partial<Pick<SessionUser, 'role' | 'adminMode'>>)
+  | null
+  | undefined;
 
-export function isReviewMaster(user: Pick<SessionUser, 'loginId'> | null | undefined): boolean {
-  const loginId = user?.loginId?.trim().toLowerCase() ?? '';
-  return REVIEW_MASTER_LOGIN_IDS.has(loginId);
+/** 전 시트 본문 편집 — 결재권자(인디) + 개발자 */
+export function isReviewMaster(user: ReviewAccessUser): boolean {
+  return isDataViewer(user);
 }
 
-/** 결산 제목행(엑셀 헤더)·열 구성 — 인디만 */
-export function isReviewIndie(user: Pick<SessionUser, 'loginId'> | null | undefined): boolean {
-  const loginId = user?.loginId?.trim().toLowerCase() ?? '';
-  return loginId === REVIEW_INDIE_LOGIN_ID;
+/** 제목행·열 구성 — 인디 + 개발자 */
+export function isReviewIndie(user: ReviewAccessUser): boolean {
+  return canUseIndieFeatures(user);
 }
 
-export function allReviewOwners(): string[] {
-  return [...new Set([...reviewAccess.staff, ...reviewAccess.masters])];
+export function allReviewOwners(access: ReviewAccessConfig = reviewAccess): string[] {
+  return [...new Set([...access.staff, ...access.masters])];
 }
 
 /** 포털 세션 사용자 → 검토표 담당자 키 (블루, 찰리 등) */
-export function resolveReviewOwner(user: Pick<SessionUser, 'name'>): string {
-  const owners = allReviewOwners();
+export function resolveReviewOwner(
+  user: Pick<SessionUser, 'name'>,
+  access: ReviewAccessConfig = reviewAccess,
+): string {
+  const owners = allReviewOwners(access);
   const name = user.name?.trim() ?? '';
   if (owners.includes(name)) return name;
 
@@ -77,21 +83,26 @@ export function getEditableSheetNamesForOwner(
   return names;
 }
 
-export function getReviewAccessForUser(user: SessionUser) {
-  const reviewOwner = resolveReviewOwner(user);
+export function getReviewAccessForUser(
+  user: SessionUser,
+  taxYear: number = DEFAULT_REVIEW_TAX_YEAR,
+) {
+  const access = accessConfigForTaxYear(taxYear);
+  const reviewOwner = resolveReviewOwner(user, access);
   const isMaster = isReviewMaster(user);
   const isIndie = isReviewIndie(user);
-  const sheetMapping = reviewAccess.sheetMap[reviewOwner] ?? null;
+  const sheetMapping = access.sheetMap[reviewOwner] ?? null;
 
   return {
     reviewOwner,
     isMaster,
     isIndie,
-    access: reviewAccess,
+    taxYear,
+    access,
     sheetMapping,
-    /** 본문(데이터) 셀 — 담당자 · 관리자(찰리/인디) */
-    canEdit: isMaster || staffCanEditReview(reviewOwner),
-    /** 제목행·열 순서 — 인디만 */
+    /** 본문(데이터) 셀 — 담당자 · 결재권자 · 개발자 */
+    canEdit: isMaster || staffCanEditReview(reviewOwner, access),
+    /** 제목행·열 순서 — 인디 · 개발자 */
     canEditLayout: isIndie,
   };
 }

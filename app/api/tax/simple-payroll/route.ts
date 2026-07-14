@@ -5,6 +5,7 @@ import { listClients, updateClientDetail } from '@/lib/clientsDb';
 import { patchIncomeTypes, readIncomeTypes } from '@/lib/incomeTypes';
 import {
   listSimplePayrollFilingsByKeys,
+  listSimplePayrollPrevFiledKeys,
   matchSimplePayrollFromExcel,
   resetSimplePayrollReceipt,
   upsertSimplePayrollFilings,
@@ -67,7 +68,10 @@ export async function GET(request: NextRequest) {
     const forceIncluded = await getForceIncludedClientIds(manager, monthlyPeriodKey);
     const rowNotes = await getWithholdingRowNotesForPeriod(manager, monthlyPeriodKey);
     const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
-    const saved = await listSimplePayrollFilingsByKeys(periodKeys);
+    const [saved, prevFiledKeys] = await Promise.all([
+      listSimplePayrollFilingsByKeys(periodKeys),
+      listSimplePayrollPrevFiledKeys(meta.year, meta.month),
+    ]);
     const { grid } = buildSimplePayrollGrid(
       clients,
       periodKey,
@@ -75,6 +79,7 @@ export async function GET(request: NextRequest) {
       excluded,
       rowNotes,
       forceIncluded,
+      prevFiledKeys,
     );
 
     return NextResponse.json({
@@ -105,6 +110,7 @@ export async function PUT(request: NextRequest) {
         filed: boolean;
         acceptanceDate?: string;
         acceptanceMethod?: string;
+        notes?: string;
       }[];
     };
 
@@ -129,7 +135,7 @@ export async function PUT(request: NextRequest) {
           filed: r.filed,
           acceptanceDate: r.acceptanceDate ?? '',
           acceptanceMethod: r.acceptanceMethod ?? '',
-          notes: '',
+          notes: r.notes ?? '',
         })),
         user.name,
       );
@@ -306,6 +312,7 @@ export async function POST(request: NextRequest) {
       : [meta.monthlyPeriodKey];
     const rowNotes = await getWithholdingRowNotesForPeriod(effectiveManager, meta.monthlyPeriodKey);
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
+    const prevFiledKeys = await listSimplePayrollPrevFiledKeys(meta.year, meta.month);
     const { grid } = buildSimplePayrollGrid(
       clients,
       body.periodKey,
@@ -313,6 +320,7 @@ export async function POST(request: NextRequest) {
       excluded,
       rowNotes,
       forceIncluded,
+      prevFiledKeys,
     );
     const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);
     const unreceivedByColumn = listUnreceivedByColumn(grid, 'simplePayroll', manager);

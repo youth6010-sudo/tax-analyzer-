@@ -1,13 +1,30 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { companyEventCheckoffs } from '@/db/schema';
+import type { CheckoffDetail } from '@/app/types/calendar';
 
 export type CompanyEventCheckoffMap = Record<string, boolean>;
+export type CompanyEventCheckoffDetailMap = Record<string, CheckoffDetail>;
 
-export async function listCheckoffsForEvents(
+function toIso(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  return d.toISOString();
+}
+
+export function checkoffsFromDetails(
+  details: CompanyEventCheckoffDetailMap,
+): CompanyEventCheckoffMap {
+  const bools: CompanyEventCheckoffMap = {};
+  for (const [name, d] of Object.entries(details)) {
+    bools[name] = d.completed;
+  }
+  return bools;
+}
+
+export async function listCheckoffDetailsForEvents(
   eventIds: string[],
-): Promise<Map<string, CompanyEventCheckoffMap>> {
-  const map = new Map<string, CompanyEventCheckoffMap>();
+): Promise<Map<string, CompanyEventCheckoffDetailMap>> {
+  const map = new Map<string, CompanyEventCheckoffDetailMap>();
   if (eventIds.length === 0) return map;
 
   const db = getDb();
@@ -18,8 +35,23 @@ export async function listCheckoffsForEvents(
 
   for (const row of rows) {
     const existing = map.get(row.eventId) ?? {};
-    existing[row.memberName] = row.completed;
+    existing[row.memberName] = {
+      completed: row.completed,
+      completedAt: toIso(row.completedAt),
+    };
     map.set(row.eventId, existing);
+  }
+  return map;
+}
+
+/** @deprecated 상세 맵 권장 — 하위 호환 */
+export async function listCheckoffsForEvents(
+  eventIds: string[],
+): Promise<Map<string, CompanyEventCheckoffMap>> {
+  const details = await listCheckoffDetailsForEvents(eventIds);
+  const map = new Map<string, CompanyEventCheckoffMap>();
+  for (const [id, detail] of details) {
+    map.set(id, checkoffsFromDetails(detail));
   }
   return map;
 }

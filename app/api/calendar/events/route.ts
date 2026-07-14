@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { listCalendarEvents } from '@/lib/calendarEvents';
+import { isDataViewer } from '@/lib/masterAccess';
 
 export async function GET(req: Request) {
   try {
@@ -15,8 +16,9 @@ export async function GET(req: Request) {
 
     const items = await listCalendarEvents(ownerNames, from, to, {
       viewerName: user.name,
+      includeCheckoffDetails: isDataViewer(user),
     });
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, canViewCheckoffDetails: isDataViewer(user) });
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

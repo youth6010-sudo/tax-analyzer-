@@ -59,6 +59,7 @@ export const TAX_MENU = [
     items: [
       { label: '데이터 백업', href: '/admin/backup' },
       { label: '블루홀 미연결', href: '/admin/bluehole-unlinked' },
+      /** charlieOnly: 개발자(찰리·리아 관리자) — 인디·일반 담당 미표시 */
       { label: '검토표 연결', href: '/admin/review-client-links', charlieOnly: true },
       { label: '유입·유출 업로드', href: '/admin/data-import' },
       { label: '수임처 데이터 초기화', href: '/admin/data-reset' },

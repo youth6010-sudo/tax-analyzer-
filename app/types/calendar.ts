@@ -33,6 +33,13 @@ export type PersonalChecklistDto = {
 
 export type CompanyScheduleKind = 'range' | 'deadline';
 
+/** 담당자별 완료 체크 상세 (완료일 포함) */
+export type CheckoffDetail = {
+  completed: boolean;
+  /** ISO string */
+  completedAt: string | null;
+};
+
 export type CompanyEventDto = {
   id: string;
   title: string;
@@ -47,7 +54,12 @@ export type CompanyEventDto = {
   myCheckoff?: boolean;
   checkoffDone?: number;
   checkoffTotal?: number;
+  /** 담당자 → 완료 여부 (간단) */
   checkoffs?: Record<string, boolean>;
+  /** 담당자 → 완료·완료일시 (결재권자·개발자용) */
+  checkoffDetails?: Record<string, CheckoffDetail>;
+  /** 세무신고 법정 마감 — 자동생성, 수정 불가 */
+  source?: 'tax_deadline';
 };
 
 export function formatCompanyEventSchedule(
@@ -77,8 +89,11 @@ export type CalendarEventDto = {
   createdAt?: string;
   companyScheduleKind?: CompanyScheduleKind;
   companyDescription?: string;
-  /** 개인 완료 또는 회사 일정 본인 체크 완료 */
+  /** 개인 완료 또는 회사·세무신고 일정 본인 체크 완료 */
   completed?: boolean;
+  checkoffDone?: number;
+  checkoffTotal?: number;
+  checkoffDetails?: Record<string, CheckoffDetail>;
 };
 
 /** 캘린더·체크리스트 등록일시 표시 */
@@ -102,6 +117,21 @@ export function formatChecklistDueDate(dueDate: string | undefined): string {
   const [y, m, d] = dueDate.split('-').map(Number);
   if (!y || !m || !d) return dueDate;
   return `${y}. ${m}. ${d}.`;
+}
+
+/** 완료 체크 일시 표시 */
+export function formatCheckoffCompletedAt(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 export function isChecklistPastDue(dueDate: string | undefined): boolean {
