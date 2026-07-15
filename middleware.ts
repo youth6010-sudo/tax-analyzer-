@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import type { SessionData } from '@/lib/session';
 import { getSessionOptionsForEdge } from '@/lib/session';
+import {
+  assertYouthIdsIpAllowed,
+  isYouthIdsPath,
+  youthIdsForbiddenHtml,
+} from '@/lib/youthIdsAccess';
 
 const PUBLIC_PATHS = ['/login'];
 const PUBLIC_API = ['/api/auth/login', '/api/auth/login-users'];
@@ -15,6 +20,13 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith('/favicon')) return true;
   if (/\.(ico|png|jpg|jpeg|svg|webp|json|woff2?)$/.test(pathname)) return true;
   return false;
+}
+
+function youthIdsForbiddenResponse(): NextResponse {
+  return new NextResponse(youthIdsForbiddenHtml(), {
+    status: 403,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
 }
 
 export async function middleware(request: NextRequest) {
@@ -39,6 +51,10 @@ export async function middleware(request: NextRequest) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('next', pathname);
       return NextResponse.redirect(loginUrl);
+    }
+
+    if (isYouthIdsPath(pathname) && !assertYouthIdsIpAllowed(request.headers)) {
+      return youthIdsForbiddenResponse();
     }
 
     return response;
