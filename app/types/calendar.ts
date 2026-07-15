@@ -12,6 +12,16 @@ export type PersonalChecklistMemo = {
   createdAt: string;
 };
 
+/** 개인 체크리스트 — 작성자용 완료 알림 */
+export type PersonalChecklistNotificationDto = {
+  id: string;
+  itemId: string;
+  actorName: string;
+  kind: string;
+  title: string;
+  createdAt: string;
+};
+
 export type PersonalChecklistDto = {
   id: string;
   ownerName: string;
@@ -21,14 +31,25 @@ export type PersonalChecklistDto = {
   category: ChecklistCategory;
   taxType: ChecklistTaxType;
   dueDate: string;
+  /** 본인 기준 완료 (협업은 myCheckoff, 단독은 completed 플래그) */
   completed: boolean;
   reflectInNotes: boolean;
-  /** 공동 담당자 (작성자 외) */
+  /** 협업자 (작성자 외) */
   assigneeNames: string[];
   memos: PersonalChecklistMemo[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** 협업자 지정된 공동 업무 */
+  collaborative?: boolean;
+  /** 참여자 (작성자 + 협업자) */
+  participants?: string[];
+  myCheckoff?: boolean;
+  checkoffDone?: number;
+  checkoffTotal?: number;
+  checkoffs?: Record<string, boolean>;
+  /** 참여자별 완료·완료일시 */
+  checkoffDetails?: Record<string, CheckoffDetail>;
 };
 
 export type CompanyScheduleKind = 'range' | 'deadline';

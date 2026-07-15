@@ -3,12 +3,20 @@ import { getDb } from '@/db';
 import { clients, personalChecklistItems } from '@/db/schema';
 import type {
   ChecklistTaxType,
+  CheckoffDetail,
   PersonalChecklistDto,
   PersonalChecklistMemo,
 } from '@/app/types/calendar';
 import { checklistTaxTypeFromRow, normalizeChecklistTaxType } from '@/app/types/calendar';
 import { syncChecklistToClientNotes, unsyncChecklistFromClientNotes } from '@/lib/personalChecklistSync';
 import { getClientById } from '@/lib/clientsDb';
+import {
+  countCompletedAmongMembers,
+  listCheckoffDetailsForPersonalItems,
+  setPersonalChecklistCheckoff,
+  type PersonalChecklistCheckoffDetailMap,
+} from '@/lib/personalChecklistCheckoffs';
+import { createCompletionNotification } from '@/lib/personalChecklistNotifications';
 
 function normalizeAssignees(names: string[] | undefined | null, ownerName: string): string[] {
   const seen = new Set<string>();
@@ -20,6 +28,10 @@ function normalizeAssignees(names: string[] | undefined | null, ownerName: strin
     out.push(n);
   }
   return out;
+}
+
+function participantsOf(ownerName: string, assigneeNames: string[]): string[] {
+  return [ownerName, ...assigneeNames];
 }
 
 function normalizeMemos(raw: unknown): PersonalChecklistMemo[] {
@@ -38,10 +50,15 @@ function normalizeMemos(raw: unknown): PersonalChecklistMemo[] {
   return out;
 }
 
-function toDto(
+function toBaseDto(
   row: typeof personalChecklistItems.$inferSelect,
   clientName?: string,
 ): PersonalChecklistDto {
+  const assigneeNames = normalizeAssignees(
+    (row.assigneeNames as string[] | null | undefined) ?? [],
+    row.ownerName,
+  );
+  const collaborative = assigneeNames.length > 0;
   return {
     id: row.id,
     ownerName: row.ownerName,
@@ -53,15 +70,79 @@ function toDto(
     dueDate: row.dueDate,
     completed: row.completed,
     reflectInNotes: row.reflectInNotes,
-    assigneeNames: normalizeAssignees(
-      (row.assigneeNames as string[] | null | undefined) ?? [],
-      row.ownerName,
-    ),
+    assigneeNames,
     memos: normalizeMemos(row.memos),
     sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    collaborative,
+    participants: collaborative ? participantsOf(row.ownerName, assigneeNames) : undefined,
   };
+}
+
+function enrichDto(
+  base: PersonalChecklistDto,
+  viewerName: string | undefined,
+  details: PersonalChecklistCheckoffDetailMap | undefined,
+): PersonalChecklistDto {
+  if (!base.collaborative || !base.participants) {
+    return {
+      ...base,
+      myCheckoff: base.completed,
+    };
+  }
+
+  const participants = base.participants;
+  const detailMap = details ?? {};
+  const hasAnyRows = Object.keys(detailMap).length > 0;
+  // 레거시: checkoff 없이 completed만 있는 공동 업무
+  const legacyAllDone = !hasAnyRows && base.completed;
+
+  const checkoffs: Record<string, boolean> = {};
+  const checkoffDetails: Record<string, CheckoffDetail> = {};
+  let done = 0;
+  for (const name of participants) {
+    const d = detailMap[name];
+    const completed = legacyAllDone ? true : (d?.completed ?? false);
+    checkoffs[name] = completed;
+    checkoffDetails[name] = {
+      completed,
+      completedAt: legacyAllDone ? null : (d?.completedAt ?? null),
+    };
+    if (completed) done += 1;
+  }
+
+  const myCheckoff = viewerName
+    ? (checkoffs[viewerName] ?? false)
+    : false;
+
+  // 작성자는 완료시각까지, 협업자도 각자 진행 현황은 개인 체크리스트에서 확인
+  const canViewDetails = !!viewerName && (
+    viewerName === base.ownerName
+    || participants.includes(viewerName)
+  );
+
+  return {
+    ...base,
+    /** 목록 표시용: 본인 완료 여부 */
+    completed: myCheckoff,
+    myCheckoff,
+    checkoffDone: done,
+    checkoffTotal: participants.length,
+    checkoffs,
+    checkoffDetails: canViewDetails ? checkoffDetails : undefined,
+  };
+}
+
+async function enrichItems(
+  items: PersonalChecklistDto[],
+  viewerName?: string,
+): Promise<PersonalChecklistDto[]> {
+  const collabIds = items.filter(i => i.collaborative).map(i => i.id);
+  const detailMap = await listCheckoffDetailsForPersonalItems(collabIds);
+  return items.map(item =>
+    enrichDto(item, viewerName, detailMap.get(item.id)),
+  );
 }
 
 function canAccessItem(
@@ -73,20 +154,30 @@ function canAccessItem(
   return assignees.some(n => n.trim() === userName);
 }
 
-/** 내가 작성했거나 담당자로 지정된 항목 */
+/** 작성자이거나 협업자로 지정된 항목이 아직 열려 있는지 */
+function isOpenForViewer(item: PersonalChecklistDto, viewerName: string): boolean {
+  if (!item.collaborative) return !(item.myCheckoff ?? item.completed);
+  // 작성자: 전원 완료 전까지 개인 체크리스트에 유지 (누가 완료했는지 확인)
+  if (item.ownerName === viewerName) {
+    return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 0);
+  }
+  // 협업자: 본인 완료 여부로 표시
+  return !(item.myCheckoff ?? item.completed);
+}
+
+/** 내가 작성했거나 협업자로 지정된 항목 */
 export async function listPersonalChecklistForOwner(
   ownerName: string,
   opts?: { includeCompleted?: boolean },
 ): Promise<PersonalChecklistDto[]> {
   const db = getDb();
+  // jsonb 배열 원소 매칭 (? 연산) — 협업자에게도 동일하게 노출
   const access = or(
     eq(personalChecklistItems.ownerName, ownerName),
-    sql`${personalChecklistItems.assigneeNames} @> ${JSON.stringify([ownerName])}::jsonb`,
+    sql`COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb) ? ${ownerName}`,
   );
-  const conditions = opts?.includeCompleted
-    ? [access]
-    : [access, eq(personalChecklistItems.completed, false)];
 
+  // 완료 포함: 전부. 미완료만: 단독(completed=false) + 협업(아래에서 뷰어 기준 필터)
   const rows = await db
     .select({
       item: personalChecklistItems,
@@ -94,10 +185,30 @@ export async function listPersonalChecklistForOwner(
     })
     .from(personalChecklistItems)
     .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
-    .where(and(...conditions))
-    .orderBy(asc(personalChecklistItems.sortOrder), desc(personalChecklistItems.createdAt));
+    .where(
+      opts?.includeCompleted
+        ? access
+        : and(
+            access,
+            or(
+              sql`jsonb_array_length(COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb)) > 0`,
+              eq(personalChecklistItems.completed, false),
+            ),
+          ),
+    )
+    .orderBy(
+      // 마감 임박순 · 마감 없음은 뒤
+      sql`CASE WHEN ${personalChecklistItems.dueDate} = '' THEN 1 ELSE 0 END`,
+      asc(personalChecklistItems.dueDate),
+      asc(personalChecklistItems.sortOrder),
+      desc(personalChecklistItems.createdAt),
+    );
 
-  return rows.map(r => toDto(r.item, r.clientName?.trim() || undefined));
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  const enriched = await enrichItems(base, ownerName);
+
+  if (opts?.includeCompleted) return enriched;
+  return enriched.filter(item => isOpenForViewer(item, ownerName));
 }
 
 export async function listPersonalChecklistForClient(
@@ -120,7 +231,8 @@ export async function listPersonalChecklistForClient(
     .where(and(...conditions))
     .orderBy(desc(personalChecklistItems.completed), asc(personalChecklistItems.sortOrder));
 
-  return rows.map(r => toDto(r.item, r.clientName?.trim() || undefined));
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  return enrichItems(base);
 }
 
 export async function listPersonalChecklistInRange(
@@ -147,7 +259,8 @@ export async function listPersonalChecklistInRange(
     .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
     .orderBy(asc(personalChecklistItems.dueDate));
 
-  return rows.map(r => toDto(r.item, r.clientName?.trim() || undefined));
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  return enrichItems(base);
 }
 
 export async function listPersonalChecklistInRangeForOwner(
@@ -237,7 +350,8 @@ export async function createPersonalChecklistItems(
     clientName = client?.companyName;
   }
 
-  return rows.map(row => toDto(row, clientName));
+  const base = rows.map(row => toBaseDto(row, clientName));
+  return enrichItems(base, ownerName);
 }
 
 export type UpdateChecklistInput = Partial<{
@@ -268,7 +382,7 @@ export async function updatePersonalChecklistItem(
   if (!canAccessItem(existing, actorName)) throw new Error('NOT_FOUND');
 
   const isOwner = existing.ownerName === actorName;
-  // 담당자는 완료·메모만, 작성자는 전체 수정
+  // 협업자는 완료·메모만, 작성자는 전체 수정
   if (!isOwner) {
     const allowedKeys = new Set(['completed', 'addMemo']);
     for (const key of Object.keys(patch)) {
@@ -305,13 +419,41 @@ export async function updatePersonalChecklistItem(
     }
   }
 
+  const existingAssignees = normalizeAssignees(
+    (existing.assigneeNames as string[] | null | undefined) ?? [],
+    existing.ownerName,
+  );
   const nextAssignees =
     patch.assigneeNames !== undefined
       ? normalizeAssignees(patch.assigneeNames, existing.ownerName)
-      : normalizeAssignees(
-          (existing.assigneeNames as string[] | null | undefined) ?? [],
-          existing.ownerName,
-        );
+      : existingAssignees;
+
+  // 협업 여부는 저장 후 협업자 기준 (전부 제거 시 단독으로 전환)
+  const collaborative = nextAssignees.length > 0;
+
+  // 협업: 완료는 본인 checkoff. 항목 completed는 전원 완료 시 true.
+  let patchCompleted = patch.completed;
+  if (collaborative && patch.completed !== undefined) {
+    const participants = participantsOf(existing.ownerName, nextAssignees);
+    if (!participants.includes(actorName)) {
+      throw new Error('협업자만 완료 처리할 수 있습니다.');
+    }
+
+    await setPersonalChecklistCheckoff(id, actorName, patch.completed);
+
+    // 체크 해제는 setPersonalChecklistCheckoff 안에서 알림 삭제
+    if (patch.completed && actorName !== existing.ownerName) {
+      await createCompletionNotification({
+        itemId: id,
+        recipientName: existing.ownerName,
+        actorName,
+        title: existing.title,
+      });
+    }
+
+    const doneCount = await countCompletedAmongMembers(id, participants);
+    patchCompleted = doneCount >= participants.length;
+  }
 
   const [row] = await db
     .update(personalChecklistItems)
@@ -319,7 +461,7 @@ export async function updatePersonalChecklistItem(
       ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
       ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
       ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate.trim() } : {}),
-      ...(patch.completed !== undefined ? { completed: patch.completed } : {}),
+      ...(patchCompleted !== undefined ? { completed: patchCompleted } : {}),
       ...(patch.reflectInNotes !== undefined ? { reflectInNotes: patch.reflectInNotes } : {}),
       ...(patch.assigneeNames !== undefined ? { assigneeNames: nextAssignees } : {}),
       ...(patch.addMemo !== undefined ? { memos: nextMemos } : {}),
@@ -353,7 +495,8 @@ export async function updatePersonalChecklistItem(
     clientName = client?.companyName;
   }
 
-  return toDto(row, clientName);
+  const [enriched] = await enrichItems([toBaseDto(row, clientName)], actorName);
+  return enriched;
 }
 
 export async function deletePersonalChecklistItem(id: string, actorName: string): Promise<void> {
@@ -392,5 +535,9 @@ export async function getPersonalChecklistById(
 
   if (!row) return null;
   if (actorName && !canAccessItem(row.item, actorName)) return null;
-  return toDto(row.item, row.clientName?.trim() || undefined);
+  const [enriched] = await enrichItems(
+    [toBaseDto(row.item, row.clientName?.trim() || undefined)],
+    actorName,
+  );
+  return enriched;
 }

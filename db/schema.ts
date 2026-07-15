@@ -350,6 +350,31 @@ export const personalChecklistItems = pgTable('personal_checklist_items', {
   index('personal_checklist_client_idx').on(t.clientId),
 ]);
 
+/** 개인 체크리스트 — 담당자별 완료 체크 (공동 업무) */
+export const personalChecklistCheckoffs = pgTable('personal_checklist_checkoffs', {
+  itemId: uuid('item_id').notNull().references(() => personalChecklistItems.id, { onDelete: 'cascade' }),
+  memberName: text('member_name').notNull(),
+  completed: boolean('completed').notNull().default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, t => [
+  primaryKey({ columns: [t.itemId, t.memberName] }),
+  index('personal_checklist_checkoffs_member_idx').on(t.memberName),
+]);
+
+/** 개인 체크리스트 — 작성자 완료 알림 */
+export const personalChecklistNotifications = pgTable('personal_checklist_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  itemId: uuid('item_id').notNull().references(() => personalChecklistItems.id, { onDelete: 'cascade' }),
+  recipientName: text('recipient_name').notNull(),
+  actorName: text('actor_name').notNull(),
+  kind: text('kind').notNull().default('completed'),
+  title: text('title').notNull().default(''),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('personal_checklist_notifications_recipient_idx').on(t.recipientName, t.readAt, t.createdAt),
+]);
+
 /** 사내 일정 (캘린더) */
 export const companyEvents = pgTable('company_events', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -480,6 +505,8 @@ export type SimplePayrollFiling = typeof simplePayrollFilings.$inferSelect;
 export type YearEndFiling = typeof yearEndFilings.$inferSelect;
 export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
 export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
+export type PersonalChecklistCheckoff = typeof personalChecklistCheckoffs.$inferSelect;
+export type PersonalChecklistNotification = typeof personalChecklistNotifications.$inferSelect;
 export type CompanyEvent = typeof companyEvents.$inferSelect;
 export type CompanyEventCheckoff = typeof companyEventCheckoffs.$inferSelect;
 export type TaxDeadlineCheckoff = typeof taxDeadlineCheckoffs.$inferSelect;

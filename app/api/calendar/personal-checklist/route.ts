@@ -8,12 +8,19 @@ import {
 } from '@/lib/personalChecklist';
 import type { ChecklistTaxType } from '@/app/types/calendar';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
+import { listUnreadPersonalChecklistNotifications } from '@/lib/personalChecklistNotifications';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const user = await requireUser();
-    const items = await listPersonalChecklistForOwner(user.name, { includeCompleted: false });
-    return NextResponse.json({ items });
+    const url = new URL(req.url);
+    const includeCompleted = url.searchParams.get('includeCompleted') === '1'
+      || url.searchParams.get('includeCompleted') === 'true';
+    const [items, notifications] = await Promise.all([
+      listPersonalChecklistForOwner(user.name, { includeCompleted }),
+      listUnreadPersonalChecklistNotifications(user.name),
+    ]);
+    return NextResponse.json({ items, notifications });
   } catch (e) {
     return handleApiError(e);
   }

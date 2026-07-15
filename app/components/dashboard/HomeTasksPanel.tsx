@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DashboardTask } from '@/lib/dashboardTasks';
-import type { CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
+import type {
+  ChecklistTaxType,
+  CompanyEventDto,
+  PersonalChecklistDto,
+  PersonalChecklistNotificationDto,
+} from '@/app/types/calendar';
 import {
   formatCompanyEventSchedule,
   formatChecklistDueDate,
@@ -11,7 +16,6 @@ import {
   getChecklistTypeLabel,
   isChecklistPastDue,
 } from '@/app/types/calendar';
-import type { ChecklistTaxType } from '@/app/types/calendar';
 import { prefetchPortal, usePortalTasks, getPortalChurnRecords, getPortalClients, filterNtsTasksForHandledChurn, refreshPortalBootstrap } from '@/app/utils/portalStore';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
@@ -114,6 +118,7 @@ export default function HomeTasksPanel() {
   const [sections, setSections] = useState<SectionState>(readSectionState);
   const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
+  const [personalNotifications, setPersonalNotifications] = useState<PersonalChecklistNotificationDto[]>([]);
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
   const [addModal, setAddModal] = useState<AddModal>(null);
   const [editModal, setEditModal] = useState<EditModal>(null);
@@ -127,18 +132,39 @@ export default function HomeTasksPanel() {
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
 
-  const personalVisible = useMemo(
-    () => (showCompleted ? personal : personal.filter(p => !p.completed)),
-    [personal, showCompleted],
-  );
+  /** 미완료 배지·필터용 — 작성자는 전원 완료 전까지 개인 체크리스트에 유지 */
+  const isPersonalDone = (p: PersonalChecklistDto) => {
+    if (!p.collaborative) return p.completed;
+    if (currentUser && p.ownerName === currentUser) {
+      return (p.checkoffDone ?? 0) >= (p.checkoffTotal ?? 0);
+    }
+    return p.myCheckoff ?? p.completed;
+  };
+
+  const personalVisible = useMemo(() => {
+    const list = showCompleted ? [...personal] : personal.filter(p => !isPersonalDone(p));
+    // 마감 임박순 (빠른 날짜 위). 마감 없음은 맨 아래.
+    list.sort((a, b) => {
+      const ad = a.dueDate?.trim() || '';
+      const bd = b.dueDate?.trim() || '';
+      if (!ad && !bd) return 0;
+      if (!ad) return 1;
+      if (!bd) return -1;
+      return ad.localeCompare(bd);
+    });
+    return list;
+    // currentUser: 작성자/협업자 완료 기준이 다름
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personal, showCompleted, currentUser]);
   const companyVisible = useMemo(
     () => (showCompleted ? companyEvents : companyEvents.filter(e => !e.myCheckoff)),
     [companyEvents, showCompleted],
   );
 
   const personalPending = useMemo(
-    () => personal.filter(p => !p.completed).length,
-    [personal],
+    () => personal.filter(p => !isPersonalDone(p)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [personal, currentUser],
   );
   const companyPending = useMemo(
     () => companyEvents.filter(e => !e.myCheckoff).length,
@@ -161,17 +187,27 @@ export default function HomeTasksPanel() {
     });
   };
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (includeCompleted = showCompleted) => {
     try {
+      const personalUrl = includeCompleted
+        ? '/api/calendar/personal-checklist?includeCompleted=1'
+        : '/api/calendar/personal-checklist';
       const [pRes, cRes] = await Promise.all([
-        fetch('/api/calendar/personal-checklist'),
+        fetch(personalUrl),
         fetch('/api/calendar/company-events'),
       ]);
       const [pData, cData] = await Promise.all([
         pRes.json(),
         cRes.json(),
       ]);
-      if (pRes.ok) setPersonal((pData as { items: PersonalChecklistDto[] }).items || []);
+      if (pRes.ok) {
+        const payload = pData as {
+          items: PersonalChecklistDto[];
+          notifications?: PersonalChecklistNotificationDto[];
+        };
+        setPersonal(payload.items || []);
+        setPersonalNotifications(payload.notifications || []);
+      }
       if (cRes.ok) {
         const payload = cData as {
           items: CompanyEventDto[];
@@ -186,7 +222,7 @@ export default function HomeTasksPanel() {
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, []);
+  }, [showCompleted]);
 
   useEffect(() => {
     setShowCompleted(readShowCompleted());
@@ -216,17 +252,28 @@ export default function HomeTasksPanel() {
   useEffect(() => {
     void prefetchPortal();
     const timer = window.setTimeout(() => {
-      void refresh();
+      void refresh(showCompleted);
     }, 400);
     const onFocus = () => {
-      void refresh();
+      void refresh(showCompleted);
     };
     window.addEventListener('focus', onFocus);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
     };
-  }, [refresh]);
+  }, [refresh, showCompleted]);
+
+  const dismissNotifications = async () => {
+    const ids = personalNotifications.map(n => n.id);
+    setPersonalNotifications([]);
+    if (ids.length === 0) return;
+    await fetch('/api/calendar/personal-checklist/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  };
 
   const toggleComplete = async (id: string, completed: boolean) => {
     await fetch(`/api/calendar/personal-checklist/${id}`, {
@@ -307,49 +354,102 @@ export default function HomeTasksPanel() {
               onToggle={() => toggleSection('personal')}
               onAdd={() => setAddModal('personal')}
             >
+                {personalNotifications.length > 0 && (
+                  <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold text-amber-800">완료 알림</p>
+                      <button
+                        type="button"
+                        onClick={() => void dismissNotifications()}
+                        className="text-[10px] font-semibold text-amber-700 underline-offset-2 hover:underline"
+                      >
+                        모두 확인
+                      </button>
+                    </div>
+                    <ul className="space-y-1">
+                      {personalNotifications.map(n => (
+                        <li key={n.id} className="text-[11px] text-amber-900">
+                          <span className="font-semibold">{n.actorName}</span>
+                          님이 「{n.title}」을(를) 완료했습니다
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {personalVisible.length === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">
                     {showCompleted ? '항목 없음' : '미완료 항목 없음'}
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {personalVisible.map(item => (
+                    {personalVisible.map(item => {
+                      const openForMe = !isPersonalDone(item);
+                      const overdue = openForMe && isChecklistPastDue(item.dueDate);
+                      const myDone = item.collaborative
+                        ? (item.myCheckoff ?? false)
+                        : item.completed;
+                      const isOwner = !!currentUser && item.ownerName === currentUser;
+                      const participants = item.participants ?? [
+                        item.ownerName,
+                        ...(item.assigneeNames ?? []),
+                      ];
+                      return (
                       <li
                         key={item.id}
                         onDoubleClick={() => openPersonalEdit(item)}
-                        className="relative cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm hover:border-[#4b6cb7]/30"
+                        className={`relative cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm ${
+                          overdue
+                            ? 'border-red-400 bg-red-50 hover:border-red-500'
+                            : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30'
+                        }`}
                         title="더블클릭하여 수정·삭제"
                       >
-                        {!item.completed && (
-                          <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                        {openForMe && (
+                          <span className={`absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ${
+                            overdue ? 'bg-red-600' : 'bg-red-500'
+                          }`}>
                             !
                           </span>
                         )}
                         <div className="flex items-start gap-2.5 pr-4">
                           <input
                             type="checkbox"
-                            checked={item.completed}
+                            checked={myDone}
                             onChange={e => void toggleComplete(item.id, e.target.checked)}
                             onDoubleClick={e => e.stopPropagation()}
                             className="mt-0.5"
+                            title={item.collaborative ? '내 업무 완료' : '완료'}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className={`font-semibold leading-snug ${item.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                            <p className={`font-semibold leading-snug ${
+                              myDone
+                                ? 'text-slate-400 line-through'
+                                : overdue
+                                  ? 'text-red-800'
+                                  : 'text-slate-800'
+                            }`}>
                               {item.title}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                              <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                                overdue
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
                                 {taxLabel(item.taxType)}
                               </span>
+                              {item.collaborative && (
+                                <span className="rounded bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                                  협업
+                                </span>
+                              )}
                               {item.dueDate && (
                                 <span
                                   className={`text-[10px] font-bold ${
-                                    !item.completed && isChecklistPastDue(item.dueDate)
-                                      ? 'text-red-600'
-                                      : 'text-slate-600'
+                                    overdue ? 'text-red-700' : 'text-slate-600'
                                   }`}
                                 >
-                                  마감 {formatChecklistDueDate(item.dueDate)}
+                                  {overdue ? '기한 경과 · ' : ''}마감 {formatChecklistDueDate(item.dueDate)}
                                 </span>
                               )}
                               {item.clientName && (
@@ -360,10 +460,45 @@ export default function HomeTasksPanel() {
                               )}
                               {(item.assigneeNames?.length ?? 0) > 0 && (
                                 <span className="text-[10px] text-violet-700">
-                                  담당 {item.assigneeNames.join(', ')}
+                                  협업 {item.assigneeNames.join(', ')}
                                 </span>
                               )}
                             </div>
+                            {item.collaborative && (item.checkoffTotal ?? 0) > 0 && (
+                              <p className="mt-1 text-[10px] text-slate-400">
+                                협업 완료 {item.checkoffDone ?? 0}/{item.checkoffTotal}
+                              </p>
+                            )}
+                            {item.collaborative && participants.length > 0 && (
+                              <ul
+                                className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5"
+                                onClick={e => e.stopPropagation()}
+                                onDoubleClick={e => e.stopPropagation()}
+                              >
+                                {participants.map(name => {
+                                  const detail = item.checkoffDetails?.[name];
+                                  const memberDone = detail?.completed
+                                    ?? item.checkoffs?.[name]
+                                    ?? false;
+                                  const at = formatCheckoffCompletedAt(detail?.completedAt);
+                                  const canSeeAt = isOwner || name === currentUser;
+                                  return (
+                                    <li
+                                      key={name}
+                                      className={`text-[10px] ${memberDone ? 'text-emerald-700' : 'text-slate-400'}`}
+                                    >
+                                      {memberDone ? '✓' : '○'} {name}
+                                      {name === item.ownerName ? ' (작성)' : ' (협업)'}
+                                      {memberDone && canSeeAt && at
+                                        ? ` · ${at}`
+                                        : memberDone
+                                          ? ' · 완료'
+                                          : ' · 미완료'}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
                             {(item.memos?.length ?? 0) > 0 && (
                               <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
                                 <span className="font-semibold text-slate-600">
@@ -376,7 +511,8 @@ export default function HomeTasksPanel() {
                           </div>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </SectionCard>

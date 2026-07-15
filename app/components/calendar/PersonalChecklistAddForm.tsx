@@ -515,7 +515,7 @@ export default function PersonalChecklistAddForm({
             />
           </FormRow>
 
-          <FormRow label="담당자">
+          <FormRow label="협업자">
             <div className="flex flex-wrap gap-1.5">
               {staffOptions.map(name => {
                 const on = assigneeNames.includes(name);
@@ -535,7 +535,9 @@ export default function PersonalChecklistAddForm({
                 );
               })}
             </div>
-            <p className="mt-1 text-[10px] text-slate-400">함께 볼 팀원을 선택합니다.</p>
+            <p className="mt-1 text-[10px] text-slate-400">
+              선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.
+            </p>
           </FormRow>
 
           <label className="flex items-start gap-2 pl-[6.5rem] text-xs text-slate-600 cursor-pointer">
@@ -556,7 +558,7 @@ export default function PersonalChecklistAddForm({
             작성자 <span className="font-semibold text-slate-800">{editItem.ownerName}</span>
           </p>
           {(editItem.assigneeNames?.length ?? 0) > 0 && (
-            <p>담당 {editItem.assigneeNames.join(', ')}</p>
+            <p>협업 {editItem.assigneeNames.join(', ')}</p>
           )}
         </div>
       )}
