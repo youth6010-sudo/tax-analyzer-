@@ -1,6 +1,5 @@
 import type { ClientRecord } from '@/app/types/client';
 import {
-  cellDisplayValue,
   mergeVatPeriodProgressPatch,
   readVatPeriodProgress,
   vatProgressPeriodKey,
@@ -362,6 +361,23 @@ function normalizeMark(raw: string): VatAnnualMarkStatus {
   return raw.trim() ? '△' : '';
 }
 
+/** 셀에서 OX 마크만 추출 — 자유서식 text는 마크로 취급하지 않음 */
+function cellOxMark(cell: VatProgressCell | undefined): VatAnnualMarkStatus {
+  if (!cell) return '';
+  const mark = String(cell.mark ?? '').trim();
+  if (mark) return normalizeMark(mark);
+  // 레거시: text에 O/X/△만 들어 있던 경우
+  const text = String(cell.text ?? '').trim();
+  if (
+    text === 'O' || text === '○' || text === 'o' ||
+    text === 'X' || text === '×' || text === 'x' ||
+    text === '△' || text === 'Δ'
+  ) {
+    return normalizeMark(text);
+  }
+  return '';
+}
+
 /** 확인 완료(진행 반영): O 또는 X */
 export function isConfirmedMark(m: VatAnnualMarkStatus): boolean {
   return m === 'O' || m === 'X';
@@ -378,7 +394,7 @@ function markRank(m: VatAnnualMarkStatus): number {
 export function aggregateMarks(cells: Array<VatProgressCell | undefined>): VatAnnualMarkStatus {
   let best: VatAnnualMarkStatus = '';
   for (const cell of cells) {
-    const m = normalizeMark(cellDisplayValue(cell));
+    const m = cellOxMark(cell);
     if (markRank(m) > markRank(best)) best = m;
   }
   return best;
@@ -459,7 +475,7 @@ export function buildVatLineStatus(
   byPhase: Record<string, VatPeriodProgress>,
 ): VatAnnualLineStatus {
   const phaseMarks = VAT_PHASES.map(phase =>
-    normalizeMark(cellDisplayValue(byPhase[phase]?.[key])),
+    cellOxMark(byPhase[phase]?.[key]),
   );
   return buildVatLineStatusFromPhaseMarks(key, label, phaseMarks);
 }
@@ -479,7 +495,7 @@ export function planVatMarkWrites(
   const writes: Array<{ phase: VatPhase; cell: VatProgressCell }> = [{ phase, cell }];
   const provisional = pairedProvisionalPhase(phase);
   if (provisional && mark) {
-    const existingMark = normalizeMark(cellDisplayValue(byPhase[provisional]?.[key]));
+    const existingMark = cellOxMark(byPhase[provisional]?.[key]);
     if (!existingMark) {
       writes.push({ phase: provisional, cell: { mark, text: '' } });
     }
@@ -512,7 +528,7 @@ export function syncPairedProvisionalAfterWrite(
   return next;
 }
 
-/** 기수 OX 패치 + 확정→예정 자동 채우기 */
+/** 기수 OX 패치 + 확정→예정 자동 채우기 (자유서식 text·색칠은 마크 정규화 제외) */
 export function mergeVatProgressMarkWrites(
   intakeData: Record<string, unknown>,
   year: number,
@@ -522,14 +538,54 @@ export function mergeVatProgressMarkWrites(
   const byPhase = collectYearProgressByPhase(intakeData, year, VAT_PHASES);
   let next = intakeData;
   for (const [key, cell] of Object.entries(patch)) {
-    const rawMark = cell ? cellDisplayValue(cell) : '';
-    const writes = planVatMarkWrites(byPhase, phase, key, rawMark);
+    const periodKey = vatProgressPeriodKey(year, phase);
+
+    if (!cell) {
+      next = mergeVatPeriodProgressPatch(next, periodKey, { [key]: { text: '', mark: '', bg: '' } });
+      const cleared = { ...(byPhase[phase] || {}) };
+      delete cleared[key];
+      byPhase[phase] = cleared;
+      continue;
+    }
+
+    const text = String(cell.text ?? '').trim();
+    const markRaw = String(cell.mark ?? '').trim();
+    const bg = String(cell.bg ?? '').trim();
+
+    // 자유서식: text가 있으면 OX 정규화하지 않고 그대로 저장
+    if (text) {
+      const preserved: VatProgressCell = { text, mark: '', bg };
+      next = mergeVatPeriodProgressPatch(next, periodKey, { [key]: preserved });
+      byPhase[phase] = { ...(byPhase[phase] || {}), [key]: preserved };
+      continue;
+    }
+
+    // 색칠만 (값 없음)
+    if (!markRaw && bg) {
+      const preserved: VatProgressCell = { text: '', mark: '', bg };
+      next = mergeVatPeriodProgressPatch(next, periodKey, { [key]: preserved });
+      byPhase[phase] = { ...(byPhase[phase] || {}), [key]: preserved };
+      continue;
+    }
+
+    // 값·마크·색 모두 비움 → 삭제
+    if (!markRaw && !bg) {
+      next = mergeVatPeriodProgressPatch(next, periodKey, { [key]: { text: '', mark: '', bg: '' } });
+      const cleared = { ...(byPhase[phase] || {}) };
+      delete cleared[key];
+      byPhase[phase] = cleared;
+      continue;
+    }
+
+    // OX 마크 입력 (+ 확정→예정 미러)
+    const writes = planVatMarkWrites(byPhase, phase, key, markRaw);
     for (const w of writes) {
+      const withBg: VatProgressCell = { ...w.cell, bg };
       next = mergeVatPeriodProgressPatch(next, vatProgressPeriodKey(year, w.phase), {
-        [key]: w.cell,
+        [key]: withBg,
       });
       const pk = w.phase;
-      byPhase[pk] = { ...(byPhase[pk] || {}), [key]: w.cell };
+      byPhase[pk] = { ...(byPhase[pk] || {}), [key]: withBg };
     }
   }
   // 통장·기타증빙 마크 → 연간 분기/표시용 동기
@@ -556,11 +612,11 @@ export function backfillEmptyProvisionalMarks(
   let next = intakeData;
   for (const key of keys) {
     for (const conf of ['1기 확정', '2기 확정'] as const) {
-      const mark = normalizeMark(cellDisplayValue(byPhase[conf]?.[key]));
+      const mark = cellOxMark(byPhase[conf]?.[key]);
       if (!mark) continue;
       const prov = pairedProvisionalPhase(conf);
       if (!prov) continue;
-      const existing = normalizeMark(cellDisplayValue(byPhase[prov]?.[key]));
+      const existing = cellOxMark(byPhase[prov]?.[key]);
       if (existing) continue;
       next = mergeVatPeriodProgressPatch(next, vatProgressPeriodKey(year, prov), {
         [key]: { mark, text: '' },
@@ -599,7 +655,7 @@ export function phaseMarksFromProgressKey(
   progressKey: string,
 ): VatAnnualMarkStatus[] {
   return VAT_PHASES.map(phase =>
-    normalizeMark(cellDisplayValue(byPhase[phase]?.[progressKey])),
+    cellOxMark(byPhase[phase]?.[progressKey]),
   );
 }
 
@@ -902,7 +958,7 @@ export function buildDualReceiveEntryTrackStatus(
 
   const fromVat = quartersFromProgressKey(byPhase, progressKey);
   const hasVatMark = VAT_PHASES.some(p =>
-    Boolean(normalizeMark(cellDisplayValue(byPhase[p]?.[progressKey]))),
+    Boolean(cellOxMark(byPhase[p]?.[progressKey])),
   );
 
   let receiveQ = fromVat.receive;
