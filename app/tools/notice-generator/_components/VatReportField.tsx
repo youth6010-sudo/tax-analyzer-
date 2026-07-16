@@ -1,4 +1,4 @@
-import type { VatNonDeductibleItem, VatReport } from '../_lib/types';
+import type { VatNamedAmountItem, VatNonDeductibleItem, VatReport, VatSummaryRow } from '../_lib/types';
 import { calcVatReport } from '../_lib/templates';
 import {
   noticeBtnSecondary,
@@ -6,7 +6,6 @@ import {
   noticeLabel,
   noticeSection,
   noticeSectionTitle,
-  noticeTextarea,
   noticeTextareaCompact,
 } from './noticeUi';
 
@@ -59,21 +58,53 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
   );
 
   const items = value.nonDeductibleItems ?? [];
-
   const setNonDeductible = (next: VatNonDeductibleItem[]) => {
     update({ nonDeductibleItems: next });
   };
-
   const patchNonDeductible = (i: number, patch: Partial<VatNonDeductibleItem>) => {
     setNonDeductible(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
   };
-
   const addNonDeductible = () => {
     setNonDeductible([...items, { reason: '', vat: 0 }]);
   };
-
   const removeNonDeductible = (i: number) => {
     setNonDeductible(items.filter((_, idx) => idx !== i));
+  };
+
+  const reductions = value.reductionItems?.length
+    ? value.reductionItems
+    : (value.reductionAmount || value.reductionLabel)
+      ? [{ label: value.reductionLabel || '', amount: value.reductionAmount || 0 }]
+      : [];
+  const setReductions = (next: VatNamedAmountItem[]) => {
+    update({
+      reductionItems: next,
+      reductionLabel: '',
+      reductionAmount: 0,
+    });
+  };
+  const patchReduction = (i: number, patch: Partial<VatNamedAmountItem>) => {
+    setReductions(reductions.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  };
+  const addReduction = () => {
+    setReductions([...reductions, { label: '', amount: 0 }]);
+  };
+  const removeReduction = (i: number) => {
+    setReductions(reductions.filter((_, idx) => idx !== i));
+  };
+
+  const customRows = value.customSummaryRows ?? [];
+  const setCustomRows = (next: VatSummaryRow[]) => {
+    update({ customSummaryRows: next });
+  };
+  const patchCustomRow = (i: number, patch: Partial<VatSummaryRow>) => {
+    setCustomRows(customRows.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  };
+  const addCustomRow = () => {
+    setCustomRows([...customRows, { label: '', supply: 0, vat: 0 }]);
+  };
+  const removeCustomRow = (i: number) => {
+    setCustomRows(customRows.filter((_, idx) => idx !== i));
   };
 
   const body = (
@@ -153,22 +184,57 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
           )}
         </div>
 
-        <div className="grid grid-cols-[1fr_1fr_1fr] items-center gap-2">
-          <span className="text-xs text-slate-500">경감세액</span>
-          <input
-            type="text"
-            value={value.reductionLabel}
-            onChange={e => update({ reductionLabel: e.target.value })}
-            placeholder="명칭 (예: 전자신고)"
-            className={inputClass}
-          />
+        <div className="rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-violet-900">경감세액</p>
+            <button type="button" onClick={addReduction} className={`${noticeBtnSecondary} !py-1 text-xs`}>
+              + 항목 추가
+            </button>
+          </div>
+          {reductions.length === 0 ? (
+            <p className="text-[11px] text-slate-500">경감세액이 있으면 명칭과 금액을 입력하세요.</p>
+          ) : (
+            <div className="space-y-2">
+              {reductions.map((it, i) => (
+                <div key={i} className="grid grid-cols-[1fr_6rem_auto] items-center gap-2">
+                  <input
+                    type="text"
+                    value={it.label}
+                    onChange={e => patchReduction(i, { label: e.target.value })}
+                    placeholder="명칭 (예: 전자신고)"
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatComma(it.amount)}
+                    onChange={e => patchReduction(i, { amount: parseComma(e.target.value) })}
+                    placeholder="금액"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeReduction(i)}
+                    className={`${noticeBtnSecondary} !px-2 !py-1 text-xs`}
+                    title="삭제"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-[1fr_1fr] items-center gap-2 sm:grid-cols-[1fr_1fr_1fr]">
+          <span className="text-xs text-slate-500">예정고지세액</span>
           <input
             type="text"
             inputMode="numeric"
-            value={formatComma(value.reductionAmount)}
-            onChange={e => update({ reductionAmount: parseComma(e.target.value) })}
+            value={formatComma(value.preliminaryNoticeAmount)}
+            onChange={e => update({ preliminaryNoticeAmount: parseComma(e.target.value) })}
             placeholder="금액"
-            className={inputClass}
+            className={`${inputClass} sm:col-span-2`}
           />
         </div>
 
@@ -189,6 +255,65 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
             placeholder="금액"
             className={inputClass}
           />
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-700">요약표 추가 항목</p>
+            <button type="button" onClick={addCustomRow} className={`${noticeBtnSecondary} !py-1 text-xs`}>
+              + 행 추가
+            </button>
+          </div>
+          <p className="mb-2 text-[11px] text-slate-500">
+            신고 결과 보고 표에 그대로 나옵니다. 구분·공급가·부가세(세액)를 자유롭게 입력하세요.
+          </p>
+          {customRows.length === 0 ? (
+            <p className="text-[11px] text-slate-400">추가 행이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_5.5rem_5.5rem_auto] gap-2 text-[10px] font-semibold text-slate-400">
+                <span>구분</span>
+                <span>공급가</span>
+                <span>부가세</span>
+                <span />
+              </div>
+              {customRows.map((it, i) => (
+                <div key={i} className="grid grid-cols-[1fr_5.5rem_5.5rem_auto] items-center gap-2">
+                  <input
+                    type="text"
+                    value={it.label}
+                    onChange={e => patchCustomRow(i, { label: e.target.value })}
+                    placeholder="항목명"
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatComma(it.supply)}
+                    onChange={e => patchCustomRow(i, { supply: parseComma(e.target.value) })}
+                    placeholder="공급가"
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatComma(it.vat)}
+                    onChange={e => patchCustomRow(i, { vat: parseComma(e.target.value) })}
+                    placeholder="세액"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCustomRow(i)}
+                    className={`${noticeBtnSecondary} !px-2 !py-1 text-xs`}
+                    title="삭제"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
@@ -254,6 +379,22 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
               className={`${noticeTextareaCompact} mt-1 w-full text-sm`}
             />
           </div>
+          {isPay && calc.finalTax > 0 && (
+            <div className="sm:col-span-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={value.installmentConfirm}
+                  onChange={e => update({ installmentConfirm: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                <span className="font-semibold">분납 확인</span>
+                <span className="text-xs font-normal text-slate-500">
+                  체크 시 신고 결과 보고에 분납(분할 납부) 안내가 포함됩니다
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -265,25 +406,9 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
           </b>{' '}
           ({isPay ? '납부' : '환급'})
           <span className="ml-1 text-slate-400">
-            = 매출세액 − 공제매입세액 − 경감세액 + 가산세액
+            = 매출세액 − 공제매입세액 − 경감세액 − 예정고지 + 가산세액
           </span>
         </p>
-        {(calc.salesVatRate != null || calc.buyVatRateExFixed != null) && (
-          <p className="text-slate-500">
-            {calc.salesVatRate != null && (
-              <span>
-                매출 부가율 <b className="text-slate-700">{calc.salesVatRate.toFixed(1)}%</b>
-              </span>
-            )}
-            {calc.salesVatRate != null && calc.buyVatRateExFixed != null && ' · '}
-            {calc.buyVatRateExFixed != null && (
-              <span>
-                매입 부가율(고정자산 제외){' '}
-                <b className="text-slate-700">{calc.buyVatRateExFixed.toFixed(1)}%</b>
-              </span>
-            )}
-          </p>
-        )}
       </div>
     </>
   );

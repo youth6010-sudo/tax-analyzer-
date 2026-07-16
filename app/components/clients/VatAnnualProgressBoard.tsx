@@ -734,7 +734,7 @@ export default function VatAnnualProgressBoard() {
     `tabular-nums text-[10px] ${active ? 'text-slate-200' : 'text-slate-400'}`;
 
   const dataTracks = VAT_ANNUAL_TRACKS;
-  const colSpan = 2 + dataTracks.length + 2;
+  const colSpan = 3 + dataTracks.length + 2;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -845,6 +845,7 @@ export default function VatAnnualProgressBoard() {
       <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-auto`}>
         <table className="w-max min-w-full border-collapse text-sm">
           <colgroup>
+            <col className="w-12" />
             <col className="w-14" />
             <col className="min-w-[11rem] w-[13rem]" />
             {dataTracks.map(t => (
@@ -866,6 +867,9 @@ export default function VatAnnualProgressBoard() {
           </colgroup>
           <thead className="sticky top-0 z-20">
             <tr className="border-b border-slate-300 bg-slate-100 text-[11px] text-slate-700 shadow-[0_1px_0_0_rgb(203,213,225)]">
+              <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center font-semibold">
+                순번
+              </th>
               <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center font-semibold">
                 코드
               </th>
@@ -904,10 +908,13 @@ export default function VatAnnualProgressBoard() {
                 </td>
               </tr>
             ) : (
-              filtered.map(row => {
+              filtered.map((row, index) => {
                 const byKey = new Map(row.annualSummary.tracks.map(t => [t.key, t] as const));
                 return (
                   <tr key={row.id} className="border-b border-slate-100 hover:bg-sky-50/40">
+                    <td className="border-r border-slate-100 px-1 py-1.5 text-center align-middle font-mono text-[11px] text-slate-500">
+                      {index + 1}
+                    </td>
                     <td className="border-r border-slate-100 px-1 py-1.5 text-center align-middle font-mono text-[10px] text-slate-500">
                       {row.douzoneCode || '—'}
                     </td>

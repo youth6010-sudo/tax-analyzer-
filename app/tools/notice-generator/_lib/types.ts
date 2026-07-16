@@ -79,6 +79,19 @@ export type VatNonDeductibleItem = {
   vat: number;
 };
 
+/** 경감세액 등 — 명칭·금액 */
+export type VatNamedAmountItem = {
+  label: string;
+  amount: number;
+};
+
+/** 신고결과 요약표에 추가할 사용자 행 */
+export type VatSummaryRow = {
+  label: string;
+  supply: number;
+  vat: number;
+};
+
 // 부가세 신고 결과 보고 및 검토 입력값
 export type VatReport = {
   salesSupply: number;
@@ -89,10 +102,18 @@ export type VatReport = {
   fixedAssetVat: number;
   cardCashSupply: number;
   cardCashVat: number;
+  /** @deprecated → reductionItems */
   reductionLabel: string;
+  /** @deprecated → reductionItems */
   reductionAmount: number;
+  /** 경감세액 — 항목별 */
+  reductionItems: VatNamedAmountItem[];
   /** 매입세액 불공제 — 사유별 금액 */
   nonDeductibleItems: VatNonDeductibleItem[];
+  /** 예정고지세액 (차감) */
+  preliminaryNoticeAmount: number;
+  /** 요약표(표) 추가 항목 — 사용자가 자유롭게 행 추가 */
+  customSummaryRows: VatSummaryRow[];
   penaltyLabel: string;
   penaltyAmount: number;
   /** 직원 여부 (예: 있음 / 없음) */
@@ -107,6 +128,8 @@ export type VatReport = {
   refundReason: string;
   /** 신고 결과 보고 특이사항 */
   vatSpecialNotes: string;
+  /** 분납(분할 납부) 안내 문구 포함 */
+  installmentConfirm: boolean;
 };
 
 export const EMPTY_VAT_REPORT: VatReport = {
@@ -120,7 +143,10 @@ export const EMPTY_VAT_REPORT: VatReport = {
   cardCashVat: 0,
   reductionLabel: '',
   reductionAmount: 0,
+  reductionItems: [],
   nonDeductibleItems: [],
+  preliminaryNoticeAmount: 0,
+  customSummaryRows: [],
   penaltyLabel: '',
   penaltyAmount: 0,
   employeeStatus: '',
@@ -129,6 +155,7 @@ export const EMPTY_VAT_REPORT: VatReport = {
   paperTaxInvoice: '',
   refundReason: '',
   vatSpecialNotes: '',
+  installmentConfirm: false,
 };
 
 export type TaxTypeMeta = {

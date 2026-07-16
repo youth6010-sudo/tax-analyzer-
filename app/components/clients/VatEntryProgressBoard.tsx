@@ -421,7 +421,7 @@ export default function VatEntryProgressBoard() {
   }, [rows, q, canViewAll, managerFilter, phase, orderTick]);
 
   const displayLayout = useMemo(() => visibleVatLayout(layout), [layout]);
-  const periodColSpan = 2 + displayLayout.length;
+  const periodColSpan = 3 + displayLayout.length;
 
   const openColumnEditor = () => {
     setOrderDraft(visibleVatLayout(layout).map(c => ({ ...c })));
@@ -571,6 +571,7 @@ export default function VatEntryProgressBoard() {
       <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-y-auto overflow-x-hidden`}>
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup>
+            <col className="w-[3.5rem]" />
             <col className="w-[4.5rem]" />
             <col className="w-[12rem]" />
             {displayLayout.map(col => (
@@ -579,6 +580,7 @@ export default function VatEntryProgressBoard() {
           </colgroup>
           <thead className="sticky top-0 z-20">
             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-600 shadow-[0_1px_0_0_rgb(226,232,240)]">
+              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-center font-semibold">순번</th>
               <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">코드</th>
               <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">
                 거래처
@@ -608,8 +610,11 @@ export default function VatEntryProgressBoard() {
                 </td>
               </tr>
             ) : (
-              filtered.map(row => (
+              filtered.map((row, index) => (
                 <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <td className="px-1 py-1 text-center font-mono text-[11px] text-slate-500">
+                    {index + 1}
+                  </td>
                   <td className="px-1 py-1 font-mono text-[10px] text-slate-500">
                     {row.douzoneCode || '—'}
                   </td>

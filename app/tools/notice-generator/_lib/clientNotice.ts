@@ -127,6 +127,25 @@ function parseVatNonDeductibleItem(raw: unknown): VatNonDeductibleItem | null {
   return { reason: o.reason, vat: typeof o.vat === 'number' ? o.vat : 0 };
 }
 
+function parseVatNamedAmountItem(raw: unknown): { label: string; amount: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    label: typeof o.label === 'string' ? o.label : '',
+    amount: typeof o.amount === 'number' ? o.amount : 0,
+  };
+}
+
+function parseVatSummaryRow(raw: unknown): { label: string; supply: number; vat: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    label: typeof o.label === 'string' ? o.label : '',
+    supply: typeof o.supply === 'number' ? o.supply : 0,
+    vat: typeof o.vat === 'number' ? o.vat : 0,
+  };
+}
+
 function parseVatReport(raw: unknown): VatReport | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const e = raw as Record<string, unknown>;
@@ -134,6 +153,21 @@ function parseVatReport(raw: unknown): VatReport | undefined {
     typeof e[k] === 'number' ? (e[k] as number) : 0;
   const str = (k: keyof VatReport) =>
     typeof e[k] === 'string' ? (e[k] as string) : '';
+
+  let reductionItems = Array.isArray(e.reductionItems)
+    ? e.reductionItems
+        .map(parseVatNamedAmountItem)
+        .filter((x): x is { label: string; amount: number } => x !== null)
+    : [];
+  // 레거시 단일 경감세액 → 항목 배열로 승계
+  if (reductionItems.length === 0) {
+    const legacyAmount = typeof e.reductionAmount === 'number' ? e.reductionAmount : 0;
+    const legacyLabel = typeof e.reductionLabel === 'string' ? e.reductionLabel : '';
+    if (legacyAmount || legacyLabel.trim()) {
+      reductionItems = [{ label: legacyLabel, amount: legacyAmount }];
+    }
+  }
+
   return {
     salesSupply: num('salesSupply'),
     salesVat: num('salesVat'),
@@ -145,10 +179,17 @@ function parseVatReport(raw: unknown): VatReport | undefined {
     cardCashVat: num('cardCashVat'),
     reductionLabel: str('reductionLabel'),
     reductionAmount: num('reductionAmount'),
+    reductionItems,
     nonDeductibleItems: Array.isArray(e.nonDeductibleItems)
       ? e.nonDeductibleItems
           .map(parseVatNonDeductibleItem)
           .filter((x): x is VatNonDeductibleItem => x !== null)
+      : [],
+    preliminaryNoticeAmount: num('preliminaryNoticeAmount'),
+    customSummaryRows: Array.isArray(e.customSummaryRows)
+      ? e.customSummaryRows
+          .map(parseVatSummaryRow)
+          .filter((x): x is { label: string; supply: number; vat: number } => x !== null)
       : [],
     penaltyLabel: str('penaltyLabel'),
     penaltyAmount: num('penaltyAmount'),
@@ -158,6 +199,7 @@ function parseVatReport(raw: unknown): VatReport | undefined {
     paperTaxInvoice: str('paperTaxInvoice'),
     refundReason: str('refundReason'),
     vatSpecialNotes: str('vatSpecialNotes'),
+    installmentConfirm: e.installmentConfirm === true,
   };
 }
 
