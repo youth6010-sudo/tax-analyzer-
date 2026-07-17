@@ -293,6 +293,16 @@ export async function getExcludedClientIds(
   return session?.excluded ?? {};
 }
 
+/** 신고대상확인 세션 — 수동 추가 업체 id */
+export async function getExtraClientIds(
+  manager: string,
+  taxType: FilingTaxId | string,
+  periodKey: string,
+): Promise<string[]> {
+  const session = await getFilingCheckSession(manager, taxType, periodKey);
+  return (session?.extraClients ?? []).map(e => e.id).filter(Boolean);
+}
+
 /** 원천세 세션 — 반기 자동제외를 수기로 살린 업체 */
 export async function getForceIncludedClientIds(
   manager: string,

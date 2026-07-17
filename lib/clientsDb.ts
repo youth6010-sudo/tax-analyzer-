@@ -896,7 +896,7 @@ export async function getChurnRecordByClientId(clientId: string) {
   return churnRecordRowToView(row);
 }
 
-/** clientId 또는 상호로 연결된 유출 이력 (엑셀 import 등 clientId 미연결 포함) */
+/** clientId로 연결된 유출 이력. 상호 동명은 다른 수임처일 수 있어 orphan(clientId 없음)만 상호 매칭 */
 export async function getChurnRecordForClient(clientId: string, companyName: string) {
   const byId = await getChurnRecordByClientId(clientId);
   if (byId) return byId;
@@ -910,7 +910,12 @@ export async function getChurnRecordForClient(clientId: string, companyName: str
     .from(churnRecords)
     .leftJoin(clients, eq(churnRecords.clientId, clients.id))
     .leftJoin(users, eq(churnRecords.recordedByUserId, users.id))
-    .where(sql`trim(${churnRecords.companyName}) = ${name}`)
+    .where(
+      and(
+        isNull(churnRecords.clientId),
+        sql`trim(${churnRecords.companyName}) = ${name}`,
+      ),
+    )
     .orderBy(desc(churnRecords.churnedAt))
     .limit(1);
 

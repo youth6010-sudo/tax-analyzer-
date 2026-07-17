@@ -19,6 +19,7 @@ import {
   computeIncomeGridStats,
   listUnreceivedByColumn,
   listUnreceivedCompanyNames,
+  mergeFilingTargetClients,
   yearEndColumnActive,
 } from '@/lib/incomeTypeFilingGrid';
 import {
@@ -28,6 +29,7 @@ import {
   type HometaxFiling,
 } from '@/app/utils/filingCheck';
 import {
+  getExtraClientIds,
   getWithholdingExclusionsForYear,
   getWithholdingRowNotesForYear,
 } from '@/lib/taxFilingChecksDb';
@@ -53,14 +55,24 @@ export async function GET(request: NextRequest) {
       mineOnly: !isMasterUser(user),
       userId: user.id,
       userName: user.name,
+      includeChurned: true,
     });
 
     const saved = await listYearEndFilings(year);
     const yearExcluded = await getWithholdingExclusionsForYear(manager, year);
     const rowNotes = await getWithholdingRowNotesForYear(manager, year);
     const yearSimpleFiled = await listSimplePayrollFiledTypesByYear(year);
+    const extraClientIds = await getExtraClientIds(manager, 'yearEnd', String(year));
 
-    const grid = buildYearEndGrid(clients, year, saved, yearExcluded, rowNotes, yearSimpleFiled);
+    const grid = buildYearEndGrid(
+      clients,
+      year,
+      saved,
+      yearExcluded,
+      rowNotes,
+      yearSimpleFiled,
+      extraClientIds,
+    );
 
     const tables: Record<
       YearEndIncomeType,
@@ -148,13 +160,19 @@ export async function POST(request: NextRequest) {
       mineOnly: !isMasterUser(user),
       userId: user.id,
       userName: user.name,
+      includeChurned: true,
     });
 
     let yearExcluded = await getWithholdingExclusionsForYear(effectiveManager, body.year);
     const yearSimpleFiled = await listSimplePayrollFiledTypesByYear(body.year);
     let saved = await listYearEndFilings(body.year);
+    const extraClientIds = await getExtraClientIds(effectiveManager, 'yearEnd', String(body.year));
 
-    const targetClients = filingTargets(clients, 'yearEnd');
+    const targetClients = mergeFilingTargetClients(
+      filingTargets(clients, 'yearEnd'),
+      clients,
+      extraClientIds,
+    );
     const clientByBiz = new Map<string, (typeof targetClients)[0]>();
     for (const c of targetClients) {
       const biz = normalizeBizNo(c.businessNo);
@@ -272,6 +290,7 @@ export async function POST(request: NextRequest) {
       yearExcluded,
       rowNotes,
       yearSimpleFiled,
+      extraClientIds,
     );
     const stats = computeIncomeGridStats(grid, 'yearEnd', manager);
     const unreceivedByColumn = listUnreceivedByColumn(grid, 'yearEnd', manager);

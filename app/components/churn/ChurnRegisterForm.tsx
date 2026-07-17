@@ -80,7 +80,14 @@ export default function ChurnRegisterForm({
           <ChurnClientSearch value={selectedClient} onChange={onClientChange} disabled={saving} />
         </div>
         {selectedClient && (
-          <p className="mt-2 text-sm font-bold text-gray-900">{selectedClient.companyName}</p>
+          <p className="mt-2 text-sm font-bold text-gray-900">
+            {selectedClient.companyName}
+            {selectedClient.representative ? (
+              <span className="ml-1.5 font-medium text-gray-500">
+                · 대표 {selectedClient.representative}
+              </span>
+            ) : null}
+          </p>
         )}
         {existingRecord && (
           <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">

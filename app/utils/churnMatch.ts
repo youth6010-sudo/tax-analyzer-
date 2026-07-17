@@ -6,33 +6,37 @@ type ChurnClientRef = Pick<ClientRecord, 'id' | 'companyName' | 'status'> & {
   churn?: ChurnSummary | null;
   nts?: ClientRecord['nts'];
 };
-/** 수임처에 연결된 유출 이력 — clientId 또는 상호(엑셀 import 등 clientId 미연결) */
+/** 수임처에 연결된 유출 이력 — clientId 우선, clientId 없는(엑셀) 건만 상호로 매칭 */
 export type ChurnRegistrationIndex = {
   clientIds: Set<string>;
-  companyNames: Set<string>;
+  /** clientId 없이 상호만 있는 유출 이력 */
+  orphanCompanyNames: Set<string>;
 };
 
 export function buildChurnRegistrationIndex(
   records: Array<{ clientId?: string | null; companyName?: string | null }>,
 ): ChurnRegistrationIndex {
   const clientIds = new Set<string>();
-  const companyNames = new Set<string>();
+  const orphanCompanyNames = new Set<string>();
   for (const r of records) {
-    if (r.clientId) clientIds.add(r.clientId);
+    const linkedId = (r.clientId ?? '').trim();
+    if (linkedId) {
+      clientIds.add(linkedId);
+      continue;
+    }
     const key = compactSearchText(r.companyName ?? '');
-    if (key) companyNames.add(key);
+    if (key) orphanCompanyNames.add(key);
   }
-  return { clientIds, companyNames };
+  return { clientIds, orphanCompanyNames };
 }
 
 export function clientMatchesChurnRegistration(
   client: Pick<ClientRecord, 'id' | 'companyName' | 'status'>,
   index: ChurnRegistrationIndex,
 ): boolean {
-  if (client.status === 'churned') return true;
   if (index.clientIds.has(client.id)) return true;
   const key = compactSearchText(client.companyName);
-  return key ? index.companyNames.has(key) : false;
+  return key ? index.orphanCompanyNames.has(key) : false;
 }
 
 export function matchChurnRecordForClient(
@@ -45,7 +49,14 @@ export function matchChurnRecordForClient(
   const nameKey = compactSearchText(client.companyName);
   if (!nameKey) return null;
 
-  return records.find(r => compactSearchText(r.companyName) === nameKey) ?? null;
+  // 다른 수임처(clientId 있음)의 동명 이력에는 묶지 않음 — 엑셀 orphan만 상호 매칭
+  return (
+    records.find(r => {
+      const linkedId = (r.clientId ?? '').trim();
+      if (linkedId) return false;
+      return compactSearchText(r.companyName) === nameKey;
+    }) ?? null
+  );
 }
 
 export function clientNeedsChurnBackfill(
@@ -61,9 +72,9 @@ function clientStatusRank(status: ClientStatus): number {
   return 2;
 }
 
-/** 유출 등록 검색: 동일 사업자·식별번호 중복 수임처는 1건만 표시 */
+/** 유출 등록 검색: 동일 사업자·식별번호라도 상호가 다르면 모두 표시 */
 export function dedupeClientsForChurnSearch(clients: ClientRecord[]): ClientRecord[] {
-  const byDupKey = new Map<string, ClientRecord>();
+  const byDupKey = new Map<string, ClientRecord[]>();
   const rest: ClientRecord[] = [];
 
   for (const client of clients) {
@@ -72,24 +83,34 @@ export function dedupeClientsForChurnSearch(clients: ClientRecord[]): ClientReco
       rest.push(client);
       continue;
     }
-    const prev = byDupKey.get(dupKey);
-    if (!prev || clientStatusRank(client.status) < clientStatusRank(prev.status)) {
-      byDupKey.set(dupKey, client);
-    }
+    const list = byDupKey.get(dupKey) ?? [];
+    list.push(client);
+    byDupKey.set(dupKey, list);
   }
 
-  const merged = [...byDupKey.values(), ...rest];
+  const merged: ClientRecord[] = [...rest];
+  for (const group of byDupKey.values()) {
+    const byName = new Map<string, ClientRecord>();
+    for (const client of group) {
+      const nameKey = compactSearchText(client.companyName) || client.id;
+      const prev = byName.get(nameKey);
+      if (!prev || clientStatusRank(client.status) < clientStatusRank(prev.status)) {
+        byName.set(nameKey, client);
+      }
+    }
+    merged.push(...byName.values());
+  }
+
   merged.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
   return merged;
 }
 
-/** 유출 이력이 있거나 이미 유출 상태인 수임처 */
+/** 유출 이력이 등록된 수임처 (상태만 churned인 폐업 건은 미등록으로 봄) */
 export function clientHasChurnRegistration(
   client: ChurnClientRef,
   records: ChurnRecordView[],
 ): boolean {
   if (client.churn) return true;
-  if (client.status === 'churned') return true;
   return clientMatchesChurnRegistration(client, buildChurnRegistrationIndex(records));
 }
 

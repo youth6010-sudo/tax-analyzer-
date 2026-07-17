@@ -692,7 +692,9 @@ function FilingCheckPageInner() {
         setAllClients(portalClients);
       }
 
-      const url = master ? '/api/clients' : '/api/clients?mine=1&scope=filing';
+      const url = master
+        ? '/api/clients?includeChurned=1'
+        : '/api/clients?mine=1&scope=filing&includeChurned=1';
       try {
         const res = await fetch(url, { cache: 'no-store' });
         const d = res.ok ? await res.json() : null;
@@ -1507,11 +1509,17 @@ function FilingCheckPageInner() {
     }
   };
 
-  // 업체 추가 (수임처 검색)
+  // 업체 추가 (수임처 검색) — 폐업·해임 포함. 간이지급·연말정산도 동일
   const [showAdd, setShowAdd] = useState(false);
 
   const addClientFromPicker = (c: ClientRecord) => {
-    if (targets.some(t => t.id === c.id)) {
+    const alreadyInExtras = record.extraClients.some(m => m.id === c.id);
+    if (isIncomeTypeTax) {
+      if (alreadyInExtras) {
+        window.alert('이미 목록에 추가된 업체입니다.');
+        return;
+      }
+    } else if (targets.some(t => t.id === c.id)) {
       window.alert('이미 목록에 있는 업체입니다.');
       return;
     }
@@ -1521,9 +1529,38 @@ function FilingCheckPageInner() {
       businessNo: c.businessNo,
       representative: c.representative || undefined,
     };
-    patchRecord({ extraClients: [...record.extraClients, m] });
+    const nextExtras = alreadyInExtras ? record.extraClients : [...record.extraClients, m];
+    const nextRecord = { ...record, extraClients: nextExtras };
+    setRecord(nextRecord);
     setTargetDisplayOrder(prev => (prev.includes(c.id) ? prev : [...prev, c.id]));
+    void (async () => {
+      await persistSession(nextRecord);
+      if (isIncomeTypeTax) {
+        await incomeSectionRef.current?.reload();
+      }
+    })();
   };
+
+  const clientAddBar =
+    !locked ? (
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowAdd(v => !v)}
+          className={portalBtnSecondary}
+        >
+          {showAdd ? '닫기' : '+ 업체 추가'}
+        </button>
+        {showAdd && (
+          <div className="flex min-w-[16rem] flex-1 flex-wrap items-center gap-2">
+            <FilingCheckClientAdd onSelect={addClientFromPicker} disabled={locked} />
+            <span className="text-xs text-slate-400">
+              폐업·해임 수임처도 검색됩니다. 다음 신고분에도 유지됩니다.
+            </span>
+          </div>
+        )}
+      </div>
+    ) : null;
 
   const removeExtraClient = (id: string) => {
     const overrides = { ...record.overrides };
@@ -2213,6 +2250,7 @@ function FilingCheckPageInner() {
               </span>
             )}
           </div>
+          {clientAddBar}
           <IncomeTypeFilingSection
             ref={incomeSectionRef}
             mode={tax === 'simplePayroll' ? 'simplePayroll' : 'yearEnd'}
@@ -2356,23 +2394,7 @@ function FilingCheckPageInner() {
       )}
 
       {/* 업체 추가 */}
-      {!locked && (
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setShowAdd(v => !v)}
-          className={portalBtnSecondary}
-        >
-          {showAdd ? '닫기' : '+ 업체 추가'}
-        </button>
-        {showAdd && (
-          <div className="flex min-w-[16rem] flex-1 flex-wrap items-center gap-2">
-            <FilingCheckClientAdd onSelect={addClientFromPicker} disabled={locked} />
-            <span className="text-xs text-slate-400">수임처 목록에서 검색해 추가합니다. 다음 신고분에도 유지됩니다.</span>
-          </div>
-        )}
-      </div>
-      )}
+      {clientAddBar}
 
       {/* 대상 목록 */}
       <div className={portalCard}>

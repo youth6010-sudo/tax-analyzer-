@@ -20,6 +20,25 @@ import {
 } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
+/** 기본 신고대상 + 수동 추가(폐업·해임 등) — 중복 제거 */
+export function mergeFilingTargetClients(
+  baseTargets: ClientRecord[],
+  allClients: ClientRecord[],
+  extraClientIds: string[] = [],
+): ClientRecord[] {
+  if (!extraClientIds.length) return baseTargets;
+  const seen = new Set(baseTargets.map(c => c.id));
+  const byId = new Map(allClients.map(c => [c.id, c]));
+  const merged = [...baseTargets];
+  for (const id of extraClientIds) {
+    if (seen.has(id)) continue;
+    const c = byId.get(id);
+    if (!c) continue;
+    seen.add(id);
+    merged.push(c);
+  }
+  return merged;
+}
 
 export type IncomeGridCell = {
   active: boolean;
@@ -117,6 +136,7 @@ export function buildSimplePayrollGrid(
   forceIncluded: Record<string, boolean> = {},
   /** 전월(또는 근로 직전 반기) 접수 완료 — clientId|incomeType */
   prevFiledKeys: ReadonlySet<string> = new Set(),
+  extraClientIds: string[] = [],
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
@@ -124,8 +144,14 @@ export function buildSimplePayrollGrid(
     filed.map(r => [`${r.periodKey ?? monthlyPeriodKey}|${r.clientId}|${r.incomeType}`, r]),
   );
 
+  const targetClients = mergeFilingTargetClients(
+    simplePayrollTargetsForPeriod(clients, meta.month),
+    clients,
+    extraClientIds,
+  );
+
   const grid = sortIncomeGridRows(
-    simplePayrollTargetsForPeriod(clients, meta.month).map(c => {
+    targetClients.map(c => {
       const intakeData = c.intakeData ?? {};
       const whSettings = readWithholdingSettings(intakeData);
       const cells: Record<string, IncomeGridCell> = {};
@@ -289,11 +315,18 @@ export function buildYearEndGrid(
   rowNotes: Record<string, string> = {},
   /** 같은 해 간이지급에서 접수된 유형 (clientId → incomeType set) */
   yearSimplePayrollFiled: Map<string, ReadonlySet<string>> = new Map(),
+  extraClientIds: string[] = [],
 ): IncomeTypeGridRow[] {
   const filedMap = new Map(filed.map(r => [`${r.clientId}|${r.incomeType}`, r]));
 
+  const targetClients = mergeFilingTargetClients(
+    filingTargets(clients, 'yearEnd'),
+    clients,
+    extraClientIds,
+  );
+
   return sortIncomeGridRows(
-    filingTargets(clients, 'yearEnd').map(c => {
+    targetClients.map(c => {
       const incomeTypes = readIncomeTypes(c.intakeData);
       const yearEndTypes = readYearEndTypes(c.intakeData);
       const simpleFiled = yearSimplePayrollFiled.get(c.id);

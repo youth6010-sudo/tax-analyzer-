@@ -12,6 +12,7 @@ import {
 } from '@/lib/simplePayrollFilingsDb';
 import {
   getExcludedClientIds,
+  getExtraClientIds,
   getForceIncludedClientIds,
   getWithholdingRowNotesForPeriod,
 } from '@/lib/taxFilingChecksDb';
@@ -24,6 +25,7 @@ import {
   computeIncomeGridStats,
   listUnreceivedByColumn,
   listUnreceivedCompanyNames,
+  mergeFilingTargetClients,
   simplePayrollPeriodMeta,
 } from '@/lib/incomeTypeFilingGrid';
 import {
@@ -62,10 +64,12 @@ export async function GET(request: NextRequest) {
       mineOnly: !isMasterUser(user),
       userId: user.id,
       userName: user.name,
+      includeChurned: true,
     });
 
     const excluded = await getExcludedClientIds(manager, 'withholding', monthlyPeriodKey);
     const forceIncluded = await getForceIncludedClientIds(manager, monthlyPeriodKey);
+    const extraClientIds = await getExtraClientIds(manager, 'simplePayroll', monthlyPeriodKey);
     const rowNotes = await getWithholdingRowNotesForPeriod(manager, monthlyPeriodKey);
     const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
     const [saved, prevFiledKeys] = await Promise.all([
@@ -80,6 +84,7 @@ export async function GET(request: NextRequest) {
       rowNotes,
       forceIncluded,
       prevFiledKeys,
+      extraClientIds,
     );
 
     return NextResponse.json({
@@ -172,13 +177,19 @@ export async function POST(request: NextRequest) {
       mineOnly: !isMasterUser(user),
       userId: user.id,
       userName: user.name,
+      includeChurned: true,
     });
 
     const manager = body.manager ?? user.name;
     const effectiveManager = manager === '전체' ? user.name : manager;
     let excluded = await getExcludedClientIds(effectiveManager, 'withholding', monthlyKey);
+    const extraClientIds = await getExtraClientIds(effectiveManager, 'simplePayroll', monthlyKey);
 
-    const targetClients = simplePayrollTargetsForPeriod(clients, month);
+    const targetClients = mergeFilingTargetClients(
+      simplePayrollTargetsForPeriod(clients, month),
+      clients,
+      extraClientIds,
+    );
     const clientByBiz = new Map<string, (typeof targetClients)[0]>();
     for (const c of targetClients) {
       const biz = normalizeBizNo(c.businessNo);
@@ -321,6 +332,7 @@ export async function POST(request: NextRequest) {
       rowNotes,
       forceIncluded,
       prevFiledKeys,
+      extraClientIds,
     );
     const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);
     const unreceivedByColumn = listUnreceivedByColumn(grid, 'simplePayroll', manager);

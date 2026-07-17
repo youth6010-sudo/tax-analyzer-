@@ -192,7 +192,16 @@ const protectedKeys = new Set(
 
 const toUpsert = [];
 let skippedManualJune = 0;
+let skippedOutOfRange = 0;
+const allowedPeriods = new Set([
+  ...Array.from({ length: 6 }, (_, i) => `${YEAR}-${String(i + 1).padStart(2, '0')}`),
+  `${YEAR}-H1`,
+]);
 for (const [periodKey, map] of planned) {
+  if (!allowedPeriods.has(periodKey)) {
+    skippedOutOfRange += map.size;
+    continue;
+  }
   for (const item of map.values()) {
     const pk = `${periodKey}|${item.clientId}|${item.incomeType}`;
     if (isJuneProtectedPeriod(periodKey) && protectedKeys.has(pk)) {
@@ -221,6 +230,7 @@ console.log(
       upsertCount: toUpsert.length,
       skippedDirectJune,
       skippedManualJune,
+      skippedOutOfRange,
       skippedNoClient,
       skippedNoType,
       skippedNoPeriod,

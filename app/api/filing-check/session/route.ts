@@ -8,6 +8,8 @@ import {
   upsertFilingCheckSession,
   type FilingCheckSessionData,
 } from '@/lib/taxFilingChecksDb';
+import { filingSessionToTaxDeadlineIds } from '@/lib/filingCheckTaxDeadlineIds';
+import { setTaxDeadlineCheckoff } from '@/lib/taxDeadlineCheckoffs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,6 +43,25 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** 신고대상확인 완료 ↔ 회사일정 세무마감 체크오프 동기화 */
+async function syncCompanyCalendarCheckoffs(
+  manager: string,
+  taxType: string,
+  periodKey: string,
+  wasDone: boolean,
+  nowDone: boolean,
+): Promise<void> {
+  if (manager === '전체' || !manager.trim()) return;
+  if (wasDone === nowDone) return;
+
+  const deadlineIds = filingSessionToTaxDeadlineIds(taxType, periodKey);
+  if (deadlineIds.length === 0) return;
+
+  await Promise.all(
+    deadlineIds.map(id => setTaxDeadlineCheckoff(id, manager.trim(), nowDone)),
+  );
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireUser();
@@ -64,7 +85,13 @@ export async function PUT(request: NextRequest) {
       throw new Error('FORBIDDEN');
     }
 
+    const prev = await getFilingCheckSession(manager, taxType, periodKey);
+    const wasDone = Boolean(prev?.done);
+    const nowDone = Boolean(data.done);
+
     await upsertFilingCheckSession(manager, taxType, periodKey, data, user.id);
+    await syncCompanyCalendarCheckoffs(manager, taxType, periodKey, wasDone, nowDone);
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     return handleApiError(e);

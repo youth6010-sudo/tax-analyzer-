@@ -200,7 +200,7 @@ function readLaborJournal(entry: VatAnnualYearState): Partial<Record<string, boo
 }
 
 /** 연간 분기 칸 짧은 표기 (한 줄 유지) — title에 월 범위 */
-export const BANK_QUARTER_LABELS = ['1Q', '2Q', '3Q', '4Q'] as const;
+export const BANK_QUARTER_LABELS = ['1/4', '2/4', '3/4', '4/4'] as const;
 export const BANK_QUARTER_HINTS = ['1-3월', '4-6월', '7-9월', '10-12월'] as const;
 export const BANK_QUARTER_END_MONTHS = [3, 6, 9, 12] as const;
 

@@ -50,7 +50,7 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
       const ac = new AbortController();
       abortRef.current = ac;
 
-      const params = new URLSearchParams({ q, scope: 'notice' });
+      const params = new URLSearchParams({ q, scope: 'notice', includeChurned: '1' });
       if (!isMaster) params.set('mineOnly', '1');
 
       fetch(`/api/clients/search?${params.toString()}`, { signal: ac.signal })
@@ -71,8 +71,8 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
   }, [query, isMaster]);
 
   const placeholder = isMaster
-    ? '수임처 검색 (업체명·사업자번호·대표자)'
-    : '내 담당 수임처 검색';
+    ? '수임처 검색 (폐업·해임 포함)'
+    : '내 담당 수임처 검색 (폐업·해임 포함)';
 
   return (
     <div ref={rootRef} className="relative min-w-[14rem] flex-1 sm:max-w-md">
@@ -107,8 +107,13 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
                   setOpen(false);
                 }}
               >
-                <span className="text-sm font-semibold text-slate-800">
+                <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                   {c.companyName || '(상호 없음)'}
+                  {c.status === 'churned' ? (
+                    <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                      해임
+                    </span>
+                  ) : null}
                 </span>
                 <span className="text-[11px] text-slate-500">
                   {[c.businessNo, c.representative, c.manager].filter(Boolean).join(' · ')}

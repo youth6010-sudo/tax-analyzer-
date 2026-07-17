@@ -100,6 +100,14 @@ function ClientsPageContent() {
 
   const state: ClientsListState = urlState;
 
+  /** 검색어는 로컬 draft — URL 매 키입력 sync는 IME(한글) 조합을 깨뜨림 */
+  const [qDraft, setQDraft] = useState(state.q);
+  const composingRef = useRef(false);
+
+  useEffect(() => {
+    if (!composingRef.current) setQDraft(state.q);
+  }, [state.q]);
+
   useEffect(() => {
     hydratePortal();
   }, []);
@@ -346,7 +354,7 @@ function ClientsPageContent() {
   }, [state.scroll]);
 
   const listBeforeCategoryFilter = useMemo(() => {
-    const q = state.q.trim();
+    const q = qDraft.trim();
     let list: ClientRecord[];
 
     if (!q) {
@@ -385,7 +393,7 @@ function ClientsPageContent() {
     }
 
     return list;
-  }, [clients, state.q, state.manager]);
+  }, [clients, qDraft, state.manager]);
 
   const filtered = useMemo(() => {
     if (state.categoryFilters.length === 0) return listBeforeCategoryFilter;
@@ -533,8 +541,23 @@ function ClientsPageContent() {
       <div className={`${portalCard} shrink-0 flex flex-wrap items-center gap-2 p-2.5 mb-2`}>
         <input
           type="search"
-          value={state.q}
-          onChange={e => updateState({ q: e.target.value })}
+          value={qDraft}
+          onChange={e => {
+            const v = e.target.value;
+            setQDraft(v);
+            const ne = e.nativeEvent as InputEvent;
+            if (ne.isComposing || composingRef.current) return;
+            updateState({ q: v });
+          }}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={e => {
+            composingRef.current = false;
+            const v = e.currentTarget.value;
+            setQDraft(v);
+            updateState({ q: v });
+          }}
           placeholder="업체·대표·번호·담당자 검색"
           className={`${portalInput} !py-1.5 flex-1 min-w-[10rem] max-w-sm text-sm`}
         />
