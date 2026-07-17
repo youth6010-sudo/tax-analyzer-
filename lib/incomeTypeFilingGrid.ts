@@ -7,6 +7,7 @@ import {
 } from '@/app/types/incomeTypes';
 import type { ClientIncomeTypes, IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import { filingTargets, simplePayrollTargetsForPeriod } from '@/app/utils/filingCheck';
+import { isClosureReviewClient } from '@/app/utils/clientClosure';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
 import {
@@ -20,20 +21,28 @@ import {
 } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
-/** 기본 신고대상 + 수동 추가(폐업·해임 등) — 중복 제거 */
+/** 기본 신고대상 + 수동 추가 — 기본 목록에서 폐업·해임 제외, 접수가 있는 폐업·해임·수동추가는 유지 */
 export function mergeFilingTargetClients(
   baseTargets: ClientRecord[],
   allClients: ClientRecord[],
   extraClientIds: string[] = [],
+  opts?: { filedClientIds?: ReadonlySet<string> },
 ): ClientRecord[] {
-  if (!extraClientIds.length) return baseTargets;
-  const seen = new Set(baseTargets.map(c => c.id));
+  const filedIds = opts?.filedClientIds;
+  const base = baseTargets.filter(c => {
+    if (!isClosureReviewClient(c)) return true;
+    // 폐업·해임: 이번 기간 접수(filed)가 있을 때만 기본 병합
+    return filedIds?.has(c.id) ?? false;
+  });
+  const seen = new Set(base.map(c => c.id));
   const byId = new Map(allClients.map(c => [c.id, c]));
-  const merged = [...baseTargets];
+  const merged = [...base];
   for (const id of extraClientIds) {
     if (seen.has(id)) continue;
     const c = byId.get(id);
     if (!c) continue;
+    // 수동 추가 폐업·해임: 접수 없으면 제외
+    if (isClosureReviewClient(c) && !(filedIds?.has(c.id))) continue;
     seen.add(id);
     merged.push(c);
   }
@@ -144,10 +153,15 @@ export function buildSimplePayrollGrid(
     filed.map(r => [`${r.periodKey ?? monthlyPeriodKey}|${r.clientId}|${r.incomeType}`, r]),
   );
 
+  const filedClientIds = new Set(
+    filed.filter(r => r.filed).map(r => r.clientId),
+  );
+
   const targetClients = mergeFilingTargetClients(
     simplePayrollTargetsForPeriod(clients, meta.month),
     clients,
     extraClientIds,
+    { filedClientIds },
   );
 
   const grid = sortIncomeGridRows(
@@ -318,11 +332,13 @@ export function buildYearEndGrid(
   extraClientIds: string[] = [],
 ): IncomeTypeGridRow[] {
   const filedMap = new Map(filed.map(r => [`${r.clientId}|${r.incomeType}`, r]));
+  const filedClientIds = new Set(filed.filter(r => r.filed).map(r => r.clientId));
 
   const targetClients = mergeFilingTargetClients(
     filingTargets(clients, 'yearEnd'),
     clients,
     extraClientIds,
+    { filedClientIds },
   );
 
   return sortIncomeGridRows(

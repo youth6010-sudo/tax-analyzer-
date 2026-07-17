@@ -67,6 +67,7 @@ import {
 } from '@/app/utils/filingCheck';
 import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
+import { isClosureReviewClient } from '@/app/utils/clientClosure';
 import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
 import {
   formatResidentNoDisplay,
@@ -313,6 +314,25 @@ function resolveExtraClients(
     out.push(full ?? manualToClient(m));
   }
   return out;
+}
+
+/** 폐업·해임 — 접수목록(엑셀)에 없으면 신고대상확인 기본 목록에서 숨김 */
+function shouldShowClosedOrChurnedClient(
+  c: ClientRecord,
+  excelBizSet: Set<string>,
+  isExtra: boolean,
+): boolean {
+  if (!isClosureReviewClient(c)) return true;
+  const biz = normalizeBizNo(c.businessNo);
+  if (excelBizSet.size > 0) {
+    return biz.length === 10 && excelBizSet.has(biz);
+  }
+  // 접수목록 업로드 전: 수동 추가(extra)만 허용
+  return isExtra;
+}
+
+function clientManagerKey(c: ClientRecord): string {
+  return c.manager?.trim() || UNCategorized;
 }
 
 /** 신고유형 — 당월 / 전월 (레거시 차월 → 전월) */
@@ -828,12 +848,24 @@ function FilingCheckPageInner() {
   };
 
   // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
+  // 폐업·해임은 기본 제외 (접수목록 매칭·수동 추가는 targets에서 별도 병합)
   const taxTargetsAll = useMemo(() => {
-    if (tax === 'withholding') return withholdingTargetsForPeriod(clients, period.month);
-    if (tax === 'simplePayroll') return simplePayrollTargetsForPeriod(clients, period.month);
-    if (tax === 'vat') return filingTargets(clients, 'vat', { vatPhase: period.vatPhase });
-    return filingTargets(clients, tax);
+    const raw =
+      tax === 'withholding'
+        ? withholdingTargetsForPeriod(clients, period.month)
+        : tax === 'simplePayroll'
+          ? simplePayrollTargetsForPeriod(clients, period.month)
+          : tax === 'vat'
+            ? filingTargets(clients, 'vat', { vatPhase: period.vatPhase })
+            : filingTargets(clients, tax);
+    return raw.filter(c => !isClosureReviewClient(c));
   }, [clients, tax, period.month, period.vatPhase]);
+
+  const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
+  const extraClientIds = useMemo(
+    () => new Set(record.extraClients.map(m => m.id)),
+    [record.extraClients],
+  );
 
   const periodCompare = useMemo(() => {
     if (!prevSession) return null;
@@ -844,7 +876,14 @@ function FilingCheckPageInner() {
     const prevP = parsePeriodKey(tax, prevPk);
 
     if (tax === 'withholding') {
-      return compareWithholdingMonths(clients, prevSession, record, prevP.month, period.month);
+      // 담당자별 세션·수임처만 전월 대비 (전체 업체 비교 시 타 담당이 '신규'로 뜸)
+      return compareWithholdingMonths(
+        scopeByManager(taxTargetsAll),
+        prevSession,
+        record,
+        prevP.month,
+        period.month,
+      );
     }
     if (tax === 'simplePayroll') {
       const prevTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, prevP.month));
@@ -977,7 +1016,7 @@ function FilingCheckPageInner() {
     const scoped =
       selManager === ALL_MANAGERS
         ? taxTargetsAll
-        : taxTargetsAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager);
+        : taxTargetsAll.filter(c => clientManagerKey(c) === selManager);
     const ordered =
       selManager === ALL_MANAGERS
         ? applyManagerScopedClientOrder(
@@ -988,12 +1027,27 @@ function FilingCheckPageInner() {
             managerOrder,
           )
         : applyFilingCheckClientOrder(scoped, clientListSort, selManager, orderTaxKey);
-    const manual = resolveExtraClients(
-      record.extraClients,
-      clients,
-      new Set(ordered.map(c => c.id)),
-    );
-    return [...ordered, ...manual];
+    const seen = new Set(ordered.map(c => c.id));
+
+    // 접수목록에 있는 폐업·해임 — 담당자 스코프 내에서만 병합
+    const closedWithReceipt: ClientRecord[] = [];
+    if (excelSet.size > 0) {
+      for (const c of clients) {
+        if (seen.has(c.id) || !isClosureReviewClient(c)) continue;
+        if (selManager !== ALL_MANAGERS && clientManagerKey(c) !== selManager) continue;
+        const biz = normalizeBizNo(c.businessNo);
+        if (biz.length !== 10 || !excelSet.has(biz)) continue;
+        closedWithReceipt.push(c);
+        seen.add(c.id);
+      }
+    }
+
+    const manual = resolveExtraClients(record.extraClients, clients, seen).filter(c => {
+      if (selManager !== ALL_MANAGERS && clientManagerKey(c) !== selManager) return false;
+      return shouldShowClosedOrChurnedClient(c, excelSet, true);
+    });
+
+    return [...ordered, ...closedWithReceipt, ...manual];
   }, [
     taxTargetsAll,
     selManager,
@@ -1003,9 +1057,9 @@ function FilingCheckPageInner() {
     orderTaxKey,
     clientOrderVersion,
     clients,
+    excelSet,
   ]);
 
-  const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const isReceived = (id: string, bizNo: string) =>
     record.overrides[id] ?? excelSet.has(normalizeBizNo(bizNo));
 
@@ -1089,10 +1143,6 @@ function FilingCheckPageInner() {
     [comprehensiveGroups, record.excluded, tax],
   );
 
-  const extraClientIds = useMemo(
-    () => new Set(record.extraClients.map(m => m.id)),
-    [record.extraClients],
-  );
   const isExtraAdded = (id: string) => extraClientIds.has(id);
 
   const vatProvisional = tax === 'vat' && isVatProvisionalPhase(period.vatPhase);
@@ -1651,8 +1701,13 @@ function FilingCheckPageInner() {
       }
 
       const fileBizSet = new Set(bizNos.filter(b => b.length === 10));
+      // 현재 담당자 수임처만 매칭 — 타 담당 업체가 extraClients로 섞이지 않게
+      const managerScopedClients =
+        selManager === ALL_MANAGERS
+          ? clients
+          : clients.filter(c => clientManagerKey(c) === selManager);
       const clientByBiz = new Map<string, ClientRecord>();
-      for (const c of clients) {
+      for (const c of managerScopedClients) {
         const b = normalizeBizNo(c.businessNo);
         if (b.length === 10 && !clientByBiz.has(b)) clientByBiz.set(b, c);
       }
@@ -1662,7 +1717,13 @@ function FilingCheckPageInner() {
       );
       const nextExcluded = { ...record.excluded };
       const nextForce = { ...(record.forceIncluded ?? {}) };
-      const nextExtra = [...record.extraClients];
+      // 타 담당으로 잘못 들어간 extra 정리
+      const nextExtra = record.extraClients.filter(m => {
+        const full = clients.find(c => c.id === m.id);
+        if (!full) return selManager === ALL_MANAGERS;
+        if (selManager === ALL_MANAGERS) return true;
+        return clientManagerKey(full) === selManager;
+      });
       const nextOrder = [...targetDisplayOrder];
       const added: string[] = [];
 
@@ -1688,7 +1749,8 @@ function FilingCheckPageInner() {
         }
         const alreadyTarget =
           targets.some(t => t.id === client.id) || nextExtra.some(e => e.id === client.id);
-        if (!alreadyTarget) {
+        // 「전체」세션에는 extra 적재하지 않음 — 담당자별 세션에서만 추가
+        if (!alreadyTarget && selManager !== ALL_MANAGERS) {
           nextExtra.push({
             id: client.id,
             companyName: client.companyName,

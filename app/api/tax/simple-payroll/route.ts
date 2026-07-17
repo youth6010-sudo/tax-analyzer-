@@ -36,6 +36,7 @@ import {
   type HometaxFiling,
 } from '@/app/utils/filingCheck';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
+import { UNCategorized } from '@/app/utils/clientsGrouping';
 
 function apiError(e: unknown) {
   if (e instanceof Error && e.message === 'UNAUTHORIZED') {
@@ -185,23 +186,39 @@ export async function POST(request: NextRequest) {
     let excluded = await getExcludedClientIds(effectiveManager, 'withholding', monthlyKey);
     const extraClientIds = await getExtraClientIds(effectiveManager, 'simplePayroll', monthlyKey);
 
-    const targetClients = mergeFilingTargetClients(
-      simplePayrollTargetsForPeriod(clients, month),
-      clients,
-      extraClientIds,
-    );
-    const clientByBiz = new Map<string, (typeof targetClients)[0]>();
-    for (const c of targetClients) {
-      const biz = normalizeBizNo(c.businessNo);
-      if (biz.length === 10 && !clientByBiz.has(biz)) clientByBiz.set(biz, c);
-    }
-
     const { map: filingTypeMap, unmappedRows, parsedRows } = buildSimplePayrollFilingTypeMap(filings);
     const fileBizSet = new Set(
       filings.length > 0
         ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
         : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
     );
+
+    // 담당자 스코프로만 매칭 — 타 담당·접수 없는 폐업·해임이 섞이지 않게
+    const managerScoped =
+      manager === '전체'
+        ? clients
+        : clients.filter(c => (c.manager?.trim() || UNCategorized) === effectiveManager);
+    const receiptClientIds = new Set(
+      managerScoped
+        .filter(c => {
+          const biz = normalizeBizNo(c.businessNo);
+          return biz.length === 10 && fileBizSet.has(biz);
+        })
+        .map(c => c.id),
+    );
+
+    const targetClients = mergeFilingTargetClients(
+      simplePayrollTargetsForPeriod(clients, month),
+      clients,
+      extraClientIds,
+      { filedClientIds: receiptClientIds },
+    );
+    const clientByBiz = new Map<string, (typeof targetClients)[0]>();
+    for (const c of managerScoped) {
+      const biz = normalizeBizNo(c.businessNo);
+      if (biz.length === 10 && !clientByBiz.has(biz)) clientByBiz.set(biz, c);
+    }
+
     const uploadNameByBiz = new Map<string, string>();
     for (const f of filings) {
       const biz = normalizeBizNo(f.bizNo);

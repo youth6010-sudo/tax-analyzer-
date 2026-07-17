@@ -28,6 +28,7 @@ import {
   normalizeBizNo,
   type HometaxFiling,
 } from '@/app/utils/filingCheck';
+import { UNCategorized } from '@/app/utils/clientsGrouping';
 import {
   getExtraClientIds,
   getWithholdingExclusionsForYear,
@@ -168,23 +169,38 @@ export async function POST(request: NextRequest) {
     let saved = await listYearEndFilings(body.year);
     const extraClientIds = await getExtraClientIds(effectiveManager, 'yearEnd', String(body.year));
 
-    const targetClients = mergeFilingTargetClients(
-      filingTargets(clients, 'yearEnd'),
-      clients,
-      extraClientIds,
-    );
-    const clientByBiz = new Map<string, (typeof targetClients)[0]>();
-    for (const c of targetClients) {
-      const biz = normalizeBizNo(c.businessNo);
-      if (biz.length === 10 && !clientByBiz.has(biz)) clientByBiz.set(biz, c);
-    }
-
     const { map: filingTypeMap, unmappedRows, parsedRows } = buildYearEndFilingTypeMap(filings);
     const fileBizSet = new Set(
       filings.length > 0
         ? filings.map(f => normalizeBizNo(f.bizNo)).filter(b => b.length === 10)
         : (body.bizNos ?? []).map(b => b.replace(/\D/g, '')).filter(b => b.length === 10),
     );
+
+    const managerScoped =
+      manager === '전체'
+        ? clients
+        : clients.filter(c => (c.manager?.trim() || UNCategorized) === effectiveManager);
+    const receiptClientIds = new Set(
+      managerScoped
+        .filter(c => {
+          const biz = normalizeBizNo(c.businessNo);
+          return biz.length === 10 && fileBizSet.has(biz);
+        })
+        .map(c => c.id),
+    );
+
+    const targetClients = mergeFilingTargetClients(
+      filingTargets(clients, 'yearEnd'),
+      clients,
+      extraClientIds,
+      { filedClientIds: receiptClientIds },
+    );
+    const clientByBiz = new Map<string, (typeof targetClients)[0]>();
+    for (const c of managerScoped) {
+      const biz = normalizeBizNo(c.businessNo);
+      if (biz.length === 10 && !clientByBiz.has(biz)) clientByBiz.set(biz, c);
+    }
+
     const uploadNameByBiz = new Map<string, string>();
     for (const f of filings) {
       const biz = normalizeBizNo(f.bizNo);
