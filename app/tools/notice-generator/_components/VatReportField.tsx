@@ -406,7 +406,7 @@ export default function VatReportField({ value, onChange, embedded = false }: Pr
           </b>{' '}
           ({isPay ? '납부' : '환급'})
           <span className="ml-1 text-slate-400">
-            = 매출세액 − 공제매입세액 − 경감세액 − 예정고지 + 가산세액
+            = 매출세액 − 공제매입세액 − 경감세액 − 예정고지 + 가산세액 (원단위 절사)
           </span>
         </p>
       </div>

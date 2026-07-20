@@ -905,9 +905,15 @@ function coverageRangeText(deadline: DeadlineResult | null): string {
   return `${start} ~ ${end}`;
 }
 
-// 원(₩) 금액을 천 단위 콤마 + "원"으로 표기 (절댓값 기준)
+// 원단위 절사 (10원 미만 버림). 음수(환급)도 절댓값 기준 절사 후 부호 유지.
+export function truncateWonUnit(n: number): number {
+  const x = Math.round(Number(n) || 0);
+  return Math.trunc(x / 10) * 10;
+}
+
+// 원(₩) 금액을 천 단위 콤마 + "원"으로 표기 (원단위 절사·절댓값)
 function formatWon(n: number): string {
-  return `${Math.abs(Math.round(n)).toLocaleString('ko-KR')} 원`;
+  return `${Math.abs(truncateWonUnit(n)).toLocaleString('ko-KR')} 원`;
 }
 
 // 부가세를 제외한 세목(원천세·종소세·법인세)은 지방소득세가 별도로 부과된다.
@@ -971,7 +977,10 @@ function buildVatInstallmentBody({
   const dash = noticeDash;
   const installments = payment.installments;
   const attachText = formatAttachText(payment);
-  const total = installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
+  const total = installments.reduce(
+    (s, it) => s + Math.max(0, truncateWonUnit(it.amount || 0)),
+    0,
+  );
 
   const parts: string[] = [];
   parts.push(
@@ -1015,8 +1024,8 @@ export function buildPaymentNoticeTokens({
   const dueDate = deadline ? escapeHtml(formatDottedDate(deadline.final)) : '';
   const slips = Math.max(0, Math.round(payment.slips || 0));
   const hasLocal = hasLocalIncomeTax(taxType);
-  const main = Math.round(payment.amount || 0);
-  const local = hasLocal ? Math.round(payment.localAmount || 0) : 0;
+  const main = truncateWonUnit(payment.amount || 0);
+  const local = hasLocal ? truncateWonUnit(payment.localAmount || 0) : 0;
 
   const empty = {
     '{귀속}': belong,
@@ -1042,7 +1051,10 @@ export function buildPaymentNoticeTokens({
   if (taxType === TAX_TYPES.VAT && slips >= 2 && payment.installments.length >= 2) {
     const attachText = formatAttachText(payment);
     const body = buildVatInstallmentBody({ belong, name, payment, dueDate });
-    const total = payment.installments.reduce((s, it) => s + Math.max(0, Math.round(it.amount || 0)), 0);
+    const total = payment.installments.reduce(
+      (s, it) => s + Math.max(0, truncateWonUnit(it.amount || 0)),
+      0,
+    );
     const 회차 = payment.installments
       .map((it, i) => {
         const dateText = isoToDottedDate(it.date) || '(일자 미입력)';
@@ -1071,7 +1083,7 @@ export function buildPaymentNoticeTokens({
         .filter(i => i.enabled)
         .map(i => ({
           name: WITHHOLDING_ITEM_LABELS[i.key],
-          amount: Math.round(i.amount || 0),
+          amount: truncateWonUnit(i.amount || 0),
         }));
       whItems.push({ name: '지방소득세', amount: local });
       return whItems;
@@ -1238,8 +1250,10 @@ export function calcVatReport(report: VatReport) {
   );
   const preliminaryNotice = Math.round(report.preliminaryNoticeAmount || 0);
   const penalty = Math.round(report.penaltyAmount || 0);
-  // 납부세액 = 매출세액 − 공제매입세액 − 경감세액 − 예정고지 + 가산세액
-  const finalTax = salesVat - deductibleBuyVat - reduction - preliminaryNotice + penalty;
+  // 납부세액 = 매출세액 − 공제매입세액 − 경감세액 − 예정고지 + 가산세액 (원단위 절사)
+  const finalTax = truncateWonUnit(
+    salesVat - deductibleBuyVat - reduction - preliminaryNotice + penalty,
+  );
 
   return {
     salesSupply,

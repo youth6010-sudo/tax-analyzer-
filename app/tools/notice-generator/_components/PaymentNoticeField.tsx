@@ -7,6 +7,7 @@ import {
   usesWithholdingBreakdown,
   WITHHOLDING_ITEM_LABELS,
 } from '../_lib/withholdingItems';
+import { truncateWonUnit } from '../_lib/templates';
 import { noticeInput, noticeLabel, noticeSection, noticeSectionTitle } from './noticeUi';
 
 const inputClass = `${noticeInput} w-full min-w-0 max-w-full box-border`;
@@ -134,8 +135,14 @@ export default function PaymentNoticeField({
     : useInstallments
       ? value.installments.map(i => i.amount)
       : [value.amount, local];
-  const payTotal = amounts.filter(n => n > 0).reduce((s, n) => s + n, 0);
-  const refundTotal = amounts.filter(n => n < 0).reduce((s, n) => s + Math.abs(n), 0);
+  const payTotal = amounts
+    .map(truncateWonUnit)
+    .filter(n => n > 0)
+    .reduce((s, n) => s + n, 0);
+  const refundTotal = amounts
+    .map(truncateWonUnit)
+    .filter(n => n < 0)
+    .reduce((s, n) => s + Math.abs(n), 0);
   const hasRefund = refundTotal > 0;
 
   // 분납 회차 날짜 입력은 자유 타이핑을 위해 로컬 텍스트 상태로 관리
