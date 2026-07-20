@@ -546,7 +546,40 @@ export function normalizeHtmlForClipboard(html: string): string {
       clone.querySelectorAll('[style]').forEach(node => {
         const cell = node as HTMLElement;
         const t = cell.tagName.toLowerCase();
-        if (t === 'td' || t === 'th') return; // 표 셀 배경 유지
+        if (t === 'td' || t === 'th') {
+          // 흰·밝은 글씨 → 본문색으로 (바깥 wrapper color에 덮이거나 검게 보이는 문제 방지)
+          const raw = (cell.style.color || '').replace(/\s/g, '').toLowerCase();
+          if (
+            !raw ||
+            raw === '#fff' ||
+            raw === '#ffffff' ||
+            raw === 'white' ||
+            raw === 'rgb(255,255,255)' ||
+            raw === '#f8fafc' ||
+            raw === '#f1f5f9'
+          ) {
+            cell.style.color = NOTICE_TEXT_COLOR;
+          }
+          // 제목행이 어두운 배경이면 연한 회색+진한 글자로 교정 (붙여넣기 안정)
+          if (t === 'th') {
+            const bg = (cell.style.backgroundColor || cell.style.background || '')
+              .replace(/\s/g, '')
+              .toLowerCase();
+            if (
+              bg.includes('334155') ||
+              bg.includes('1e293b') ||
+              bg.includes('0f172a') ||
+              bg.includes('002d62') ||
+              bg === 'rgb(51,65,85)' ||
+              bg === 'rgb(15,23,42)'
+            ) {
+              cell.style.background = '#e2e8f0';
+              cell.style.backgroundColor = '#e2e8f0';
+              cell.style.color = NOTICE_TEXT_COLOR;
+            }
+          }
+          return;
+        }
         cell.style.removeProperty('background');
         cell.style.removeProperty('background-color');
         cell.style.removeProperty('background-image');
@@ -1224,7 +1257,7 @@ export function calcVatReport(report: VatReport) {
 }
 
 // 입력값을 그대로 보여주는 신고 결과 요약 표(HTML).
-// 0은 '-'로 표기하고, 관련 항목끼리 색으로 구분한다.
+// 0은 '-'로 표기. 색은 연한 배경+진한 글자만 사용 (흰 글씨 금지 — 서식 복사 시 상속색에 덮임).
 function vatSummaryTable(
   report: VatReport,
   calc: ReturnType<typeof calcVatReport>,
@@ -1232,14 +1265,21 @@ function vatSummaryTable(
 ): string {
   const num = (n: number) => (n ? Math.round(n).toLocaleString('ko-KR') : '-');
   const numZero = (n: number) => Math.round(n || 0).toLocaleString('ko-KR');
-  const border = '1px solid #e5e7eb';
+  const border = '1px solid #cbd5e1';
+  const text = '#1e293b';
+  const muted = '#334155';
   const cellBase =
-    'border:' + border + ';padding:7px 10px;font-size:12px;line-height:1.4;vertical-align:middle;';
+    'border:' +
+    border +
+    ';padding:7px 10px;font-size:12px;line-height:1.45;vertical-align:middle;';
 
   type RowOpts = { bg?: string; color?: string; bold?: boolean; indent?: boolean };
   const row = (label: string, supply: string, vat: string, opts: RowOpts = {}) => {
-    const { bg = '#ffffff', color = '#334155', bold = false, indent = false } = opts;
-    const style = `${cellBase}background:${bg};color:${color};${bold ? 'font-weight:bold;' : ''}`;
+    const { bg = '#ffffff', color = muted, bold = false, indent = false } = opts;
+    // background + background-color 둘 다 — 한글·워드 붙여넣기 호환
+    const style =
+      `${cellBase}background:${bg};background-color:${bg};color:${color};` +
+      `${bold ? 'font-weight:bold;' : ''}`;
     const pad = indent ? 'padding-left:18px;' : '';
     const nowrap = 'white-space:nowrap;';
     return (
@@ -1251,14 +1291,13 @@ function vatSummaryTable(
     );
   };
 
-  const th = (text: string) =>
-    `<th style="${cellBase}background:#334155;color:#ffffff;font-weight:bold;text-align:center;white-space:nowrap;">${text}</th>`;
+  // 제목행: 연한 회색 배경 + 진한 글자 (흰 글씨면 서식 복사 때 본문색으로 검게 덮임)
+  const th = (label: string) =>
+    `<th style="${cellBase}background:#e2e8f0;background-color:#e2e8f0;color:${text};font-weight:bold;text-align:center;white-space:nowrap;">${escapeHtml(label)}</th>`;
 
-  // 색상 그룹: 매출(파랑) / 매입(주황) / 경감(보라) / 최종(납부 핑크·환급 초록)
-  const finalBg = calc.finalTax >= 0 ? '#ffe4e6' : '#d1fae5';
-  const finalColor = calc.finalTax >= 0 ? '#be123c' : '#047857';
+  const finalBg = calc.finalTax >= 0 ? '#fef2f2' : '#ecfdf5';
+  const finalColor = calc.finalTax >= 0 ? '#9f1239' : '#065f46';
 
-  // 매입 세부 항목 중 값이 입력된 것만 표에 노출
   const buySubRows = (
     [
       { label: '└ 세금계산서', s: report.taxInvoiceSupply, v: report.taxInvoiceVat },
@@ -1267,45 +1306,35 @@ function vatSummaryTable(
     ] as const
   )
     .filter(x => Math.round(x.s || 0) !== 0 || Math.round(x.v || 0) !== 0)
-    .map(x =>
-      row(x.label, num(x.s), num(x.v), { bg: '#fff7ed', color: '#9a3412', indent: true }),
-    )
+    .map(x => row(x.label, num(x.s), num(x.v), { bg: '#f8fafc', color: muted, indent: true }))
     .join('');
 
   const reductionRows = (calc.reductionItems ?? [])
     .filter(it => Math.round(it.amount || 0) !== 0)
     .map(it => {
       const name = (it.label || '').trim();
-      return row(
-        name || '-',
-        '-',
-        num(it.amount),
-        { bg: '#ede9fe', color: '#6d28d9' },
-      );
+      return row(name || '-', '-', num(it.amount), { bg: '#f8fafc', color: muted });
     })
     .join('');
 
   const preliminaryRow =
     calc.preliminaryNotice !== 0
-      ? row('예정고지', '-', num(calc.preliminaryNotice), {
-          bg: '#e0e7ff',
-          color: '#3730a3',
-        })
+      ? row('예정고지', '-', num(calc.preliminaryNotice), { bg: '#f8fafc', color: muted })
       : '';
 
   const nonDeductibleRows = (report.nonDeductibleItems ?? [])
     .filter(it => Math.round(it.vat || 0) !== 0)
     .map(it => {
       const reason = (it.reason || '').trim();
-      return row(reason || '-', '-', num(it.vat), { bg: '#fef3c7', color: '#b45309', indent: true });
+      return row(reason || '-', '-', num(it.vat), { bg: '#f8fafc', color: muted, indent: true });
     })
     .join('');
 
   const deductibleBuyRow =
     calc.nonDeductibleVat > 0
       ? row('공제 매입세액 합계', '-', numZero(calc.deductibleBuyVat), {
-          bg: '#ffedd5',
-          color: '#c2410c',
+          bg: '#fff7ed',
+          color: text,
           bold: true,
           indent: true,
         })
@@ -1314,42 +1343,38 @@ function vatSummaryTable(
   const penaltyName = (report.penaltyLabel || '').trim();
   const penaltyRow =
     Math.round(report.penaltyAmount || 0) !== 0
-      ? row(
-          penaltyName || '-',
-          '-',
-          num(report.penaltyAmount),
-          { bg: '#fee2e2', color: '#b91c1c' },
-        )
+      ? row(penaltyName || '-', '-', num(report.penaltyAmount), {
+          bg: '#f8fafc',
+          color: muted,
+        })
       : '';
 
   const customRows = (report.customSummaryRows ?? [])
-    .filter(it =>
-      (it.label || '').trim() ||
-      Math.round(it.supply || 0) !== 0 ||
-      Math.round(it.vat || 0) !== 0,
+    .filter(
+      it =>
+        (it.label || '').trim() ||
+        Math.round(it.supply || 0) !== 0 ||
+        Math.round(it.vat || 0) !== 0,
     )
     .map(it => {
       const label = (it.label || '').trim();
-      return row(label || '-', num(it.supply), num(it.vat), {
-        bg: '#f8fafc',
-        color: '#475569',
-      });
+      return row(label || '-', num(it.supply), num(it.vat), { bg: '#ffffff', color: muted });
     })
     .join('');
 
   return (
-    `<table style="border-collapse:collapse;table-layout:fixed;width:100%;max-width:500px;display:table;float:none;clear:both;margin:6px 0;font-size:12px;">` +
+    `<table style="border-collapse:collapse;table-layout:fixed;width:100%;max-width:500px;display:table;float:none;clear:both;margin:6px 0;font-size:12px;color:${muted};">` +
     `<colgroup><col style="width:40%;"><col style="width:30%;"><col style="width:30%;"></colgroup>` +
     `<thead><tr>${th('구분')}${th('공급가')}${th('부가세(세액)')}</tr></thead>` +
     `<tbody>` +
     row('매출 합계', num(report.salesSupply), num(report.salesVat), {
-      bg: '#dbeafe',
-      color: '#1d4ed8',
+      bg: '#eff6ff',
+      color: text,
       bold: true,
     }) +
     row('매입 합계', numZero(calc.buySupply), numZero(calc.buyVat), {
-      bg: '#fed7aa',
-      color: '#c2410c',
+      bg: '#fff7ed',
+      color: text,
       bold: true,
     }) +
     buySubRows +
