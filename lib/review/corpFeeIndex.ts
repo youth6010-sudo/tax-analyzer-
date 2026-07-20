@@ -16,7 +16,7 @@ import {
   listReviewPatches,
   type ReviewNewRowInput,
 } from '@/lib/review/reviewGridDb';
-const FEE_STAFF_ORDER = ['블루', '다야', '윈터', '리아', '페리', '인디'] as const;
+const FEE_STAFF_ORDER = ['블루', '다야', '윈터', '리아', '페리', '인디', '찰리'] as const;
 const FEE_SEGMENT_GAP = 10;
 
 const REVENUE_COL_LAST_YEAR = 5;

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isDataViewer, requireUser } from '@/lib/auth';
+import { assertCanAccessClient, canEditVatFilingFee } from '@/lib/clientAccess';
+import { canUseIndieFeatures } from '@/lib/masterAccess';
 import { getClientById, listClients, updateClientDetail } from '@/lib/clientsDb';
 import { listSimplePayrollFilingsByKeys } from '@/lib/simplePayrollFilingsDb';
 import { listYearEndFilings } from '@/lib/yearEndFilingsDb';
-import { loadFilingCheckSessionWithCarry } from '@/lib/taxFilingChecksDb';
+import { loadFilingCheckSessionWithCarry, loadFilingCheckSessionsForTargetList } from '@/lib/taxFilingChecksDb';
 import { simplePayrollMonthlyPeriodKey, simplePayrollPeriodKeysForYear } from '@/lib/periodUtils';
 import { getClientCategoryForFilter, getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import {
@@ -20,6 +22,8 @@ import { YEAR_END_INCOME_KEYS, type YearEndIncomeKey } from '@/app/types/incomeT
 import {
   readVatMaterialFlags,
   readVatPeriodProgress,
+  readVatFilingFee,
+  mergeVatFilingFeePatch,
   summarizeVatPeriodProgress,
   vatProgressPeriodKey,
   type VatMaterialFlags,
@@ -183,7 +187,7 @@ function laborStatusForClient(
   return out;
 }
 
-/** 신고대상확인(부가세) 세션 — 담당자별 (직전 완료분 제외·추가 승계 포함) */
+/** 신고대상확인(부가세) 세션 — 담당자별 일괄 로드 */
 async function loadVatFilingSessions(
   managers: string[],
   year: number,
@@ -195,18 +199,8 @@ async function loadVatFilingSessions(
     vatPhase: phase,
     half: 'H1',
   });
-  const map = new Map<
-    string,
-    Awaited<ReturnType<typeof loadFilingCheckSessionWithCarry>>['data']
-  >();
   const uniqueManagers = [...new Set(managers.map(m => m.trim()).filter(Boolean))];
-  await Promise.all(
-    uniqueManagers.map(async manager => {
-      const loaded = await loadFilingCheckSessionWithCarry(manager, 'vat', pk);
-      map.set(manager, loaded.data);
-    }),
-  );
-  return map;
+  return loadFilingCheckSessionsForTargetList(uniqueManagers, 'vat', pk);
 }
 
 function isExcludedByVatSession(
@@ -270,7 +264,8 @@ export async function GET(request: NextRequest) {
     const view = viewRaw === 'year' || viewRaw === 'annual' ? 'annual' : 'period';
     // 신고대상확인과 동일: 데이터뷰어=전체 수임처 / 그 외=담당 수임처
     const canViewAll = isDataViewer(user);
-    const layout = await getVatProgressLayout(user.loginId || '');
+    const canEditLayout = canUseIndieFeatures(user);
+    const layout = await getVatProgressLayout();
 
     const all = await listClients({
       mineOnly: !canViewAll,
@@ -280,16 +275,23 @@ export async function GET(request: NextRequest) {
     });
 
     const managersSeed = [
-      user.name || '',
-      ...all.map(c => c.manager || ''),
-      ...[...new Set(all.map(c => c.manager?.trim() || '').filter(Boolean))],
+      ...new Set(
+        all
+          .map(c => c.manager?.trim() || '')
+          .filter(Boolean),
+      ),
     ];
 
     let targets: ClientRecord[];
     if (view === 'annual') {
       const byId = new Map<string, ClientRecord>();
-      for (const p of VAT_PHASES) {
-        const sessions = await loadVatFilingSessions(managersSeed, year, p);
+      const phaseSessions = await Promise.all(
+        VAT_PHASES.map(async p => ({
+          phase: p,
+          sessions: await loadVatFilingSessions(managersSeed, year, p),
+        })),
+      );
+      for (const { phase: p, sessions } of phaseSessions) {
         for (const c of resolveVatReviewTargets(all, p, sessions)) {
           byId.set(c.id, c);
         }
@@ -349,6 +351,8 @@ export async function GET(request: NextRequest) {
       return {
         ...base,
         progress,
+        filingFee: readVatFilingFee(c.intakeData, periodKey),
+        filingFeeEditable: canEditVatFilingFee(user, c),
         summary: summarizeVatPeriodProgress(progress, layout),
       };
     });
@@ -367,6 +371,7 @@ export async function GET(request: NextRequest) {
       phase,
       view,
       canViewAll,
+      canEditLayout,
       loginId: user.loginId || '',
       layout,
       periodKey: vatProgressPeriodKey(year, phase),
@@ -387,6 +392,7 @@ export async function PATCH(request: NextRequest) {
       phase?: string;
       progress?: VatPeriodProgress;
       flags?: Partial<VatMaterialFlags>;
+      filingFee?: number | null;
       layout?: VatProgressColumnDef[];
       annual?: Partial<VatAnnualYearState>;
       /** 연간진행표 자료수취·입력 분기 (통장·기타증빙 → 부가세 OX) */
@@ -402,7 +408,10 @@ export async function PATCH(request: NextRequest) {
     };
 
     if (body.layout) {
-      const layout = await saveVatProgressLayout(user.loginId || '', body.layout, user.id);
+      if (!canUseIndieFeatures(user)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const layout = await saveVatProgressLayout(body.layout, user.id);
       return NextResponse.json({ ok: true, layout });
     }
 
@@ -411,6 +420,30 @@ export async function PATCH(request: NextRequest) {
     const year = Number(body.year || new Date().getFullYear());
     const client = await getClientById(clientId);
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    assertCanAccessClient(user, client);
+
+    if (body.filingFee !== undefined) {
+      if (!canEditVatFilingFee(user, client)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const phase = String(body.phase || '1기 확정');
+      if (!VAT_PHASES.includes(phase as VatPhase)) {
+        return NextResponse.json({ error: 'Invalid phase' }, { status: 400 });
+      }
+      const periodKey = vatProgressPeriodKey(year, phase);
+      const filingFee =
+        body.filingFee === null ? null : Math.round(Number(body.filingFee));
+      const intakeData = mergeVatFilingFeePatch(
+        { ...(client.intakeData ?? {}) },
+        periodKey,
+        filingFee,
+      );
+      const updated = await updateClientDetail(clientId, { intakeData });
+      return NextResponse.json({
+        ok: true,
+        filingFee: readVatFilingFee(updated.intakeData, periodKey),
+      });
+    }
 
     let intakeData = { ...(client.intakeData ?? {}) };
 

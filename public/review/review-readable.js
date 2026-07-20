@@ -7,7 +7,7 @@
   const FEE_LIST_COL_STORAGE_KEY = "reviewFeeListCols";
   const FEE_STAFF_FILTER_KEY = "reviewFeeStaffFilters";
   const DETAIL_EMPHASIS_STORAGE_KEY = "reviewDetailEmphasis";
-  const FEE_STAFF_ORDER = ["블루", "다야", "윈터", "리아", "페리", "인디"];
+  const FEE_STAFF_ORDER = ["블루", "다야", "윈터", "리아", "페리", "인디", "찰리"];
   /** 조정료 시트: 담당 구간 안에서 업체 행 사이 공백이 이만큼 이상이면 다음 담당자 블록 */
   const FEE_SEGMENT_GAP = 10;
 

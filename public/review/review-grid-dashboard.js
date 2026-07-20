@@ -8,6 +8,8 @@
 
   const TAX_KEY = "reviewTaxTab";
 
+  const ALL_PANELS_ID = "panel-__all__";
+
   let lastMountedPanelId = null;
   let remountingPanel = false;
 
@@ -422,6 +424,7 @@
       onPatch: options.onPatch,
       searchQuery: options.searchQuery,
       onRerender: options.onRerender,
+      hideIncomeFilterBar: !!options.hideIncomeFilterBar,
     };
 
     if (taxTab === "income" && panel.incomeSheet) {
@@ -472,6 +475,88 @@
 
     return wrap;
 
+  }
+
+
+
+  function mountAllPanels(scrollEl, data, panels, options, taxTab) {
+    scrollEl.innerHTML = "";
+    lastMountedPanelId = ALL_PANELS_ID;
+    scrollEl.dataset.reviewAllPanels = "1";
+
+    const stack = document.createElement("div");
+    stack.className = "review-all-panels-stack";
+
+    if (
+      taxTab === "income" &&
+      panels.length &&
+      window.ReviewClientList &&
+      typeof window.ReviewClientList.renderIncomeFilterToolbar === "function"
+    ) {
+      const sharedWrap = document.createElement("div");
+      sharedWrap.className = "review-shared-income-filters";
+      const sharedSections = ReviewGridSections.getSharedIncomeFilterSections();
+      sharedWrap.appendChild(
+        ReviewClientList.renderIncomeFilterToolbar(
+          sharedSections,
+          panels[0].owner || "",
+          options.onRerender,
+          { owner: panels[0].owner || "" }
+        )
+      );
+      stack.appendChild(sharedWrap);
+    }
+
+    const panelOptions = Object.assign({}, options, { reviewAllPanels: true, hideIncomeFilterBar: taxTab === "income" });
+
+    panels.forEach(function (panel) {
+      panel.hydrated = false;
+      hydratePanel(panel, data);
+
+      const section = document.createElement("section");
+      section.className = "review-all-panel-section board-root";
+      if (panel.owner) section.dataset.manager = panel.owner;
+
+      const head = document.createElement("div");
+      head.className = "review-all-panel-head";
+      const title = document.createElement("span");
+      title.textContent = panel.title || panel.owner || "담당";
+      head.appendChild(title);
+      if (panel.summary) {
+        const badge = document.createElement("span");
+        badge.className = "review-all-panel-summary";
+        badge.textContent = panel.summary;
+        head.appendChild(badge);
+      }
+      section.appendChild(head);
+
+      const bodyWrap = document.createElement("div");
+      bodyWrap.className = "review-all-panel-body";
+      bodyWrap.appendChild(renderPanelBody(panel, panelOptions));
+      section.appendChild(bodyWrap);
+
+      stack.appendChild(section);
+    });
+
+    scrollEl.appendChild(stack);
+    const scrollCol = document.getElementById("portal-main-column");
+    if (scrollCol) scrollCol.scrollTop = 0;
+  }
+
+  function mountAllPanelsWhenReady(scrollEl, data, panels, options, taxTab, chipsEl, tabsEl) {
+    const viewOpts = panelViewOptions(data, scrollEl, chipsEl, tabsEl, options, taxTab);
+    const run = function () {
+      mountAllPanels(scrollEl, data, panels, viewOpts, taxTab);
+    };
+    if (
+      taxTab === "income" &&
+      window.ReviewGridApp &&
+      typeof window.ReviewGridApp.ensureAllIncomeSheets === "function"
+    ) {
+      window.ReviewGridApp.ensureAllIncomeSheets().then(run).catch(run);
+      return;
+    }
+    run();
   }
 
 
@@ -536,7 +621,16 @@
 
     chipsEl.hidden = false;
 
-
+    const allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className =
+      "manager-chip manager-chip--all" + (activeId === ALL_PANELS_ID ? " active" : "");
+    allBtn.setAttribute("aria-label", "전체 담당자");
+    allBtn.textContent = "전체";
+    allBtn.addEventListener("click", function () {
+      onSelect(ALL_PANELS_ID);
+    });
+    chipsEl.appendChild(allBtn);
 
     items.forEach(function (panel) {
 
@@ -666,6 +760,7 @@
 
     lastMountedPanelId = panelId;
 
+    delete scrollEl.dataset.reviewAllPanels;
     scrollEl.innerHTML = "";
     const shouldRerender = window.ReviewRowExpand ? ReviewRowExpand.collapseAll() : false;
     scrollEl.appendChild(renderPanelBody(panel, options));
@@ -741,12 +836,16 @@
     }
     remountingPanel = true;
     try {
-      mountPanel(
-        scrollEl,
-        data,
-        lastMountedPanelId,
-        panelViewOptions(data, scrollEl, chipsEl, tabsEl, options, taxTab)
-      );
+      const viewOpts = panelViewOptions(data, scrollEl, chipsEl, tabsEl, options, taxTab);
+      if (lastMountedPanelId === ALL_PANELS_ID) {
+        const searchQuery = (options.searchQuery || "").trim();
+        const panels = data.panels.filter(function (panel) {
+          return panelMatchesSearch(panel, searchQuery);
+        });
+        mountAllPanels(scrollEl, data, panels, viewOpts, taxTab);
+        return;
+      }
+      mountPanel(scrollEl, data, lastMountedPanelId, viewOpts);
     } finally {
       remountingPanel = false;
     }
@@ -839,12 +938,12 @@
     });
 
     if (!activeId || ids.indexOf(activeId) < 0) {
-
-      activeId = staffPanels[0].id;
-
+      if (activeId !== ALL_PANELS_ID) {
+        activeId = staffPanels[0].id;
+      }
     }
 
-    if (searchQuery && ids.indexOf(activeId) < 0) {
+    if (searchQuery && ids.indexOf(activeId) < 0 && activeId !== ALL_PANELS_ID) {
 
       activeId = staffPanels[0].id;
 
@@ -872,6 +971,15 @@
           renderView(data, scrollEl, chipsEl, tabsEl, options);
         };
 
+        if (id === ALL_PANELS_ID) {
+          if (window.ReviewGridApp && typeof window.ReviewGridApp.ensureAllIncomeSheets === "function") {
+            window.ReviewGridApp.ensureAllIncomeSheets().then(run).catch(run);
+          } else {
+            run();
+          }
+          return;
+        }
+
         if (window.ReviewGridApp && typeof window.ReviewGridApp.ensurePanelSheets === "function") {
           window.ReviewGridApp.ensurePanelSheets(id).then(run).catch(run);
           return;
@@ -889,6 +997,11 @@
 
 
 
+    if (activeId === ALL_PANELS_ID) {
+      mountAllPanelsWhenReady(scrollEl, data, staffPanels, options, taxTab, chipsEl, tabsEl);
+      return;
+    }
+
     mountPanelWhenReady(scrollEl, data, activeId, options, taxTab, chipsEl, tabsEl);
 
   }
@@ -896,6 +1009,8 @@
 
 
   window.ReviewGridDashboard = {
+
+    ALL_PANELS_ID: ALL_PANELS_ID,
 
     findSheet,
 

@@ -111,6 +111,41 @@
     return bar;
   }
 
+  function renderIncomeFilterToolbar(sections, owner, onViewRerender, toolbarOptions) {
+    let checkedKinds = ReviewGridSections.getIncomeMainFilters(owner, sections);
+    let showExcluded = ReviewGridSections.getIncomeExcludedVisible(owner);
+    let showSections = getSectionDisplayEnabled();
+
+    function triggerRerender() {
+      if (onViewRerender) onViewRerender();
+    }
+
+    const filterBar = renderIncomeMainFilterBar(sections, owner, checkedKinds, function (next) {
+      checkedKinds = next;
+      triggerRerender();
+    }, {
+      showExcluded: showExcluded,
+      onExcludedChange: function (next) {
+        showExcluded = next;
+        triggerRerender();
+      },
+    });
+
+    const opts = Object.assign({}, toolbarOptions || {}, {
+      showSections: showSections,
+      onSectionDisplayChange: function (next) {
+        showSections = next;
+        if (toolbarOptions && typeof toolbarOptions.onSectionDisplayChange === "function") {
+          toolbarOptions.onSectionDisplayChange(next);
+          return;
+        }
+        triggerRerender();
+      },
+    });
+
+    return buildListToolbar("income", triggerRerender, filterBar, opts);
+  }
+
   function renderFilterBar(sections, owner, checkedKinds, onChange) {
     const available = ReviewGridSections.getAvailableFilterKinds(sections);
     const bar = document.createElement("div");
@@ -1392,6 +1427,12 @@
 
   function applyStickyOffsets(table, kind) {
     const reviewPage = document.getElementById("review-page");
+    if (reviewPage && reviewPage.querySelector(".review-all-panels-stack")) {
+      const scrollWrap = table.parentElement;
+      const stickyHead = scrollWrap ? scrollWrap.querySelector(".client-list-sticky-head") : null;
+      if (stickyHead) stickyHead.style.display = "none";
+      return;
+    }
     const stickyBar = reviewPage ? reviewPage.querySelector(".page-sticky-bar") : null;
     const stickyTop = stickyBar ? Math.ceil(stickyBar.getBoundingClientRect().height) : 0;
     const scrollWrap = table.parentElement;
@@ -2076,6 +2117,7 @@
     let showExcluded = ReviewGridSections.getIncomeExcludedVisible(owner);
     let showSections = getSectionDisplayEnabled();
     let activeSheet = sheet;
+    const viewRerender = options.onRerender;
 
     const boardOpts = Object.assign({}, options, {
       sheet: activeSheet,
@@ -2117,6 +2159,7 @@
     }
 
     function refreshMain() {
+      checkedKinds = ReviewGridSections.getIncomeMainFilters(owner, sections);
       mainHost.innerHTML = "";
       const base = filterClientRows(mainRows(), checkedKinds);
       let rows = base.rows;
@@ -2133,6 +2176,7 @@
     }
 
     function refreshExcluded() {
+      showExcluded = ReviewGridSections.getIncomeExcludedVisible(owner);
       excludedHost.innerHTML = "";
       if (!showExcluded) {
         excludedSection.hidden = true;
@@ -2161,23 +2205,18 @@
     boardOpts.onSectionDisplayChange = function (next) {
       showSections = next;
       boardOpts.showSections = next;
-      refreshAll();
+      if (viewRerender) viewRerender();
+      else refreshAll();
     };
 
-    const filterBar = renderIncomeMainFilterBar(sections, owner, checkedKinds, function (next) {
-      checkedKinds = next;
-      refreshMain();
-    }, {
-      showExcluded: showExcluded,
-      onExcludedChange: function (next) {
-        showExcluded = next;
-        refreshExcluded();
-      },
-    });
+    const toolbar = options.hideIncomeFilterBar
+      ? null
+      : renderIncomeFilterToolbar(sections, owner, function () {
+          if (viewRerender) viewRerender();
+          else refreshAll();
+        }, boardOpts);
 
-    const toolbar = buildListToolbar("income", refreshAll, filterBar, boardOpts);
-
-    root.appendChild(toolbar);
+    if (toolbar) root.appendChild(toolbar);
     root.appendChild(mainHost);
     if (ReviewGridSections.hasExcludedSection(sections)) {
       root.appendChild(excludedSection);
@@ -2323,6 +2362,7 @@
     filterFeeStaffRows,
     renderFilterBar,
     renderIncomeMainFilterBar,
+    renderIncomeFilterToolbar,
     renderFeeStaffFilterBar,
     buildListToolbar,
     renderClientList,

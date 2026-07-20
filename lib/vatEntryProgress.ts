@@ -96,6 +96,34 @@ export function vatProgressPeriodKey(year: number, vatPhase: string): string {
   return `${year}:${vatPhase}`;
 }
 
+/** 부가세 검토표 — 해당 신고분 수기 수수료 (수임처 feeSummary와 별도) */
+export function readVatFilingFee(
+  intakeData: Record<string, unknown> | null | undefined,
+  periodKey: string,
+): number | null {
+  const raw = intakeData?.vatFilingFees;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const v = (raw as Record<string, unknown>)[periodKey];
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v);
+  const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function mergeVatFilingFeePatch(
+  intakeData: Record<string, unknown>,
+  periodKey: string,
+  amount: number | null,
+): Record<string, unknown> {
+  const prev =
+    intakeData.vatFilingFees && typeof intakeData.vatFilingFees === 'object' && !Array.isArray(intakeData.vatFilingFees)
+      ? { ...(intakeData.vatFilingFees as Record<string, number>) }
+      : {};
+  if (amount == null) delete prev[periodKey];
+  else prev[periodKey] = amount;
+  return { ...intakeData, vatFilingFees: prev };
+}
+
 export function cellDisplayValue(cell: VatProgressCell | undefined): string {
   if (!cell) return '';
   const text = String(cell.text ?? '').trim();

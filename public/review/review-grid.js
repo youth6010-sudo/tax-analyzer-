@@ -50,6 +50,9 @@
     }
     try {
       const saved = sessionStorage.getItem("reviewSelectedPanel");
+      if (saved === "panel-__all__") {
+        return saved;
+      }
       if (saved && saved.indexOf("panel-") === 0) {
         const owner = saved.slice("panel-".length);
         if (access.incomeOrder && access.incomeOrder.indexOf(owner) >= 0) {
@@ -115,6 +118,13 @@
 
   async function ensurePanelSheets(panelId) {
     if (!dashboardData || !panelId) return;
+    if (
+      panelId === ReviewGridDashboard.ALL_PANELS_ID ||
+      panelId === "panel-__all__"
+    ) {
+      await ensureAllIncomeSheetsForSearch();
+      return;
+    }
     const panel = dashboardData.panels.find(function (p) {
       return p.id === panelId;
     });
@@ -128,6 +138,9 @@
     if (!dashboardData || !dashboardData.master) return;
     const names = collectIncomeSheetNames(dashboardData.access, dashboardData.access.incomeOrder);
     await fetchSheetsByNames(names);
+    if (dashboardData && window.ReviewGridDashboard) {
+      window.ReviewGridDashboard.invalidatePanels(dashboardData);
+    }
   }
 
   function updateBoardEditButtons() {
@@ -466,10 +479,22 @@
       let sheets = [];
 
       if (isEmbed) {
-        const owner = resolveIncomeSheetOwner(access, user, master);
         const names = collectSharedSheetNames(access);
-        const map = owner ? access.sheetMap[owner] : null;
-        if (map && map.income) names.add(map.income);
+        let savedPanel = null;
+        try {
+          savedPanel = sessionStorage.getItem("reviewSelectedPanel");
+        } catch (e) {
+          /* ignore */
+        }
+        if (master && savedPanel === "panel-__all__") {
+          collectIncomeSheetNames(access, access.incomeOrder).forEach(function (name) {
+            names.add(name);
+          });
+        } else {
+          const owner = resolveIncomeSheetOwner(access, user, master);
+          const map = owner ? access.sheetMap[owner] : null;
+          if (map && map.income) names.add(map.income);
+        }
 
         void fetch("/api/review/client-links-index")
           .then(function (res) {
@@ -550,6 +575,7 @@
     boot: boot,
     reset: invalidateBoot,
     ensurePanelSheets: ensurePanelSheets,
+    ensureAllIncomeSheets: ensureAllIncomeSheetsForSearch,
   };
 
   if (document.readyState === "loading") {

@@ -315,7 +315,7 @@ export default function ReviewSheetEmbed() {
         id="review-page"
         className="review-page review-embed-root flex min-h-0 flex-1 flex-col"
       >
-        <div className="page-sticky-bar -mx-4 mb-3 px-4 pb-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="page-sticky-bar mb-3 pb-3">
           <div className="page-sticky-row page-sticky-row--tools">
             <div className="tax-tabs" id="tax-tabs" />
             <input
@@ -344,7 +344,7 @@ export default function ReviewSheetEmbed() {
           </div>
         </div>
         <nav
-          className="manager-chips -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+          className="manager-chips"
           id="manager-chips"
           hidden
           aria-label="담당자"

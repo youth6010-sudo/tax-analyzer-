@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { filingCheckSessions, taxFilingChecks } from '@/db/schema';
 import type { FilingTaxId } from '@/app/utils/filingCheck';
@@ -222,6 +222,106 @@ export async function loadFilingCheckSessionWithCarry(
     data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
     carriedFromPeriodKey,
   };
+}
+
+/** 목록 조회용 — 승계 병합만 하고 DB에 쓰지 않음 (담당자 N회 조회 최적화) */
+function mergeSessionForTargetList(
+  current: FilingCheckSessionData | null,
+  previous: { data: FilingCheckSessionData; periodKey: string } | null,
+): FilingCheckSessionData {
+  if (current === null) {
+    if (previous) {
+      return {
+        ...EMPTY_SESSION_DATA,
+        ...carryFieldsFromRecord(previous.data),
+        ...receiptSlice(null),
+      };
+    }
+    return { ...EMPTY_SESSION_DATA };
+  }
+
+  const receipt = receiptSlice(current);
+  if (previous && carryNeedsPreviousMerge(previous.data, current)) {
+    const carry = mergeCarryFieldLayers(previous.data, current);
+    return {
+      ...EMPTY_SESSION_DATA,
+      ...carry,
+      ...receipt,
+      forceIncluded: {
+        ...(previous.data.forceIncluded ?? {}),
+        ...(current.forceIncluded ?? {}),
+      },
+      clientOrder: current.clientOrder,
+      siteDone: current.siteDone,
+    };
+  }
+
+  return { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt };
+}
+
+/**
+ * 담당자별 신고대상확인 세션 일괄 로드 (승계 병합 · DB 쓰기 없음)
+ */
+export async function loadFilingCheckSessionsForTargetList(
+  managers: string[],
+  taxType: FilingTaxId | string,
+  periodKey: string,
+): Promise<Map<string, FilingCheckSessionData>> {
+  const unique = [...new Set(managers.map(m => m.trim()).filter(Boolean))];
+  const map = new Map<string, FilingCheckSessionData>();
+  if (unique.length === 0) return map;
+
+  const db = getDb();
+  const [currentRows, prevRows] = await Promise.all([
+    db
+      .select()
+      .from(filingCheckSessions)
+      .where(
+        and(
+          eq(filingCheckSessions.taxType, taxType),
+          eq(filingCheckSessions.periodKey, periodKey),
+          inArray(filingCheckSessions.manager, unique),
+        ),
+      ),
+    db
+      .select()
+      .from(filingCheckSessions)
+      .where(
+        and(
+          eq(filingCheckSessions.taxType, taxType),
+          lt(filingCheckSessions.periodKey, periodKey),
+          sql`(${filingCheckSessions.data}->>'done') = 'true'`,
+          inArray(filingCheckSessions.manager, unique),
+        ),
+      ),
+  ]);
+
+  const currentByManager = new Map<string, FilingCheckSessionData>();
+  for (const row of currentRows) {
+    currentByManager.set(
+      row.manager,
+      { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) },
+    );
+  }
+
+  const prevByManager = new Map<string, { data: FilingCheckSessionData; periodKey: string }>();
+  for (const row of prevRows) {
+    const existing = prevByManager.get(row.manager);
+    if (!existing || row.periodKey > existing.periodKey) {
+      prevByManager.set(row.manager, {
+        data: { ...EMPTY_SESSION_DATA, ...(row.data as Partial<FilingCheckSessionData>) },
+        periodKey: row.periodKey,
+      });
+    }
+  }
+
+  for (const manager of unique) {
+    map.set(
+      manager,
+      mergeSessionForTargetList(currentByManager.get(manager) ?? null, prevByManager.get(manager) ?? null),
+    );
+  }
+  return map;
 }
 
 export async function upsertFilingCheckSession(

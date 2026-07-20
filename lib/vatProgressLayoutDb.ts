@@ -9,6 +9,8 @@ import {
 
 const LAYOUT_TAX = '_vatProgressLayout';
 const LAYOUT_PERIOD = 'v1';
+/** 검토자가 편집하는 공통 열 구성 — 전 담당자 동일 */
+const SHARED_LAYOUT_MANAGER = '__shared__';
 
 type LayoutPayload = {
   columns?: VatProgressColumnDef[];
@@ -16,19 +18,14 @@ type LayoutPayload = {
   order?: string[];
 };
 
-function ownerKey(loginId: string): string {
-  return loginId.trim().toLowerCase() || 'anon';
-}
-
-export async function getVatProgressLayout(loginId: string): Promise<VatProgressColumnDef[]> {
+export async function getVatProgressLayout(): Promise<VatProgressColumnDef[]> {
   const db = getDb();
-  const manager = ownerKey(loginId);
   const rows = await db
     .select()
     .from(filingCheckSessions)
     .where(
       and(
-        eq(filingCheckSessions.manager, manager),
+        eq(filingCheckSessions.manager, SHARED_LAYOUT_MANAGER),
         eq(filingCheckSessions.taxType, LAYOUT_TAX),
         eq(filingCheckSessions.periodKey, LAYOUT_PERIOD),
       ),
@@ -41,12 +38,10 @@ export async function getVatProgressLayout(loginId: string): Promise<VatProgress
 }
 
 export async function saveVatProgressLayout(
-  loginId: string,
   columns: VatProgressColumnDef[],
   userId?: string,
 ): Promise<VatProgressColumnDef[]> {
   const db = getDb();
-  const manager = ownerKey(loginId);
   const normalized = normalizeVatProgressLayout(columns);
   const payload: LayoutPayload = { columns: normalized };
 
@@ -55,7 +50,7 @@ export async function saveVatProgressLayout(
     .from(filingCheckSessions)
     .where(
       and(
-        eq(filingCheckSessions.manager, manager),
+        eq(filingCheckSessions.manager, SHARED_LAYOUT_MANAGER),
         eq(filingCheckSessions.taxType, LAYOUT_TAX),
         eq(filingCheckSessions.periodKey, LAYOUT_PERIOD),
       ),
@@ -73,7 +68,7 @@ export async function saveVatProgressLayout(
       .where(eq(filingCheckSessions.id, existing[0].id));
   } else {
     await db.insert(filingCheckSessions).values({
-      manager,
+      manager: SHARED_LAYOUT_MANAGER,
       taxType: LAYOUT_TAX,
       periodKey: LAYOUT_PERIOD,
       data: payload as Record<string, unknown>,

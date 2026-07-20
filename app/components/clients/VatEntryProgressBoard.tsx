@@ -25,6 +25,7 @@ import {
   cycleReceiveEntryMark,
   cycleVatColor,
   cycleVatMark,
+  isVatProgressCellFilled,
   isVatProgressColumnLocked,
   normalizeVatProgressLayout,
   type VatMaterialFlags,
@@ -42,6 +43,7 @@ import {
   MANAGER_ORDER_STORAGE_KEY,
   readManagerOrder,
 } from '@/app/utils/clientListPrefs';
+import { parseFeeInput } from '@/app/utils/feeBreakdown';
 
 const LABOR_COLS = [
   { key: 'employed', label: '상용' },
@@ -69,10 +71,82 @@ type VatProgressRow = {
   douzoneCode: string;
   manager: string;
   isCorporate?: boolean;
+  filingFee?: number | null;
+  filingFeeEditable?: boolean;
   progress?: VatPeriodProgress;
   flags?: VatMaterialFlags;
   labor: Record<LaborKey, LaborSlot>;
 };
+
+function formatFeeDisplay(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '';
+  return value.toLocaleString('ko-KR');
+}
+
+function FeeAmountCell({
+  value,
+  editable,
+  onSave,
+}: {
+  value: number | null | undefined;
+  editable: boolean;
+  onSave: (next: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const display = formatFeeDisplay(value);
+
+  if (!editable) {
+    return (
+      <span className="block truncate text-right text-[11px] tabular-nums text-slate-500">
+        {display ? `${display}원` : '—'}
+      </span>
+    );
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="text"
+        inputMode="numeric"
+        className="mx-auto block h-7 w-full max-w-[5.5rem] rounded border border-blue-300 px-1 text-right text-[11px] tabular-nums outline-none"
+        value={draft}
+        onChange={e => {
+          const digits = e.target.value.replace(/[^\d]/g, '');
+          setDraft(digits ? Number(digits).toLocaleString('ko-KR') : '');
+        }}
+        onBlur={() => {
+          setEditing(false);
+          const parsed = parseFeeInput(draft.replace(/,/g, ''));
+          onSave(parsed);
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            setDraft(display);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="클릭하여 수수료 입력"
+      onClick={() => {
+        setDraft(display);
+        setEditing(true);
+      }}
+      className="mx-auto block w-full truncate rounded px-0.5 text-right text-[11px] tabular-nums text-slate-700 hover:bg-slate-100"
+    >
+      {display ? `${display}원` : <span className="text-slate-300">—</span>}
+    </button>
+  );
+}
 
 function emptyFlags(): VatMaterialFlags {
   return { agencySales: false, zeroRateSales: false, nonDeductible: false, manualEntry: false };
@@ -86,6 +160,46 @@ function isOptionalColumnActive(flags: VatMaterialFlags | undefined, columnKey: 
   if (columnKey === 'agencySales') return f.agencySales;
   if (columnKey === 'zeroRateSales') return f.zeroRateSales;
   return true;
+}
+
+/** 해당 업체·열에서 입력 칸이 켜져 있는지 (비활성·해당없음 제외) */
+function isProgressColumnActive(row: VatProgressRow, col: VatProgressColumnDef): boolean {
+  if (col.key === 'bankStatement' && !row.isCorporate) return false;
+  return isOptionalColumnActive(row.flags, col.key);
+}
+
+/** 활성 칸 기준 완료 — O/X(결정) 또는 자유서식·색칠 입력 */
+function isProgressCellComplete(col: VatProgressColumnDef, cell: VatProgressCell | undefined): boolean {
+  if (col.input === 'mark') {
+    const mark = String(cell?.mark ?? '').trim();
+    return mark === 'O' || mark === 'X';
+  }
+  return isVatProgressCellFilled(cell);
+}
+
+type ColumnProgressStat = { done: number; total: number; remaining: number };
+
+function computeColumnProgressStats(
+  rows: VatProgressRow[],
+  layout: VatProgressColumnDef[],
+): Map<string, ColumnProgressStat> {
+  const map = new Map<string, ColumnProgressStat>();
+  for (const col of layout) {
+    let total = 0;
+    let done = 0;
+    for (const row of rows) {
+      if (!isProgressColumnActive(row, col)) continue;
+      total += 1;
+      if (isProgressCellComplete(col, row.progress?.[col.key])) done += 1;
+    }
+    map.set(col.key, { done, total, remaining: total - done });
+  }
+  return map;
+}
+
+function formatColumnProgressStat(stat: ColumnProgressStat | undefined): string {
+  if (!stat || stat.total === 0) return '';
+  return `${stat.done}/${stat.total}`;
 }
 
 function LaborBadge({ slot, label }: { slot: LaborSlot | undefined; label: string }) {
@@ -287,6 +401,7 @@ export default function VatEntryProgressBoard() {
   const [error, setError] = useState('');
   const [detailRow, setDetailRow] = useState<VatProgressRow | null>(null);
   const [canViewAll, setCanViewAll] = useState(false);
+  const [canEditLayout, setCanEditLayout] = useState(false);
   const [managerFilter, setManagerFilter] = useState('');
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<VatProgressColumnDef[]>([]);
@@ -334,6 +449,7 @@ export default function VatEntryProgressBoard() {
       if (!res.ok) throw new Error(data.error || '불러오기 실패');
       setRows((data.rows as VatProgressRow[]) ?? []);
       setCanViewAll(!!data.canViewAll);
+      setCanEditLayout(!!data.canEditLayout);
       if (Array.isArray(data.layout)) {
         setLayout(normalizeVatProgressLayout(data.layout as VatProgressColumnDef[]));
       }
@@ -374,6 +490,32 @@ export default function VatEntryProgressBoard() {
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
       void load();
+    }
+  };
+
+  const updateFilingFee = async (row: VatProgressRow, filingFee: number | null) => {
+    const prev = row.filingFee ?? null;
+    if (prev === filingFee) return;
+    setRows(prevRows =>
+      prevRows.map(r => (r.id === row.id ? { ...r, filingFee } : r)),
+    );
+    try {
+      const res = await fetch('/api/clients/vat-progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: row.id, year, phase, filingFee }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
+      const saved = (data as { filingFee?: number | null }).filingFee ?? filingFee;
+      setRows(prevRows =>
+        prevRows.map(r => (r.id === row.id ? { ...r, filingFee: saved } : r)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장 실패');
+      setRows(prevRows =>
+        prevRows.map(r => (r.id === row.id ? { ...r, filingFee: prev } : r)),
+      );
     }
   };
 
@@ -421,7 +563,17 @@ export default function VatEntryProgressBoard() {
   }, [rows, q, canViewAll, managerFilter, phase, orderTick]);
 
   const displayLayout = useMemo(() => visibleVatLayout(layout), [layout]);
-  const periodColSpan = 3 + displayLayout.length;
+  const periodColSpan = 4 + displayLayout.length;
+
+  const columnProgressStats = useMemo(
+    () => computeColumnProgressStats(filtered, displayLayout),
+    [filtered, displayLayout],
+  );
+
+  const filingFeeTotal = useMemo(
+    () => filtered.reduce((sum, row) => sum + (row.filingFee ?? 0), 0),
+    [filtered],
+  );
 
   const openColumnEditor = () => {
     setOrderDraft(visibleVatLayout(layout).map(c => ({ ...c })));
@@ -550,12 +702,14 @@ export default function VatEntryProgressBoard() {
           value={q}
           onChange={e => setQ(e.target.value)}
         />
-        <button type="button" className={portalBtnSecondary} onClick={openColumnEditor}>
-          열 편집
-        </button>
         <button type="button" className={portalBtnSecondary} onClick={() => void load()}>
           새로고침
         </button>
+        {canEditLayout ? (
+          <button type="button" className={portalBtnSecondary} onClick={openColumnEditor}>
+            열 편집
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -574,6 +728,7 @@ export default function VatEntryProgressBoard() {
             <col className="w-[3.5rem]" />
             <col className="w-[4.5rem]" />
             <col className="w-[12rem]" />
+            <col className="w-[5.5rem]" />
             {displayLayout.map(col => (
               <col key={col.key} />
             ))}
@@ -585,15 +740,36 @@ export default function VatEntryProgressBoard() {
               <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">
                 거래처
               </th>
-              {displayLayout.map(col => (
-                <th
-                  key={col.key}
-                  className="sticky top-0 z-20 break-keep bg-slate-50 px-0.5 py-2 text-center font-semibold leading-tight"
-                  title={col.label}
-                >
-                  {col.label}
-                </th>
-              ))}
+              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-right font-semibold">
+                <span className="block">수수료</span>
+                {!loading && filtered.length > 0 ? (
+                  <span className="mt-0.5 block text-[9px] font-normal tabular-nums text-blue-600">
+                    {filingFeeTotal > 0 ? `${filingFeeTotal.toLocaleString('ko-KR')}원` : '—'}
+                  </span>
+                ) : null}
+              </th>
+              {displayLayout.map(col => {
+                const stat = columnProgressStats.get(col.key);
+                const progressLabel = formatColumnProgressStat(stat);
+                return (
+                  <th
+                    key={col.key}
+                    className="sticky top-0 z-20 break-keep bg-slate-50 px-0.5 py-2 text-center font-semibold leading-tight"
+                    title={
+                      stat && stat.total > 0
+                        ? `${col.label} — ${stat.done}/${stat.total}`
+                        : col.label
+                    }
+                  >
+                    <span className="block">{col.label}</span>
+                    {progressLabel ? (
+                      <span className="mt-0.5 block text-[9px] font-normal tabular-nums text-blue-600">
+                        {progressLabel}
+                      </span>
+                    ) : null}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -627,6 +803,13 @@ export default function VatEntryProgressBoard() {
                     >
                       {row.companyName}
                     </button>
+                  </td>
+                  <td className="px-1 py-1">
+                    <FeeAmountCell
+                      value={row.filingFee}
+                      editable={!!row.filingFeeEditable}
+                      onSave={next => void updateFilingFee(row, next)}
+                    />
                   </td>
                   {displayLayout.map(col => (
                     <td key={col.key} className="px-0.5 py-1 text-center">

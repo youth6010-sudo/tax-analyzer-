@@ -262,8 +262,33 @@
     });
   }
 
+  function readGlobalSessionJson(key, owner) {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) return JSON.parse(raw);
+      const legacy = sessionStorage.getItem(storageKey(key, owner));
+      if (legacy) return JSON.parse(legacy);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function getSharedIncomeFilterSections() {
+    return [
+      { kind: "bookkeeping" },
+      { kind: "sincere" },
+      { kind: "corp_client" },
+      { kind: "agent" },
+      { kind: "transfer" },
+      { kind: "consult" },
+    ];
+  }
+
   function getIncomeExcludedVisible(owner) {
     try {
+      const global = sessionStorage.getItem(EXCLUDED_VISIBLE_KEY);
+      if (global != null) return global !== "0";
       return sessionStorage.getItem(storageKey(EXCLUDED_VISIBLE_KEY, owner)) !== "0";
     } catch {
       return true;
@@ -271,7 +296,7 @@
   }
 
   function setIncomeExcludedVisible(owner, on) {
-    sessionStorage.setItem(storageKey(EXCLUDED_VISIBLE_KEY, owner), on ? "1" : "0");
+    sessionStorage.setItem(EXCLUDED_VISIBLE_KEY, on ? "1" : "0");
   }
 
   function getIncomeMainFilters(owner, sections) {
@@ -279,19 +304,12 @@
     const availableKeys = available.map(function (f) {
       return f.key;
     });
-    try {
-      const raw = sessionStorage.getItem(storageKey(FILTERS_KEY, owner));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(function (k) {
-            return availableKeys.indexOf(k) >= 0;
-          });
-          if (filtered.length) return filtered;
-        }
-      }
-    } catch {
-      /* ignore */
+    const parsed = readGlobalSessionJson(FILTERS_KEY, owner);
+    if (Array.isArray(parsed)) {
+      const filtered = parsed.filter(function (k) {
+        return availableKeys.indexOf(k) >= 0;
+      });
+      if (filtered.length) return filtered;
     }
     return availableKeys.slice();
   }
@@ -301,25 +319,18 @@
     const availableKeys = available.map(function (f) {
       return f.key;
     });
-    try {
-      const raw = sessionStorage.getItem(storageKey(FILTERS_KEY, owner));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(function (k) {
-            return availableKeys.indexOf(k) >= 0;
-          });
-          if (filtered.length) return filtered;
-        }
-      }
-    } catch {
-      /* ignore */
+    const parsed = readGlobalSessionJson(FILTERS_KEY, owner);
+    if (Array.isArray(parsed)) {
+      const filtered = parsed.filter(function (k) {
+        return availableKeys.indexOf(k) >= 0;
+      });
+      if (filtered.length) return filtered;
     }
     return availableKeys.slice();
   }
 
   function setIncomeFilters(owner, kinds) {
-    sessionStorage.setItem(storageKey(FILTERS_KEY, owner), JSON.stringify(kinds));
+    sessionStorage.setItem(FILTERS_KEY, JSON.stringify(kinds));
   }
 
   function findParentSection(sections, childId) {
@@ -547,6 +558,7 @@
     getIncomeMainFilters,
     getIncomeFilters,
     setIncomeFilters,
+    getSharedIncomeFilterSections,
     hasExcludedSection,
     getIncomeExcludedVisible,
     setIncomeExcludedVisible,

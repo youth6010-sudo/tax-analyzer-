@@ -2,7 +2,7 @@ import { and, eq, or, type SQL } from 'drizzle-orm';
 import { clients } from '@/db/schema';
 import type { SessionUser } from '@/lib/session';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
-import { isDataViewer, isDeveloperAdmin } from '@/lib/masterAccess';
+import { isDataViewer, isDeveloperAdmin, canUseIndieFeatures } from '@/lib/masterAccess';
 
 export {
   isMasterUser,
@@ -37,6 +37,17 @@ export function assertCanAccessClient(
 /** 수정 — 전체 조회 권한(인디·개발자) 또는 본인 담당 */
 export function canEditClient(user: SessionUser, client: ClientAccessFields): boolean {
   if (isDataViewer(user)) return true;
+  if (client.assignedUserId === user.id) return true;
+  const matchNames = getManagerMatchNames(user.name);
+  return matchNames.some(name => name === (client.manager ?? ''));
+}
+
+/** 부가세 검토표 신고분 수수료 — 담당 본인 또는 검토자(인디·찰리·리아 관리자) */
+export function canEditVatFilingFee(
+  user: SessionUser,
+  client: ClientAccessFields,
+): boolean {
+  if (canUseIndieFeatures(user)) return true;
   if (client.assignedUserId === user.id) return true;
   const matchNames = getManagerMatchNames(user.name);
   return matchNames.some(name => name === (client.manager ?? ''));
