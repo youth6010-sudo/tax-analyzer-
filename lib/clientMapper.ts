@@ -31,6 +31,8 @@ const LIST_INTAKE_KEYS = [
   'vatMaterialFlags',
   'vatEntryProgress',
   'vatAnnualProgress',
+  /** 부가세 검토표 신고분 수수료 */
+  'vatFilingFees',
 ] as const;
 
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */

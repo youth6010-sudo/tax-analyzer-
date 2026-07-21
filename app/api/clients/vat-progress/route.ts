@@ -12,7 +12,6 @@ import {
   filingTargets,
   isCorporateClient,
   periodKey as filingPeriodKey,
-  vatYearProgressPhases,
   type VatPhase,
   VAT_PHASES,
 } from '@/app/utils/filingCheck';
@@ -24,7 +23,6 @@ import {
   readVatPeriodProgress,
   readVatFilingFee,
   mergeVatFilingFeePatch,
-  summarizeVatPeriodProgress,
   vatProgressPeriodKey,
   type VatMaterialFlags,
   type VatPeriodProgress,
@@ -315,7 +313,6 @@ export async function GET(request: NextRequest) {
         annual: view === 'annual',
         yearSpFiled: yearSpFiled?.get(c.id),
       });
-      const yearPhases = vatYearProgressPhases(c);
       const base = {
         id: c.id,
         companyName: c.companyName,
@@ -328,8 +325,6 @@ export async function GET(request: NextRequest) {
         mainCategory: getClientCategoryForFilter(c),
         flags,
         labor,
-        progressKeys: layout.map(col => col.key),
-        yearPhases,
       };
 
       if (view === 'annual') {
@@ -353,7 +348,6 @@ export async function GET(request: NextRequest) {
         progress,
         filingFee: readVatFilingFee(c.intakeData, periodKey),
         filingFeeEditable: canEditVatFilingFee(user, c),
-        summary: summarizeVatPeriodProgress(progress, layout),
       };
     });
 
