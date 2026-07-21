@@ -427,19 +427,32 @@ export default function VatAnnualProgressBoard() {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
+    const fetchOnce = async () => {
       const params = new URLSearchParams({
         year: String(year),
         phase: '1기 확정',
         view: 'annual',
       });
       const res = await fetch(`/api/clients/vat-progress?${params}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '불러오기 실패');
+      const data = await res.json().catch(() => {
+        throw new Error(`불러오기 실패 (${res.status})`);
+      });
+      if (!res.ok) throw new Error((data as { error?: string }).error || `불러오기 실패 (${res.status})`);
+      return data;
+    };
+    try {
+      let data;
+      try {
+        data = await fetchOnce();
+      } catch {
+        // 일시적 네트워크·서버 오류 — 한 번 자동 재시도
+        await new Promise(resolve => setTimeout(resolve, 800));
+        data = await fetchOnce();
+      }
       setRows((data.rows as AnnualRow[]) ?? []);
       setCanViewAll(!!data.canViewAll);
     } catch (e) {
-      setRows([]);
+      // 실패해도 기존 내용은 유지 — 빈 화면 방지
       setError(e instanceof Error ? e.message : '불러오기 실패');
     } finally {
       setLoading(false);

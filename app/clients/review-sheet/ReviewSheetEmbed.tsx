@@ -13,6 +13,9 @@ import {
 
 const REVIEW_TAX_YEAR_STORAGE_KEY = 'reviewTaxYear';
 
+/** review/*.js 캐시 무효화 — 검토표 스크립트 수정 시 올려서 구버전·신버전 혼용 방지 */
+const REVIEW_ASSET_VERSION = '20260721a';
+
 const SCRIPT_GROUPS = [
   ['/review/review-auth.js'],
   ['/review/review-grid-core.js', '/review/review-grid-edit.js'],
@@ -52,7 +55,7 @@ async function loadReviewScripts(): Promise<void> {
   }
 }
 
-function loadScript(src: string): Promise<void> {
+function loadScriptOnce(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[data-review-src="${src}"]`);
     if (existing) {
@@ -60,20 +63,33 @@ function loadScript(src: string): Promise<void> {
       return;
     }
     const el = document.createElement('script');
-    el.src = src;
+    el.src = `${src}?v=${REVIEW_ASSET_VERSION}`;
     el.async = false;
     el.dataset.reviewSrc = src;
     el.onload = () => resolve();
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
+    el.onerror = () => {
+      el.remove();
+      reject(new Error(`Failed to load ${src}`));
+    };
     document.body.appendChild(el);
   });
+}
+
+async function loadScript(src: string): Promise<void> {
+  try {
+    await loadScriptOnce(src);
+  } catch {
+    // 일시적 네트워크 오류 — 한 번 자동 재시도
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await loadScriptOnce(src);
+  }
 }
 
 function ensureReviewStylesheet() {
   if (document.querySelector('link[data-review-grid-css="1"]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/review/review-grid.css';
+  link.href = `/review/review-grid.css?v=${REVIEW_ASSET_VERSION}`;
   link.dataset.reviewGridCss = '1';
   document.head.appendChild(link);
 }

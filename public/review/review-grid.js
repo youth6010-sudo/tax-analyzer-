@@ -511,10 +511,19 @@
             window.__REVIEW_CLIENT_LINKS_INDEX__ = {};
           });
 
-        const dataRes = await fetchWithTimeout(
-          "/api/review/grid-sheet?names=" + encodeURIComponent(Array.from(names).join(",")),
-          60000
-        );
+        const sheetUrl =
+          "/api/review/grid-sheet?names=" + encodeURIComponent(Array.from(names).join(","));
+        let dataRes;
+        try {
+          dataRes = await fetchWithTimeout(sheetUrl, 60000);
+          if (!dataRes.ok) throw new Error("status " + dataRes.status);
+        } catch (firstErr) {
+          // 일시적 네트워크·서버 오류 — 한 번 자동 재시도
+          await new Promise(function (resolve) {
+            setTimeout(resolve, 800);
+          });
+          dataRes = await fetchWithTimeout(sheetUrl, 60000);
+        }
 
         if (!dataRes.ok) {
           throw new Error("review-grid 시트 로드 실패 (" + dataRes.status + ")");
