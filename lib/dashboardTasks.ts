@@ -2,10 +2,7 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, intakeInquiries, intakeProcesses, clients } from '@/db/schema';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
-import {
-  buildChurnRegistrationIndex,
-  clientMatchesChurnRegistration,
-} from '@/app/utils/churnMatch';
+import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
@@ -235,7 +232,6 @@ export async function listDashboardTasks(
   const churnRows = await db
     .select({ clientId: churnRecords.clientId, companyName: churnRecords.companyName })
     .from(churnRecords);
-  const churnIndex = buildChurnRegistrationIndex(churnRows);
 
   const ntsRows = await db
     .select({
@@ -253,7 +249,7 @@ export async function listDashboardTasks(
     ));
 
   for (const c of ntsRows) {
-    if (clientMatchesChurnRegistration(c, churnIndex)) continue;
+    if (clientHasHandledNtsChurn(c, churnRows)) continue;
     const manager = (c.manager || '').trim();
     if (!visibleToUser(manager, user)) continue;
     const label = c.ntsStatusCode === '03' ? '폐업' : '휴업';

@@ -10,10 +10,14 @@ import {
   portalBtnSecondary,
   portalCard,
 } from '../../components/portal/uiClasses';
-import type { ClientRecord, NtsStatusCache } from '../../types/client';
+import type { ClientRecord, ChurnRecordView, NtsStatusCache } from '../../types/client';
 import { formatNtsDate, ntsBadgeClass, ntsStatusLabel } from '@/app/utils/ntsStatus';
-import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
-import { getPortalChurnRecords, hydratePortal } from '@/app/utils/portalStore';
+import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import {
+  getPortalChurnRecords,
+  hydratePortal,
+  subscribePortal,
+} from '@/app/utils/portalStore';
 
 interface BatchResult {
   status?: string;
@@ -39,13 +43,19 @@ export default function NtsMonitorPage() {
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [churnRecords, setChurnRecords] = useState<ChurnRecordView[]>(() => getPortalChurnRecords());
 
   const load = useCallback(async (mine: boolean) => {
     setReady(false);
     try {
-      const res = await fetch(`/api/clients${mine ? '?mine=1' : ''}`, { cache: 'no-store' });
-      const data = (await res.json().catch(() => ({}))) as { clients?: ClientRecord[] };
-      setClients(data.clients ?? []);
+      const [clientsRes, churnRes] = await Promise.all([
+        fetch(`/api/clients${mine ? '?mine=1' : ''}`, { cache: 'no-store' }),
+        fetch('/api/churn', { cache: 'no-store' }),
+      ]);
+      const clientsData = (await clientsRes.json().catch(() => ({}))) as { clients?: ClientRecord[] };
+      const churnData = (await churnRes.json().catch(() => ({}))) as { records?: ChurnRecordView[] };
+      setClients(clientsData.clients ?? []);
+      if (Array.isArray(churnData.records)) setChurnRecords(churnData.records);
     } catch {
       setClients([]);
     } finally {
@@ -58,7 +68,12 @@ export default function NtsMonitorPage() {
     void load(mineOnly);
   }, [load, mineOnly]);
 
-  const churnRecords = useMemo(() => getPortalChurnRecords(), [clients]);
+  useEffect(() => {
+    return subscribePortal(() => {
+      const portal = getPortalChurnRecords();
+      if (portal.length > 0) setChurnRecords(portal);
+    });
+  }, []);
 
   const runCheck = useCallback(async () => {
     if (clients.length === 0) return;
@@ -113,7 +128,7 @@ export default function NtsMonitorPage() {
       const t = Date.parse(nts.checkedAt) || 0;
       if (t > last) last = t;
       if (isClosedCode(nts.statusCode)) {
-        if (clientHasChurnRegistration(c, churnRecords)) continue;
+        if (clientHasHandledNtsChurn(c, churnRecords)) continue;
         flaggedList.push({ client: c, nts });
         if (nts.statusCode === '03') closed += 1;
         else resting += 1;

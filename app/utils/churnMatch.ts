@@ -108,19 +108,37 @@ export function dedupeClientsForChurnSearch(clients: ClientRecord[]): ClientReco
 /** 유출 이력이 등록된 수임처 (상태만 churned인 폐업 건은 미등록으로 봄) */
 export function clientHasChurnRegistration(
   client: ChurnClientRef,
-  records: ChurnRecordView[],
+  records: Array<{ clientId?: string | null; companyName?: string | null }>,
 ): boolean {
   if (client.churn) return true;
   return clientMatchesChurnRegistration(client, buildChurnRegistrationIndex(records));
+}
+
+/**
+ * 폐업·휴업 「유출 처리」 안내 억제용.
+ * - 연결된 clientId / orphan 상호 매칭
+ * - 이미 유출이력에 같은 상호가 있으면(다른 수임처에 묶여 있어도) 다시 띄우지 않음
+ */
+export function clientHasHandledNtsChurn(
+  client: ChurnClientRef,
+  records: Array<{ clientId?: string | null; companyName?: string | null }>,
+): boolean {
+  if (client.churn) return true;
+  if (client.status === 'churned') return true;
+  if (clientHasChurnRegistration(client, records)) return true;
+  const nameKey = compactSearchText(client.companyName);
+  if (!nameKey) return false;
+  return records.some(r => compactSearchText(r.companyName ?? '') === nameKey);
 }
 
 /** 국세청 폐업·휴업 안내(유출 등록 링크)가 필요한지 */
 export function clientNeedsNtsChurnPrompt(
   client: ChurnClientRef,
   records: ChurnRecordView[],
-): boolean {  const code = client.nts?.statusCode;
+): boolean {
+  const code = client.nts?.statusCode;
   if (code !== '02' && code !== '03') return false;
-  return !clientHasChurnRegistration(client, records);
+  return !clientHasHandledNtsChurn(client, records);
 }
 
 export function filterClientsForChurnRegistration<T extends ClientRecord>(

@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientRecord } from '@/app/types/client';
-import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
-import { getPortalChurnRecords } from '@/app/utils/portalStore';
+import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
 import { clientRecordToContact } from '@/lib/clientMapper';
 import ContactDetailView from '@/app/components/ContactDetailView';
 import ClientRelatedLinks from '@/app/components/ClientRelatedLinks';
@@ -57,13 +57,19 @@ export default function ClientDetailPage({
   const [intakeData, setIntakeData] = useState(client.intakeData ?? {});
   const [unifiedEditing, setUnifiedEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
   const contactSaveRef = useRef<(() => Promise<void>) | null>(null);
   const metaSaveRef = useRef<(() => Promise<void>) | null>(null);
   const materialsSaveRef = useRef<(() => Promise<void>) | null>(null);
   const rosterClient = { ...client, intakeData };
+
+  useEffect(() => {
+    return subscribePortal(() => setChurnRecords(getPortalChurnRecords()));
+  }, []);
+
   const suppressChurnPrompt = useMemo(
-    () => clientHasChurnRegistration(rosterClient, getPortalChurnRecords()),
-    [rosterClient],
+    () => clientHasHandledNtsChurn(rosterClient, churnRecords),
+    [rosterClient, churnRecords],
   );
 
   const handleUnifiedSave = async () => {

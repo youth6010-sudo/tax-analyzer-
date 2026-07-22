@@ -14,8 +14,8 @@ import {
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
-import { clientHasChurnRegistration } from '@/app/utils/churnMatch';
-import { getPortalChurnRecords, getPortalClients, hydratePortal } from '@/app/utils/portalStore';
+import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { getPortalChurnRecords, getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 import { CLIENT_SORT_STORAGE_KEY, commitClientListReorder, MANAGER_CLIENT_ORDER_STORAGE_KEY, readManagerClientOrder, type ClientSortKey } from '@/app/utils/clientListPrefs';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
@@ -256,7 +256,12 @@ export default function MyClientsBoard() {
   const [filingExcluded, setFilingExcluded] = useState<Record<string, string>>({});
   const [ntsChecking, setNtsChecking] = useState(false);
   const [ntsError, setNtsError] = useState('');
+  const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
   const taxFilter = useDashboardTaxFilter();
+
+  useEffect(() => {
+    return subscribePortal(() => setChurnRecords(getPortalChurnRecords()));
+  }, []);
 
   useEffect(() => {
     hydratePortal();
@@ -355,15 +360,14 @@ export default function MyClientsBoard() {
 
   // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합 (유출 이력 있으면 제외)
   const ntsClosedIds = useMemo(() => {
-    const churnRecords = getPortalChurnRecords();
     const s = new Set<string>();
     for (const c of clients) {
-      if (clientHasChurnRegistration(c, churnRecords)) continue;
+      if (clientHasHandledNtsChurn(c, churnRecords)) continue;
       const code = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
       if (code === '02' || code === '03') s.add(c.id);
     }
     return s;
-  }, [clients, ntsOverride]);
+  }, [clients, ntsOverride, churnRecords]);
 
   const runNtsCheck = async () => {
     setNtsChecking(true);
