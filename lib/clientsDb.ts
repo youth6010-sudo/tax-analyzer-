@@ -25,7 +25,7 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
-/** intakeData.category 를 구분·서비스(개인+신고→신고대리)에 맞춤 */
+/** intakeData.category — 개인+신고만이면 신고대리로 승격, 기존 신고대리는 유지 */
 function applySyncedCategory(
   intake: Record<string, unknown>,
   entityType: string | undefined,
@@ -36,10 +36,9 @@ function applySyncedCategory(
     (entityType || '') as BusinessEntityType | '',
     serviceTypes,
   );
-  if (synced) return { ...intake, category: synced };
-  const next = { ...intake };
-  delete next.category;
-  return next;
+  if (synced == null) return intake;
+  if (String(intake.category ?? '').trim() === synced) return intake;
+  return { ...intake, category: synced };
 }
 
 export interface ClientListFilters {

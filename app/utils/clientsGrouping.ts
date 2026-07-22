@@ -39,8 +39,7 @@ function categoryFromEntityType(entityType: BusinessEntityType | '' | undefined)
  * 구분·서비스로 대분류 산출.
  * - 법인 → 법인
  * - 개인·비사업자 + 신고만(기장 없음) → 신고대리
- * - 개인·비사업자 + 기장(또는 그 외) → 개인
- * 지주택·미사용은 호출측에서 보존한다.
+ * - 그 외 개인·비사업자 → 개인 (단, 저장값이 신고대리면 유지 — 아래 sync 참고)
  */
 export function deriveMainCategoryFromEntityAndServices(
   entityType: BusinessEntityType | '' | undefined,
@@ -56,7 +55,14 @@ export function deriveMainCategoryFromEntityAndServices(
   return '개인';
 }
 
-/** 저장용 — 지주택·미사용은 유지, 그 외는 구분·서비스로 맞춤 */
+/**
+ * 저장용 대분류 동기화.
+ * - 지주택·미사용: 유지
+ * - 이미 신고대리: 유지 (서비스에 기장이 없어도 신고대리로 남김 — 엑셀 대분류 기준)
+ * - 개인/빈값 + 개인·비사업자 + 신고만: 신고대리로 승격
+ * - 법인 구분이면 법인
+ * - 그 외 자동 대분류만 구분·서비스로 맞춤
+ */
 export function syncMainCategory(
   currentCategory: unknown,
   entityType: BusinessEntityType | '' | undefined,
@@ -64,19 +70,25 @@ export function syncMainCategory(
 ): string | null {
   const cur = currentCategory != null ? String(currentCategory).trim() : '';
   if (cur === JISUTAEK_CATEGORY || cur === UNUSED_CATEGORY) return cur || null;
-  return deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
+  // 기존 신고대리는 절대 개인으로 내리지 않음
+  if (cur === SINGO_DAERI) return SINGO_DAERI;
+
+  const derived = deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
+  if (!derived) return cur || null;
+
+  // 개인(또는 빈 대분류) → 신고만이면 신고대리로 올림
+  if (derived === SINGO_DAERI && (cur === '개인' || !cur || cur === NON_BUSINESS_CATEGORY)) {
+    return SINGO_DAERI;
+  }
+  if (derived === '법인') return '법인';
+  if (cur === '법인' || cur === '개인' || !cur || cur === NON_BUSINESS_CATEGORY) {
+    return derived;
+  }
+  return cur || derived;
 }
 
-function isAutoManagedCategory(s: string): boolean {
-  return (
-    !s ||
-    s === UNCategorized ||
-    s === '개인' ||
-    s === '법인' ||
-    s === SINGO_DAERI ||
-    s === NON_BUSINESS_CATEGORY ||
-    LEGACY_EMPTY_CATEGORY_ALIASES.has(s)
-  );
+function isLegacyOrEmptyCategory(s: string): boolean {
+  return !s || s === UNCategorized || LEGACY_EMPTY_CATEGORY_ALIASES.has(s) || s === NON_BUSINESS_CATEGORY;
 }
 
 /**
@@ -132,15 +144,19 @@ export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_D
 export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
-  if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY) return s;
+  if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY || s === SINGO_DAERI) return s || UNCategorized;
 
   const derived = deriveMainCategoryFromEntityAndServices(
     client.businessEntityType as BusinessEntityType | '',
     client.serviceTypes,
   );
-  // 개인+신고가 대분류에 '개인'으로 남아 있어도 신고대리로 표시·집계
-  if (derived && isAutoManagedCategory(s)) return derived;
-  return s || UNCategorized;
+  // 저장된 대분류가 개인/비어 있는데 개인+신고만이면 신고대리로 표시
+  if (derived === SINGO_DAERI && (s === '개인' || isLegacyOrEmptyCategory(s))) {
+    return SINGO_DAERI;
+  }
+  if (s) return s;
+  if (derived) return derived;
+  return UNCategorized;
 }
 
 export type OtherCategoryGroup = {
