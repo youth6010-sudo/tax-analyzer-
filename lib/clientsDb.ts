@@ -16,12 +16,31 @@ import {
   dedupeClientsForChurnSearch,
   filterClientsForChurnRegistration,
 } from '@/app/utils/churnMatch';
+import { syncMainCategory } from '@/app/utils/clientsGrouping';
+import type { BusinessEntityType } from '@/app/types/contact';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
   feeSummary?: number | null;
   program?: string;
 };
+
+/** intakeData.category 를 구분·서비스(개인+신고→신고대리)에 맞춤 */
+function applySyncedCategory(
+  intake: Record<string, unknown>,
+  entityType: string | undefined,
+  serviceTypes: readonly string[] | undefined,
+): Record<string, unknown> {
+  const synced = syncMainCategory(
+    intake.category,
+    (entityType || '') as BusinessEntityType | '',
+    serviceTypes,
+  );
+  if (synced) return { ...intake, category: synced };
+  const next = { ...intake };
+  delete next.category;
+  return next;
+}
 
 export interface ClientListFilters {
   status?: ClientStatus;
@@ -442,8 +461,16 @@ export async function updateClientIntake(
   if (!existing || existing.status !== 'intake') throw new Error('NOT_FOUND');
 
   const patch = data.patch ?? {};
-  const mergedIntake = { ...(existing.intakeData ?? {}), ...(data.intakeData ?? {}) };
+  const nextEntity =
+    patch.businessEntityType !== undefined
+      ? patch.businessEntityType
+      : existing.businessEntityType || '';
+  const nextServices =
+    patch.serviceTypes !== undefined ? patch.serviceTypes : existing.serviceTypes ?? [];
+
+  let mergedIntake = { ...(existing.intakeData ?? {}), ...(data.intakeData ?? {}) };
   if (patch.mobilePhone !== undefined) mergedIntake.mobilePhone = patch.mobilePhone.trim();
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
 
   const [row] = await db
     .update(clients)
@@ -497,13 +524,17 @@ export async function updateClient(id: string, payload: ClientPatch) {
   const existing = await getClientById(id);
   if (!existing) throw new Error('NOT_FOUND');
 
-  const mergedIntake = {
+  const nextEntity = payload.businessEntityType || '';
+  const nextServices = payload.serviceTypes ?? existing.serviceTypes ?? [];
+
+  let mergedIntake = {
     ...(existing.intakeData ?? {}),
     ...(payload.intakeData ?? {}),
   };
   if (payload.mobilePhone !== undefined) {
     mergedIntake.mobilePhone = payload.mobilePhone.trim();
   }
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
 
   const [row] = await db
     .update(clients)
@@ -517,7 +548,7 @@ export async function updateClient(id: string, payload: ClientPatch) {
       phone: payload.phone.trim(),
       fax: payload.fax.trim(),
       taxTypes: payload.taxTypes,
-      businessEntityType: payload.businessEntityType || '',
+      businessEntityType: nextEntity,
       serviceTypes: payload.serviceTypes,
       ...(payload.feeSummary !== undefined ? { feeSummary: payload.feeSummary } : {}),
       ...(payload.program !== undefined ? { program: payload.program.trim() } : {}),
@@ -544,7 +575,13 @@ export async function updateClientDetail(
   const existing = await getClientById(id);
   if (!existing) throw new Error('NOT_FOUND');
 
-  const mergedIntake = mergeIntakeDataPatch(existing.intakeData, patch.intakeData);
+  const nextEntity =
+    patch.businessEntityType !== undefined
+      ? patch.businessEntityType || ''
+      : existing.businessEntityType || '';
+
+  let mergedIntake = mergeIntakeDataPatch(existing.intakeData, patch.intakeData);
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, existing.serviceTypes);
 
   const [row] = await db
     .update(clients)

@@ -36,6 +36,50 @@ function categoryFromEntityType(entityType: BusinessEntityType | '' | undefined)
 }
 
 /**
+ * 구분·서비스로 대분류 산출.
+ * - 법인 → 법인
+ * - 개인·비사업자 + 신고만(기장 없음) → 신고대리
+ * - 개인·비사업자 + 기장(또는 그 외) → 개인
+ * 지주택·미사용은 호출측에서 보존한다.
+ */
+export function deriveMainCategoryFromEntityAndServices(
+  entityType: BusinessEntityType | '' | undefined,
+  serviceTypes: readonly string[] | undefined,
+): ClientMainCategory | null {
+  if (entityType === 'corporate') return '법인';
+  if (entityType !== 'individual' && entityType !== 'nonBusiness') return null;
+
+  const services = serviceTypes ?? [];
+  const hasBookkeeping = services.includes('bookkeeping');
+  const hasFiling = services.includes('filing');
+  if (hasFiling && !hasBookkeeping) return SINGO_DAERI;
+  return '개인';
+}
+
+/** 저장용 — 지주택·미사용은 유지, 그 외는 구분·서비스로 맞춤 */
+export function syncMainCategory(
+  currentCategory: unknown,
+  entityType: BusinessEntityType | '' | undefined,
+  serviceTypes: readonly string[] | undefined,
+): string | null {
+  const cur = currentCategory != null ? String(currentCategory).trim() : '';
+  if (cur === JISUTAEK_CATEGORY || cur === UNUSED_CATEGORY) return cur || null;
+  return deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
+}
+
+function isAutoManagedCategory(s: string): boolean {
+  return (
+    !s ||
+    s === UNCategorized ||
+    s === '개인' ||
+    s === '법인' ||
+    s === SINGO_DAERI ||
+    s === NON_BUSINESS_CATEGORY ||
+    LEGACY_EMPTY_CATEGORY_ALIASES.has(s)
+  );
+}
+
+/**
  * 대분류 필터 칩용 버킷 — intakeData.category 원값 우선, 비어 있으면 구분(businessEntityType) fallback.
  * 표시용 getClientCategory()와 달리 필터·집계에만 사용한다.
  */
@@ -88,6 +132,14 @@ export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_D
 export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
+  if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY) return s;
+
+  const derived = deriveMainCategoryFromEntityAndServices(
+    client.businessEntityType as BusinessEntityType | '',
+    client.serviceTypes,
+  );
+  // 개인+신고가 대분류에 '개인'으로 남아 있어도 신고대리로 표시·집계
+  if (derived && isAutoManagedCategory(s)) return derived;
   return s || UNCategorized;
 }
 
