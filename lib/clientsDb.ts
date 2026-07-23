@@ -25,7 +25,7 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
-/** intakeData.category — 빈 값만 자동(기장 없으면 신고대리), 명시 개인·법인은 유지 */
+/** intakeData.category — 구분과 맞춤(법인↔개인), 빈 값만 기장 없을 때 신고대리 */
 function applySyncedCategory(
   intake: Record<string, unknown>,
   entityType: string | undefined,

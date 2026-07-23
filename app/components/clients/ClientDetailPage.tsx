@@ -3,8 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ClientRecord } from '@/app/types/client';
+import type { ContactUpdatePayload } from '@/app/types/contact';
 import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
-import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
+import { businessEntityTypeForCategory } from '@/app/utils/clientBizNo';
+import { SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import {
+  getPortalChurnRecords,
+  markPortalClientsFresh,
+  patchPortalClient,
+  subscribePortal,
+} from '@/app/utils/portalStore';
 import { clientRecordToContact } from '@/lib/clientMapper';
 import ContactDetailView from '@/app/components/ContactDetailView';
 import ClientRelatedLinks from '@/app/components/ClientRelatedLinks';
@@ -46,6 +54,47 @@ function Section({
   );
 }
 
+/** 기업구분·대분류가 서로 어긋나지 않게 한 번에 맞춤 */
+function resolveEntityAndCategory(
+  baseline: { entity: string; category: string },
+  contactForm: ContactUpdatePayload,
+  metaCategory: string,
+): { entity: ContactUpdatePayload['businessEntityType']; category: string } {
+  let entity = contactForm.businessEntityType;
+  let category = metaCategory.trim();
+
+  const entityChanged = entity !== baseline.entity;
+  const categoryChanged = category !== baseline.category;
+
+  if (entityChanged && !categoryChanged) {
+    if (entity === 'corporate') {
+      category = '법인';
+    } else if (entity === 'individual' || entity === 'nonBusiness') {
+      const services = contactForm.serviceTypes ?? [];
+      const hasBookkeeping = services.includes('bookkeeping');
+      const hasFiling = services.includes('filing');
+      category = hasFiling && !hasBookkeeping ? SINGO_DAERI : '개인';
+    }
+  } else if (categoryChanged && !entityChanged) {
+    const synced = businessEntityTypeForCategory(category);
+    if (synced) entity = synced;
+  } else if (categoryChanged && entityChanged) {
+    const synced = businessEntityTypeForCategory(category);
+    if (synced) {
+      entity = synced;
+    } else if (entity === 'corporate') {
+      category = '법인';
+    } else if (category === '법인') {
+      const services = contactForm.serviceTypes ?? [];
+      const hasBookkeeping = services.includes('bookkeeping');
+      const hasFiling = services.includes('filing');
+      category = hasFiling && !hasBookkeeping ? SINGO_DAERI : '개인';
+    }
+  }
+
+  return { entity, category };
+}
+
 export default function ClientDetailPage({
   client,
   canEdit,
@@ -59,11 +108,18 @@ export default function ClientDetailPage({
   const [intakeData, setIntakeData] = useState(client.intakeData ?? {});
   const [unifiedEditing, setUnifiedEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
-  const contactSaveRef = useRef<((opts?: { skipRefresh?: boolean }) => Promise<void>) | null>(null);
-  const metaSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const contactFormRef = useRef<(() => ContactUpdatePayload) | null>(null);
+  const metaPatchRef = useRef<(() => { intakeData: Record<string, unknown>; category: string }) | null>(
+    null,
+  );
   const materialsSaveRef = useRef<(() => Promise<void>) | null>(null);
   const rosterClient = { ...client, intakeData };
+
+  useEffect(() => {
+    setIntakeData(client.intakeData ?? {});
+  }, [client.id, client.intakeData]);
 
   useEffect(() => {
     return subscribePortal(() => setChurnRecords(getPortalChurnRecords()));
@@ -76,12 +132,60 @@ export default function ClientDetailPage({
 
   const handleUnifiedSave = async () => {
     setSaving(true);
+    setSaveError('');
     try {
-      await contactSaveRef.current?.({ skipRefresh: true });
-      await metaSaveRef.current?.();
+      const contactForm = contactFormRef.current?.();
+      if (!contactForm?.companyName?.trim()) {
+        setSaveError('업체명은 필수입니다.');
+        return;
+      }
+
+      const meta = metaPatchRef.current?.() ?? {
+        intakeData: {},
+        category: String(client.intakeData?.category ?? ''),
+      };
+
+      const { entity, category } = resolveEntityAndCategory(
+        {
+          entity: client.businessEntityType || '',
+          category: String(client.intakeData?.category ?? '').trim(),
+        },
+        contactForm,
+        meta.category,
+      );
+
+      const intakeDataPatch = {
+        ...meta.intakeData,
+        category: category || null,
+      };
+
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...contactForm,
+          businessEntityType: entity,
+          intakeData: intakeDataPatch,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error ?? '저장 실패');
+      }
+
+      if (data.client) {
+        patchPortalClient(client.id, data.client);
+        markPortalClientsFresh();
+        if (data.client.intakeData) {
+          setIntakeData(data.client.intakeData as Record<string, unknown>);
+        }
+      }
+
       await materialsSaveRef.current?.();
       setUnifiedEditing(false);
       router.refresh();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '저장 실패');
     } finally {
       setSaving(false);
     }
@@ -97,6 +201,7 @@ export default function ClientDetailPage({
 
       {canEdit && (
         <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {saveError && <p className="mr-auto text-xs text-rose-600">{saveError}</p>}
           {!unifiedEditing ? (
             <button
               type="button"
@@ -109,7 +214,10 @@ export default function ClientDetailPage({
             <>
               <button
                 type="button"
-                onClick={() => setUnifiedEditing(false)}
+                onClick={() => {
+                  setUnifiedEditing(false);
+                  setSaveError('');
+                }}
                 disabled={saving}
                 className={portalBtnSecondary}
               >
@@ -136,7 +244,7 @@ export default function ClientDetailPage({
           variant="flat"
           forcedEditing={unifiedEditing}
           hideEditButton
-          onSaveRef={contactSaveRef}
+          getFormRef={contactFormRef}
           titleAside={<ClientContactsPanel clientId={client.id} canEdit={canEdit && unifiedEditing} inline />}
         />
 
@@ -152,7 +260,7 @@ export default function ClientDetailPage({
               canEdit={canEdit}
               forcedEditing={unifiedEditing}
               hideEditControls
-              onSaveRef={metaSaveRef}
+              getPatchRef={metaPatchRef}
               onSaved={setIntakeData}
               embedded
             />

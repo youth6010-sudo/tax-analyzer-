@@ -46,6 +46,8 @@ interface ContactDetailViewProps {
   forcedEditing?: boolean;
   hideEditButton?: boolean;
   onSaveRef?: React.MutableRefObject<((opts?: { skipRefresh?: boolean }) => Promise<void>) | null>;
+  /** 통합 저장용 — 현재 편집 폼 스냅샷 */
+  getFormRef?: React.MutableRefObject<(() => ContactUpdatePayload) | null>;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -99,6 +101,7 @@ export default function ContactDetailView({
   forcedEditing,
   hideEditButton = false,
   onSaveRef,
+  getFormRef,
 }: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
@@ -180,6 +183,10 @@ export default function ContactDetailView({
   useEffect(() => {
     if (onSaveRef) onSaveRef.current = (opts?: { skipRefresh?: boolean }) => handleSave(opts);
   }, [handleSave, onSaveRef]);
+
+  useEffect(() => {
+    if (getFormRef) getFormRef.current = () => form;
+  }, [form, getFormRef]);
 
   const isEditing = forcedEditing ?? internalEditing;
 

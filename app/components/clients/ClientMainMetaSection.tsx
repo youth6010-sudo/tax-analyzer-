@@ -34,6 +34,11 @@ type Props = {
   forcedEditing?: boolean;
   hideEditControls?: boolean;
   onSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  /** 통합 저장용 — intake 패치 + 대분류 */
+  getPatchRef?: React.MutableRefObject<(() => {
+    intakeData: Record<string, unknown>;
+    category: string;
+  }) | null>;
 };
 
 export default function ClientMainMetaSection({
@@ -45,6 +50,7 @@ export default function ClientMainMetaSection({
   forcedEditing,
   hideEditControls = false,
   onSaveRef,
+  getPatchRef,
 }: Props) {
   const [intake, setIntake] = useState(initialIntake);
   const [internalEditing, setInternalEditing] = useState(false);
@@ -56,6 +62,34 @@ export default function ClientMainMetaSection({
     setIntake(initialIntake);
     setForm(buildForm(initialIntake));
   }, [clientId, initialIntake]);
+
+  const buildIntakePatch = useCallback(() => {
+    const taxFlags: Record<string, boolean> = {};
+    for (const k of TAX_FLAG_KEYS) taxFlags[k] = !!form.flags[k];
+
+    const intakePatch: Record<string, unknown> = {};
+    for (const k of MAIN_META_INTAKE_KEYS) {
+      intakePatch[k] = form.meta[k]?.trim() || null;
+    }
+    if (Object.values(taxFlags).some(Boolean)) intakePatch.taxFlags = taxFlags;
+    else intakePatch.taxFlags = null;
+
+    if (form.semiAnnualTarget || form.semiAnnualMonthlyDisplay) {
+      intakePatch.withholdingSettings = {
+        semiAnnualTarget: form.semiAnnualTarget,
+        semiAnnualMonthlyDisplay: form.semiAnnualMonthlyDisplay,
+      };
+    } else {
+      intakePatch.withholdingSettings = null;
+    }
+
+    const category = form.meta.category?.trim() ?? '';
+    return { intakeData: intakePatch, category };
+  }, [form]);
+
+  useEffect(() => {
+    if (getPatchRef) getPatchRef.current = () => buildIntakePatch();
+  }, [buildIntakePatch, getPatchRef]);
 
   const wh = readWithholdingSettings(intake);
   const flags = (intake.taxFlags ?? {}) as Record<string, boolean>;
@@ -70,26 +104,7 @@ export default function ClientMainMetaSection({
     setSaving(true);
     setError('');
     try {
-      const taxFlags: Record<string, boolean> = {};
-      for (const k of TAX_FLAG_KEYS) taxFlags[k] = !!form.flags[k];
-
-      const intakePatch: Record<string, unknown> = {};
-      for (const k of MAIN_META_INTAKE_KEYS) {
-        intakePatch[k] = form.meta[k]?.trim() || null;
-      }
-      if (Object.values(taxFlags).some(Boolean)) intakePatch.taxFlags = taxFlags;
-      else intakePatch.taxFlags = null;
-
-      if (form.semiAnnualTarget || form.semiAnnualMonthlyDisplay) {
-        intakePatch.withholdingSettings = {
-          semiAnnualTarget: form.semiAnnualTarget,
-          semiAnnualMonthlyDisplay: form.semiAnnualMonthlyDisplay,
-        };
-      } else {
-        intakePatch.withholdingSettings = null;
-      }
-
-      const category = form.meta.category?.trim() ?? '';
+      const { intakeData: intakePatch, category } = buildIntakePatch();
       const syncedEntity = businessEntityTypeForCategory(category);
 
       const res = await fetch(`/api/clients/${clientId}`, {
