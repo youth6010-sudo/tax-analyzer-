@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest) {
     }
 
     if (Array.isArray(body.patches)) {
-      // 클라이언트는 매번 전체 패치 목록을 보냄.
+      // 클라이언트는 dirty 패치만 보낼 수 있음(upsert). 전체 목록도 동일하게 처리.
       // 제목행 패치가 목록에 있어도(인디가 예전에 저장한 것 포함)
       // 비인디는 본문만 upsert — 전체 저장을 막지 않음.
       const patchesToSave = access.canEditLayout
@@ -110,6 +110,11 @@ export async function PUT(request: NextRequest) {
     }
     if (Array.isArray(body.newRows)) {
       await replaceReviewNewRows(body.newRows, user.id);
+    }
+
+    // newRows 교체가 없으면 전체 목록 재조회 생략 (dirty 패치 PUT)
+    if (!Array.isArray(body.newRows)) {
+      return NextResponse.json({ ok: true });
     }
 
     const [patches, newRows] = await Promise.all([listReviewPatches(), listReviewNewRows()]);

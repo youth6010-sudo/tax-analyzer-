@@ -46,7 +46,7 @@ export type PortalBootstrap = {
   churnMissingClients: ClientRecord[];
 };
 
-const STORAGE_KEY = 'portalBootstrap:v9';
+const STORAGE_KEY = 'portalBootstrap:v11';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
@@ -169,6 +169,13 @@ export function getPortalTasks(): DashboardTask[] {
 
 export function getPortalHomeStats(): PortalHomeStats | null {
   return memory?.homeStats ?? null;
+}
+
+/** bootstrap TTL 안이면 true — 같은 화면에서 /api/clients 재호출 생략용 */
+export function isPortalBootstrapFresh(maxAgeMs: number = FRESH_MS): boolean {
+  if (!memory) memory = readStorage();
+  if (!memory?.clients?.length) return false;
+  return Date.now() - memory.fetchedAt < maxAgeMs;
 }
 
 export function getPortalClients(): ClientRecord[] {
@@ -323,17 +330,7 @@ export function patchPortalIntake(
 }
 
 export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
-  const intakeLikelyStale =
-    memory &&
-    memory.clients.length > 0 &&
-    !(memory.inquiries?.length) &&
-    !(memory.processes?.length);
-  if (
-    !force &&
-    !intakeLikelyStale &&
-    memory &&
-    Date.now() - memory.fetchedAt < FRESH_MS
-  ) {
+  if (!force && memory && Date.now() - memory.fetchedAt < FRESH_MS) {
     return Promise.resolve(memory);
   }
   if (inflight) return inflight;
@@ -359,8 +356,13 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
       }
       const data = (await res.json()) as PortalBootstrap;
       bootstrapSyncError = null;
+      const prevInquiries = memory?.inquiries ?? [];
+      const prevProcesses = memory?.processes ?? [];
       memory = {
         ...data,
+        // bootstrap은 유입을 더 이상 실어 오지 않음 — IntakeHub가 채운 캐시 유지
+        inquiries: data.inquiries?.length ? data.inquiries : prevInquiries,
+        processes: data.processes?.length ? data.processes : prevProcesses,
         churnRecords: data.churnRecords ?? [],
         churnMissingClients: data.churnMissingClients ?? [],
         tasks: filterNtsTasksForHandledChurn(

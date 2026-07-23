@@ -44,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 function isDetailOnlyPatch(body: Partial<ClientPatch> & Record<string, unknown>): boolean {
   if (body.companyName !== undefined || body.intakeData === undefined) return false;
   const keys = Object.keys(body);
-  const allowed = new Set(['intakeData', 'feeSummary', 'program', 'businessEntityType']);
+  const allowed = new Set(['intakeData', 'feeSummary', 'program', 'businessEntityType', 'expectedUpdatedAt']);
   return keys.length > 0 && keys.every(k => allowed.has(k));
 }
 
@@ -134,6 +134,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           program: body.program,
           businessEntityType:
             typeof body.businessEntityType === 'string' ? body.businessEntityType : undefined,
+          expectedUpdatedAt:
+            typeof body.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : undefined,
         })
       : await updateClient(id, body as ClientPatch);
 

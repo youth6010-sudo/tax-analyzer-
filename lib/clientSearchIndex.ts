@@ -2,7 +2,8 @@ import { desc, eq, inArray, or, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clients } from '@/db/schema';
 import type { ChurnSummary, ClientSearchResult } from '@/app/types/client';
-import { clientToRecord } from '@/lib/clientMapper';
+import { clientToListRecord, listClientSelect } from '@/lib/clientMapper';
+import type { Client } from '@/db/schema';
 import { intakeSearchText } from '@/app/utils/searchNormalize';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
 import {
@@ -32,7 +33,7 @@ export async function listClientSearchIndex(filters: ClientSearchIndexFilters = 
   const whereCond = mergeClientConditions(statusCond, mineCond);
 
   const rows = await db
-    .select()
+    .select(listClientSelect)
     .from(clients)
     .where(whereCond)
     .orderBy(clients.companyName);
@@ -71,7 +72,9 @@ export async function listClientSearchIndex(filters: ClientSearchIndexFilters = 
   ]);
 
   return rows.map(r => {
-    const record = clientToRecord(r, { primaryContactMobile: primaryPhones.get(r.id) });
+    const base = clientToListRecord(r as Client);
+    const phone = primaryPhones.get(r.id);
+    const record = phone && !base.mobilePhone ? { ...base, mobilePhone: phone } : base;
     const primaryContactName = primaryNames.get(r.id);
     const contacts = contactSearch.get(r.id);
     const extraIntake = intakeSearchText(record.intakeData);

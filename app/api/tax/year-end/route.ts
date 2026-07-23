@@ -236,7 +236,11 @@ export async function POST(request: NextRequest) {
             (client.intakeData ?? {}) as Record<string, unknown>,
             yearEndPatch,
           );
-          await updateClientDetail(client.id, { intakeData: nextIntake });
+          await updateClientDetail(client.id, {
+            intakeData: {
+              yearEndTypes: nextIntake.yearEndTypes as Record<string, unknown>,
+            },
+          });
           client.intakeData = nextIntake;
           addedNames.push(displayName);
         }

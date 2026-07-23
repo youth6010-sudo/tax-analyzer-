@@ -11,6 +11,10 @@
   let boardEditMode = false;
   let saveInFlight = null;
   let lastSaveFailed = false;
+  /** 마지막 성공 저장 이후 변경된 패치 키 */
+  let dirtyPatchKeys = new Set();
+  let newRowsDirty = false;
+  let saveAgain = false;
 
   function reportSaveFailure(err) {
     lastSaveFailed = true;
@@ -23,32 +27,72 @@
     );
   }
 
+  function patchKey(sheetName, r, c) {
+    return sheetName + "|" + r + "|" + c;
+  }
+
   function flushRemoteSave() {
     if (!isEmbed()) return Promise.resolve();
     clearTimeout(saveTimer);
     saveTimer = null;
-    if (saveInFlight) return saveInFlight;
+    if (saveInFlight) {
+      saveAgain = true;
+      return saveInFlight;
+    }
+
+    const keys = dirtyPatchKeys;
+    dirtyPatchKeys = new Set();
+    const sendNewRows = newRowsDirty;
+    if (sendNewRows) newRowsDirty = false;
+
+    const allPatches = patchesCache || [];
+    const patches =
+      keys.size > 0
+        ? allPatches.filter(function (p) {
+            return keys.has(patchKey(p.sheetName, p.r, p.c));
+          })
+        : [];
+
+    if (!patches.length && !sendNewRows) {
+      if (saveAgain) {
+        saveAgain = false;
+        return flushRemoteSave();
+      }
+      return Promise.resolve();
+    }
+
+    const body = {};
+    if (patches.length) body.patches = patches;
+    if (sendNewRows) body.newRows = newRowsCache || [];
+
+    const sentKeys = keys;
     saveInFlight = fetch("/api/review/patches", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patches: patchesCache || [],
-        newRows: newRowsCache || [],
-      }),
+      body: JSON.stringify(body),
     })
       .then(function (res) {
         if (!res.ok) {
-          return res.json().then(function (body) {
-            throw new Error((body && body.error) || "저장 실패 (" + res.status + ")");
+          return res.json().then(function (b) {
+            throw new Error((b && b.error) || "저장 실패 (" + res.status + ")");
           });
         }
         lastSaveFailed = false;
       })
       .catch(function (err) {
+        sentKeys.forEach(function (k) {
+          dirtyPatchKeys.add(k);
+        });
+        if (sendNewRows) newRowsDirty = true;
         reportSaveFailure(err);
       })
       .finally(function () {
         saveInFlight = null;
+        // 비행 중 추가 편집만 이어서 저장 (실패 시 dirty 복구는 다음 schedule에 맡김 — 즉시 재시도 루프 방지)
+        if (saveAgain) {
+          saveAgain = false;
+          void flushRemoteSave();
+        }
       });
     return saveInFlight;
   }
@@ -111,6 +155,7 @@
   function saveNewRows(rows) {
     if (isEmbed()) {
       newRowsCache = rows;
+      newRowsDirty = true;
       scheduleRemoteSave();
       return;
     }
@@ -189,10 +234,6 @@
     localStorage.setItem(PATCH_KEY, JSON.stringify(patches));
   }
 
-  function patchKey(sheetName, r, c) {
-    return sheetName + "|" + r + "|" + c;
-  }
-
   function upsertPatch(sheetName, r, c, v, bg) {
     const patches = loadPatches();
     const key = patchKey(sheetName, r, c);
@@ -213,6 +254,7 @@
     }
     if (idx >= 0) patches[idx] = item;
     else patches.push(item);
+    if (isEmbed()) dirtyPatchKeys.add(key);
     savePatches(patches);
     return patches.length;
   }

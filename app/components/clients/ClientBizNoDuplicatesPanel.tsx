@@ -104,11 +104,10 @@ export default function ClientBizNoDuplicatesPanel({
     setActingId(target.id);
     setError('');
     try {
-      const nextIntake = { ...(target.intakeData ?? {}), category: '미사용' };
       const res = await fetch(`/api/clients/${target.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intakeData: nextIntake }),
+        body: JSON.stringify({ intakeData: { category: '미사용' } }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || '저장 실패');

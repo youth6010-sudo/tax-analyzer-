@@ -72,38 +72,46 @@ export async function upsertReviewPatches(
   patches: ReviewPatchInput[],
   userId: string | null,
 ) {
+  if (!patches.length) return;
   const db = getDb();
   const now = new Date();
+  /** 순차 await 대신 청크 병렬 — 셀 다수 편집 시 DB 왕복 대기 감소 */
+  const CHUNK = 25;
 
-  for (const patch of patches) {
-    const setFields: {
-      value: string;
-      updatedBy: string | null;
-      updatedAt: Date;
-      bg?: string | null;
-    } = {
-      value: serializePatchValue(patch.v),
-      updatedBy: userId,
-      updatedAt: now,
-    };
-    if (patch.bg !== undefined) {
-      setFields.bg = patch.bg;
-    }
-    await db
-      .insert(reviewGridPatches)
-      .values({
-        sheetName: patch.sheetName,
-        r: patch.r,
-        c: patch.c,
-        value: serializePatchValue(patch.v),
-        bg: patch.bg ?? null,
-        updatedBy: userId,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [reviewGridPatches.sheetName, reviewGridPatches.r, reviewGridPatches.c],
-        set: setFields,
-      });
+  for (let i = 0; i < patches.length; i += CHUNK) {
+    const slice = patches.slice(i, i + CHUNK);
+    await Promise.all(
+      slice.map(patch => {
+        const setFields: {
+          value: string;
+          updatedBy: string | null;
+          updatedAt: Date;
+          bg?: string | null;
+        } = {
+          value: serializePatchValue(patch.v),
+          updatedBy: userId,
+          updatedAt: now,
+        };
+        if (patch.bg !== undefined) {
+          setFields.bg = patch.bg;
+        }
+        return db
+          .insert(reviewGridPatches)
+          .values({
+            sheetName: patch.sheetName,
+            r: patch.r,
+            c: patch.c,
+            value: serializePatchValue(patch.v),
+            bg: patch.bg ?? null,
+            updatedBy: userId,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [reviewGridPatches.sheetName, reviewGridPatches.r, reviewGridPatches.c],
+            set: setFields,
+          });
+      }),
+    );
   }
 }
 

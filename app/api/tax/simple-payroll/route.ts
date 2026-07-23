@@ -258,7 +258,12 @@ export async function POST(request: NextRequest) {
             (client.intakeData ?? {}) as Record<string, unknown>,
             patch,
           );
-          await updateClientDetail(client.id, { intakeData: nextIntake });
+          await updateClientDetail(client.id, {
+            intakeData: {
+              incomeTypes: nextIntake.incomeTypes as Record<string, unknown>,
+              taxFlags: nextIntake.taxFlags as Record<string, unknown>,
+            },
+          });
           client.intakeData = nextIntake;
         }
       } else {
@@ -272,7 +277,12 @@ export async function POST(request: NextRequest) {
             (client.intakeData ?? {}) as Record<string, unknown>,
             patch,
           );
-          await updateClientDetail(client.id, { intakeData: nextIntake });
+          await updateClientDetail(client.id, {
+            intakeData: {
+              incomeTypes: nextIntake.incomeTypes as Record<string, unknown>,
+              taxFlags: nextIntake.taxFlags as Record<string, unknown>,
+            },
+          });
           client.intakeData = nextIntake;
           changed = true;
         }

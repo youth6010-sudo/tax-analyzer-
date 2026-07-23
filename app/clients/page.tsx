@@ -16,6 +16,7 @@ import type { ClientRecord } from '../types/client';
 import {
   getPortalClients,
   hydratePortal,
+  isPortalBootstrapFresh,
   markPortalClientsFresh,
   patchPortalClient,
   subscribePortal,
@@ -164,6 +165,15 @@ function ClientsPageContent() {
   }, []);
 
   const load = useCallback(async () => {
+    // 포털 bootstrap이 신선하면 전체 /api/clients 재호출 생략 (폐업 포함·강제 새로고침은 제외)
+    if (!state.includeChurned && isPortalBootstrapFresh()) {
+      const cached = getPortalClients();
+      if (cached.length > 0) {
+        setFetchedClients(cached);
+        setFetching(false);
+        return;
+      }
+    }
     const params = new URLSearchParams();
     if (state.mineOnly) params.set('mine', '1');
     if (state.includeChurned) params.set('includeChurned', '1');

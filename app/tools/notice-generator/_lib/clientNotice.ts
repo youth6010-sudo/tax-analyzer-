@@ -321,19 +321,18 @@ export async function saveClientNotice(
 
   // 업체별 필요자료를 수임처관리의 "세목별 특이사항"(intakeData.notes[키])에도 반영.
   // 기존 notes 맵은 보존하고 해당 세목 키만 갱신한다.
-  const currentNotes =
-    intakeData.notes && typeof intakeData.notes === 'object'
-      ? (intakeData.notes as Record<string, string>)
-      : {};
   const douzoneKey = TAX_TO_DOUZONE_NOTE_KEY[taxType];
-  const nextNotes = { ...currentNotes, [douzoneKey]: htmlToPlainText(data.materials) };
+  const noteText = htmlToPlainText(data.materials);
 
   const res = await fetch(`/api/clients/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
     body: JSON.stringify({
-      intakeData: { noticeData: nextMap, notes: nextNotes },
+      intakeData: {
+        noticeData: { [taxType]: data },
+        notes: { [douzoneKey]: noteText },
+      },
     }),
   });
   if (!res.ok) {

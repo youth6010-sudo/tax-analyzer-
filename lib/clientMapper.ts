@@ -1,9 +1,11 @@
+import { sql } from 'drizzle-orm';
 import type { ClientRecord } from '@/app/types/client';
 import type { ContactRecord } from '@/app/types/contact';
-import type { Client } from '@/db/schema';
+import { clients, type Client } from '@/db/schema';
 import { mobilePhoneFrom } from '@/app/utils/clientPhone';
 
-const LIST_INTAKE_KEYS = [
+/** 목록·bootstrap·검색 인덱스에 실을 intake 키 (부가세 진행도·안내문은 전용 API) */
+export const LIST_INTAKE_KEYS = [
   'category',
   'douzoneCode',
   'mobilePhone',
@@ -26,12 +28,8 @@ const LIST_INTAKE_KEYS = [
   'payrollHistory',
   /** 수임처 목록 엑셀 — 필요자료·특이사항 */
   'notes',
-  'noticeData',
-  /** 부가세 자료입력 진행도 */
+  /** 부가세 자료 플래그·신고분 수수료 (진행도 맵은 제외) */
   'vatMaterialFlags',
-  'vatEntryProgress',
-  'vatAnnualProgress',
-  /** 부가세 검토표 신고분 수수료 */
   'vatFilingFees',
 ] as const;
 
@@ -50,6 +48,53 @@ export function slimIntakeDataForList(intakeData: Record<string, unknown> | unde
   }
   return out;
 }
+
+/** DB 목록 조회용 — 허용 키만 jsonb_build_object 로 프로젝션 */
+export function listIntakeDataSql(column = clients.intakeData) {
+  const args = LIST_INTAKE_KEYS.flatMap(key => [
+    sql.raw(`'${key}'`),
+    sql`${column} -> ${sql.raw(`'${key}'`)}`,
+  ]);
+  return sql<Record<string, unknown>>`
+    COALESCE(
+      jsonb_strip_nulls(jsonb_build_object(${sql.join(args, sql`, `)})),
+      '{}'::jsonb
+    )
+  `;
+}
+
+/** listClients / getClientsByIds 공통 SELECT (intake 슬림) */
+export const listClientSelect = {
+  id: clients.id,
+  companyName: clients.companyName,
+  manager: clients.manager,
+  representative: clients.representative,
+  businessNo: clients.businessNo,
+  corporateNo: clients.corporateNo,
+  residentNo: clients.residentNo,
+  phone: clients.phone,
+  fax: clients.fax,
+  taxTypes: clients.taxTypes,
+  businessEntityType: clients.businessEntityType,
+  serviceTypes: clients.serviceTypes,
+  feeSummary: clients.feeSummary,
+  program: clients.program,
+  converted: clients.converted,
+  colbert: clients.colbert,
+  status: clients.status,
+  assignedUserId: clients.assignedUserId,
+  intakeStep: clients.intakeStep,
+  intakeData: listIntakeDataSql(),
+  source: clients.source,
+  blueholeClientId: clients.blueholeClientId,
+  ntsStatus: clients.ntsStatus,
+  ntsStatusCode: clients.ntsStatusCode,
+  ntsTaxType: clients.ntsTaxType,
+  ntsClosedDate: clients.ntsClosedDate,
+  ntsCheckedAt: clients.ntsCheckedAt,
+  createdAt: clients.createdAt,
+  updatedAt: clients.updatedAt,
+};
 
 export function clientToRecord(row: Client, opts?: { primaryContactMobile?: string }): ClientRecord {
   const intakeData = row.intakeData ?? {};
@@ -91,7 +136,7 @@ export function clientToRecord(row: Client, opts?: { primaryContactMobile?: stri
   };
 }
 
-/** 목록 조회 전용 — intakeData 최소 필드만 */
+/** 목록 조회 전용 — intakeData 최소 필드만 (SQL 프로젝션 후에도 화이트리스트 재적용) */
 export function clientToListRecord(row: Client): ClientRecord {
   return clientToRecord({ ...row, intakeData: slimIntakeDataForList(row.intakeData) });
 }

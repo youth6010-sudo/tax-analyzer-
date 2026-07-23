@@ -1,7 +1,6 @@
 import { isDataViewer, requireUser } from '@/lib/auth';
 import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '@/lib/clientsDb';
 import { listDashboardTasks } from '@/lib/dashboardTasks';
-import { listInquiries, listIntakeProcesses } from '@/lib/workbookDb';
 
 const BOOTSTRAP_CACHE_MS = 60_000;
 const bootstrapCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof buildPortalBootstrap>> }>();
@@ -67,10 +66,9 @@ async function buildPortalBootstrap(user: Awaited<ReturnType<typeof requireUser>
     manager: c.manager,
   }));
 
-  const [tasks, inquiries, processes, churnRecords, churnMissingClients] = await Promise.all([
+  // 유입 inquiries/processes는 bootstrap에서 제외 — /clients/intake 이 /api/intake/* 로 로드
+  const [tasks, churnRecords, churnMissingClients] = await Promise.all([
     listDashboardTasks({ name: user.name, isAdmin: isDataViewer(user) }, 20, taskClientPool),
-    listInquiries(),
-    listIntakeProcesses(),
     listChurnRecords(accessFilter),
     listChurnedClientsWithoutRecord(accessFilter),
   ]);
@@ -82,8 +80,8 @@ async function buildPortalBootstrap(user: Awaited<ReturnType<typeof requireUser>
     homeStats: statsFromClients(activeClients),
     clients: activeClients,
     searchIndex: [],
-    inquiries,
-    processes,
+    inquiries: [] as Record<string, unknown>[],
+    processes: [] as Record<string, unknown>[],
     churnRecords,
     churnMissingClients,
   };

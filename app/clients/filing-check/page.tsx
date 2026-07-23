@@ -65,7 +65,7 @@ import {
   type VatPhase,
   type VatObligation,
 } from '@/app/utils/filingCheck';
-import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
+import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients, isPortalBootstrapFresh } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
 import { isClosureReviewClient } from '@/app/utils/clientClosure';
 import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
@@ -593,6 +593,10 @@ function FilingCheckPageInner() {
   const fileRef = useRef<HTMLInputElement>(null);
   const incomeFileRef = useRef<HTMLInputElement>(null);
   const incomeSectionRef = useRef<IncomeTypeFilingHandle>(null);
+  const pendingPersistRef = useRef<CheckRecord | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistInflightRef = useRef<Promise<void> | null>(null);
+  const PERSIST_DEBOUNCE_MS = 400;
   const [incomeStats, setIncomeStats] = useState<IncomeFilingStats>({
     target: 0,
     received: 0,
@@ -647,11 +651,32 @@ function FilingCheckPageInner() {
       window.removeEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
   }, []);
 
-  const persistSession = useCallback(
-    async (data: CheckRecord) => {
-      if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) return;
-      const pk = periodKey(tax, period);
-      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, data);
+  const flushPersistSession = useCallback(async () => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) {
+      pendingPersistRef.current = null;
+      return;
+    }
+
+    while (persistInflightRef.current) {
+      await persistInflightRef.current;
+    }
+
+    const data = pendingPersistRef.current;
+    if (!data) return;
+    if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) {
+      pendingPersistRef.current = null;
+      return;
+    }
+    pendingPersistRef.current = null;
+
+    const pk = periodKey(tax, period);
+    writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, data);
+
+    const run = (async () => {
       try {
         const res = await fetch('/api/filing-check/session', {
           method: 'PUT',
@@ -659,7 +684,7 @@ function FilingCheckPageInner() {
           body: JSON.stringify({
             manager: selManager,
             taxType: tax,
-            periodKey: periodKey(tax, period),
+            periodKey: pk,
             data,
           }),
         });
@@ -679,16 +704,83 @@ function FilingCheckPageInner() {
             : '저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.',
         );
       }
+    })();
+
+    const tracked = run.finally(() => {
+      if (persistInflightRef.current === tracked) persistInflightRef.current = null;
+    });
+    persistInflightRef.current = tracked;
+    await tracked;
+
+    if (pendingPersistRef.current) {
+      await flushPersistSession();
+    }
+  }, [selManager, tax, period, keyId]);
+
+  const persistSession = useCallback(
+    (data: CheckRecord, opts?: { flush?: boolean }) => {
+      if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) {
+        return Promise.resolve();
+      }
+      pendingPersistRef.current = data;
+      writeLocalFilingCheckSession(
+        STORAGE_PREFIX,
+        selManager,
+        tax,
+        periodKey(tax, period),
+        data,
+      );
+
+      if (opts?.flush) {
+        return flushPersistSession();
+      }
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => {
+        persistTimerRef.current = null;
+        void flushPersistSession();
+      }, PERSIST_DEBOUNCE_MS);
+      return Promise.resolve();
     },
-    [selManager, tax, period, keyId],
+    [selManager, tax, period, keyId, flushPersistSession],
   );
 
   useEffect(() => {
     return () => {
       if (savedTickTimerRef.current) clearTimeout(savedTickTimerRef.current);
       if (incomeSavedTickTimerRef.current) clearTimeout(incomeSavedTickTimerRef.current);
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      // 언마운트 시 대기 중인 스냅샷을 즉시 전송 (fire-and-forget)
+      const pending = pendingPersistRef.current;
+      if (pending && sessionReadyRef.current) {
+        pendingPersistRef.current = null;
+        const pk = periodKey(tax, period);
+        writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, pending);
+        void fetch('/api/filing-check/session', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            manager: selManager,
+            taxType: tax,
+            periodKey: pk,
+            data: pending,
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      }
     };
-  }, []);
+  }, [selManager, tax, period]);
+
+  // 기간·담당자 전환 시 미전송 debounce 취소 (이전 키로 쓰지 않도록)
+  useEffect(() => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    pendingPersistRef.current = null;
+  }, [keyId]);
 
   useEffect(() => {
     hydratePortal();
@@ -706,10 +798,14 @@ function FilingCheckPageInner() {
         if (cancelled) return;
       }
 
-      // 포털 bootstrap에 이미 수임처가 있으면 먼저 쓰고, 백그라운드로 최신만 갱신
+      // 포털 bootstrap에 이미 수임처가 있으면 먼저 쓰고, TTL 안이면 전체 /api/clients 재호출 생략
       const portalClients = getPortalClients();
       if (portalClients.length > 0) {
         setAllClients(portalClients);
+      }
+
+      if (isPortalBootstrapFresh() && portalClients.length > 0) {
+        return;
       }
 
       const url = master
@@ -786,13 +882,14 @@ function FilingCheckPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyId, selManager, tax, period]);
 
-  // 기록 변경 시 즉시 저장. 완료(done) 상태에서는 완료 취소만 허용.
+  // 기록 변경 시 저장(디바운스). 완료(done) 상태에서는 완료 취소만 허용. done 변경은 즉시 flush.
   const patchRecord = (patch: Partial<CheckRecord>) => {
     setRecord(prev => {
       const unlocking = prev.done && patch.done === false;
       if (prev.done && !unlocking) return prev;
       const next = { ...prev, ...patch };
-      void persistSession(next);
+      const flush = patch.done !== undefined || patch.fileName !== undefined;
+      void persistSession(next, flush ? { flush: true } : undefined);
       return next;
     });
   };
@@ -1510,9 +1607,19 @@ function FilingCheckPageInner() {
       const res = await fetch(`/api/clients/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intakeData: nextIntake }),
+        body: JSON.stringify({
+          intakeData: { filingType: value },
+        }),
       });
       if (!res.ok) throw new Error('저장 실패');
+      const data = (await res.json().catch(() => ({}))) as { client?: ClientRecord };
+      if (data.client?.updatedAt) {
+        setAllClients(prev =>
+          (prev ?? clients).map(x =>
+            x.id === c.id ? { ...x, updatedAt: data.client!.updatedAt, intakeData: nextIntake } : x,
+          ),
+        );
+      }
     } catch {
       setAllClients(prev =>
         (prev ?? clients).map(x =>
@@ -1531,10 +1638,11 @@ function FilingCheckPageInner() {
         ? (prevIntake.vatObligationByPhase as Record<string, string>)
         : {};
     const bucket = vatObligationBucket(period.vatPhase);
+    const phasePatch = { [bucket]: value, [period.vatPhase]: value };
     const nextIntake = {
       ...prevIntake,
       vatObligation: value,
-      vatObligationByPhase: { ...prevByPhase, [bucket]: value, [period.vatPhase]: value },
+      vatObligationByPhase: { ...prevByPhase, ...phasePatch },
     };
     setAllClients(prev =>
       (prev ?? clients).map(x =>
@@ -1546,9 +1654,22 @@ function FilingCheckPageInner() {
       const res = await fetch(`/api/clients/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intakeData: nextIntake }),
+        body: JSON.stringify({
+          intakeData: {
+            vatObligation: value,
+            vatObligationByPhase: phasePatch,
+          },
+        }),
       });
       if (!res.ok) throw new Error('저장 실패');
+      const data = (await res.json().catch(() => ({}))) as { client?: ClientRecord };
+      if (data.client?.updatedAt) {
+        setAllClients(prev =>
+          (prev ?? clients).map(x =>
+            x.id === c.id ? { ...x, updatedAt: data.client!.updatedAt, intakeData: nextIntake } : x,
+          ),
+        );
+      }
     } catch {
       setAllClients(prev =>
         (prev ?? clients).map(x =>
@@ -1584,7 +1705,7 @@ function FilingCheckPageInner() {
     setRecord(nextRecord);
     setTargetDisplayOrder(prev => (prev.includes(c.id) ? prev : [...prev, c.id]));
     void (async () => {
-      await persistSession(nextRecord);
+      await persistSession(nextRecord, { flush: true });
       if (isIncomeTypeTax) {
         await incomeSectionRef.current?.reload();
       }

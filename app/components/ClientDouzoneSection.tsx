@@ -134,15 +134,13 @@ export default function ClientDouzoneSection({
 
       const fee = feeRaw ? Number(feeRaw) : null;
 
-      const nextIntake = { ...intakeData };
+      const intakePatch: Record<string, unknown> = {};
 
       for (const key of editableKeys) {
 
         const v = form[key]?.trim() ?? '';
 
-        if (v) nextIntake[key] = v;
-
-        else delete nextIntake[key];
+        intakePatch[key] = v || null;
 
       }
 
@@ -154,7 +152,7 @@ export default function ClientDouzoneSection({
 
         body: JSON.stringify({
 
-          intakeData: nextIntake,
+          intakeData: intakePatch,
 
           feeSummary: fee != null && !Number.isNaN(fee) ? fee : null,
 
@@ -170,7 +168,7 @@ export default function ClientDouzoneSection({
 
       const c = data.client;
 
-      setIntakeData(c.intakeData ?? nextIntake);
+      setIntakeData(c.intakeData ?? { ...intakeData, ...intakePatch });
 
       setFeeSummary(c.feeSummary ?? null);
 

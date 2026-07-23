@@ -14,7 +14,7 @@ import {
 const REVIEW_TAX_YEAR_STORAGE_KEY = 'reviewTaxYear';
 
 /** review/*.js 캐시 무효화 — 검토표 스크립트 수정 시 올려서 구버전·신버전 혼용 방지 */
-const REVIEW_ASSET_VERSION = '20260721a';
+const REVIEW_ASSET_VERSION = '20260723a';
 
 const SCRIPT_GROUPS = [
   ['/review/review-auth.js'],

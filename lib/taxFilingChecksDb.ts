@@ -336,26 +336,31 @@ export async function upsertFilingCheckSession(
   const incoming = { ...EMPTY_SESSION_DATA, ...data };
 
   // 빈 로컬(EMPTY)로 기존 제외·특이사항을 통째로 지우는 경우만 방어.
-  // 정상 저장(제외 목록이 있는 PUT)은 요청 데이터를 그대로 반영.
   const incomingWipesCarry =
     !hasCarryFieldsData(incoming) &&
     (incoming.excelBizNos?.length ?? 0) === 0 &&
     !incoming.fileName?.trim() &&
     Object.keys(incoming.overrides ?? {}).length === 0;
-  const merged: FilingCheckSessionData =
-    existing && incomingWipesCarry && hasCarryFieldsData(existing)
-      ? {
-          ...incoming,
-          ...carryFieldsFromRecord(existing),
-          ...receiptSlice(incoming),
-          forceIncluded: {
-            ...(existing.forceIncluded ?? {}),
-            ...(incoming.forceIncluded ?? {}),
-          },
-          clientOrder: incoming.clientOrder ?? existing.clientOrder,
-          siteDone: incoming.siteDone ?? existing.siteDone,
-        }
-      : incoming;
+
+  let merged: FilingCheckSessionData;
+  if (existing && incomingWipesCarry && hasCarryFieldsData(existing)) {
+    merged = {
+      ...incoming,
+      ...carryFieldsFromRecord(existing),
+      ...receiptSlice(incoming),
+      forceIncluded: {
+        ...(existing.forceIncluded ?? {}),
+        ...(incoming.forceIncluded ?? {}),
+      },
+      clientOrder: incoming.clientOrder ?? existing.clientOrder,
+      siteDone: incoming.siteDone ?? existing.siteDone,
+    };
+  } else if (existing) {
+    // 기존 세션 위에 요청 필드 덮어쓰기 (클라이언트가 보낸 top-level 값 그대로 사용 → 삭제 반영)
+    merged = { ...existing, ...incoming };
+  } else {
+    merged = incoming;
+  }
 
   if (existing) {
     await db

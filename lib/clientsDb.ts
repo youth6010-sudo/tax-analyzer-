@@ -8,7 +8,7 @@ import {
   normalizeChurnClosureFields,
   type ChurnClientClosureHint,
 } from '@/app/config/churnOptions';
-import { clientToListRecord, clientToRecord } from '@/lib/clientMapper';
+import { clientToListRecord, clientToRecord, listClientSelect } from '@/lib/clientMapper';
 import { computeFeeSummaryFromItems, feeItemsEqual, readFeeItems, type FeeLineItem } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
@@ -76,12 +76,12 @@ export async function listClients(filters: ClientListFilters = {}) {
   }
 
   const rows = await db
-    .select()
+    .select(listClientSelect)
     .from(clients)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(clients.companyName);
 
-  const records = rows.map(clientToListRecord);
+  const records = rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
   const churnedIds = records.filter(r => r.status === 'churned').map(r => r.id);
   if (churnedIds.length === 0) return records;
 
@@ -147,8 +147,8 @@ export async function getClientsByIds(ids: string[]) {
   if (unique.length === 0) return [];
 
   const db = getDb();
-  const rows = await db.select().from(clients).where(inArray(clients.id, unique));
-  const records = rows.map(clientToListRecord);
+  const rows = await db.select(listClientSelect).from(clients).where(inArray(clients.id, unique));
+  const records = rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
 
   const churnedIds = records.filter(r => r.status === 'churned').map(r => r.id);
   if (churnedIds.length === 0) return records;
@@ -526,10 +526,7 @@ export async function updateClient(id: string, payload: ClientPatch) {
   const nextEntity = payload.businessEntityType || '';
   const nextServices = payload.serviceTypes ?? existing.serviceTypes ?? [];
 
-  let mergedIntake = {
-    ...(existing.intakeData ?? {}),
-    ...(payload.intakeData ?? {}),
-  };
+  let mergedIntake = mergeIntakeDataPatch(existing.intakeData, payload.intakeData ?? {});
   if (payload.mobilePhone !== undefined) {
     mergedIntake.mobilePhone = payload.mobilePhone.trim();
   }
@@ -568,11 +565,25 @@ export async function updateClientDetail(
     feeSummary?: number | null;
     program?: string;
     businessEntityType?: string;
+    /** ISO 시각 — 있으면 서버 updatedAt과 다르면 CONFLICT */
+    expectedUpdatedAt?: string | null;
   },
 ) {
   const db = getDb();
   const existing = await getClientById(id);
   if (!existing) throw new Error('NOT_FOUND');
+
+  if (patch.expectedUpdatedAt) {
+    const expectedMs = Date.parse(patch.expectedUpdatedAt);
+    const currentMs = Date.parse(existing.updatedAt);
+    if (
+      !Number.isNaN(expectedMs) &&
+      !Number.isNaN(currentMs) &&
+      Math.abs(expectedMs - currentMs) > 1500
+    ) {
+      throw new Error('CONFLICT');
+    }
+  }
 
   const nextEntity =
     patch.businessEntityType !== undefined
@@ -605,29 +616,36 @@ function mergeIntakeDataPatch(
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
   const merged = { ...(existing ?? {}) };
+  /** 객체 맵 — 키 단위 병합 (동시 편집 시 통째 교체 방지) */
+  const deepMergeKeys = new Set([
+    'noticeData',
+    'notes',
+    'vatEntryProgress',
+    'vatAnnualProgress',
+    'vatObligationByPhase',
+    'vatMaterialFlags',
+    'vatFilingFees',
+    'incomeTypes',
+    'yearEndTypes',
+    'taxFlags',
+    'withholdingSettings',
+  ]);
+
   for (const [k, v] of Object.entries(patch)) {
     if (v === null || v === undefined || v === '') {
       delete merged[k];
       continue;
     }
-    if (k === 'noticeData' && typeof v === 'object' && !Array.isArray(v)) {
+    if (deepMergeKeys.has(k) && typeof v === 'object' && !Array.isArray(v)) {
       const prev =
-        merged.noticeData && typeof merged.noticeData === 'object' && !Array.isArray(merged.noticeData)
-          ? (merged.noticeData as Record<string, unknown>)
+        merged[k] && typeof merged[k] === 'object' && !Array.isArray(merged[k])
+          ? (merged[k] as Record<string, unknown>)
           : {};
-      merged.noticeData = { ...prev, ...(v as Record<string, unknown>) };
-      continue;
-    }
-    if (k === 'notes' && typeof v === 'object' && !Array.isArray(v)) {
-      const prev =
-        merged.notes && typeof merged.notes === 'object' && !Array.isArray(merged.notes)
-          ? (merged.notes as Record<string, unknown>)
-          : {};
-      const nextNotes = { ...prev, ...(v as Record<string, unknown>) };
-      for (const [nk, nv] of Object.entries(nextNotes)) {
-        if (nv === null || nv === undefined || nv === '') delete nextNotes[nk];
+      const nextMap = { ...prev, ...(v as Record<string, unknown>) };
+      for (const [nk, nv] of Object.entries(nextMap)) {
+        if (nv === null || nv === undefined || nv === '') delete nextMap[nk];
       }
-      merged.notes = nextNotes;
+      merged[k] = nextMap;
       continue;
     }
     merged[k] = v;
@@ -1292,26 +1310,26 @@ export async function findClientsByBusinessNo(
   if (isCorporate) {
     if (corpDigits.length !== 13) return [];
     const rows = await db
-      .select()
+      .select(listClientSelect)
       .from(clients)
       .where(
         sql`regexp_replace(${clients.businessNo}, '[^0-9]', '', 'g') = ${digits}
           AND regexp_replace(${clients.corporateNo}, '[^0-9]', '', 'g') = ${corpDigits}`,
       )
       .orderBy(asc(clients.createdAt));
-    return rows.map(clientToListRecord);
+    return rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
   }
 
   if (resDigits.length !== 13) return [];
   const rows = await db
-    .select()
+    .select(listClientSelect)
     .from(clients)
     .where(
       sql`regexp_replace(${clients.businessNo}, '[^0-9]', '', 'g') = ${digits}
         AND regexp_replace(${clients.residentNo}, '[^0-9]', '', 'g') = ${resDigits}`,
     )
     .orderBy(asc(clients.createdAt));
-  return rows.map(clientToListRecord);
+  return rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
 }
 
 export async function deleteClientById(id: string) {
