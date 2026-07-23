@@ -24,7 +24,12 @@ export default function NoticeCollapsibleSection({
         <h2 className={noticeSectionTitle}>{title}</h2>
         <span className="shrink-0 text-xs font-medium text-slate-500">{open ? '접기' : '펼치기'}</span>
       </button>
-      {open && <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">{children}</div>}
+      <div
+        hidden={!open}
+        className="mt-3 space-y-3 border-t border-slate-100 pt-3"
+      >
+        {children}
+      </div>
     </section>
   );
 }

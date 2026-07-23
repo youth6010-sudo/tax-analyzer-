@@ -21,17 +21,40 @@ export function useNoticeRichEditor({
   const ref = useRef<HTMLDivElement>(null);
   const internalChangeRef = useRef(false);
   const focusedRef = useRef(false);
+  const wasEnabledRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    if (!ref.current || !enabled) return;
-    if (internalChangeRef.current) {
+    if (!ref.current) return;
+
+    // 미리보기 모드에서도 value를 DOM에 반영 (동일 노드 유지)
+    if (!enabled) {
+      internalChangeRef.current = false;
+      wasEnabledRef.current = false;
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      const html = toEditorHtml(value || '');
+      if (ref.current.innerHTML !== html) {
+        ref.current.innerHTML = html;
+      }
+      return;
+    }
+
+    const justEnabled = !wasEnabledRef.current;
+    wasEnabledRef.current = true;
+
+    // 입력 중 자체 onChange로 value가 바뀐 경우는 DOM을 다시 쓰지 않음
+    // 단, 편집 모드에 막 들어온 경우에는 반드시 내용을 채움
+    if (internalChangeRef.current && !justEnabled) {
       internalChangeRef.current = false;
       return;
     }
-    // 거래처·세목 전환 등 외부 value 변경: 대기 중 debounce emit이 과거값을 덮어쓰지 않게 취소
+    internalChangeRef.current = false;
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -57,13 +80,15 @@ export function useNoticeRichEditor({
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
       }
-      // Enter가 <div> 대신 <br>가 되도록 (문장 중간 강제 분리 완화)
       try {
         document.execCommand('defaultParagraphSeparator', false, 'br');
       } catch {
         /* ignore */
       }
-      const sanitized = sanitizeNoticeHtml(ref.current.innerHTML);
+      const raw = ref.current.innerHTML;
+      if (!raw.trim()) return '';
+      const sanitized = sanitizeNoticeHtml(raw);
+      if (!sanitized.trim()) return '';
       const display = finalizeNoticeHtml(sanitized);
       if (syncDom && ref.current.innerHTML !== display) {
         ref.current.innerHTML = display;
@@ -103,7 +128,6 @@ export function useNoticeRichEditor({
 
   const handleInput = useCallback(() => {
     if (!ref.current || !enabled) return;
-    // 세목·거래처 전환 전에 ref/state가 최신이어야 하므로 입력 즉시 동기화 (sanitize는 blur/debounce)
     internalChangeRef.current = true;
     onChangeRef.current(ref.current.innerHTML);
     scheduleDebouncedEmit();

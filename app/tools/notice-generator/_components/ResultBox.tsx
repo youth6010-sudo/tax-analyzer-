@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   finalizeNoticeHtml,
@@ -42,21 +44,22 @@ export default function ResultBox({
   const { ref: editorRef, handleFocus, handleBlur, handleInput, afterInsert, emit } =
     useNoticeRichEditor({
       value: displayHtml,
-      onChange: (html: string) => setEdited(html),
+      onChange: (html: string) => {
+        // 빈 문자열로 덮어쓰지 않음 (blur/버튼 포커스 경합 방지)
+        if (!html.trim()) return;
+        setEdited(html);
+      },
       toEditorHtml,
       enabled: editing,
     });
 
   useEffect(() => {
     if (editing) return;
+    // 원본(자동생성) HTML이 바뀌어도 사용자가 편집한 내용은 유지.
+    // 편집 내용이 「재생성」으로 비워진 경우(null)에만 기준값을 갱신.
     if (edited === null) {
       lastMessageHtml.current = messageHtml;
-      return;
     }
-    if (edited === lastMessageHtml.current) {
-      setEdited(null);
-    }
-    lastMessageHtml.current = messageHtml;
   }, [messageHtml, edited, editing]);
 
   const isDirty = edited !== null && edited !== messageHtml;
@@ -93,7 +96,8 @@ export default function ResultBox({
 
   const toggleEdit = () => {
     if (editing) {
-      emit(true);
+      const next = emit(true);
+      if (next.trim()) setEdited(next);
       setEditing(false);
     } else {
       setEditing(true);
@@ -206,25 +210,23 @@ export default function ResultBox({
         </div>
       </div>
 
-      {editing ? (
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onFocus={handleFocus}
-          onInput={handleInput}
-          onBlur={handleBlur}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-blue-200 bg-white p-3 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20`}
-        />
-      ) : (
-        <div
-          className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-800`}
-          dangerouslySetInnerHTML={{ __html: displayHtml }}
-        />
-      )}
+      {/* 편집/미리보기 동일 DOM — 재편집 시 내용 유지 (dangerouslySetInnerHTML 사용 안 함) */}
+      <div
+        ref={editorRef}
+        contentEditable={editing}
+        suppressContentEditableWarning
+        onFocus={editing ? handleFocus : undefined}
+        onInput={editing ? handleInput : undefined}
+        onBlur={editing ? handleBlur : undefined}
+        onPaste={editing ? handlePaste : undefined}
+        onDrop={editing ? handleDrop : undefined}
+        onDragOver={editing ? handleDragOver : undefined}
+        className={`notice-preview ${previewMinH} w-full overflow-auto rounded-lg border p-3 text-sm text-slate-800 outline-none ${
+          editing
+            ? 'border-blue-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20'
+            : 'border-slate-200 bg-slate-50/80'
+        }`}
+      />
       {!compact && !embedded && (
         <p className="mt-1.5 text-[10px] text-slate-400">
           서식 복사: 한글·워드·메일 · 텍스트: 카카오톡 등 · 편집: Ctrl+B/I/U/Z/Y

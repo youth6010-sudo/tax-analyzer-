@@ -52,13 +52,18 @@ export default function NoticeResultTabs({
         </div>
       </div>
 
-      {activeTab === 'main' && <ResultBox messageHtml={mainHtml} editable compact embedded />}
-      {activeTab === 'vat' && showVat && vatHtml != null && (
-        <ResultBox messageHtml={vatHtml} editable compact embedded />
-      )}
-      {activeTab === 'payment' && (
+      {/* 탭 전환 시 언마운트하지 않음 — 편집 내용 유지 */}
+      <div hidden={activeTab !== 'main'} role="tabpanel">
+        <ResultBox messageHtml={mainHtml} editable compact embedded />
+      </div>
+      {showVat && vatHtml != null ? (
+        <div hidden={activeTab !== 'vat'} role="tabpanel">
+          <ResultBox messageHtml={vatHtml} editable compact embedded />
+        </div>
+      ) : null}
+      <div hidden={activeTab !== 'payment'} role="tabpanel">
         <ResultBox messageHtml={paymentHtml} editable compact embedded />
-      )}
+      </div>
     </>
   );
 

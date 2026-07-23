@@ -227,6 +227,20 @@ function sanitizeNodeStyles(el: HTMLElement) {
   const prevWidth = el.style.width;
   const prevColSpan = el.getAttribute('colspan');
   const prevRowSpan = el.getAttribute('rowspan');
+  // 부가세 요약표 등 — 편집 후에도 구분 색·글자색 유지
+  const prevBg =
+    (el.style.backgroundColor || el.style.background || '').trim() ||
+    (el.getAttribute('bgcolor') || '').trim();
+  const prevColor = (el.style.color || '').trim();
+  const prevFontWeight = (el.style.fontWeight || '').trim();
+  const prevWhiteSpace = (el.style.whiteSpace || '').trim();
+  const prevVerticalAlign = (el.style.verticalAlign || '').trim();
+  const prevPadding = (el.style.padding || '').trim();
+  const prevFontSize = (el.style.fontSize || '').trim();
+  const cellIndex =
+    isCell && typeof (el as HTMLTableCellElement).cellIndex === 'number'
+      ? (el as HTMLTableCellElement).cellIndex
+      : -1;
 
   for (const attr of Array.from(el.attributes)) {
     if (attr.name === 'colspan' || attr.name === 'rowspan') continue;
@@ -263,12 +277,55 @@ function sanitizeNodeStyles(el: HTMLElement) {
   }
 
   if (isCell) {
-    el.style.border = '1px solid #e5e7eb';
-    el.style.padding = '8px 12px';
-    el.style.color = NOTICE_TEXT_COLOR;
-    el.style.backgroundColor = 'transparent';
-    if (isBold) el.style.fontWeight = '700';
-    if (prevAlign) el.style.textAlign = prevAlign;
+    el.style.border = '1px solid #cbd5e1';
+    el.style.padding = prevPadding || '7px 10px';
+    el.style.fontSize = prevFontSize || '12px';
+    el.style.lineHeight = '1.45';
+    el.style.verticalAlign = prevVerticalAlign || 'middle';
+    el.style.whiteSpace = prevWhiteSpace || 'nowrap';
+
+    // 배경·글자색 유지 (투명/본문색으로 덮어쓰지 않음)
+    const bgNorm = prevBg.replace(/\s/g, '').toLowerCase();
+    const keepBg =
+      prevBg &&
+      bgNorm !== 'transparent' &&
+      bgNorm !== 'rgba(0,0,0,0)' &&
+      bgNorm !== 'inherit';
+    if (keepBg) {
+      el.style.background = prevBg;
+      el.style.backgroundColor = prevBg;
+    } else {
+      el.style.background = '#ffffff';
+      el.style.backgroundColor = '#ffffff';
+    }
+
+    const colorNorm = prevColor.replace(/\s/g, '').toLowerCase();
+    const lightColor =
+      !prevColor ||
+      colorNorm === '#fff' ||
+      colorNorm === '#ffffff' ||
+      colorNorm === 'white' ||
+      colorNorm === 'rgb(255,255,255)' ||
+      colorNorm === '#f8fafc' ||
+      colorNorm === '#f1f5f9';
+    el.style.color = lightColor ? NOTICE_TEXT_COLOR : prevColor;
+
+    if (isBold || prevFontWeight === 'bold' || prevFontWeight === '700') {
+      el.style.fontWeight = '700';
+    } else if (prevFontWeight) {
+      el.style.fontWeight = prevFontWeight;
+    }
+
+    // 열 정렬 통일 — 1열(구분) 왼쪽, 2·3열(공급가·세액) 오른쪽 / 제목행은 가운데
+    if (tag === 'th') {
+      el.style.textAlign = 'center';
+    } else if (cellIndex > 0) {
+      el.style.textAlign = 'right';
+    } else if (prevAlign === 'right' || prevAlign === 'center') {
+      el.style.textAlign = prevAlign;
+    } else {
+      el.style.textAlign = 'left';
+    }
     return;
   }
 
@@ -577,6 +634,15 @@ export function normalizeHtmlForClipboard(html: string): string {
               cell.style.backgroundColor = '#e2e8f0';
               cell.style.color = NOTICE_TEXT_COLOR;
             }
+            cell.style.textAlign = 'center';
+          } else {
+            const idx =
+              typeof (cell as HTMLTableCellElement).cellIndex === 'number'
+                ? (cell as HTMLTableCellElement).cellIndex
+                : -1;
+            // 공급가·부가세 열 우측 정렬 고정
+            if (idx > 0) cell.style.textAlign = 'right';
+            else if (!cell.style.textAlign) cell.style.textAlign = 'left';
           }
           return;
         }
@@ -965,12 +1031,11 @@ function buildVatInstallmentBody({
   belong,
   name,
   payment,
-  dueDate,
 }: {
   belong: string;
   name: string;
   payment: PaymentNotice;
-  dueDate: string;
+  dueDate?: string;
 }): string {
   const line = noticeLine;
   const blank = noticeBlank;
@@ -984,8 +1049,11 @@ function buildVatInstallmentBody({
 
   const parts: string[] = [];
   parts.push(
-    line(`${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`),
+    line(
+      `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`,
+    ),
   );
+  parts.push(line('분할 납부 일정은 아래와 같습니다.'));
   parts.push(blank());
   if (attachText) parts.push(line(`첨부 서류: ${escapeHtml(attachText)}`));
   parts.push(line(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`));
@@ -993,7 +1061,7 @@ function buildVatInstallmentBody({
     const dateText = isoToDottedDate(it.date) || '(일자 미입력)';
     parts.push(dash(`${i + 1}차: ${escapeHtml(dateText)} · ${escapeHtml(formatWon(it.amount))}`));
   });
-  if (dueDate) parts.push(line(`납부 기한: ${escapeHtml(dueDate)}`));
+  // 분납 일정에 차수별 기한이 있으므로 공통 「납부 기한」 줄은 넣지 않음
   parts.push(line(OVERDUE_NOTE));
   return parts.join('');
 }
@@ -1064,14 +1132,16 @@ export function buildPaymentNoticeTokens({
     return {
       ...empty,
       '{최종납부세액}': escapeHtml(formatWon(total)),
-      '{서두}': noticeLine(
-        `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 분할 납부 일정은 아래와 같습니다.`,
-      ),
+      '{서두}':
+        noticeLine(
+          `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`,
+        ) + noticeLine('분할 납부 일정은 아래와 같습니다.'),
       '{납부요약}': noticeLine(`최종 납부 세액: 총 ${escapeHtml(formatWon(total))}`),
       '{분납회차목록}': 회차,
       '{첨부안내}': attachText ? noticeLine(`첨부 서류: ${escapeHtml(attachText)}`) : '',
       '{첨부서류상세}': attachText ? escapeHtml(attachText) : '',
-      '{납부기한줄}': dueDate ? noticeLine(`납부 기한: ${dueDate}`) : '',
+      // 분납 일정에 차수별 기한이 있으므로 공통 「납부 기한」 줄은 비움
+      '{납부기한줄}': '',
       '{연체안내}': noticeLine(OVERDUE_NOTE),
       '{안내본문}': body,
     };
@@ -1296,11 +1366,14 @@ function vatSummaryTable(
       `${bold ? 'font-weight:bold;' : ''}`;
     const pad = indent ? 'padding-left:18px;' : '';
     const nowrap = 'white-space:nowrap;';
+    // 금액열은 항상 우측 정렬(숫자·'-' 동일) — 편집/복사 후에도 열이 맞게
+    const amount =
+      'text-align:right;font-variant-numeric:tabular-nums;-moz-font-feature-settings:"tnum";font-feature-settings:"tnum";';
     return (
       `<tr>` +
-      `<td style="${style}${pad}${nowrap}">${escapeHtml(label)}</td>` +
-      `<td style="${style}text-align:right;${nowrap}">${supply}</td>` +
-      `<td style="${style}text-align:right;${nowrap}">${vat}</td>` +
+      `<td style="${style}${pad}${nowrap}text-align:left;">${escapeHtml(label)}</td>` +
+      `<td style="${style}${amount}${nowrap}">${supply}</td>` +
+      `<td style="${style}${amount}${nowrap}">${vat}</td>` +
       `</tr>`
     );
   };
