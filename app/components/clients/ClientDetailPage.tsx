@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ClientRecord } from '@/app/types/client';
 import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
 import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
@@ -54,11 +55,12 @@ export default function ClientDetailPage({
   canEdit: boolean;
   relatedSlot?: React.ReactNode;
 }) {
+  const router = useRouter();
   const [intakeData, setIntakeData] = useState(client.intakeData ?? {});
   const [unifiedEditing, setUnifiedEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
-  const contactSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const contactSaveRef = useRef<((opts?: { skipRefresh?: boolean }) => Promise<void>) | null>(null);
   const metaSaveRef = useRef<(() => Promise<void>) | null>(null);
   const materialsSaveRef = useRef<(() => Promise<void>) | null>(null);
   const rosterClient = { ...client, intakeData };
@@ -75,10 +77,11 @@ export default function ClientDetailPage({
   const handleUnifiedSave = async () => {
     setSaving(true);
     try {
-      await contactSaveRef.current?.();
+      await contactSaveRef.current?.({ skipRefresh: true });
       await metaSaveRef.current?.();
       await materialsSaveRef.current?.();
       setUnifiedEditing(false);
+      router.refresh();
     } finally {
       setSaving(false);
     }

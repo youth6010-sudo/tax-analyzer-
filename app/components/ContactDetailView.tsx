@@ -45,7 +45,7 @@ interface ContactDetailViewProps {
   /** 페이지 통합 수정 모드 */
   forcedEditing?: boolean;
   hideEditButton?: boolean;
-  onSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  onSaveRef?: React.MutableRefObject<((opts?: { skipRefresh?: boolean }) => Promise<void>) | null>;
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -149,7 +149,7 @@ export default function ContactDetailView({
     }));
   }, []);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (opts?: { skipRefresh?: boolean }) => {
     if (!form.companyName.trim()) {
       setError('업체명은 필수입니다.');
       return;
@@ -166,7 +166,10 @@ export default function ContactDetailView({
       if (!res.ok) throw new Error(data.error ?? '저장 실패');
       setContact((data.contact ?? data.client) as ContactRecord);
       setInternalEditing(false);
-      router.refresh();
+      // 통합 저장에서는 메타·자료 저장 전에 refresh하면 대분류 입력이 리셋됨
+      if (!opts?.skipRefresh) {
+        router.refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
     } finally {
@@ -175,7 +178,7 @@ export default function ContactDetailView({
   }, [contact.id, form, router]);
 
   useEffect(() => {
-    if (onSaveRef) onSaveRef.current = () => handleSave();
+    if (onSaveRef) onSaveRef.current = (opts?: { skipRefresh?: boolean }) => handleSave(opts);
   }, [handleSave, onSaveRef]);
 
   const isEditing = forcedEditing ?? internalEditing;

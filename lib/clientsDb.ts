@@ -25,7 +25,7 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
-/** intakeData.category — 개인+신고만이면 신고대리로 승격, 기존 신고대리는 유지 */
+/** intakeData.category — 빈 값만 자동(기장 없으면 신고대리), 명시 개인·법인은 유지 */
 function applySyncedCategory(
   intake: Record<string, unknown>,
   entityType: string | undefined,

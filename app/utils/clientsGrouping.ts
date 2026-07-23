@@ -36,10 +36,10 @@ function categoryFromEntityType(entityType: BusinessEntityType | '' | undefined)
 }
 
 /**
- * 구분·서비스로 대분류 산출.
+ * 구분·서비스로 대분류 산출 (빈 대분류 자동 채움용).
  * - 법인 → 법인
- * - 개인·비사업자 + 신고만(기장 없음) → 신고대리
- * - 그 외 개인·비사업자 → 개인 (단, 저장값이 신고대리면 유지 — 아래 sync 참고)
+ * - 개인·비사업자 + 신고 + 기장 미선택 → 신고대리
+ * - 그 외 개인·비사업자 → 개인
  */
 export function deriveMainCategoryFromEntityAndServices(
   entityType: BusinessEntityType | '' | undefined,
@@ -51,6 +51,7 @@ export function deriveMainCategoryFromEntityAndServices(
   const services = serviceTypes ?? [];
   const hasBookkeeping = services.includes('bookkeeping');
   const hasFiling = services.includes('filing');
+  // 신고대리 = 기장 체크가 없을 때(신고만)
   if (hasFiling && !hasBookkeeping) return SINGO_DAERI;
   return '개인';
 }
@@ -58,10 +59,9 @@ export function deriveMainCategoryFromEntityAndServices(
 /**
  * 저장용 대분류 동기화.
  * - 지주택·미사용: 유지
- * - 이미 신고대리: 유지 (서비스에 기장이 없어도 신고대리로 남김 — 엑셀 대분류 기준)
- * - 개인/빈값 + 개인·비사업자 + 신고만: 신고대리로 승격
- * - 법인 구분이면 법인
- * - 그 외 자동 대분류만 구분·서비스로 맞춤
+ * - 사용자가 고른 개인·법인: 그대로 유지 (신고대리로 덮지 않음)
+ * - 신고대리: 기장이 켜지면 개인으로, 아니면 유지
+ * - 빈·레거시 대분류만 구분·서비스로 자동 채움 (기장 없으면 신고대리)
  */
 export function syncMainCategory(
   currentCategory: unknown,
@@ -70,18 +70,24 @@ export function syncMainCategory(
 ): string | null {
   const cur = currentCategory != null ? String(currentCategory).trim() : '';
   if (cur === JISUTAEK_CATEGORY || cur === UNUSED_CATEGORY) return cur || null;
-  // 기존 신고대리는 절대 개인으로 내리지 않음
-  if (cur === SINGO_DAERI) return SINGO_DAERI;
+
+  // 명시적 개인·법인은 사용자 선택 존중
+  if (cur === '개인' || cur === '법인') return cur;
+
+  const services = serviceTypes ?? [];
+  const hasBookkeeping = services.includes('bookkeeping');
+
+  // 신고대리: 구분을 법인으로 바꾸면 법인, 기장이 눌러지면 개인, 아니면 유지
+  if (cur === SINGO_DAERI) {
+    if (entityType === 'corporate') return '법인';
+    return hasBookkeeping ? '개인' : SINGO_DAERI;
+  }
 
   const derived = deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
   if (!derived) return cur || null;
 
-  // 개인(또는 빈 대분류) → 신고만이면 신고대리로 올림
-  if (derived === SINGO_DAERI && (cur === '개인' || !cur || cur === NON_BUSINESS_CATEGORY)) {
-    return SINGO_DAERI;
-  }
-  if (derived === '법인') return '법인';
-  if (cur === '법인' || cur === '개인' || !cur || cur === NON_BUSINESS_CATEGORY) {
+  // 빈·레거시만 자동 (기장 미선택+신고 → 신고대리)
+  if (isLegacyOrEmptyCategory(cur)) {
     return derived;
   }
   return cur || derived;
@@ -145,15 +151,15 @@ export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
   if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY || s === SINGO_DAERI) return s || UNCategorized;
+  // 저장된 개인·법인은 표시도 그대로 (신고대리로 덮지 않음)
+  if (s === '개인' || s === '법인') return s;
 
   const derived = deriveMainCategoryFromEntityAndServices(
     client.businessEntityType as BusinessEntityType | '',
     client.serviceTypes,
   );
-  // 저장된 대분류가 개인/비어 있는데 개인+신고만이면 신고대리로 표시
-  if (derived === SINGO_DAERI && (s === '개인' || isLegacyOrEmptyCategory(s))) {
-    return SINGO_DAERI;
-  }
+  // 빈·레거시만: 기장 미선택+신고 → 신고대리로 표시
+  if (isLegacyOrEmptyCategory(s) && derived) return derived;
   if (s) return s;
   if (derived) return derived;
   return UNCategorized;
