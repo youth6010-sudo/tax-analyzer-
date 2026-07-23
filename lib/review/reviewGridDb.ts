@@ -120,9 +120,12 @@ export async function replaceReviewNewRows(
   userId: string | null,
 ) {
   const db = getDb();
+  // 빈 배열로 전체 삭제하는 실수(로드 전 dirty 저장 등) 방지 — 명시적 clear는 clearReviewGridEdits
+  if (!rows.length) {
+    console.warn('[reviewGridDb] replaceReviewNewRows skipped empty array');
+    return;
+  }
   await db.delete(reviewGridNewRows);
-
-  if (!rows.length) return;
 
   await db.insert(reviewGridNewRows).values(
     rows.map(row => {

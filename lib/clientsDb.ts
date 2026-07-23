@@ -8,7 +8,7 @@ import {
   normalizeChurnClosureFields,
   type ChurnClientClosureHint,
 } from '@/app/config/churnOptions';
-import { clientToListRecord, clientToRecord, listClientSelect } from '@/lib/clientMapper';
+import { clientToListRecord, clientToRecord, listClientSelect, listClientSelectVat } from '@/lib/clientMapper';
 import { computeFeeSummaryFromItems, feeItemsEqual, readFeeItems, type FeeLineItem } from '@/app/utils/feeBreakdown';
 import { getPrimaryContactNamesByClientIds } from '@/lib/clientContactsDb';
 import { buildMineOnlyClientCondition, mergeClientConditions } from '@/lib/clientAccess';
@@ -50,6 +50,8 @@ export interface ClientListFilters {
   mineOnly?: boolean;
   userId?: string;
   userName?: string;
+  /** 부가세 진행도·연간표 — vatEntryProgress/vatAnnualProgress 포함 */
+  includeVatProgress?: boolean;
 }
 
 export async function listClients(filters: ClientListFilters = {}) {
@@ -75,13 +77,18 @@ export async function listClients(filters: ClientListFilters = {}) {
     if (mineCond) conditions.push(mineCond);
   }
 
+  const selectShape = filters.includeVatProgress ? listClientSelectVat : listClientSelect;
   const rows = await db
-    .select(listClientSelect)
+    .select(selectShape)
     .from(clients)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(clients.companyName);
 
-  const records = rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
+  const records = rows.map(row =>
+    filters.includeVatProgress
+      ? clientToRecord(row as Parameters<typeof clientToRecord>[0])
+      : clientToListRecord(row as Parameters<typeof clientToListRecord>[0]),
+  );
   const churnedIds = records.filter(r => r.status === 'churned').map(r => r.id);
   if (churnedIds.length === 0) return records;
 

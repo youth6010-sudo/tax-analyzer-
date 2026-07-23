@@ -33,11 +33,21 @@ export const LIST_INTAKE_KEYS = [
   'vatFilingFees',
 ] as const;
 
+/** 부가세 검토표(진행도·연간) API 전용 — 목록 slim에 넣지 않음 */
+export const VAT_PROGRESS_INTAKE_KEYS = [
+  ...LIST_INTAKE_KEYS,
+  'vatEntryProgress',
+  'vatAnnualProgress',
+] as const;
+
 /** 목록 API·bootstrap용 — 큰 intake JSON 제외 (소득유형·taxFlags는 신고 그리드용으로 유지) */
-export function slimIntakeDataForList(intakeData: Record<string, unknown> | undefined): Record<string, unknown> {
+export function slimIntakeDataForList(
+  intakeData: Record<string, unknown> | undefined,
+  keys: readonly string[] = LIST_INTAKE_KEYS,
+): Record<string, unknown> {
   if (!intakeData) return {};
   const out: Record<string, unknown> = {};
-  for (const k of LIST_INTAKE_KEYS) {
+  for (const k of keys) {
     const v = intakeData[k];
     if (v == null) continue;
     if (typeof v === 'object') {
@@ -50,8 +60,11 @@ export function slimIntakeDataForList(intakeData: Record<string, unknown> | unde
 }
 
 /** DB 목록 조회용 — 허용 키만 jsonb_build_object 로 프로젝션 */
-export function listIntakeDataSql(column = clients.intakeData) {
-  const args = LIST_INTAKE_KEYS.flatMap(key => [
+export function listIntakeDataSql(
+  column = clients.intakeData,
+  keys: readonly string[] = LIST_INTAKE_KEYS,
+) {
+  const args = keys.flatMap(key => [
     sql.raw(`'${key}'`),
     sql`${column} -> ${sql.raw(`'${key}'`)}`,
   ]);
@@ -63,38 +76,47 @@ export function listIntakeDataSql(column = clients.intakeData) {
   `;
 }
 
+function buildListClientSelect(intakeData: ReturnType<typeof listIntakeDataSql>) {
+  return {
+    id: clients.id,
+    companyName: clients.companyName,
+    manager: clients.manager,
+    representative: clients.representative,
+    businessNo: clients.businessNo,
+    corporateNo: clients.corporateNo,
+    residentNo: clients.residentNo,
+    phone: clients.phone,
+    fax: clients.fax,
+    taxTypes: clients.taxTypes,
+    businessEntityType: clients.businessEntityType,
+    serviceTypes: clients.serviceTypes,
+    feeSummary: clients.feeSummary,
+    program: clients.program,
+    converted: clients.converted,
+    colbert: clients.colbert,
+    status: clients.status,
+    assignedUserId: clients.assignedUserId,
+    intakeStep: clients.intakeStep,
+    intakeData,
+    source: clients.source,
+    blueholeClientId: clients.blueholeClientId,
+    ntsStatus: clients.ntsStatus,
+    ntsStatusCode: clients.ntsStatusCode,
+    ntsTaxType: clients.ntsTaxType,
+    ntsClosedDate: clients.ntsClosedDate,
+    ntsCheckedAt: clients.ntsCheckedAt,
+    createdAt: clients.createdAt,
+    updatedAt: clients.updatedAt,
+  };
+}
+
 /** listClients / getClientsByIds 공통 SELECT (intake 슬림) */
-export const listClientSelect = {
-  id: clients.id,
-  companyName: clients.companyName,
-  manager: clients.manager,
-  representative: clients.representative,
-  businessNo: clients.businessNo,
-  corporateNo: clients.corporateNo,
-  residentNo: clients.residentNo,
-  phone: clients.phone,
-  fax: clients.fax,
-  taxTypes: clients.taxTypes,
-  businessEntityType: clients.businessEntityType,
-  serviceTypes: clients.serviceTypes,
-  feeSummary: clients.feeSummary,
-  program: clients.program,
-  converted: clients.converted,
-  colbert: clients.colbert,
-  status: clients.status,
-  assignedUserId: clients.assignedUserId,
-  intakeStep: clients.intakeStep,
-  intakeData: listIntakeDataSql(),
-  source: clients.source,
-  blueholeClientId: clients.blueholeClientId,
-  ntsStatus: clients.ntsStatus,
-  ntsStatusCode: clients.ntsStatusCode,
-  ntsTaxType: clients.ntsTaxType,
-  ntsClosedDate: clients.ntsClosedDate,
-  ntsCheckedAt: clients.ntsCheckedAt,
-  createdAt: clients.createdAt,
-  updatedAt: clients.updatedAt,
-};
+export const listClientSelect = buildListClientSelect(listIntakeDataSql());
+
+/** 부가세 진행도·연간표 — vatEntryProgress / vatAnnualProgress 포함 */
+export const listClientSelectVat = buildListClientSelect(
+  listIntakeDataSql(clients.intakeData, VAT_PROGRESS_INTAKE_KEYS),
+);
 
 export function clientToRecord(row: Client, opts?: { primaryContactMobile?: string }): ClientRecord {
   const intakeData = row.intakeData ?? {};

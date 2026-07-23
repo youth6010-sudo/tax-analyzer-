@@ -270,6 +270,7 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       userName: user.name || '',
       includeChurned: false,
+      includeVatProgress: true,
     });
 
     const managersSeed = [
