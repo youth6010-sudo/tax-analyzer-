@@ -121,7 +121,8 @@ export const DEFAULT_VAT_REPORT_TEMPLATE = `<div style="line-height:1.55;">
 <br>
 [신고 결과 요약]<br>
 {신고결과요약표}{신고결과부가정보}검토 후 이상 없으시면 「확인 완료」 댓글 부탁드립니다.<br>
-{분납안내}감사합니다.<br>
+{분납안내}<br>
+감사합니다.<br>
 </div>`;
 
 // 신고 결과 안내(납부세액) — 사용자 서식 토큰

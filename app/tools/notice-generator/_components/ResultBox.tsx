@@ -6,6 +6,7 @@ import {
   htmlToPlainText,
   normalizeHtmlForClipboard,
   prepareNoticePasteContent,
+  syncVatInstallmentInEdited,
 } from '../_lib/templates';
 import { useNoticeRichEditor } from '../_lib/useNoticeRichEditor';
 import {
@@ -54,13 +55,16 @@ export default function ResultBox({
     });
 
   useEffect(() => {
-    if (editing) return;
-    // 원본(자동생성) HTML이 바뀌어도 사용자가 편집한 내용은 유지.
-    // 편집 내용이 「재생성」으로 비워진 경우(null)에만 기준값을 갱신.
-    if (edited === null) {
-      lastMessageHtml.current = messageHtml;
-    }
-  }, [messageHtml, edited, editing]);
+    // 자동생성 문구가 바뀌어도 편집본은 유지.
+    // 분납 안내만 on/off·일정 변경분으로 편집본에 동기화한다.
+    if (messageHtml === lastMessageHtml.current) return;
+    const prev = lastMessageHtml.current;
+    lastMessageHtml.current = messageHtml;
+    setEdited(curr => {
+      if (curr === null) return null;
+      return syncVatInstallmentInEdited(curr, prev, messageHtml);
+    });
+  }, [messageHtml]);
 
   const isDirty = edited !== null && edited !== messageHtml;
   const previewMinH = compact ? 'min-h-[8rem]' : 'min-h-[12rem]';

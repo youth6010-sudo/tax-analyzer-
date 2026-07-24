@@ -8,7 +8,7 @@ import {
 
 const CONFIG_KEY = 'notice_default_templates';
 /** 코드 배포로 기본 서식이 바뀌면 버전을 올려 DB에 저장된 값을 자동 갱신한다 */
-const NOTICE_DEFAULTS_VERSION = 7;
+const NOTICE_DEFAULTS_VERSION = 8;
 
 type StoredNoticeDefaults = Partial<NoticeGlobalDefaults> & { _version?: number };
 

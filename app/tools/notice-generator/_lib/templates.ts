@@ -1520,6 +1520,106 @@ function buildVatInstallmentBlock(
   return parts.join('');
 }
 
+const VAT_INSTALLMENT_MARKER = '분할 납부 안내';
+
+/** 안내 HTML에서 분납 안내 본문(제목~일정)만 추출. 없으면 null */
+function extractVatInstallmentBody(html: string): string | null {
+  const raw = unwrapNoticeBody(html || '');
+  const markerIdx = raw.indexOf(VAT_INSTALLMENT_MARKER);
+  if (markerIdx < 0) return null;
+
+  let start = markerIdx;
+  const head = raw.slice(0, markerIdx);
+  const lead = head.match(/(?:<(?:b|strong|span|font|i|em)[^>]*>\s*)*(?:💳\s*)?$/i);
+  if (lead) start = markerIdx - lead[0].length;
+
+  const tail = raw.slice(start);
+  const thanksRel = tail.search(/감사합니다/);
+  let end = thanksRel >= 0 ? start + thanksRel : raw.length;
+  if (thanksRel < 0) {
+    const closeRel = tail.search(/<\/div>/i);
+    if (closeRel >= 0) end = start + closeRel;
+  }
+
+  let body = raw.slice(start, end);
+  body = body.replace(/^(?:<br\s*\/?>\s*)+/i, '').replace(/(?:<br\s*\/?>\s*)+$/i, '').trim();
+  return body || null;
+}
+
+function normalizeInstallmentKey(body: string | null): string {
+  if (!body) return '';
+  return body
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 편집본에서 분납 안내 블록(+앞뒤 여분 br) 제거 */
+function removeVatInstallmentBody(html: string): string {
+  const body = extractVatInstallmentBody(html);
+  if (!body) return html;
+
+  const wrapped = /<div\b/i.test(html.trim());
+  let raw = unwrapNoticeBody(html);
+  const idx = raw.indexOf(body);
+  if (idx < 0) return html;
+
+  let start = idx;
+  let end = idx + body.length;
+  const lead = raw.slice(0, start).match(/(?:<br\s*\/?>\s*)+$/i);
+  if (lead) start -= lead[0].length;
+  const trail = raw.slice(end).match(/^(?:<br\s*\/?>\s*)+/i);
+  if (trail) end += trail[0].length;
+
+  // 본문과 「감사합니다」 사이는 빈 optionalBreak(<br>) 한 칸만 유지
+  raw = `${raw.slice(0, start)}<br>${raw.slice(end)}`;
+  raw = tidyNoticeBreaks(raw);
+  return wrapped ? wrapNoticeHtml(raw) : raw;
+}
+
+/** 「감사합니다」 앞에 분납 안내 삽입 (없으면 본문 끝) */
+function insertVatInstallmentBody(html: string, body: string): string {
+  const chunk = `<br>${body}<br><br>`;
+  const wrapped = /<div\b/i.test(html.trim());
+  let raw = unwrapNoticeBody(html);
+  // 기존 분납이 있으면 먼저 제거
+  if (extractVatInstallmentBody(raw)) {
+    raw = unwrapNoticeBody(removeVatInstallmentBody(wrapNoticeHtml(raw)));
+  }
+
+  if (/감사합니다/.test(raw)) {
+    raw = raw.replace(/감사합니다/, `${chunk}감사합니다`);
+  } else {
+    raw = raw.replace(/(?:<br\s*\/?>\s*)*$/i, '') + chunk;
+  }
+  raw = tidyNoticeBreaks(raw);
+  return wrapped ? wrapNoticeHtml(raw) : raw;
+}
+
+/**
+ * 자동생성 문구의 분납 안내만 편집본에 반영한다.
+ * (분납 체크 on/off·일정 변경 시 편집 내용 유지)
+ */
+export function syncVatInstallmentInEdited(
+  editedHtml: string,
+  prevGeneratedHtml: string,
+  nextGeneratedHtml: string,
+): string {
+  const prevBody = extractVatInstallmentBody(prevGeneratedHtml);
+  const nextBody = extractVatInstallmentBody(nextGeneratedHtml);
+  if (normalizeInstallmentKey(prevBody) === normalizeInstallmentKey(nextBody)) {
+    return editedHtml;
+  }
+
+  let out = removeVatInstallmentBody(editedHtml);
+  if (nextBody) {
+    out = insertVatInstallmentBody(out, nextBody);
+  }
+  return finalizeNoticeHtml(out);
+}
+
 function buildVatSupplementBlock(
   report: VatReport,
   calc: ReturnType<typeof calcVatReport>,
@@ -1551,11 +1651,7 @@ function buildVatSupplementBlock(
   return lines.map(l => noticeDash(escapeHtml(l))).join('');
 }
 
-/**
- * 선택 블록 토큰 — 없으면 줄바꿈만, 있으면 줄바꿈+내용+줄바꿈
- * ({신고결과부가정보}, {분납안내})
- */
-/** 없으면 줄바꿈만 / 있으면 줄바꿈+내용+줄바꿈 */
+/** 없으면 줄바꿈만 / 있으면 줄바꿈+내용+줄바꿈 ({신고결과부가정보}, {분납안내}) */
 function optionalBreakBlock(content: string): string {
   // 내용 끝 br은 래퍼가 담당 — 이중 빈 줄 방지
   const body = (content || '')
