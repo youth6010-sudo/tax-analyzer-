@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
       listSimplePayrollFilingsByKeys(periodKeys),
       listSimplePayrollPrevFiledKeys(meta.year, meta.month),
     ]);
+    const periodStart = new Date(meta.year, meta.month - 1, 1);
     const { grid } = buildSimplePayrollGrid(
       clients,
       periodKey,
@@ -86,6 +87,7 @@ export async function GET(request: NextRequest) {
       forceIncluded,
       prevFiledKeys,
       extraClientIds,
+      { periodStartDate: periodStart },
     );
 
     return NextResponse.json({

@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "title": "신규 고객 초기 상담",
   "subtitle": "전화 상담 · 대면 상담 · 마무리·후속 — 기장상담지 연동",
   "phases": [
@@ -32,7 +32,7 @@
       "title": "유입",
       "description": "유입경로를 기록합니다.",
       "fields": [
-        { "key": "channel", "label": "유입경로", "type": "select", "options": ["", "지인 소개", "블로그", "인터넷 검색", "AI", "홍보앱", "SNS", "기존 세무사 불만", "신규 창업", "기타"] },
+        { "key": "channel", "label": "유입경로", "type": "select", "options": ["", "지인 소개", "블로그", "인터넷 검색", "AI", "홍보앱", "SNS", "거래처확장", "기존 세무사 불만", "신규 창업", "기타"] },
         { "key": "channelDetail", "label": "소개·검색경로 상세", "type": "textarea", "placeholder": "블로그, AI, 홍보앱, SNS 등" }
       ]
     },

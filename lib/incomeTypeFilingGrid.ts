@@ -7,7 +7,7 @@ import {
 } from '@/app/types/incomeTypes';
 import type { ClientIncomeTypes, IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import { filingTargets, simplePayrollTargetsForPeriod } from '@/app/utils/filingCheck';
-import { isClosureReviewClient } from '@/app/utils/clientClosure';
+import { filingClosureNotice, parseClientClosureDate } from '@/app/utils/clientClosure';
 import { getClientDouzoneCode } from '@/app/utils/clientsGrouping';
 import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
 import {
@@ -21,19 +21,24 @@ import {
 } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
-/** 기본 신고대상 + 수동 추가 — 기본 목록에서 폐업·해임 제외, 접수가 있는 폐업·해임·수동추가는 유지 */
+/**
+ * 기본 신고대상 + 수동 추가.
+ * periodStartDate가 있으면 그 날짜 이전에 유출·폐업된 업체는 제외 (기간 중 발생분은 유지).
+ */
 export function mergeFilingTargetClients(
   baseTargets: ClientRecord[],
   allClients: ClientRecord[],
   extraClientIds: string[] = [],
-  opts?: { filedClientIds?: ReadonlySet<string> },
+  _opts?: { filedClientIds?: ReadonlySet<string>; periodStartDate?: Date },
 ): ClientRecord[] {
-  const filedIds = opts?.filedClientIds;
-  const base = baseTargets.filter(c => {
-    if (!isClosureReviewClient(c)) return true;
-    // 폐업·해임: 이번 기간 접수(filed)가 있을 때만 기본 병합
-    return filedIds?.has(c.id) ?? false;
-  });
+  const periodStart = _opts?.periodStartDate ?? null;
+  const isExpiredBefore = (c: ClientRecord): boolean => {
+    if (!periodStart) return false;
+    const d = parseClientClosureDate(c as ClientRecord & { churn?: null });
+    return d !== null && d < periodStart;
+  };
+
+  const base = baseTargets.filter(c => !isExpiredBefore(c));
   const seen = new Set(base.map(c => c.id));
   const byId = new Map(allClients.map(c => [c.id, c]));
   const merged = [...base];
@@ -41,8 +46,7 @@ export function mergeFilingTargetClients(
     if (seen.has(id)) continue;
     const c = byId.get(id);
     if (!c) continue;
-    // 수동 추가 폐업·해임: 접수 없으면 제외
-    if (isClosureReviewClient(c) && !(filedIds?.has(c.id))) continue;
+    if (isExpiredBefore(c)) continue;
     seen.add(id);
     merged.push(c);
   }
@@ -74,6 +78,8 @@ export type IncomeTypeGridRow = {
   semiAnnualMonthlyDisplay?: boolean;
   /** 원천세 세션에서 가져온 신고 특이사항 */
   rowNote?: string;
+  /** 유출·폐업·휴업 안내 */
+  closureNotice?: string | null;
   cells: Record<string, IncomeGridCell>;
 };
 
@@ -146,6 +152,7 @@ export function buildSimplePayrollGrid(
   /** 전월(또는 근로 직전 반기) 접수 완료 — clientId|incomeType */
   prevFiledKeys: ReadonlySet<string> = new Set(),
   extraClientIds: string[] = [],
+  opts?: { periodStartDate?: Date },
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
@@ -157,11 +164,12 @@ export function buildSimplePayrollGrid(
     filed.filter(r => r.filed).map(r => r.clientId),
   );
 
+  const periodStartDate = opts?.periodStartDate ?? new Date(meta.year, meta.month - 1, 1);
   const targetClients = mergeFilingTargetClients(
     simplePayrollTargetsForPeriod(clients, meta.month),
     clients,
     extraClientIds,
-    { filedClientIds },
+    { filedClientIds, periodStartDate },
   );
 
   const grid = sortIncomeGridRows(
@@ -236,6 +244,7 @@ export function buildSimplePayrollGrid(
         rowNote: rowNotes[c.id] ?? '',
         semiAnnualTarget: whSettings.semiAnnualTarget,
         semiAnnualMonthlyDisplay: whSettings.semiAnnualMonthlyDisplay,
+        closureNotice: filingClosureNotice(c),
         cells,
       };
     }),
@@ -330,15 +339,18 @@ export function buildYearEndGrid(
   /** 같은 해 간이지급에서 접수된 유형 (clientId → incomeType set) */
   yearSimplePayrollFiled: Map<string, ReadonlySet<string>> = new Map(),
   extraClientIds: string[] = [],
+  opts?: { periodStartDate?: Date },
 ): IncomeTypeGridRow[] {
   const filedMap = new Map(filed.map(r => [`${r.clientId}|${r.incomeType}`, r]));
   const filedClientIds = new Set(filed.filter(r => r.filed).map(r => r.clientId));
+  // 연말정산은 귀속 연도 1월 1일 기준 — 그 이전 유출은 제외
+  const periodStartDate = opts?.periodStartDate ?? new Date(year, 0, 1);
 
   const targetClients = mergeFilingTargetClients(
     filingTargets(clients, 'yearEnd'),
     clients,
     extraClientIds,
-    { filedClientIds },
+    { filedClientIds, periodStartDate },
   );
 
   return sortIncomeGridRows(
@@ -368,6 +380,7 @@ export function buildYearEndGrid(
         manager: c.manager ?? '',
         excludeReason: excluded[c.id] ?? null,
         rowNote: rowNotes[c.id] ?? '',
+        closureNotice: filingClosureNotice(c),
         cells,
       };
     }),

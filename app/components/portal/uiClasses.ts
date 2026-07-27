@@ -25,10 +25,10 @@ export const portalInput =
 export const portalSelect = portalInput;
 
 export const portalBtnSecondary =
-  'inline-flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg px-3.5 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors';
+  'inline-flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg px-3.5 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
 
 export const portalBtnPrimary =
-  'inline-flex items-center justify-center gap-1.5 text-sm font-semibold rounded-lg px-3.5 py-2 text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-600/20 transition-colors';
+  'inline-flex items-center justify-center gap-1.5 text-sm font-semibold rounded-lg px-3.5 py-2 text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-600/20 transition-colors disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
 
 export const portalBtnDark =
   'inline-flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg px-3.5 py-2 text-white bg-slate-800 hover:bg-slate-700 shadow-sm transition-colors disabled:opacity-50';

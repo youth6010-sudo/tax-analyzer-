@@ -958,10 +958,12 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           새로고침
         </button>
         <input
+          id="income-type-hometax-upload"
           ref={fileRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
+          accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+          className="sr-only"
+          disabled={parsing}
           onChange={e => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -969,14 +971,16 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
             if (fileRef.current) fileRef.current.value = '';
           }}
         />
-        <button
-          type="button"
-          className={portalBtnSecondary}
-          disabled={parsing}
-          onClick={() => fileRef.current?.click()}
+        <label
+          htmlFor="income-type-hometax-upload"
+          className={`${portalBtnSecondary} ${
+            parsing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+          }`}
+          aria-disabled={parsing}
+          title={parsing ? '파일을 읽는 중입니다.' : '홈택스 접수목록 엑셀(.xlsx/.xls) 선택'}
         >
           {parsing ? '읽는 중…' : '홈택스 접수목록 업로드'}
-        </button>
+        </label>
         <button
           type="button"
           className={portalBtnPrimary}

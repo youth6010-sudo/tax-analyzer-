@@ -1,4 +1,5 @@
 import type { ChurnSummary, ClientRecord } from '@/app/types/client';
+import type { FilingTaxId, FilingPeriod, VatPhase } from '@/app/utils/filingCheck';
 
 export type ClientWithChurn = ClientRecord & { churn?: ChurnSummary | null };
 
@@ -80,6 +81,62 @@ export function getClientClosureKind(
   if (String(client.intakeData?.statusLabel ?? '').trim() === '폐업') return '폐업';
   if (client.intakeData?.closedDate) return '폐업';
   return '해임';
+}
+
+/**
+ * 신고 기간의 시작 연월(첫날 00:00) — 유출일 비교 기준.
+ * 원천세/간이지급: 해당 월 1일
+ * 부가세: 1기 예정 = 1월, 1기 확정 = 1월, 2기 예정 = 7월, 2기 확정 = 7월
+ * 법인·종소세·기타: 해당 연도 1월 1일
+ */
+export function filingPeriodStartDate(taxId: FilingTaxId, period: FilingPeriod): Date {
+  const { year, month, vatPhase } = period;
+  if (taxId === 'withholding' || taxId === 'simplePayroll') {
+    return new Date(year, month - 1, 1);
+  }
+  if (taxId === 'vat') {
+    const startMonth: Record<VatPhase, number> = {
+      '1기 예정': 1,
+      '1기 확정': 1,
+      '2기 예정': 7,
+      '2기 확정': 7,
+    };
+    return new Date(year, (startMonth[vatPhase] ?? 1) - 1, 1);
+  }
+  // corporate, income, comprehensive 등 연 단위
+  return new Date(year, 0, 1);
+}
+
+/**
+ * 유출·폐업일이 신고 기간 시작일 이전이면 true (목록 제외 대상).
+ * 유출일이 불명확하면 false (이번 신고분에는 유지).
+ */
+export function isClosedBeforeFilingPeriod(
+  client: ClientRecord,
+  taxId: FilingTaxId,
+  period: FilingPeriod,
+): boolean {
+  if (!isClosureReviewClient(client)) return false;
+  const closedAt = parseClientClosureDate(client as ClientWithChurn);
+  if (!closedAt) return false; // 날짜 불명 → 이번 신고에 포함(안내 표시)
+  const periodStart = filingPeriodStartDate(taxId, period);
+  return closedAt < periodStart;
+}
+
+/**
+ * 신고대상확인 목록용 안내 — 유출(해임)·폐업·휴업 사업장이 이번 신고 기간 중 발생했을 때 표시.
+ * 기간 이전 유출은 목록 자체에서 제외되므로 null.
+ */
+export function filingClosureNotice(
+  client: ClientRecord,
+  ntsStatusCodeOverride?: string,
+): string | null {
+  if (!isClosureReviewClient(client, ntsStatusCodeOverride)) return null;
+  if (client.status === 'churned') return '유출된 사업장입니다';
+  const kind = getClientClosureKind(client, ntsStatusCodeOverride);
+  if (kind === '폐업') return '폐업된 사업장입니다';
+  if (kind === '휴업') return '휴업 중인 사업장입니다';
+  return '유출된 사업장입니다';
 }
 
 export const CLOSURE_YEAR_UNKNOWN = 'unknown' as const;

@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       rowNotes,
       yearSimpleFiled,
       extraClientIds,
+      { periodStartDate: new Date(year, 0, 1) },
     );
 
     const tables: Record<

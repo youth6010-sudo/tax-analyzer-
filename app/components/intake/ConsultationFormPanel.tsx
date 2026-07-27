@@ -201,15 +201,22 @@ function PhaseColumn({
                   </p>
                 )}
               </div>
-              {fields.map(f => (
+              {fields.map(f => {
+                const required = Boolean(f.required || REGISTER_REQUIRED_KEYS.has(f.key));
+                return (
                 <label key={f.key} className="block">
-                  <span className="text-xs font-semibold text-gray-700">
+                  <span className={`text-xs font-semibold ${required ? 'text-rose-700' : 'text-gray-700'}`}>
                     {f.label}
-                    {REGISTER_REQUIRED_KEYS.has(f.key) ? ' *' : ''}
+                    {required && (
+                      <span className="ml-0.5 font-bold text-rose-600" title="필수">
+                        *
+                      </span>
+                    )}
                   </span>
                   <FieldRow field={f} value={form[f.key] ?? ''} onChange={v => onChange(f.key, v)} />
                 </label>
-              ))}
+              );
+              })}
             </section>
           );
         })}
@@ -414,6 +421,9 @@ export default function ConsultationFormPanel({
         <div>
           <h2 className="text-lg font-black text-gray-900">{config.title}</h2>
           {config.subtitle && <p className="text-xs text-gray-500 mt-0.5">{config.subtitle}</p>}
+          <p className="mt-1 text-[11px] font-semibold text-rose-600">
+            <span className="font-bold">*</span> 필수 입력 항목
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {draftId && (
@@ -510,7 +520,7 @@ export default function ConsultationFormPanel({
       </div>
 
       <p className="mt-2 text-center text-[10px] text-gray-400">
-        연락처·상호명 필수 · 초회상담자는 로그인 계정으로 자동 기록 · 나머지는 등록 후 보완
+        <span className="font-bold text-rose-600">*</span> 연락처·상호명 필수 · 초회상담자는 로그인 계정으로 자동 기록 · 나머지는 등록 후 보완
       </p>
     </div>
   );

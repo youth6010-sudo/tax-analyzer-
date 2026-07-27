@@ -26,6 +26,8 @@ export type IncomeGridRow = {
   rowNote?: string;
   semiAnnualTarget?: boolean;
   semiAnnualMonthlyDisplay?: boolean;
+  /** 유출·폐업·휴업 안내 */
+  closureNotice?: string | null;
   cells: Record<string, GridCellState>;
 };
 
@@ -471,6 +473,14 @@ export default function IncomeTypeGridTable({
                         }
                       >
                         반기{row.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                      </span>
+                    ) : null}
+                    {row.closureNotice ? (
+                      <span
+                        className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                        title={row.closureNotice}
+                      >
+                        {row.closureNotice}
                       </span>
                     ) : null}
                   </div>

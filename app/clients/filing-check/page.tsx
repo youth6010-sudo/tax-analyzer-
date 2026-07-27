@@ -65,9 +65,9 @@ import {
   type VatPhase,
   type VatObligation,
 } from '@/app/utils/filingCheck';
-import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients, isPortalBootstrapFresh } from '@/app/utils/portalStore';
+import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
-import { isClosureReviewClient } from '@/app/utils/clientClosure';
+import { filingClosureNotice, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
 import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
 import {
   formatResidentNoDisplay,
@@ -314,21 +314,6 @@ function resolveExtraClients(
     out.push(full ?? manualToClient(m));
   }
   return out;
-}
-
-/** 폐업·해임 — 접수목록(엑셀)에 없으면 신고대상확인 기본 목록에서 숨김 */
-function shouldShowClosedOrChurnedClient(
-  c: ClientRecord,
-  excelBizSet: Set<string>,
-  isExtra: boolean,
-): boolean {
-  if (!isClosureReviewClient(c)) return true;
-  const biz = normalizeBizNo(c.businessNo);
-  if (excelBizSet.size > 0) {
-    return biz.length === 10 && excelBizSet.has(biz);
-  }
-  // 접수목록 업로드 전: 수동 추가(extra)만 허용
-  return isExtra;
 }
 
 function clientManagerKey(c: ClientRecord): string {
@@ -591,8 +576,8 @@ function FilingCheckPageInner() {
   const savedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [carriedFrom, setCarriedFrom] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const incomeFileRef = useRef<HTMLInputElement>(null);
   const incomeSectionRef = useRef<IncomeTypeFilingHandle>(null);
+  const hometaxFileInputId = 'filing-check-hometax-upload';
   const pendingPersistRef = useRef<CheckRecord | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistInflightRef = useRef<Promise<void> | null>(null);
@@ -626,6 +611,8 @@ function FilingCheckPageInner() {
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
   const focusClientId = searchParams.get('client')?.trim() ?? '';
   const focusAppliedRef = useRef('');
+  /** 다음 신고분 승계 시 유출 안내 문구를 특이사항에 한 번만 채움 */
+  const closureCarryNotesKeyRef = useRef('');
 
   const cycle = getCycle(tax);
   const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
@@ -798,14 +785,10 @@ function FilingCheckPageInner() {
         if (cancelled) return;
       }
 
-      // 포털 bootstrap에 이미 수임처가 있으면 먼저 쓰고, TTL 안이면 전체 /api/clients 재호출 생략
+      // 포털 캐시는 유출 제외일 수 있음 — 신고대상확인은 유출 포함 목록을 항상 다시 받는다
       const portalClients = getPortalClients();
       if (portalClients.length > 0) {
         setAllClients(portalClients);
-      }
-
-      if (isPortalBootstrapFresh() && portalClients.length > 0) {
-        return;
       }
 
       const url = master
@@ -832,6 +815,7 @@ function FilingCheckPageInner() {
     let cancelled = false;
     const pk = periodKey(tax, period);
     sessionReadyRef.current = false;
+    closureCarryNotesKeyRef.current = '';
 
     const loadFromServer = async () => {
       try {
@@ -945,7 +929,7 @@ function FilingCheckPageInner() {
   };
 
   // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
-  // 폐업·해임은 기본 제외 (접수목록 매칭·수동 추가는 targets에서 별도 병합)
+  // 신고 기간 시작일 이전에 유출·폐업된 업체는 제외, 기간 중 발생분은 포함(안내 배지 표시)
   const taxTargetsAll = useMemo(() => {
     const raw =
       tax === 'withholding'
@@ -955,8 +939,8 @@ function FilingCheckPageInner() {
           : tax === 'vat'
             ? filingTargets(clients, 'vat', { vatPhase: period.vatPhase })
             : filingTargets(clients, tax);
-    return raw.filter(c => !isClosureReviewClient(c));
-  }, [clients, tax, period.month, period.vatPhase]);
+    return raw.filter(c => !isClosedBeforeFilingPeriod(c, tax, period));
+  }, [clients, tax, period]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const extraClientIds = useMemo(
@@ -1126,25 +1110,12 @@ function FilingCheckPageInner() {
         : applyFilingCheckClientOrder(scoped, clientListSort, selManager, orderTaxKey);
     const seen = new Set(ordered.map(c => c.id));
 
-    // 접수목록에 있는 폐업·해임 — 담당자 스코프 내에서만 병합
-    const closedWithReceipt: ClientRecord[] = [];
-    if (excelSet.size > 0) {
-      for (const c of clients) {
-        if (seen.has(c.id) || !isClosureReviewClient(c)) continue;
-        if (selManager !== ALL_MANAGERS && clientManagerKey(c) !== selManager) continue;
-        const biz = normalizeBizNo(c.businessNo);
-        if (biz.length !== 10 || !excelSet.has(biz)) continue;
-        closedWithReceipt.push(c);
-        seen.add(c.id);
-      }
-    }
-
     const manual = resolveExtraClients(record.extraClients, clients, seen).filter(c => {
       if (selManager !== ALL_MANAGERS && clientManagerKey(c) !== selManager) return false;
-      return shouldShowClosedOrChurnedClient(c, excelSet, true);
+      return true;
     });
 
-    return [...ordered, ...closedWithReceipt, ...manual];
+    return [...ordered, ...manual];
   }, [
     taxTargetsAll,
     selManager,
@@ -1154,8 +1125,27 @@ function FilingCheckPageInner() {
     orderTaxKey,
     clientOrderVersion,
     clients,
-    excelSet,
   ]);
+
+  // 직전 신고분 승계로 불러온 경우 — 유출·폐업 사업장 특이사항이 비어 있으면 안내 문구 채움
+  useEffect(() => {
+    if (!carriedFrom || !sessionReadyRef.current) return;
+    const pk = periodKey(tax, period);
+    const applyKey = `${selManager}|${tax}|${pk}|${carriedFrom}`;
+    if (closureCarryNotesKeyRef.current === applyKey) return;
+
+    const updates: Record<string, string> = {};
+    for (const c of targets) {
+      const notice = filingClosureNotice(c);
+      if (!notice) continue;
+      if ((record.rowNotes[c.id] ?? '').trim()) continue;
+      if (Object.prototype.hasOwnProperty.call(record.excluded, c.id)) continue;
+      updates[c.id] = notice;
+    }
+    closureCarryNotesKeyRef.current = applyKey;
+    if (Object.keys(updates).length === 0) return;
+    patchRecord({ rowNotes: { ...record.rowNotes, ...updates } });
+  }, [carriedFrom, targets, selManager, tax, period, record.rowNotes, record.excluded]);
 
   const isReceived = (id: string, bizNo: string) =>
     record.overrides[id] ?? excelSet.has(normalizeBizNo(bizNo));
@@ -1274,6 +1264,11 @@ function FilingCheckPageInner() {
       ? activeComprehensiveGroups.length
       : receiptActiveTargets.length;
   const vatNoticeTargetCount = vatProvisional ? vatNoticeActiveTargets.length : 0;
+  /** 합계표제출 — 접수목록 검증 제외 대상 (부가세) */
+  const vatSummaryOnlyTargets = useMemo(() => {
+    if (tax !== 'vat') return [];
+    return activeTargets.filter(c => isVatSummaryOnlyClient(c));
+  }, [tax, activeTargets]);
   const tableExtraCols = (tax === 'withholding' ? 1 : 0) + (vatProvisional ? 1 : 0);
   const tableColSpan = 7 + tableExtraCols;
   const diff =
@@ -1726,7 +1721,7 @@ function FilingCheckPageInner() {
           <div className="flex min-w-[16rem] flex-1 flex-wrap items-center gap-2">
             <FilingCheckClientAdd onSelect={addClientFromPicker} disabled={locked} />
             <span className="text-xs text-slate-400">
-              폐업·해임 수임처도 검색됩니다. 다음 신고분에도 유지됩니다.
+              유출·폐업 수임처도 검색·유지됩니다. 목록에 「유출된 사업장입니다」로 표시됩니다.
             </span>
           </div>
         )}
@@ -1908,6 +1903,7 @@ function FilingCheckPageInner() {
       setParseError('엑셀을 읽지 못했습니다. 홈택스 접수목록 파일(.xlsx/.xls)인지 확인해 주세요.');
     } finally {
       setParsing(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -1942,6 +1938,12 @@ function FilingCheckPageInner() {
       }
     }
     if (!isIncomeTypeTax) {
+      if (vatSummaryOnlyTargets.length > 0) {
+        lines.push(`· 합계표제출 ${vatSummaryOnlyTargets.length}곳 (접수목록 검증 제외)`);
+        for (const c of vatSummaryOnlyTargets) {
+          lines.push(`  - ${c.companyName || c.representative || '(이름없음)'}`);
+        }
+      }
       if (excludedTargetsForSummary.length > 0) {
         lines.push(`· 신고제외 ${excludedTargetsForSummary.length}곳`);
         for (const c of excludedTargetsForSummary) {
@@ -2006,6 +2008,7 @@ function FilingCheckPageInner() {
     record.rowNotes,
     activeTargets,
     excludedTargetsForSummary,
+    vatSummaryOnlyTargets,
     missingFromListNames,
     noReceiptNames,
     uploadAddedNames,
@@ -2042,6 +2045,21 @@ function FilingCheckPageInner() {
 
   const completionFooter = (diffValue: number) => (
     <>
+      {tax === 'vat' && vatSummaryOnlyTargets.length > 0 && (
+        <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3">
+          <p className="text-xs font-bold text-violet-800">
+            합계표제출 {vatSummaryOnlyTargets.length}곳 — 접수목록 검증 제외
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-xs text-violet-900">
+            {vatSummaryOnlyTargets.map(c => (
+              <li key={c.id}>· {c.companyName || c.representative || '(이름없음)'}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-violet-700/90">
+            완료 처리 시 요약(블루홀 공유용)에도 함께 포함됩니다.
+          </p>
+        </div>
+      )}
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {locked ? (
           <>
@@ -2102,6 +2120,8 @@ function FilingCheckPageInner() {
 
   // 안내문구 생성기와 동일하게 2025년부터 10년치
   const years = Array.from({ length: 10 }, (_, i) => 2025 + i);
+  const hometaxUploadBusy = isIncomeTypeTax ? incomeParsing : parsing;
+  const hometaxUploadDisabled = hometaxUploadBusy || locked;
 
   return (
     <PortalPageShell>
@@ -2282,10 +2302,12 @@ function FilingCheckPageInner() {
             <span className="max-w-[12rem] truncate text-xs text-slate-500">{record.fileName}</span>
           )}
           <input
-            ref={isIncomeTypeTax ? incomeFileRef : fileRef}
+            id={hometaxFileInputId}
+            ref={fileRef}
             type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
+            accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            className="sr-only"
+            disabled={hometaxUploadDisabled}
             onChange={e => {
               const f = e.target.files?.[0];
               if (!f) return;
@@ -2308,21 +2330,32 @@ function FilingCheckPageInner() {
                   })
                   .finally(() => {
                     setIncomeParsing(false);
-                    if (incomeFileRef.current) incomeFileRef.current.value = '';
+                    if (fileRef.current) fileRef.current.value = '';
                   });
               } else {
                 void handleUpload(f);
               }
             }}
           />
-          <button
-            type="button"
-            onClick={() => (isIncomeTypeTax ? incomeFileRef : fileRef).current?.click()}
-            disabled={(isIncomeTypeTax ? incomeParsing : parsing) || locked}
-            className={portalBtnSecondary}
+          {/* label+htmlFor: display:none 입력의 프로그래밍 click이 막히는 환경 대비 */}
+          <label
+            htmlFor={hometaxFileInputId}
+            className={`${portalBtnSecondary} ${
+              hometaxUploadDisabled
+                ? 'cursor-not-allowed opacity-50'
+                : 'cursor-pointer'
+            }`}
+            title={
+              locked
+                ? '완료 상태입니다. 완료 취소 후 업로드하세요.'
+                : hometaxUploadBusy
+                  ? '파일을 읽는 중입니다.'
+                  : '홈택스 접수목록 엑셀(.xlsx/.xls) 선택'
+            }
+            aria-disabled={hometaxUploadDisabled}
           >
-            {(isIncomeTypeTax ? incomeParsing : parsing) ? '읽는 중…' : '홈택스 접수목록 업로드'}
-          </button>
+            {hometaxUploadBusy ? '읽는 중…' : '홈택스 접수목록 업로드'}
+          </label>
           {!isIncomeTypeTax &&
             !locked &&
             (excelSet.size > 0 ||
@@ -2353,7 +2386,7 @@ function FilingCheckPageInner() {
                   .then(() => {
                     setIncomeNotice('');
                     setIncomeUploaded(false);
-                    if (incomeFileRef.current) incomeFileRef.current.value = '';
+                    if (fileRef.current) fileRef.current.value = '';
                     showIncomeSavedTick();
                   })
                   .catch(err => {
@@ -2615,6 +2648,10 @@ function FilingCheckPageInner() {
                   const manualExcluded = isManualExcluded(g.primaryClientId);
                   const reason = excludeReasonOf(primary);
                   const excluded = reason !== null;
+                  const closureNotice =
+                    filingClosureNotice(primary) ??
+                    g.clients.map(c => filingClosureNotice(c)).find(Boolean) ??
+                    null;
                   const received = !excluded && isGroupFilingReceived(g);
                   const siteState = groupSiteDoneState(g);
                   const restCount = g.clients.length - 1;
@@ -2684,6 +2721,14 @@ function FilingCheckPageInner() {
                               외 {restCount}
                             </button>
                           )}
+                          {closureNotice && (
+                            <span
+                              className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                              title={closureNotice}
+                            >
+                              {closureNotice}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -2727,6 +2772,7 @@ function FilingCheckPageInner() {
                   const manualExcluded = isManualExcluded(c.id);
                   const reason = excludeReasonOf(c);
                   const excluded = reason !== null;
+                  const closureNotice = filingClosureNotice(c);
                   const received = !excluded && isReceived(c.id, c.businessNo);
                   const rowNo = displayedComprehensiveGroupsOrdered.length + mi + 1;
                   return (
@@ -2777,6 +2823,14 @@ function FilingCheckPageInner() {
                                   : 'text-slate-800'
                             }
                           />
+                          {closureNotice && (
+                            <span
+                              className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                              title={closureNotice}
+                            >
+                              {closureNotice}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -2848,6 +2902,7 @@ function FilingCheckPageInner() {
                 const manualExcluded = isManualExcluded(c.id);
                 const reason = excludeReasonOf(c);
                 const excluded = reason !== null;
+                const closureNotice = filingClosureNotice(c);
                 const semiAnnualAutoExcluded =
                   excluded &&
                   !manualExcluded &&
@@ -2952,6 +3007,14 @@ function FilingCheckPageInner() {
                         {tax === 'vat' && isSimplifiedVatClient(c) && (
                           <span className="shrink-0 whitespace-nowrap rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
                             간이
+                          </span>
+                        )}
+                        {closureNotice && (
+                          <span
+                            className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                            title={closureNotice}
+                          >
+                            {closureNotice}
                           </span>
                         )}
                         {tax === 'withholding' && (() => {

@@ -147,7 +147,20 @@ function FormFieldsSection({ form, config }: { form: Record<string, unknown>; co
   );
 }
 
-const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
+const REGISTER_REQUIRED_KEYS = new Set(['phone', 'companyName']);
+
+function RequiredLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <span className={`font-semibold ${required ? 'text-rose-700' : 'text-gray-600'}`}>
+      {label}
+      {required && (
+        <span className="ml-0.5 font-bold text-rose-600" title="필수">
+          *
+        </span>
+      )}
+    </span>
+  );
+}
 
 function ConsultationFormEditFields({
   form,
@@ -171,15 +184,18 @@ function ConsultationFormEditFields({
 
   return (
     <div className="border-t border-gray-100 pt-3 space-y-3">
-      <p className="text-xs font-bold text-blue-700">신규상담 항목</p>
+      <p className="text-xs font-bold text-blue-700">
+        신규상담 항목 <span className="font-bold text-rose-600">*</span> 필수
+      </p>
       {keys.map(key => {
         const meta = fieldMeta.get(key);
         const label = labels.get(key) ?? key;
         const value = form[key] ?? '';
+        const required = Boolean(meta?.required || REGISTER_REQUIRED_KEYS.has(key));
         if (meta?.type === 'textarea') {
           return (
             <label key={key} className="block text-xs">
-              <span className="font-semibold text-gray-600">{label}</span>
+              <RequiredLabel label={label} required={required} />
               <textarea
                 value={value}
                 onChange={e => onChange(key, e.target.value)}
@@ -192,7 +208,7 @@ function ConsultationFormEditFields({
         if (meta?.type === 'select') {
           return (
             <label key={key} className="block text-xs">
-              <span className="font-semibold text-gray-600">{label}</span>
+              <RequiredLabel label={label} required={required} />
               <select
                 value={value}
                 onChange={e => onChange(key, e.target.value)}
@@ -209,7 +225,7 @@ function ConsultationFormEditFields({
         }
         return (
           <label key={key} className="block text-xs">
-            <span className="font-semibold text-gray-600">{label}</span>
+            <RequiredLabel label={label} required={required} />
             <input
               type={meta?.type === 'date' ? 'date' : meta?.type === 'number' ? 'number' : 'text'}
               value={value}
@@ -222,6 +238,8 @@ function ConsultationFormEditFields({
     </div>
   );
 }
+
+const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
 
 function TextBlock({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
   if (!value.trim()) return null;
