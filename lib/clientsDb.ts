@@ -18,6 +18,7 @@ import {
 } from '@/app/utils/churnMatch';
 import { syncMainCategory } from '@/app/utils/clientsGrouping';
 import type { BusinessEntityType } from '@/app/types/contact';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -478,6 +479,15 @@ export async function updateClientIntake(
   if (patch.mobilePhone !== undefined) mergedIntake.mobilePhone = patch.mobilePhone.trim();
   mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
 
+  let nextAssignedUserId = existing.assignedUserId;
+  if (patch.manager !== undefined) {
+    const nextManager = patch.manager.trim();
+    if (nextManager !== (existing.manager || '').trim()) {
+      const assignee = await findUserByName(nextManager);
+      nextAssignedUserId = assignee?.id ?? null;
+    }
+  }
+
   const [row] = await db
     .update(clients)
     .set({
@@ -492,6 +502,7 @@ export async function updateClientIntake(
       ...(patch.taxTypes !== undefined ? { taxTypes: patch.taxTypes } : {}),
       ...(patch.businessEntityType !== undefined ? { businessEntityType: patch.businessEntityType } : {}),
       ...(patch.serviceTypes !== undefined ? { serviceTypes: patch.serviceTypes } : {}),
+      ...(patch.manager !== undefined ? { assignedUserId: nextAssignedUserId } : {}),
       ...(data.intakeStep !== undefined ? { intakeStep: data.intakeStep } : {}),
       intakeData: mergedIntake,
       updatedAt: new Date(),
@@ -532,6 +543,7 @@ export async function updateClient(id: string, payload: ClientPatch) {
 
   const nextEntity = payload.businessEntityType || '';
   const nextServices = payload.serviceTypes ?? existing.serviceTypes ?? [];
+  const nextManager = payload.manager.trim();
 
   let mergedIntake = mergeIntakeDataPatch(existing.intakeData, payload.intakeData ?? {});
   if (payload.mobilePhone !== undefined) {
@@ -539,11 +551,18 @@ export async function updateClient(id: string, payload: ClientPatch) {
   }
   mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
 
+  // 담당자 변경 시 assignedUserId도 맞춤 — 안 맞으면 mine=1에 이전 담당 대시보드에 남음
+  let nextAssignedUserId = existing.assignedUserId;
+  if (nextManager !== (existing.manager || '').trim()) {
+    const assignee = await findUserByName(nextManager);
+    nextAssignedUserId = assignee?.id ?? null;
+  }
+
   const [row] = await db
     .update(clients)
     .set({
       companyName: payload.companyName.trim(),
-      manager: payload.manager.trim(),
+      manager: nextManager,
       representative: payload.representative.trim(),
       businessNo: payload.businessNo.trim(),
       corporateNo: payload.corporateNo.trim(),
@@ -553,6 +572,7 @@ export async function updateClient(id: string, payload: ClientPatch) {
       taxTypes: payload.taxTypes,
       businessEntityType: nextEntity,
       serviceTypes: payload.serviceTypes,
+      assignedUserId: nextAssignedUserId,
       ...(payload.feeSummary !== undefined ? { feeSummary: payload.feeSummary } : {}),
       ...(payload.program !== undefined ? { program: payload.program.trim() } : {}),
       intakeData: mergedIntake,
@@ -1406,8 +1426,51 @@ export async function upsertClientFromImport(data: {
 
 export async function findUserByName(name: string) {
   const db = getDb();
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-  const [row] = await db.select().from(users).where(eq(users.name, trimmed)).limit(1);
+  const names = getManagerMatchNames(name);
+  if (!names.length) return null;
+  const [row] = await db.select().from(users).where(inArray(users.name, names)).limit(1);
   return row ?? null;
+}
+
+/** 담당자(manager)와 assignedUserId 불일치 건을 담당자 기준으로 맞춤 */
+export async function syncAssignedUsersToManagers(): Promise<{ updated: number; skipped: number }> {
+  const db = getDb();
+  const allUsers = await db.select({ id: users.id, name: users.name }).from(users);
+  const userByName = new Map<string, string>();
+  for (const u of allUsers) {
+    for (const n of getManagerMatchNames(u.name)) {
+      userByName.set(n, u.id);
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: clients.id,
+      manager: clients.manager,
+      assignedUserId: clients.assignedUserId,
+    })
+    .from(clients)
+    .where(ne(clients.status, 'churned'));
+
+  let updated = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const mgr = (row.manager || '').trim();
+    if (!mgr) {
+      skipped += 1;
+      continue;
+    }
+    const expectedId = userByName.get(mgr) ?? null;
+    if (!expectedId) {
+      skipped += 1;
+      continue;
+    }
+    if (row.assignedUserId === expectedId) continue;
+    await db
+      .update(clients)
+      .set({ assignedUserId: expectedId, updatedAt: new Date() })
+      .where(eq(clients.id, row.id));
+    updated += 1;
+  }
+  return { updated, skipped };
 }
