@@ -107,6 +107,14 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
           <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
         </svg>
       );
+    case 'nhis-branches':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+          <path d="M11 8v6M8 11h6" />
+        </svg>
+      );
     case 'comprehensive':
       return <CalculatorGridIcon className={className} />;
     case 'gacha':
@@ -174,6 +182,7 @@ const HREF_ICON: Record<string, string> = {
   '/bluehole': 'bluehole',
   '/clients/filing-check': 'filing-check',
   '/tools/notice-generator': 'notice-generator',
+  '/tools/nhis-branches': 'nhis-branches',
   '/tax/comprehensive': 'comprehensive',
   '/gacha': 'gacha',
   '/gacha?tab=manager': 'gacha-manager',
