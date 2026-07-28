@@ -108,17 +108,27 @@ export async function findPreviousCompletedFilingCheckSession(
   currentPeriodKey: string,
 ): Promise<{ data: FilingCheckSessionData; periodKey: string } | null> {
   const db = getDb();
+  const isAll = manager === '전체';
+  const names = isAll
+    ? null
+    : [...new Set([manager, ...getManagerMatchNames(manager)].map(n => n.trim()).filter(Boolean))];
+
+  const conditions = [
+    eq(filingCheckSessions.taxType, taxType),
+    lt(filingCheckSessions.periodKey, currentPeriodKey),
+    sql`(${filingCheckSessions.data}->>'done') = 'true'`,
+  ];
+  if (names && names.length > 0) {
+    conditions.push(inArray(filingCheckSessions.manager, names));
+  } else if (isAll) {
+    // 「전체」행은 저장하지 않음 — 담당자 세션만 탐색
+    conditions.push(sql`${filingCheckSessions.manager} <> '전체'`);
+  }
+
   const rows = await db
     .select()
     .from(filingCheckSessions)
-    .where(
-      and(
-        eq(filingCheckSessions.manager, manager),
-        eq(filingCheckSessions.taxType, taxType),
-        lt(filingCheckSessions.periodKey, currentPeriodKey),
-        sql`(${filingCheckSessions.data}->>'done') = 'true'`,
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(desc(filingCheckSessions.periodKey))
     .limit(1);
 
@@ -217,6 +227,82 @@ async function listFilingCheckSessionsForPeriod(
   }));
 }
 
+/** 「전체」·별칭 세션 — 제외·강제포함·메모·추가업체를 합침 (관리자 화면과 담당자 제외 일치) */
+function mergeCarrySlicesFromParts(
+  parts: Array<Partial<FilingCheckSessionData> | null | undefined>,
+): Pick<FilingCheckSessionData, 'excluded' | 'forceIncluded' | 'rowNotes' | 'extraClients'> {
+  const excluded: Record<string, string> = {};
+  const forceIncluded: Record<string, boolean> = {};
+  const rowNotes: Record<string, string> = {};
+  const extraById = new Map<string, FilingCheckSessionData['extraClients'][number]>();
+
+  for (const rec of parts) {
+    if (!rec) continue;
+    for (const [id, reason] of Object.entries(rec.excluded ?? {})) {
+      const next = reason ?? '';
+      if (!Object.prototype.hasOwnProperty.call(excluded, id)) {
+        excluded[id] = next;
+        continue;
+      }
+      const cur = excluded[id] ?? '';
+      const curWeak = !cur.trim() || cur === '미접수 자동제외';
+      const nextStrong = Boolean(next.trim()) && next !== '미접수 자동제외';
+      if (curWeak && nextStrong) excluded[id] = next;
+    }
+    for (const [id, v] of Object.entries(rec.forceIncluded ?? {})) {
+      if (v) forceIncluded[id] = true;
+    }
+    for (const [id, note] of Object.entries(rec.rowNotes ?? {})) {
+      if ((note ?? '').trim() && !(rowNotes[id] ?? '').trim()) rowNotes[id] = note;
+    }
+    for (const e of rec.extraClients ?? []) {
+      if (e?.id && !extraById.has(e.id)) extraById.set(e.id, e);
+    }
+  }
+
+  return {
+    excluded,
+    forceIncluded,
+    rowNotes,
+    extraClients: [...extraById.values()],
+  };
+}
+
+function overlayMergedCarry(
+  base: Pick<FilingCheckSessionData, 'excluded' | 'forceIncluded' | 'rowNotes' | 'extraClients'>,
+  overlay: ReturnType<typeof mergeCarrySlicesFromParts> | null,
+): Pick<FilingCheckSessionData, 'excluded' | 'forceIncluded' | 'rowNotes' | 'extraClients'> {
+  if (!overlay) {
+    return {
+      excluded: base.excluded ?? {},
+      forceIncluded: base.forceIncluded ?? {},
+      rowNotes: base.rowNotes ?? {},
+      extraClients: base.extraClients ?? [],
+    };
+  }
+  const extras = mergeCarrySlicesFromParts([
+    { extraClients: overlay.extraClients },
+    { extraClients: base.extraClients ?? [] },
+  ]).extraClients;
+  return {
+    excluded: mergeCarrySlicesFromParts([
+      { excluded: overlay.excluded },
+      { excluded: base.excluded ?? {} },
+    ]).excluded,
+    forceIncluded: {
+      ...(overlay.forceIncluded ?? {}),
+      ...(base.forceIncluded ?? {}),
+    },
+    rowNotes: {
+      ...overlay.rowNotes,
+      ...Object.fromEntries(
+        Object.entries(base.rowNotes ?? {}).filter(([, v]) => (v ?? '').trim()),
+      ),
+    },
+    extraClients: extras,
+  };
+}
+
 /** 「전체」조회 — 담당자별 기한후·수정신고 사유를 결재자가 모두 볼 수 있게 합침 */
 function mergeSpecialsFromManagerSessions(
   sessions: Array<{ manager: string; data: FilingCheckSessionData }>,
@@ -313,13 +399,26 @@ export async function loadFilingCheckSessionWithCarry(
     manager === '전체' && periodSessions.length > 0
       ? mergeSpecialsFromManagerSessions(periodSessions)
       : null;
+  // 「전체」= 담당자별 제외 합침 / 담당자 = 닉네임·실명 별칭 제외 합침
+  const mergedManagerCarry =
+    manager === '전체'
+      ? mergeCarrySlicesFromParts(
+          periodSessions
+            .filter(s => s.manager.trim() && s.manager !== '전체')
+            .map(s => s.data),
+        )
+      : receiptParts.length > 1
+        ? mergeCarrySlicesFromParts(receiptParts)
+        : null;
 
   if (current === null) {
     if (previous) {
+      const carry = overlayMergedCarry(carryFieldsFromRecord(previous.data), mergedManagerCarry);
       return {
         data: {
           ...EMPTY_SESSION_DATA,
           ...carryFieldsFromRecord(previous.data),
+          ...carry,
           ...mergedReceipt,
           ...(mergedSpecials ?? {}),
           done: false,
@@ -330,6 +429,7 @@ export async function loadFilingCheckSessionWithCarry(
     return {
       data: {
         ...EMPTY_SESSION_DATA,
+        ...(mergedManagerCarry ?? {}),
         ...mergedReceipt,
         ...(mergedSpecials ?? {}),
         done: false,
@@ -343,17 +443,15 @@ export async function loadFilingCheckSessionWithCarry(
 
   if (previous && carryNeedsPreviousMerge(previous.data, current)) {
     const carry = mergeCarryFieldLayers(previous.data, current);
+    const carryOverlay = overlayMergedCarry(carry, mergedManagerCarry);
     const merged: FilingCheckSessionData = {
       ...EMPTY_SESSION_DATA,
       ...carry,
+      ...carryOverlay,
       ...mergedReceipt,
       ...(mergedSpecials ?? {}),
       // 담당자 본인 세션의 완료 여부 유지 (전체 합산 done은 쓰지 않음)
       done: current.done,
-      forceIncluded: {
-        ...(previous.data.forceIncluded ?? {}),
-        ...(current.forceIncluded ?? {}),
-      },
       clientOrder: current.clientOrder,
       siteDone: mergedReceipt.siteDone ?? current.siteDone,
     };
@@ -368,10 +466,12 @@ export async function loadFilingCheckSessionWithCarry(
     return { data: merged, carriedFromPeriodKey };
   }
 
+  const currentCarry = overlayMergedCarry(carryFieldsFromRecord(current), mergedManagerCarry);
   return {
     data: {
       ...EMPTY_SESSION_DATA,
       ...carryFieldsFromRecord(current),
+      ...currentCarry,
       ...mergedReceipt,
       ...(mergedSpecials ?? {}),
       done: current.done,

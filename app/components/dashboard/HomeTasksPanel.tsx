@@ -334,11 +334,19 @@ export default function HomeTasksPanel() {
   };
 
   const confirmRoutedDone = async (id: string) => {
-    await fetch(`/api/calendar/personal-checklist/${id}`, {
+    const res = await fetch(`/api/calendar/personal-checklist/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dismiss: true }),
     });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      window.alert(data?.error || '확인 처리에 실패했습니다.');
+      return;
+    }
+    // 즉시 목록에서 제거 (새로고침 전에도 안 보이게)
+    setRoutedOpen(prev => prev.filter(item => item.id !== id));
+    setRoutedShared(prev => prev.filter(item => item.id !== id));
     void refresh();
   };
 

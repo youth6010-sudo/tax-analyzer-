@@ -6,10 +6,12 @@ import {
   getFilingCheckSession,
   loadFilingCheckSessionWithCarry,
   upsertFilingCheckSession,
+  findPreviousCompletedFilingCheckSession,
   type FilingCheckSessionData,
 } from '@/lib/taxFilingChecksDb';
 import { filingSessionToTaxDeadlineIds } from '@/lib/filingCheckTaxDeadlineIds';
 import { setTaxDeadlineCheckoff } from '@/lib/taxDeadlineCheckoffs';
+import { previousPeriodKey } from '@/app/utils/filingCheck';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +28,36 @@ export async function GET(request: NextRequest) {
 
     if (!isMasterUser(user) && manager !== user.name && manager !== '전체') {
       throw new Error('FORBIDDEN');
+    }
+
+    /** 직전 신고 대비 — 완료 세션 우선, 없으면 달력상 직전 기간 */
+    if (searchParams.get('previousCompleted') === '1') {
+      const found = await findPreviousCompletedFilingCheckSession(manager, taxType, periodKey);
+      let prevPk = found?.periodKey ?? null;
+
+      if (!prevPk) {
+        prevPk = previousPeriodKey(taxType as never, periodKey);
+      }
+      if (!prevPk) {
+        return NextResponse.json({ data: null, periodKey: null });
+      }
+
+      // 담당자: 완료 세션 원본 그대로 (별칭으로 찾은 경우 포함)
+      if (found && manager !== '전체') {
+        return NextResponse.json({
+          data: found.data,
+          periodKey: found.periodKey,
+          fromCompleted: true,
+        });
+      }
+
+      // 「전체」또는 미완료 폴백 — 담당자 세션 합산(전체는 DB에 쓰지 않음)
+      const loaded = await loadFilingCheckSessionWithCarry(manager, taxType, prevPk);
+      return NextResponse.json({
+        data: { ...loaded.data, done: found ? true : loaded.data.done },
+        periodKey: prevPk,
+        fromCompleted: Boolean(found),
+      });
     }
 
     if (withCarry) {

@@ -731,6 +731,50 @@ export async function updatePersonalChecklistItem(
     .limit(1);
 
   if (!existing) throw new Error('NOT_FOUND');
+
+  const isDismissOnly =
+    patch.dismiss === true &&
+    Object.keys(patch).every(key => {
+      if (key === 'dismiss') return true;
+      return patch[key as keyof UpdateChecklistInput] === undefined;
+    });
+
+  // 완료 알림은 팀 전원에게 감 — 수신자는 항목 담당이 아니어도 「확인」으로 알림만 닫을 수 있음
+  if (isDismissOnly) {
+    const taxType = checklistTaxTypeFromRow(existing);
+    if (!isRoutedRequestTaxType(taxType)) {
+      throw new Error('비품·시스템개선 요청만 확인할 수 있습니다.');
+    }
+    const hasItemAccess = canAccessItem(existing, actorName);
+    const assignees = normalizeAssignees(
+      (existing.assigneeNames as string[] | null | undefined) ?? [],
+      existing.ownerName,
+    );
+    const handlers = checkoffParticipants(taxType, existing.ownerName, assignees);
+
+    if (hasItemAccess && handlers.includes(actorName)) {
+      try {
+        await dismissPersonalChecklistCheckoff(id, actorName);
+      } catch {
+        /* 미완료 담당자는 알림만 닫기 */
+      }
+    }
+
+    const marked = await markItemNotificationsRead(actorName, id);
+    if (!hasItemAccess && marked === 0) {
+      throw new Error('NOT_FOUND');
+    }
+
+    const item = await getPersonalChecklistById(id, hasItemAccess ? actorName : undefined);
+    if (item) return item;
+    return toBaseDto(
+      existing,
+      existing.clientId
+        ? (await getClientById(existing.clientId))?.companyName
+        : undefined,
+    );
+  }
+
   if (!canAccessItem(existing, actorName)) throw new Error('NOT_FOUND');
 
   const isOwner = existing.ownerName === actorName;
