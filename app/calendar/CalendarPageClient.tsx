@@ -9,7 +9,13 @@ import CalendarView from '@/app/components/calendar/CalendarView';
 import CalendarTeamFilter from '@/app/components/calendar/CalendarTeamFilter';
 import { eventDisplayTitle } from '@/app/components/calendar/CalendarEventChip';
 import type { CalendarEventDto, CompanyEventDto, PersonalChecklistDto } from '@/app/types/calendar';
-import { formatCalendarCreatedAt, formatCheckoffCompletedAt } from '@/app/types/calendar';
+import {
+  formatCalendarCreatedAt,
+  formatCheckoffCompletedAt,
+  isImprovementRequestTaxType,
+  isRoutedRequestTaxType,
+  isSuppliesOrderTaxType,
+} from '@/app/types/calendar';
 import {
   formatCalendarDateLabel,
   resolveEventChipColor,
@@ -23,6 +29,8 @@ import {
 import CenterModal from '@/app/components/portal/CenterModal';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
+import SuppliesOrderList from '@/app/components/calendar/SuppliesOrderList';
+import ImprovementRequestList from '@/app/components/calendar/ImprovementRequestList';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
@@ -134,6 +142,7 @@ export default function CalendarPageClient() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pageTab, setPageTab] = useState<'calendar' | 'supplies' | 'improvement'>('calendar');
 
   const range = useMemo(
     () => (mode === 'month' ? monthRange(year, month) : weekRange(selectedDate)),
@@ -415,6 +424,42 @@ export default function CalendarPageClient() {
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full py-4`}>
+        <div className="mb-4 flex rounded-lg border border-slate-200 p-0.5 text-sm font-semibold w-fit">
+          <button
+            type="button"
+            onClick={() => setPageTab('calendar')}
+            className={`rounded-md px-3 py-1.5 ${
+              pageTab === 'calendar' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            캘린더
+          </button>
+          <button
+            type="button"
+            onClick={() => setPageTab('supplies')}
+            className={`rounded-md px-3 py-1.5 ${
+              pageTab === 'supplies' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            비품 주문 목록
+          </button>
+          <button
+            type="button"
+            onClick={() => setPageTab('improvement')}
+            className={`rounded-md px-3 py-1.5 ${
+              pageTab === 'improvement' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            시스템 개선 요청
+          </button>
+        </div>
+
+        {pageTab === 'supplies' ? (
+          <SuppliesOrderList />
+        ) : pageTab === 'improvement' ? (
+          <ImprovementRequestList />
+        ) : (
+        <>
         <CalendarToolbar
           year={year}
           month={month}
@@ -566,12 +611,33 @@ export default function CalendarPageClient() {
             </div>
           </div>
         )}
+        </>
+        )}
       </div>
 
       <CenterModal
         open={editItem !== null}
-        title="개인 체크리스트 수정"
-        description="내용을 수정한 뒤 저장하세요."
+        title={
+          editItem &&
+          currentUser &&
+          editItem.ownerName !== currentUser &&
+          isSuppliesOrderTaxType(editItem.taxType)
+            ? '비품 주문 요청'
+            : editItem &&
+                currentUser &&
+                editItem.ownerName !== currentUser &&
+                isImprovementRequestTaxType(editItem.taxType)
+              ? '시스템 개선 요청'
+              : '개인 체크리스트 수정'
+        }
+        description={
+          editItem &&
+          currentUser &&
+          editItem.ownerName !== currentUser &&
+          isRoutedRequestTaxType(editItem.taxType)
+            ? undefined
+            : '내용을 수정한 뒤 저장하세요.'
+        }
         onClose={() => setEditItem(null)}
       >
         {editItem && (
@@ -587,6 +653,7 @@ export default function CalendarPageClient() {
               setSelectedEvent(null);
               void loadEvents();
             }}
+            onCheckoffChange={() => void loadEvents()}
             onCancel={() => setEditItem(null)}
           />
         )}

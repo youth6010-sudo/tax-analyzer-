@@ -84,24 +84,65 @@ export function defaultSimplePayrollHalf(month: number): SimplePayrollHalf {
 }
 
 /**
- * 원천세·간이지급 등 익월 10일 마감 신고분의 기본 귀속 연월.
- * 해당 신고 마감일(10일) 이전이면 전월, 이후면 당월을 신고대상 기본 기간으로 본다.
- * 예) 2026-07-06 → 6월분, 2026-07-15 → 7월분
+ * 원천세·간이지급 등 익월 10일 마감 — UI·기본 선택은 **신고월(마감월)**.
+ * - 매월 11일~말일 → 다음달이 신고월 (예: 7/28 → 8월 신고 = 7월 귀속)
+ * - 매월 1~10일 → 이번달이 신고월 (예: 8/5 → 8월 신고 = 7월 귀속)
+ * 마감일(10일)이 주말이면 다음 평일까지 이전 신고월을 유지합니다.
  */
 export function currentMonthlyFilingMonth(now = new Date()): { year: number; month: number } {
-  const day = now.getDate();
-  let year = now.getFullYear();
-  let month = now.getMonth() + 1;
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
 
-  if (day <= 10) {
-    month -= 1;
-    if (month < 1) {
-      month = 12;
-      year -= 1;
-    }
+  const deadline = withholdingDeadlineDate(y, m);
+  // 이번 달 마감일(연장 포함)까지는 이번 달이 신고월, 이후면 다음달 신고월
+  if (now.getTime() <= deadline.getTime()) {
+    return { year: y, month: m };
   }
-
+  let year = y;
+  let month = m + 1;
+  if (month > 12) {
+    month = 1;
+    year += 1;
+  }
   return { year, month };
+}
+
+/** 신고월 → 귀속월 (신고 마감월의 지급·귀속 월) */
+export function attributionMonthFromReportMonth(
+  year: number,
+  reportMonth: number,
+): { year: number; month: number } {
+  let month = reportMonth - 1;
+  let y = year;
+  if (month < 1) {
+    month = 12;
+    y -= 1;
+  }
+  return { year: y, month };
+}
+
+/** 귀속월 → 신고월 */
+export function reportMonthFromAttributionMonth(
+  year: number,
+  attributionMonth: number,
+): { year: number; month: number } {
+  let month = attributionMonth + 1;
+  let y = year;
+  if (month > 12) {
+    month = 1;
+    y += 1;
+  }
+  return { year: y, month };
+}
+
+/** 해당 달 원천세 마감일(기본 10일, 토·일이면 다음 평일) */
+export function withholdingDeadlineDate(year: number, month: number): Date {
+  const d = new Date(year, month - 1, 10, 23, 59, 59, 999);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
 }
 
 /** 간이지급 월별 period_key (일용·사업·기타·근로내용확인) */

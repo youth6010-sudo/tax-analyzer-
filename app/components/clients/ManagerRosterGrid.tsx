@@ -14,8 +14,13 @@ import {
 } from '@/app/utils/clientsGrouping';
 import {
   commitClientListReorder,
-  MANAGER_CLIENT_ORDER_STORAGE_KEY,
+  DEFAULT_ROSTER_COLUMN_WIDTH,
+  MAX_ROSTER_COLUMN_WIDTH,
+  MIN_ROSTER_COLUMN_WIDTH,
   readManagerClientOrder,
+  readRosterColumnWidth,
+  ROSTER_COLUMN_WIDTH_STORAGE_KEY,
+  writeRosterColumnWidth,
 } from '@/app/utils/clientListPrefs';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
@@ -24,12 +29,12 @@ import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManager
 import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
+import { isSimplifiedVatClient, isTaxExemptClient } from '@/app/utils/filingCheck';
 import { useClientRowExpand } from '@/app/components/clients/useClientRowExpand';
-import ClientRowHeading from '@/app/components/clients/ClientRowHeading';
+import ClientRowHeading, { type ClientRowBadge } from '@/app/components/clients/ClientRowHeading';
 import ClientFeeCell from '@/app/components/clients/ClientFeeCell';
 import ClientRowExpandPanel from '@/app/components/clients/ClientRowExpandPanel';
 
-const COLUMN_WIDTH = 300;
 const COLUMN_GAP = 10;
 
 function formatFee(value: number | null | undefined): string {
@@ -196,8 +201,15 @@ function ClientRosterRow({
   const idVal = panelIdValue(c, variant);
   const contact = contactDisplay(c);
   const idLabel = panelIdLabel(variant);
-  const entityBadge =
-    panelCategory === SINGO_DAERI && c.businessEntityType === 'nonBusiness' ? '비사업자' : undefined;
+  const badges: ClientRowBadge[] = [];
+  if (panelCategory === SINGO_DAERI && c.businessEntityType === 'nonBusiness') {
+    badges.push({ label: '비사업자', tone: 'amber' });
+  }
+  if (isSimplifiedVatClient(c)) {
+    badges.push({ label: '간이', tone: 'sky' });
+  } else if (isTaxExemptClient(c)) {
+    badges.push({ label: '면세', tone: 'violet' });
+  }
   const ntsClosed = showNtsClosed ?? false;
   const rowGrid = showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE;
   const { expanded, onNameClick, goToDetail, prefetchDetail, nameButtonClass } = useClientRowExpand(
@@ -218,13 +230,13 @@ function ClientRosterRow({
         {index + 1}
       </span>
 
-      <div className="min-w-0">
+      <div className="min-w-0 overflow-hidden">
         <ClientRowHeading
           companyName={<Highlight text={c.companyName} query={query} />}
           companyTitle={c.companyName}
           expanded={expanded}
           isChurned={isChurned}
-          entityBadge={entityBadge}
+          badges={badges}
           ntsClosed={ntsClosed}
           onNameClick={onNameClick}
           onPrefetch={prefetchDetail}
@@ -651,27 +663,30 @@ function HorizontalRosterStrip({
   managers,
   currentUserName,
   fitAllColumns = false,
+  columnWidth,
   children,
 }: {
   managers: string[];
   currentUserName?: string | null;
   fitAllColumns?: boolean;
+  columnWidth: number;
   children: React.ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const useHorizontalScroll = !fitAllColumns;
+  const columnStride = columnWidth + COLUMN_GAP;
 
   const scrollToIndex = useCallback((index: number) => {
     const el = scrollRef.current;
     if (!el || !useHorizontalScroll) return;
     const clamped = Math.max(0, Math.min(index, managers.length - 1));
     el.scrollTo({
-      left: clamped * (COLUMN_WIDTH + COLUMN_GAP),
+      left: clamped * columnStride,
       behavior: 'smooth',
     });
     setActiveIndex(clamped);
-  }, [managers.length, useHorizontalScroll]);
+  }, [columnStride, managers.length, useHorizontalScroll]);
 
   const scrollByColumn = useCallback((direction: -1 | 1) => {
     scrollToIndex(activeIndex + direction);
@@ -682,7 +697,7 @@ function HorizontalRosterStrip({
     if (!el || !useHorizontalScroll) return;
 
     const onScroll = () => {
-      const idx = Math.round(el.scrollLeft / (COLUMN_WIDTH + COLUMN_GAP));
+      const idx = Math.round(el.scrollLeft / columnStride);
       setActiveIndex(Math.max(0, Math.min(idx, managers.length - 1)));
     };
 
@@ -721,7 +736,7 @@ function HorizontalRosterStrip({
       el.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [managers.length, scrollByColumn, useHorizontalScroll]);
+  }, [columnStride, managers.length, scrollByColumn, useHorizontalScroll]);
 
   return (
     <div>
@@ -754,7 +769,7 @@ function HorizontalRosterStrip({
           ref={scrollRef}
           className={
             fitAllColumns
-              ? 'grid grid-cols-1 gap-2.5 min-w-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
+              ? 'grid grid-cols-1 gap-2.5 min-w-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 overflow-x-auto'
               : 'roster-h-scroll roster-scroll min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-3 pb-2'
           }
         >
@@ -770,6 +785,64 @@ function HorizontalRosterStrip({
         </div>
       </div>
     </div>
+  );
+}
+
+function RosterColumnResizeHandle({
+  columnWidth,
+  onResize,
+}: {
+  columnWidth: number;
+  onResize: (width: number) => void;
+}) {
+  const startX = useRef(0);
+  const startW = useRef(columnWidth);
+  const liveW = useRef(columnWidth);
+
+  useEffect(() => {
+    liveW.current = columnWidth;
+  }, [columnWidth]);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    startX.current = e.clientX;
+    startW.current = liveW.current;
+    target.setPointerCapture(e.pointerId);
+
+    const clamp = (n: number) =>
+      Math.min(MAX_ROSTER_COLUMN_WIDTH, Math.max(MIN_ROSTER_COLUMN_WIDTH, Math.round(n)));
+
+    const onMove = (ev: PointerEvent) => {
+      const next = clamp(startW.current + (ev.clientX - startX.current));
+      liveW.current = next;
+      onResize(next);
+    };
+    const onUp = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* already released */
+      }
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onUp);
+      target.removeEventListener('pointercancel', onUp);
+      writeRosterColumnWidth(liveW.current);
+    };
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onUp);
+    target.addEventListener('pointercancel', onUp);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label="담당자 목록 가로 너비 조절"
+      title="드래그하여 목록 가로 너비 조절 (모든 담당자에 적용)"
+      onPointerDown={onPointerDown}
+      className="absolute right-0 top-0 z-10 h-full w-2 -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 hover:bg-blue-400/25 active:bg-blue-500/35"
+    />
   );
 }
 
@@ -803,6 +876,19 @@ export default function ManagerRosterGrid({
   orderVersion?: number;
   onClientOrderChange?: () => void;
 }) {
+  const [columnWidth, setColumnWidth] = useState(DEFAULT_ROSTER_COLUMN_WIDTH);
+
+  useEffect(() => {
+    setColumnWidth(readRosterColumnWidth());
+    const sync = () => setColumnWidth(readRosterColumnWidth());
+    window.addEventListener(`local-storage:${ROSTER_COLUMN_WIDTH_STORAGE_KEY}`, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(`local-storage:${ROSTER_COLUMN_WIDTH_STORAGE_KEY}`, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
   // visibleManagers는 호출부에서 사용자가 지정한 순서대로 전달된다 → 그 순서를 그대로 유지
   const managerGroups = useMemo(() => {
     const grouped = groupClientsByManager(clients, sort);
@@ -833,20 +919,27 @@ export default function ManagerRosterGrid({
     );
   }
 
+  const fitAllColumns = visibleManagers.length <= 5 && columnWidth <= DEFAULT_ROSTER_COLUMN_WIDTH;
+
   return (
     <HorizontalRosterStrip
       managers={managerGroups.map(g => g.manager)}
       currentUserName={currentUserName}
-      fitAllColumns={visibleManagers.length <= 5}
+      fitAllColumns={fitAllColumns}
+      columnWidth={columnWidth}
     >
       {managerGroups.map(mgr => (
         <div
           key={mgr.manager}
           className={[
-            'flex flex-col min-w-0',
-            visibleManagers.length <= 5 ? 'w-full' : 'snap-start shrink-0',
+            'relative flex flex-col min-w-0',
+            fitAllColumns ? 'w-full' : 'snap-start shrink-0',
           ].join(' ')}
-          style={visibleManagers.length <= 5 ? undefined : { width: COLUMN_WIDTH }}
+          style={
+            fitAllColumns
+              ? { minWidth: columnWidth }
+              : { width: columnWidth, minWidth: columnWidth }
+          }
         >
           <ManagerSection
             manager={mgr.manager}
@@ -863,6 +956,7 @@ export default function ManagerRosterGrid({
             sort={sort}
             onClientOrderChange={onClientOrderChange}
           />
+          <RosterColumnResizeHandle columnWidth={columnWidth} onResize={setColumnWidth} />
         </div>
       ))}
     </HorizontalRosterStrip>

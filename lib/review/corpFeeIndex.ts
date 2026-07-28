@@ -19,6 +19,7 @@ import {
 const FEE_STAFF_ORDER = ['블루', '다야', '윈터', '리아', '페리', '인디', '찰리'] as const;
 const FEE_SEGMENT_GAP = 10;
 
+const FEE_COL = 4;
 const REVENUE_COL_LAST_YEAR = 5;
 const ADJUSTMENT_COL_LAST_YEAR = 6;
 const REVENUE_COL_THIS_YEAR = 9;
@@ -92,6 +93,7 @@ function entryFromRow(sheet: GridSheet, r: number, companyName: string, staff: s
   return {
     companyName,
     staff,
+    fee: parseNumericValue(cellAt(sheet, r, FEE_COL)?.v),
     revenueLastYear: parseNumericValue(cellAt(sheet, r, REVENUE_COL_LAST_YEAR)?.v),
     adjustmentLastYear: parseNumericValue(cellAt(sheet, r, ADJUSTMENT_COL_LAST_YEAR)?.v),
     revenueThisYear: parseNumericValue(cellAt(sheet, r, REVENUE_COL_THIS_YEAR)?.v),
@@ -113,6 +115,7 @@ function entryFromNewRow(row: ReviewNewRowInput): CorpFeeEntry | null {
   return {
     companyName: company,
     staff: row.owner ?? '',
+    fee: readFeeCol(FEE_COL),
     revenueLastYear: readFeeCol(REVENUE_COL_LAST_YEAR),
     adjustmentLastYear: readFeeCol(ADJUSTMENT_COL_LAST_YEAR),
     revenueThisYear: readFeeCol(REVENUE_COL_THIS_YEAR),

@@ -75,7 +75,7 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
     : '내 담당 수임처 검색 (폐업·해임 포함)';
 
   return (
-    <div ref={rootRef} className="relative min-w-[14rem] flex-1 sm:max-w-md">
+    <div ref={rootRef} className="relative z-40 min-w-[14rem] flex-1 sm:max-w-md">
       <input
         type="search"
         value={query}
@@ -89,7 +89,7 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
         className={`${inputCls} w-full`}
       />
       {open && query.trim() && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {isMaster === null || (loading && results.length === 0) ? (
             <p className="px-3 py-3 text-center text-sm text-slate-400">검색 중…</p>
           ) : results.length === 0 ? (

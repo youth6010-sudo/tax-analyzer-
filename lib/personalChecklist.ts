@@ -4,10 +4,20 @@ import { clients, personalChecklistItems } from '@/db/schema';
 import type {
   ChecklistTaxType,
   CheckoffDetail,
+  ImprovementRequestDto,
   PersonalChecklistDto,
   PersonalChecklistMemo,
+  ProcessedRoutedRequestDto,
+  SuppliesOrderDto,
 } from '@/app/types/calendar';
-import { checklistTaxTypeFromRow, normalizeChecklistTaxType } from '@/app/types/calendar';
+import {
+  checklistTaxTypeFromRow,
+  forcedAssigneesForTaxType,
+  isRoutedRequestTaxType,
+  isSuppliesOrderTaxType,
+  normalizeChecklistTaxType,
+  SUPPLIES_ORDER_ASSIGNEE,
+} from '@/app/types/calendar';
 import { syncChecklistToClientNotes, unsyncChecklistFromClientNotes } from '@/lib/personalChecklistSync';
 import { getClientById } from '@/lib/clientsDb';
 import {
@@ -30,8 +40,35 @@ function normalizeAssignees(names: string[] | undefined | null, ownerName: strin
   return out;
 }
 
+/** 구분별 고정 협업자 적용 */
+function assigneesForTaxType(
+  taxType: ChecklistTaxType,
+  names: string[] | undefined | null,
+  ownerName: string,
+): string[] {
+  const base = normalizeAssignees(names, ownerName);
+  const forced = forcedAssigneesForTaxType(taxType);
+  if (forced.length === 0) return base;
+  const out = [...base];
+  for (const name of forced) {
+    if (name === ownerName) continue;
+    if (!out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
 function participantsOf(ownerName: string, assigneeNames: string[]): string[] {
   return [ownerName, ...assigneeNames];
+}
+
+/** 비품·업무개선: 요청자 제외, 협업자만 완료 체크 */
+function checkoffParticipants(
+  taxType: ChecklistTaxType,
+  ownerName: string,
+  assigneeNames: string[],
+): string[] {
+  if (isRoutedRequestTaxType(taxType)) return assigneeNames;
+  return participantsOf(ownerName, assigneeNames);
 }
 
 function normalizeMemos(raw: unknown): PersonalChecklistMemo[] {
@@ -59,6 +96,7 @@ function toBaseDto(
     row.ownerName,
   );
   const collaborative = assigneeNames.length > 0;
+  const taxType = checklistTaxTypeFromRow(row);
   return {
     id: row.id,
     ownerName: row.ownerName,
@@ -66,7 +104,7 @@ function toBaseDto(
     clientName,
     title: row.title,
     category: row.category as PersonalChecklistDto['category'],
-    taxType: checklistTaxTypeFromRow(row),
+    taxType,
     dueDate: row.dueDate,
     completed: row.completed,
     reflectInNotes: row.reflectInNotes,
@@ -76,7 +114,9 @@ function toBaseDto(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     collaborative,
-    participants: collaborative ? participantsOf(row.ownerName, assigneeNames) : undefined,
+    participants: collaborative
+      ? checkoffParticipants(taxType, row.ownerName, assigneeNames)
+      : undefined,
   };
 }
 
@@ -156,6 +196,8 @@ function canAccessItem(
 
 /** 작성자이거나 협업자로 지정된 항목이 아직 열려 있는지 */
 function isOpenForViewer(item: PersonalChecklistDto, viewerName: string): boolean {
+  // 비품·시스템개선은 전용 목록에서만 표시
+  if (isRoutedRequestTaxType(item.taxType)) return false;
   if (!item.collaborative) return !(item.myCheckoff ?? item.completed);
   // 작성자: 전원 완료 전까지 개인 체크리스트에 유지 (누가 완료했는지 확인)
   if (item.ownerName === viewerName) {
@@ -253,6 +295,7 @@ export async function listPersonalChecklistInRange(
     .where(and(
       inArray(personalChecklistItems.ownerName, names),
       sql`${personalChecklistItems.dueDate} != ''`,
+      sql`${personalChecklistItems.taxType} NOT IN ('supplies', 'improvement')`,
       gte(personalChecklistItems.dueDate, from),
       lte(personalChecklistItems.dueDate, to),
     ))
@@ -261,6 +304,235 @@ export async function listPersonalChecklistInRange(
 
   const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
   return enrichItems(base);
+}
+
+/** 비품주문요청 목록 (캘린더 탭용) */
+export async function listSuppliesOrders(
+  viewerName?: string,
+): Promise<SuppliesOrderDto[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      item: personalChecklistItems,
+      clientName: clients.companyName,
+    })
+    .from(personalChecklistItems)
+    .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+    .where(eq(personalChecklistItems.taxType, 'supplies'))
+    .orderBy(desc(personalChecklistItems.createdAt));
+
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  const enriched = await enrichItems(base, viewerName);
+
+  // 주문일은 다야 checkoff — 뷰어와 무관하게 항상 조회
+  const detailMap = await listCheckoffDetailsForPersonalItems(enriched.map(i => i.id));
+
+  return enriched.map(item => {
+    const daya = detailMap.get(item.id)?.[SUPPLIES_ORDER_ASSIGNEE];
+    let orderedAt =
+      daya?.completed && daya.completedAt
+        ? daya.completedAt
+        : null;
+    // 다야가 본인 요청(협업자 없음)으로 완료한 경우
+    if (
+      !orderedAt
+      && item.ownerName === SUPPLIES_ORDER_ASSIGNEE
+      && (item.myCheckoff ?? item.completed)
+    ) {
+      orderedAt = item.updatedAt;
+    }
+    return {
+      ...item,
+      requestedAt: item.createdAt,
+      orderedAt,
+    };
+  });
+}
+
+/** 업무개선요청 목록 (캘린더 탭용) */
+export async function listImprovementRequests(
+  viewerName?: string,
+): Promise<ImprovementRequestDto[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      item: personalChecklistItems,
+      clientName: clients.companyName,
+    })
+    .from(personalChecklistItems)
+    .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+    .where(eq(personalChecklistItems.taxType, 'improvement'))
+    .orderBy(desc(personalChecklistItems.createdAt));
+
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  const enriched = await enrichItems(base, viewerName);
+  const detailMap = await listCheckoffDetailsForPersonalItems(enriched.map(i => i.id));
+
+  return enriched.map(item => {
+    const handlers = item.assigneeNames.length > 0
+      ? item.assigneeNames
+      : [...forcedAssigneesForTaxType('improvement')];
+    const details = detailMap.get(item.id) ?? {};
+    const processedBy: string[] = [];
+    let latest: string | null = null;
+    for (const name of handlers) {
+      const d = details[name];
+      if (d?.completed) {
+        processedBy.push(name);
+        if (d.completedAt && (!latest || d.completedAt > latest)) {
+          latest = d.completedAt;
+        }
+      }
+    }
+    const allDone = handlers.length > 0 && processedBy.length >= handlers.length;
+    return {
+      ...item,
+      requestedAt: item.createdAt,
+      processedAt: allDone ? latest : null,
+      handlerNames: handlers,
+      processedBy,
+    };
+  });
+}
+
+/** 홈 「비품주문/시스템개선」— 미완료(요청자·접수자) + 미확인 완료 공유 */
+export async function listRoutedRequestsForHome(
+  viewerName: string,
+): Promise<{
+  open: PersonalChecklistDto[];
+  /** @deprecated 처리알림 피드 제거 — 항상 빈 배열 */
+  sharedCompleted: ProcessedRoutedRequestDto[];
+}> {
+  const db = getDb();
+  const assigneeAccess = sql`COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb) ? ${viewerName}`;
+  const openAccess = or(
+    eq(personalChecklistItems.ownerName, viewerName),
+    assigneeAccess,
+  );
+
+  const incompleteRows = await db
+    .select({
+      item: personalChecklistItems,
+      clientName: clients.companyName,
+    })
+    .from(personalChecklistItems)
+    .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+    .where(and(
+      inArray(personalChecklistItems.taxType, ['supplies', 'improvement']),
+      openAccess,
+      eq(personalChecklistItems.completed, false),
+    ))
+    .orderBy(desc(personalChecklistItems.createdAt));
+
+  // 협업자가 본인 완료 후 「확인」하기 전까지 목록에 남기기 위해 완료 건도 포함
+  const completedAssigneeRows = await db
+    .select({
+      item: personalChecklistItems,
+      clientName: clients.companyName,
+    })
+    .from(personalChecklistItems)
+    .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+    .where(and(
+      inArray(personalChecklistItems.taxType, ['supplies', 'improvement']),
+      assigneeAccess,
+      eq(personalChecklistItems.completed, true),
+    ))
+    .orderBy(desc(personalChecklistItems.updatedAt))
+    .limit(40);
+
+  const byId = new Map<string, { item: typeof personalChecklistItems.$inferSelect; clientName?: string }>();
+  for (const r of [...incompleteRows, ...completedAssigneeRows]) {
+    if (!byId.has(r.item.id)) {
+      byId.set(r.item.id, {
+        item: r.item,
+        clientName: r.clientName?.trim() || undefined,
+      });
+    }
+  }
+
+  const openBase = [...byId.values()].map(r => toBaseDto(r.item, r.clientName));
+  const openEnriched = await enrichItems(openBase, viewerName);
+
+  const open = openEnriched
+    .filter(item => {
+      const isAssignee = item.assigneeNames.includes(viewerName);
+      if (isAssignee) {
+        // 미처리 + 본인 처리완료(확인 전) — 확인은 클라이언트에서 dismiss
+        return true;
+      }
+      // 요청자(협업 아님): 담당자 전원 처리 전까지
+      if (item.ownerName === viewerName) {
+        return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
+      }
+      return false;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  return { open, sharedCompleted: [] };
+}
+
+/** 홈 TODO 하단 — 완료된 비품·업무개선요청 (전원 공유) */
+export async function listCompletedRoutedRequests(
+  limit = 40,
+): Promise<ProcessedRoutedRequestDto[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      item: personalChecklistItems,
+      clientName: clients.companyName,
+    })
+    .from(personalChecklistItems)
+    .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+    .where(and(
+      inArray(personalChecklistItems.taxType, ['supplies', 'improvement']),
+      eq(personalChecklistItems.completed, true),
+    ))
+    .orderBy(desc(personalChecklistItems.updatedAt))
+    .limit(limit);
+
+  const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
+  const detailMap = await listCheckoffDetailsForPersonalItems(base.map(i => i.id));
+
+  return base.map(item => {
+    const details = detailMap.get(item.id) ?? {};
+    const handlers = item.assigneeNames.length > 0
+      ? item.assigneeNames
+      : [...forcedAssigneesForTaxType(item.taxType)];
+    const processedBy: string[] = [];
+    let latest: string | null = null;
+    for (const name of handlers) {
+      const d = details[name];
+      if (d?.completed) {
+        processedBy.push(name);
+        if (d.completedAt && (!latest || d.completedAt > latest)) {
+          latest = d.completedAt;
+        }
+      }
+    }
+    // 전원에게 처리자·시각 공개
+    const checkoffs: Record<string, boolean> = {};
+    const checkoffDetails: Record<string, CheckoffDetail> = {};
+    for (const name of handlers) {
+      const d = details[name];
+      checkoffs[name] = d?.completed ?? false;
+      checkoffDetails[name] = {
+        completed: d?.completed ?? false,
+        completedAt: d?.completedAt ?? null,
+      };
+    }
+    return {
+      ...item,
+      completed: true,
+      myCheckoff: true,
+      checkoffDone: processedBy.length,
+      checkoffTotal: handlers.length || undefined,
+      checkoffs,
+      checkoffDetails,
+      requestedAt: item.createdAt,
+      processedAt: latest || item.updatedAt,
+      processedBy,
+    };
+  });
 }
 
 export async function listPersonalChecklistInRangeForOwner(
@@ -302,11 +574,15 @@ export async function createPersonalChecklistItems(
   const title = input.title.trim();
   if (!title) throw new Error('제목을 입력하세요.');
 
-  const uniqueDates = [...new Set(dueDates.map(d => d.trim()).filter(Boolean))].sort();
-  if (uniqueDates.length === 0) throw new Error('마감기한을 지정하세요.');
+  const isRouted = isRoutedRequestTaxType(input.taxType);
+  let uniqueDates = [...new Set(dueDates.map(d => d.trim()).filter(Boolean))].sort();
+  if (uniqueDates.length === 0) {
+    if (isRouted) uniqueDates = [''];
+    else throw new Error('마감기한을 지정하세요.');
+  }
 
   const normalized = normalizeChecklistTaxType(input.taxType);
-  const assigneeNames = normalizeAssignees(input.assigneeNames, ownerName);
+  const assigneeNames = assigneesForTaxType(input.taxType, input.assigneeNames, ownerName);
   const memos: PersonalChecklistMemo[] = [];
   const memoBody = input.memo?.trim();
   if (memoBody) {
@@ -392,15 +668,17 @@ export async function updatePersonalChecklistItem(
     }
   }
 
-  if (patch.dueDate !== undefined && !patch.dueDate.trim()) {
+  const nextTaxType = patch.taxType !== undefined
+    ? patch.taxType
+    : checklistTaxTypeFromRow(existing);
+  const isRouted = isRoutedRequestTaxType(nextTaxType);
+
+  if (patch.dueDate !== undefined && !patch.dueDate.trim() && !isRouted) {
     throw new Error('마감기한을 지정하세요.');
   }
 
   const nextReflect = patch.reflectInNotes ?? existing.reflectInNotes;
   const nextClientId = patch.clientId !== undefined ? patch.clientId : existing.clientId;
-  const nextTaxType = patch.taxType !== undefined
-    ? patch.taxType
-    : checklistTaxTypeFromRow(existing);
   const normalized = normalizeChecklistTaxType(nextTaxType);
 
   let nextMemos = normalizeMemos(existing.memos);
@@ -423,10 +701,11 @@ export async function updatePersonalChecklistItem(
     (existing.assigneeNames as string[] | null | undefined) ?? [],
     existing.ownerName,
   );
-  const nextAssignees =
-    patch.assigneeNames !== undefined
-      ? normalizeAssignees(patch.assigneeNames, existing.ownerName)
-      : existingAssignees;
+  const nextAssignees = assigneesForTaxType(
+    nextTaxType,
+    patch.assigneeNames !== undefined ? patch.assigneeNames : existingAssignees,
+    existing.ownerName,
+  );
 
   // 협업 여부는 저장 후 협업자 기준 (전부 제거 시 단독으로 전환)
   const collaborative = nextAssignees.length > 0;
@@ -434,15 +713,22 @@ export async function updatePersonalChecklistItem(
   // 협업: 완료는 본인 checkoff. 항목 completed는 전원 완료 시 true.
   let patchCompleted = patch.completed;
   if (collaborative && patch.completed !== undefined) {
-    const participants = participantsOf(existing.ownerName, nextAssignees);
+    const participants = checkoffParticipants(nextTaxType, existing.ownerName, nextAssignees);
     if (!participants.includes(actorName)) {
       throw new Error('협업자만 완료 처리할 수 있습니다.');
     }
 
     await setPersonalChecklistCheckoff(id, actorName, patch.completed);
 
-    // 체크 해제는 setPersonalChecklistCheckoff 안에서 알림 삭제
-    if (patch.completed && actorName !== existing.ownerName) {
+    const doneCount = await countCompletedAmongMembers(id, participants);
+    patchCompleted = doneCount >= participants.length;
+
+    // 일반 협업만 작성자에게 완료 알림. 비품·시스템개선은 처리알림 없음.
+    if (
+      patch.completed &&
+      actorName !== existing.ownerName &&
+      !isRoutedRequestTaxType(nextTaxType)
+    ) {
       await createCompletionNotification({
         itemId: id,
         recipientName: existing.ownerName,
@@ -450,9 +736,6 @@ export async function updatePersonalChecklistItem(
         title: existing.title,
       });
     }
-
-    const doneCount = await countCompletedAmongMembers(id, participants);
-    patchCompleted = doneCount >= participants.length;
   }
 
   const [row] = await db
@@ -463,7 +746,9 @@ export async function updatePersonalChecklistItem(
       ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate.trim() } : {}),
       ...(patchCompleted !== undefined ? { completed: patchCompleted } : {}),
       ...(patch.reflectInNotes !== undefined ? { reflectInNotes: patch.reflectInNotes } : {}),
-      ...(patch.assigneeNames !== undefined ? { assigneeNames: nextAssignees } : {}),
+      ...(patch.assigneeNames !== undefined || isRouted
+        ? { assigneeNames: nextAssignees }
+        : {}),
       ...(patch.addMemo !== undefined ? { memos: nextMemos } : {}),
       category: normalized.category,
       taxType: normalized.taxType,

@@ -44,6 +44,13 @@ import {
   readManagerOrder,
 } from '@/app/utils/clientListPrefs';
 import { parseFeeInput } from '@/app/utils/feeBreakdown';
+import {
+  COLUMN_FILTER_EMPTY,
+  ColumnValueFilterHeader,
+  buildColumnFilterOptions,
+  matchesColumnFilter,
+  useColumnFilters,
+} from '@/app/components/portal/ColumnValueFilter';
 
 const LABOR_COLS = [
   { key: 'employed', label: '상용' },
@@ -83,7 +90,7 @@ function formatFeeDisplay(value: number | null | undefined): string {
   return value.toLocaleString('ko-KR');
 }
 
-const FEE_FILTER_NONE = '__none__';
+const FEE_FILTER_NONE = COLUMN_FILTER_EMPTY;
 
 function feeFilterKey(fee: number | null | undefined): string {
   return fee == null ? FEE_FILTER_NONE : String(fee);
@@ -92,6 +99,16 @@ function feeFilterKey(fee: number | null | undefined): string {
 function feeFilterLabel(key: string): string {
   if (key === FEE_FILTER_NONE) return '미입력';
   return `${Number(key).toLocaleString('ko-KR')}원`;
+}
+
+function progressCellFilterKey(cell: VatProgressCell | undefined): string {
+  const v = cellDisplayValue(cell);
+  return v || COLUMN_FILTER_EMPTY;
+}
+
+function progressCellFilterLabel(key: string): string {
+  if (key === COLUMN_FILTER_EMPTY) return '미입력';
+  return key;
 }
 
 function FeeAmountCell({
@@ -414,9 +431,7 @@ export default function VatEntryProgressBoard() {
   const [canViewAll, setCanViewAll] = useState(false);
   const [canEditLayout, setCanEditLayout] = useState(false);
   const [managerFilter, setManagerFilter] = useState('');
-  /** 수수료 값 필터 — null = 전체 표시 */
-  const [feeFilter, setFeeFilter] = useState<Set<string> | null>(null);
-  const [feeFilterOpen, setFeeFilterOpen] = useState(false);
+  const colFilters = useColumnFilters(`${year}|${phase}`);
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<VatProgressColumnDef[]>([]);
   const [layoutSaving, setLayoutSaving] = useState(false);
@@ -475,8 +490,6 @@ export default function VatEntryProgressBoard() {
         data = await fetchOnce();
       }
       setRows((data.rows as VatProgressRow[]) ?? []);
-      setFeeFilter(null);
-      setFeeFilterOpen(false);
       setCanViewAll(!!data.canViewAll);
       setCanEditLayout(!!data.canEditLayout);
       if (Array.isArray(data.layout)) {
@@ -587,44 +600,79 @@ export default function VatEntryProgressBoard() {
     });
   }, [rows, q, canViewAll, managerFilter]);
 
-  const feeFilterOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of searchMatched) {
-      const k = feeFilterKey(r.filingFee);
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    const keys = [...counts.keys()];
-    keys.sort((a, b) => {
-      if (a === FEE_FILTER_NONE) return -1;
-      if (b === FEE_FILTER_NONE) return 1;
-      return Number(a) - Number(b);
-    });
-    return keys.map(k => ({ key: k, count: counts.get(k) ?? 0 }));
-  }, [searchMatched]);
+  const displayLayout = useMemo(() => visibleVatLayout(layout), [layout]);
+  const periodColSpan = 4 + displayLayout.length;
 
-  const toggleFeeFilterValue = (key: string) => {
-    setFeeFilter(prev => {
-      const next = new Set(prev ?? feeFilterOptions.map(o => o.key));
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      // 전부 체크면 필터 해제와 동일
-      if (feeFilterOptions.every(o => next.has(o.key))) return null;
-      return next;
-    });
-  };
+  const feeFilterOptions = useMemo(
+    () =>
+      buildColumnFilterOptions(
+        searchMatched.map(r => feeFilterKey(r.filingFee)),
+        {
+          labelOf: feeFilterLabel,
+          sortKeys: (a, b) => {
+            if (a === FEE_FILTER_NONE) return -1;
+            if (b === FEE_FILTER_NONE) return 1;
+            return Number(a) - Number(b);
+          },
+        },
+      ),
+    [searchMatched],
+  );
+
+  const codeFilterOptions = useMemo(
+    () => buildColumnFilterOptions(searchMatched.map(r => r.douzoneCode || '')),
+    [searchMatched],
+  );
+
+  const companyFilterOptions = useMemo(
+    () => buildColumnFilterOptions(searchMatched.map(r => r.companyName || '(이름없음)')),
+    [searchMatched],
+  );
+
+  const progressFilterOptionsByCol = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildColumnFilterOptions>>();
+    for (const col of displayLayout) {
+      map.set(
+        col.key,
+        buildColumnFilterOptions(
+          searchMatched.map(r => progressCellFilterKey(r.progress?.[col.key])),
+          { labelOf: progressCellFilterLabel },
+        ),
+      );
+    }
+    return map;
+  }, [searchMatched, displayLayout]);
 
   const filtered = useMemo(() => {
-    const matched = feeFilter
-      ? searchMatched.filter(r => feeFilter.has(feeFilterKey(r.filingFee)))
-      : searchMatched;
+    const matched = searchMatched.filter(r => {
+      if (!matchesColumnFilter(colFilters.filters.code, r.douzoneCode || '')) return false;
+      if (!matchesColumnFilter(colFilters.filters.company, r.companyName || '(이름없음)')) return false;
+      if (!matchesColumnFilter(colFilters.filters.fee, feeFilterKey(r.filingFee))) return false;
+      for (const col of displayLayout) {
+        if (
+          !matchesColumnFilter(
+            colFilters.filters[`progress:${col.key}`],
+            progressCellFilterKey(r.progress?.[col.key]),
+          )
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
     return applyFilingCheckOrderToRows(matched, filingCheckOrderTaxKey('vat', phase), {
       managerFilter: canViewAll && managerFilter ? managerFilter : undefined,
       managerOrder: readManagerOrder(),
     });
-  }, [searchMatched, feeFilter, canViewAll, managerFilter, phase, orderTick]);
-
-  const displayLayout = useMemo(() => visibleVatLayout(layout), [layout]);
-  const periodColSpan = 4 + displayLayout.length;
+  }, [
+    searchMatched,
+    colFilters.filters,
+    displayLayout,
+    canViewAll,
+    managerFilter,
+    phase,
+    orderTick,
+  ]);
 
   const columnProgressStats = useMemo(
     () => computeColumnProgressStats(filtered, displayLayout),
@@ -766,6 +814,11 @@ export default function VatEntryProgressBoard() {
         <button type="button" className={portalBtnSecondary} onClick={() => void load()}>
           새로고침
         </button>
+        {colFilters.anyActive ? (
+          <button type="button" className={portalBtnSecondary} onClick={colFilters.clearAll}>
+            열 필터 해제
+          </button>
+        ) : null}
         {canEditLayout ? (
           <button type="button" className={portalBtnSecondary} onClick={openColumnEditor}>
             열 편집
@@ -797,99 +850,93 @@ export default function VatEntryProgressBoard() {
           <thead className="sticky top-0 z-20">
             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-600 shadow-[0_1px_0_0_rgb(226,232,240)]">
               <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-center font-semibold">순번</th>
-              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">코드</th>
-              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-left font-semibold">
-                거래처
-              </th>
-              <th className="sticky top-0 z-20 bg-slate-50 px-1 py-2 text-right font-semibold">
-                <span className="flex items-center justify-end gap-0.5">
-                  <span>수수료</span>
-                  <button
-                    type="button"
-                    title="수수료 값 필터"
-                    onClick={() => setFeeFilterOpen(v => !v)}
-                    className={`rounded px-0.5 text-[10px] leading-none hover:bg-slate-200 ${
-                      feeFilter ? 'text-blue-600' : 'text-slate-400'
-                    }`}
-                  >
-                    ▼
-                  </button>
-                </span>
-                {!loading && filtered.length > 0 ? (
-                  <span className="mt-0.5 block text-[9px] font-normal tabular-nums text-blue-600">
-                    {filingFeeTotal > 0 ? `${filingFeeTotal.toLocaleString('ko-KR')}원` : '—'}
-                  </span>
-                ) : null}
-                {feeFilterOpen ? (
-                  <>
-                    <div
-                      className="fixed inset-0 z-30"
-                      onClick={() => setFeeFilterOpen(false)}
-                    />
-                    <div className="absolute right-0 top-full z-40 mt-1 w-44 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-lg">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFeeFilter(null);
-                          setFeeFilterOpen(false);
-                        }}
-                        className={`mb-1 block w-full rounded px-2 py-1 text-left text-[11px] font-medium hover:bg-slate-100 ${
-                          feeFilter ? 'text-slate-600' : 'bg-blue-50 text-blue-700'
-                        }`}
-                      >
-                        전체 표시
-                      </button>
-                      <div className="max-h-56 space-y-0.5 overflow-y-auto border-t border-slate-100 pt-1">
-                        {feeFilterOptions.map(opt => {
-                          const checked = feeFilter ? feeFilter.has(opt.key) : true;
-                          return (
-                            <label
-                              key={opt.key}
-                              className="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-[11px] font-normal text-slate-700 hover:bg-slate-50"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleFeeFilterValue(opt.key)}
-                                className="h-3 w-3 accent-blue-600"
-                              />
-                              <span className="flex-1 truncate tabular-nums">
-                                {feeFilterLabel(opt.key)}
-                              </span>
-                              <span className="text-[10px] text-slate-400">{opt.count}</span>
-                            </label>
-                          );
-                        })}
-                        {feeFilterOptions.length === 0 ? (
-                          <p className="px-2 py-1 text-[11px] font-normal text-slate-400">
-                            표시할 값이 없습니다.
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </th>
+              <ColumnValueFilterHeader
+                columnKey="code"
+                label="코드"
+                options={codeFilterOptions}
+                filter={colFilters.filters.code}
+                open={colFilters.openKey === 'code'}
+                onToggleOpen={() => colFilters.toggleOpen('code')}
+                onToggleValue={key =>
+                  colFilters.toggleValue(
+                    'code',
+                    key,
+                    codeFilterOptions.map(o => o.key),
+                  )
+                }
+                onClear={() => colFilters.clear('code')}
+                align="left"
+                className="!px-1 !text-[10px] !shadow-none"
+              />
+              <ColumnValueFilterHeader
+                columnKey="company"
+                label="거래처"
+                options={companyFilterOptions}
+                filter={colFilters.filters.company}
+                open={colFilters.openKey === 'company'}
+                onToggleOpen={() => colFilters.toggleOpen('company')}
+                onToggleValue={key =>
+                  colFilters.toggleValue(
+                    'company',
+                    key,
+                    companyFilterOptions.map(o => o.key),
+                  )
+                }
+                onClear={() => colFilters.clear('company')}
+                align="left"
+                className="!px-1 !text-[10px] !shadow-none"
+              />
+              <ColumnValueFilterHeader
+                columnKey="fee"
+                label="수수료"
+                options={feeFilterOptions}
+                filter={colFilters.filters.fee}
+                open={colFilters.openKey === 'fee'}
+                onToggleOpen={() => colFilters.toggleOpen('fee')}
+                onToggleValue={key =>
+                  colFilters.toggleValue(
+                    'fee',
+                    key,
+                    feeFilterOptions.map(o => o.key),
+                  )
+                }
+                onClear={() => colFilters.clear('fee')}
+                align="right"
+                className="!px-1 !text-[10px] !shadow-none"
+                subtitle={
+                  !loading && filtered.length > 0
+                    ? filingFeeTotal > 0
+                      ? `${filingFeeTotal.toLocaleString('ko-KR')}원`
+                      : '—'
+                    : undefined
+                }
+              />
               {displayLayout.map(col => {
                 const stat = columnProgressStats.get(col.key);
                 const progressLabel = formatColumnProgressStat(stat);
+                const opts = progressFilterOptionsByCol.get(col.key) ?? [];
+                const filterKey = `progress:${col.key}`;
                 return (
-                  <th
+                  <ColumnValueFilterHeader
                     key={col.key}
-                    className="sticky top-0 z-20 break-keep bg-slate-50 px-0.5 py-2 text-center font-semibold leading-tight"
-                    title={
-                      stat && stat.total > 0
-                        ? `${col.label} — ${stat.done}/${stat.total}`
-                        : col.label
+                    columnKey={filterKey}
+                    label={col.label}
+                    options={opts}
+                    filter={colFilters.filters[filterKey]}
+                    open={colFilters.openKey === filterKey}
+                    onToggleOpen={() => colFilters.toggleOpen(filterKey)}
+                    onToggleValue={key =>
+                      colFilters.toggleValue(
+                        filterKey,
+                        key,
+                        opts.map(o => o.key),
+                      )
                     }
-                  >
-                    <span className="block">{col.label}</span>
-                    {progressLabel ? (
-                      <span className="mt-0.5 block text-[9px] font-normal tabular-nums text-blue-600">
-                        {progressLabel}
-                      </span>
-                    ) : null}
-                  </th>
+                    onClear={() => colFilters.clear(filterKey)}
+                    align="center"
+                    className="!px-0.5 !text-[10px] !shadow-none break-keep leading-tight"
+                    subtitle={progressLabel || undefined}
+                  />
                 );
               })}
             </tr>

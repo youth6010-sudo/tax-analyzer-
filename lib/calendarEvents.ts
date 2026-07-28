@@ -33,6 +33,7 @@ export async function listCalendarEvents(
 
   for (const item of personal) {
     if (!item.dueDate) continue;
+    if (item.taxType === 'supplies' || item.taxType === 'improvement') continue;
     events.push({
       id: `personal-${item.id}`,
       kind: 'personal',

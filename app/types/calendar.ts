@@ -1,8 +1,36 @@
 export type ChecklistCategory = 'tax' | 'other';
 
-export type ChecklistTaxType = 'withholding' | 'vat' | 'comprehensive' | 'corporate' | 'other';
+export type ChecklistTaxType =
+  | 'withholding'
+  | 'vat'
+  | 'comprehensive'
+  | 'corporate'
+  | 'other'
+  | 'supplies'
+  | 'improvement';
 
 export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other'> | '';
+
+/** 비품주문요청 — 기본 협업자 */
+export const SUPPLIES_ORDER_ASSIGNEE = '다야';
+
+/** 업무개선요청 — 기본 협업자 */
+export const IMPROVEMENT_REQUEST_ASSIGNEES = ['리아', '찰리'] as const;
+
+/** 요청 라우팅형(비품·업무개선) — 요청자 TODO 제외, 캘린더 별도 탭 */
+export function isRoutedRequestTaxType(
+  taxType: ChecklistTaxType | string | null | undefined,
+): boolean {
+  return taxType === 'supplies' || taxType === 'improvement';
+}
+
+export function forcedAssigneesForTaxType(
+  taxType: ChecklistTaxType | string | null | undefined,
+): readonly string[] {
+  if (taxType === 'supplies') return [SUPPLIES_ORDER_ASSIGNEE];
+  if (taxType === 'improvement') return IMPROVEMENT_REQUEST_ASSIGNEES;
+  return [];
+}
 
 /** 개인 체크리스트 메모 — 작성자 표시 */
 export type PersonalChecklistMemo = {
@@ -50,6 +78,32 @@ export type PersonalChecklistDto = {
   checkoffs?: Record<string, boolean>;
   /** 참여자별 완료·완료일시 */
   checkoffDetails?: Record<string, CheckoffDetail>;
+};
+
+/** 비품주문목록 탭 */
+export type SuppliesOrderDto = PersonalChecklistDto & {
+  /** 요청일 (= createdAt) */
+  requestedAt: string;
+  /** 다야 완료처리일 (= 주문일) */
+  orderedAt: string | null;
+};
+
+/** 업무개선요청 목록 탭 */
+export type ImprovementRequestDto = PersonalChecklistDto & {
+  requestedAt: string;
+  /** 협업자 전원 처리 완료일 (마지막 완료 시각) */
+  processedAt: string | null;
+  /** 처리 담당자(고정 협업자) */
+  handlerNames: string[];
+  /** 처리 완료한 담당자 */
+  processedBy: string[];
+};
+
+/** 홈 TODO 하단 — 전원용 처리완료 피드 */
+export type ProcessedRoutedRequestDto = PersonalChecklistDto & {
+  requestedAt: string;
+  processedAt: string | null;
+  processedBy: string[];
 };
 
 export type CompanyScheduleKind = 'range' | 'deadline';
@@ -178,14 +232,28 @@ export const CHECKLIST_TAX_OPTIONS: { id: ChecklistTaxType; label: string }[] = 
   { id: 'comprehensive', label: '종합소득세' },
   { id: 'corporate', label: '법인세' },
   { id: 'other', label: '기타' },
+  { id: 'supplies', label: '비품 주문 요청' },
+  { id: 'improvement', label: '시스템 개선 요청' },
 ];
+
+export function isSuppliesOrderTaxType(taxType: ChecklistTaxType | string | null | undefined): boolean {
+  return taxType === 'supplies';
+}
+
+export function isImprovementRequestTaxType(
+  taxType: ChecklistTaxType | string | null | undefined,
+): boolean {
+  return taxType === 'improvement';
+}
 
 export function checklistTaxTypeFromRow(row: {
   category: string;
   taxType: string | null;
 }): ChecklistTaxType {
-  if (row.category === 'other') return 'other';
   const stored = row.taxType || '';
+  if (stored === 'supplies') return 'supplies';
+  if (stored === 'improvement') return 'improvement';
+  if (row.category === 'other') return 'other';
   if (stored === 'withholding' || stored === 'vat' || stored === 'comprehensive' || stored === 'corporate') {
     return stored;
   }
@@ -197,6 +265,8 @@ export function normalizeChecklistTaxType(taxType: ChecklistTaxType): {
   taxType: StoredChecklistTaxType;
 } {
   if (taxType === 'other') return { category: 'other', taxType: '' };
+  if (taxType === 'supplies') return { category: 'other', taxType: 'supplies' };
+  if (taxType === 'improvement') return { category: 'other', taxType: 'improvement' };
   return { category: 'tax', taxType };
 }
 

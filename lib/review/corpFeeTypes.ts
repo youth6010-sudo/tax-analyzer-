@@ -3,6 +3,8 @@ import { companyLinkKey } from '@/lib/review/companyKey';
 export type CorpFeeEntry = {
   companyName: string;
   staff: string;
+  /** 조정료 시트 수수료(열 4) */
+  fee: number | null;
   revenueLastYear: number | null;
   adjustmentLastYear: number | null;
   revenueThisYear: number | null;
@@ -34,6 +36,29 @@ export function buildCorpRevenueByClientId(
     if (usedClientIds.has(client.id)) continue;
     const key = companyLinkKey(client.companyName);
     out[client.id] = key ? (byKey[key]?.revenueThisYear ?? null) : null;
+  }
+  return out;
+}
+
+/** 법인세 검토표(조정료 시트) 수수료 열 → clientId */
+export function buildCorpFeeAmountByClientId(
+  clients: readonly { id: string; companyName: string; businessEntityType?: string | null }[],
+  byKey: Record<string, CorpFeeEntry>,
+  primaryLinksByKey: Record<string, string> = {},
+): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  const usedClientIds = new Set<string>();
+
+  for (const [reviewKey, clientId] of Object.entries(primaryLinksByKey)) {
+    out[clientId] = byKey[reviewKey]?.fee ?? null;
+    usedClientIds.add(clientId);
+  }
+
+  for (const client of clients) {
+    if (client.businessEntityType !== 'corporate') continue;
+    if (usedClientIds.has(client.id)) continue;
+    const key = companyLinkKey(client.companyName);
+    out[client.id] = key ? (byKey[key]?.fee ?? null) : null;
   }
   return out;
 }

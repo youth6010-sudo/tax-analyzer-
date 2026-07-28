@@ -10,6 +10,39 @@ export type ClientSortKey = 'name' | 'code';
 export const CLIENT_SORT_STORAGE_KEY = 'clients.sort.v1';
 export const MANAGER_ORDER_STORAGE_KEY = 'clients.managerOrder.v1';
 export const MANAGER_CLIENT_ORDER_STORAGE_KEY = 'clients.managerClientOrder.v1';
+export const ROSTER_COLUMN_WIDTH_STORAGE_KEY = 'clients.rosterColumnWidth.v1';
+
+/** 수임처 담당자 칸 기본·최소 너비 (이보다 줄일 수 없음) */
+export const DEFAULT_ROSTER_COLUMN_WIDTH = 300;
+export const MIN_ROSTER_COLUMN_WIDTH = DEFAULT_ROSTER_COLUMN_WIDTH;
+export const MAX_ROSTER_COLUMN_WIDTH = 520;
+
+export function readRosterColumnWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_ROSTER_COLUMN_WIDTH;
+  try {
+    const raw = localStorage.getItem(ROSTER_COLUMN_WIDTH_STORAGE_KEY);
+    if (!raw) return DEFAULT_ROSTER_COLUMN_WIDTH;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return DEFAULT_ROSTER_COLUMN_WIDTH;
+    return Math.min(MAX_ROSTER_COLUMN_WIDTH, Math.max(MIN_ROSTER_COLUMN_WIDTH, Math.round(n)));
+  } catch {
+    return DEFAULT_ROSTER_COLUMN_WIDTH;
+  }
+}
+
+export function writeRosterColumnWidth(width: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const next = Math.min(
+      MAX_ROSTER_COLUMN_WIDTH,
+      Math.max(MIN_ROSTER_COLUMN_WIDTH, Math.round(width)),
+    );
+    localStorage.setItem(ROSTER_COLUMN_WIDTH_STORAGE_KEY, String(next));
+    window.dispatchEvent(new Event(`local-storage:${ROSTER_COLUMN_WIDTH_STORAGE_KEY}`));
+  } catch {
+    /* ignore */
+  }
+}
 
 export type ManagerClientOrderStore = Record<string, string[]>;
 

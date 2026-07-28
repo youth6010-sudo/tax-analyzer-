@@ -40,7 +40,7 @@ export type VatObligation = '예정신고' | '예정고지' | '확정신고';
 
 export const VAT_OBLIGATIONS: VatObligation[] = ['예정신고', '예정고지', '확정신고'];
 
-import { defaultSimplePayrollHalf, currentMonthlyFilingMonth } from '@/lib/periodUtils';
+import { defaultSimplePayrollHalf, currentMonthlyFilingMonth, attributionMonthFromReportMonth, reportMonthFromAttributionMonth } from '@/lib/periodUtils';
 
 export type FilingPeriod = {
   year: number;
@@ -71,18 +71,27 @@ export function normalizeBizNo(v: string | undefined | null): string {
 // 기간 라벨 (요약·표시용)
 export function periodLabel(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
-  if (cycle === 'month') return `${p.year}년 ${p.month}월`;
+  if (cycle === 'month' || taxId === 'simplePayroll') {
+    const attr = attributionMonthFromReportMonth(p.year, p.month);
+    return `${p.year}년 ${p.month}월 신고 (${attr.month}월 귀속)`;
+  }
   if (cycle === 'vat') return `${p.year}년 ${p.vatPhase}`;
-  if (taxId === 'simplePayroll') return `${p.year}년 ${p.month}월`;
   if (taxId === 'corporate') return `${p.year}년 사업연도`;
   return `${p.year}년 귀속`;
 }
 
 export function periodKey(taxId: FilingTaxId, p: FilingPeriod): string {
   const cycle = getCycle(taxId);
-  if (cycle === 'month') return `${p.year}-${String(p.month).padStart(2, '0')}`;
+  // 원천·간이지급 period_key는 귀속월로 저장 (기존 세션 호환)
+  if (cycle === 'month') {
+    const attr = attributionMonthFromReportMonth(p.year, p.month);
+    return `${attr.year}-${String(attr.month).padStart(2, '0')}`;
+  }
   if (cycle === 'vat') return `${p.year}-${p.vatPhase}`;
-  if (taxId === 'simplePayroll') return simplePayrollMonthlyPeriodKey(p.year, p.month);
+  if (taxId === 'simplePayroll') {
+    const attr = attributionMonthFromReportMonth(p.year, p.month);
+    return simplePayrollMonthlyPeriodKey(attr.year, attr.month);
+  }
   return `${p.year}`;
 }
 
@@ -92,7 +101,10 @@ export function parsePeriodKey(taxId: FilingTaxId, key: string): FilingPeriod {
   const cycle = getCycle(taxId);
   if (cycle === 'month') {
     const [y, m] = key.split('-');
-    return { ...base, year: Number(y) || base.year, month: Number(m) || base.month };
+    const attrYear = Number(y) || base.year;
+    const attrMonth = Number(m) || attributionMonthFromReportMonth(base.year, base.month).month;
+    const report = reportMonthFromAttributionMonth(attrYear, attrMonth);
+    return { ...base, year: report.year, month: report.month };
   }
   if (cycle === 'vat') {
     const idx = key.indexOf('-');
@@ -109,28 +121,44 @@ export function parsePeriodKey(taxId: FilingTaxId, key: string): FilingPeriod {
     if (h === 'H1' || h === 'H2') {
       return { ...base, year: Number(y) || base.year, month: h === 'H1' ? 7 : 1, half: h };
     }
-    const month = Number(h);
-    return { ...base, year: Number(y) || base.year, month: month || base.month };
+    const attrYear = Number(y) || base.year;
+    const attrMonth = Number(h) || attributionMonthFromReportMonth(base.year, base.month).month;
+    const report = reportMonthFromAttributionMonth(attrYear, attrMonth);
+    return { ...base, year: report.year, month: report.month };
   }
   return { ...base, year: Number(key) || base.year };
 }
 
-/** 직전 기간 키 (완료 신고분 승계용) */
+/** 직전 기간 키 (완료 신고분 승계용) — month 키는 귀속월 기준 */
 export function previousPeriodKey(taxId: FilingTaxId, currentKey: string): string | null {
-  const p = parsePeriodKey(taxId, currentKey);
   const cycle = getCycle(taxId);
   if (cycle === 'month') {
-    if (p.month <= 1) return `${p.year - 1}-12`;
-    return `${p.year}-${String(p.month - 1).padStart(2, '0')}`;
+    const [y, m] = currentKey.split('-');
+    const year = Number(y);
+    const month = Number(m);
+    if (!year || !month) return null;
+    if (month <= 1) return `${year - 1}-12`;
+    return `${year}-${String(month - 1).padStart(2, '0')}`;
   }
   if (cycle === 'vat') {
+    const p = parsePeriodKey(taxId, currentKey);
     const idx = VAT_PHASES.indexOf(p.vatPhase);
     if (idx <= 0) return `${p.year - 1}-${VAT_PHASES[VAT_PHASES.length - 1]}`;
     return `${p.year}-${VAT_PHASES[idx - 1]}`;
   }
   if (taxId === 'simplePayroll') {
-    if (p.month <= 1) return `${p.year - 1}-12`;
-    return `${p.year}-${String(p.month - 1).padStart(2, '0')}`;
+    const [y, h] = currentKey.split('-');
+    if (h === 'H1' || h === 'H2') {
+      const year = Number(y);
+      if (!year) return null;
+      if (h === 'H1') return `${year - 1}-H2`;
+      return `${year}-H1`;
+    }
+    const year = Number(y);
+    const month = Number(h);
+    if (!year || !month) return null;
+    if (month <= 1) return `${year - 1}-12`;
+    return `${year}-${String(month - 1).padStart(2, '0')}`;
   }
   const y = Number(currentKey);
   if (!Number.isFinite(y)) return null;
@@ -201,9 +229,10 @@ function readVatObligationFromMap(
   return null;
 }
 
-/** 해당 부가세 기간에 신고·고지 대상인지 (간이=2기 확정만, 법인=4회, 개인 일반=예정+반기 확정) */
+/** 해당 부가세 기간에 신고·고지 대상인지 (간이=1·2기 확정, 법인=4회, 개인 일반=예정+반기 확정) */
 export function clientAppliesToVatPhase(c: ClientRecord, phase: VatPhase): boolean {
-  if (isSimplifiedVatClient(c)) return phase === '2기 확정';
+  // 간이과세자 — 원칙은 2기 확정이나, 1기 확정에도 예정신고 등 특수 대상이 있어 포함
+  if (isSimplifiedVatClient(c)) return phase === '1기 확정' || phase === '2기 확정';
   if (isCorporateClient(c)) return true;
   // 개인 일반과세 — 예정·반기 확정
   return (

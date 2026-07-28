@@ -5,10 +5,10 @@ import {
   createPersonalChecklistItem,
   createPersonalChecklistItems,
   listPersonalChecklistForOwner,
+  listRoutedRequestsForHome,
 } from '@/lib/personalChecklist';
 import type { ChecklistTaxType } from '@/app/types/calendar';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
-import { listUnreadPersonalChecklistNotifications } from '@/lib/personalChecklistNotifications';
 
 export async function GET(req: Request) {
   try {
@@ -16,11 +16,16 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const includeCompleted = url.searchParams.get('includeCompleted') === '1'
       || url.searchParams.get('includeCompleted') === 'true';
-    const [items, notifications] = await Promise.all([
+    const [items, routed] = await Promise.all([
       listPersonalChecklistForOwner(user.name, { includeCompleted }),
-      listUnreadPersonalChecklistNotifications(user.name),
+      listRoutedRequestsForHome(user.name),
     ]);
-    return NextResponse.json({ items, notifications });
+    return NextResponse.json({
+      items,
+      notifications: [],
+      routedOpen: routed.open,
+      routedShared: [],
+    });
   } catch (e) {
     return handleApiError(e);
   }

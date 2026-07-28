@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PortalPageShell, { PortalPageHeader } from '../../components/portal/PortalPageShell';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
@@ -12,7 +12,6 @@ import {
   portalStickyBar,
 } from '../../components/portal/uiClasses';
 import {
-  getClientDouzoneCode,
   MANAGER_DISPLAY_ORDER,
   UNCategorized,
 } from '@/app/utils/clientsGrouping';
@@ -28,9 +27,18 @@ import {
   type ClientSortKey,
 } from '@/app/utils/clientListPrefs';
 import { useTriangleListReorder } from '@/app/utils/useTriangleListReorder';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { managerChipColor, MANAGER_LEGEND_ORDER } from '@/lib/calendarManagerColors';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import ScopeToggle from '@/app/components/portal/ScopeToggle';
+import {
+  COLUMN_FILTER_EMPTY,
+  ColumnFilterMenu,
+  ColumnValueFilterHeader,
+  buildColumnFilterOptions,
+  matchesColumnFilter,
+  useColumnFilters,
+} from '@/app/components/portal/ColumnValueFilter';
 import {
   FILING_TAXES,
   VAT_PHASES,
@@ -68,6 +76,7 @@ import {
 import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
 import { filingClosureNotice, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
+import { readVatFilingFee, vatProgressPeriodKey } from '@/lib/vatEntryProgress';
 import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
 import {
   formatResidentNoDisplay,
@@ -75,11 +84,11 @@ import {
   compareComprehensiveGroups,
   type ComprehensiveFilingGroup,
 } from '@/lib/comprehensiveFilingGroups';
-import { prevWithholdingPeriodKey, simplePayrollMonthlyPeriodKey } from '@/lib/periodUtils';
+import { prevWithholdingPeriodKey, simplePayrollMonthlyPeriodKey, attributionMonthFromReportMonth, reportMonthFromAttributionMonth } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
-  mergeFilingRecords,
+  hasFilingCarryData,
   readLocalFilingCheckSession,
   resetReceiptOnly,
   writeLocalFilingCheckSession,
@@ -609,6 +618,8 @@ function FilingCheckPageInner() {
   const [targetDisplayOrder, setTargetDisplayOrder] = useState<string[]>([]);
   const [groupDisplayOrder, setGroupDisplayOrder] = useState<string[]>([]);
   const [comprehensiveDetail, setComprehensiveDetail] = useState<ComprehensiveFilingGroup | null>(null);
+  /** 종소·법인 검토표 수수료 (clientId → 금액) */
+  const [reviewFeeByClientId, setReviewFeeByClientId] = useState<Record<string, number | null>>({});
   const focusClientId = searchParams.get('client')?.trim() ?? '';
   const focusAppliedRef = useRef('');
   /** 다음 신고분 승계 시 유출 안내 문구를 특이사항에 한 번만 채움 */
@@ -622,6 +633,7 @@ function FilingCheckPageInner() {
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
   const sessionReadyRef = useRef(false);
+  const colFilters = useColumnFilters(keyId);
 
   useEffect(() => {
     setStatFilter('all');
@@ -630,6 +642,27 @@ function FilingCheckPageInner() {
     setIncomeUploaded(false);
     setUploadAddedNames([]);
   }, [tax, period.year, period.month, period.vatPhase, selManager]);
+
+  // 종소·법인 — 검토표 수수료 로드
+  useEffect(() => {
+    if (tax !== 'comprehensive' && tax !== 'corporate') {
+      setReviewFeeByClientId({});
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/review/filing-fees?tax=${encodeURIComponent(tax)}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        setReviewFeeByClientId((data?.byClientId as Record<string, number | null>) ?? {});
+      })
+      .catch(() => {
+        if (!cancelled) setReviewFeeByClientId({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tax]);
 
   useEffect(() => {
     const onStorage = () => setClientOrderVersion(v => v + 1);
@@ -814,8 +847,19 @@ function FilingCheckPageInner() {
     if (!selManager) return;
     let cancelled = false;
     const pk = periodKey(tax, period);
+    // 화면·키 전환 시 이전 세션 UI를 즉시 비워 잔여 표시 방지
     sessionReadyRef.current = false;
+    loadedKeyRef.current = '';
     closureCarryNotesKeyRef.current = '';
+    setRecord({ ...EMPTY_RECORD });
+    setCarriedFrom(null);
+    setPrevSession(null);
+    setParseError('');
+    setCopied(false);
+    setIncomeNotice('');
+    setIncomeUploaded(false);
+    setUploadAddedNames([]);
+    if (fileRef.current) fileRef.current.value = '';
 
     const loadFromServer = async () => {
       try {
@@ -823,27 +867,46 @@ function FilingCheckPageInner() {
           `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=${tax}&periodKey=${pk}&withCarry=1`,
           { cache: 'no-store' },
         );
-        if (!res.ok) return { data: null as CheckRecord | null, carriedFromPeriodKey: null as string | null };
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            data: null as CheckRecord | null,
+            carriedFromPeriodKey: null as string | null,
+          };
+        }
         const json = (await res.json()) as {
           data?: CheckRecord;
           carriedFromPeriodKey?: string | null;
         };
         return {
+          ok: true as const,
           data: json.data ?? null,
           carriedFromPeriodKey: json.carriedFromPeriodKey ?? null,
         };
       } catch {
-        return { data: null, carriedFromPeriodKey: null };
+        return {
+          ok: false as const,
+          data: null as CheckRecord | null,
+          carriedFromPeriodKey: null as string | null,
+        };
       }
     };
 
     void (async () => {
       const localRec = readLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk);
-      const { data: serverRec, carriedFromPeriodKey } = await loadFromServer();
+      const { ok, data: serverRec, carriedFromPeriodKey } = await loadFromServer();
       if (cancelled) return;
 
-      const serverMerged: CheckRecord = serverRec ? { ...EMPTY_RECORD, ...serverRec } : { ...EMPTY_RECORD };
-      const merged = mergeFilingRecords(localRec, serverMerged) ?? serverMerged;
+      // 서버 성공 시 서버만 사용(로컬 병합으로 삭제값이 되살아나지 않게).
+      // 서버 실패 시에만 로컬 폴백.
+      let next: CheckRecord;
+      if (ok) {
+        next = { ...EMPTY_RECORD, ...(serverRec ?? {}) };
+      } else if (localRec && hasFilingCarryData(localRec)) {
+        next = { ...EMPTY_RECORD, ...localRec };
+      } else {
+        next = { ...EMPTY_RECORD };
+      }
 
       if (carriedFromPeriodKey) {
         setCarriedFrom(periodLabel(tax, parsePeriodKey(tax, carriedFromPeriodKey)));
@@ -851,15 +914,12 @@ function FilingCheckPageInner() {
         setCarriedFrom(null);
       }
 
-      setRecord(merged);
-      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, merged);
+      setRecord(next);
+      writeLocalFilingCheckSession(STORAGE_PREFIX, selManager, tax, pk, next);
       loadedKeyRef.current = keyId;
       sessionReadyRef.current = true;
       setDisplayOrderEpoch(e => e + 1);
     })();
-    setParseError('');
-    setCopied(false);
-    if (fileRef.current) fileRef.current.value = '';
     return () => {
       cancelled = true;
     };
@@ -909,14 +969,32 @@ function FilingCheckPageInner() {
   }, [tax, period, selManager]);
 
   const scopeByManager = useCallback(
-    (list: ClientRecord[]) =>
-      selManager === ALL_MANAGERS
-        ? list
-        : list.filter(c => (c.manager?.trim() || UNCategorized) === selManager),
+    (list: ClientRecord[]) => {
+      if (selManager === ALL_MANAGERS) return list;
+      const names = new Set(getManagerMatchNames(selManager));
+      names.add(selManager);
+      return list.filter(c => names.has(c.manager?.trim() || UNCategorized));
+    },
+    [selManager],
+  );
+
+  const matchesSelManager = useCallback(
+    (manager: string | undefined | null) => {
+      if (selManager === ALL_MANAGERS) return true;
+      const names = new Set(getManagerMatchNames(selManager));
+      names.add(selManager);
+      return names.has(manager?.trim() || UNCategorized);
+    },
     [selManager],
   );
 
   const locked = record.done;
+
+  /** 원천·간이지급: period.month는 신고월, 귀속월은 전월 */
+  const attribution = useMemo(
+    () => attributionMonthFromReportMonth(period.year, period.month),
+    [period.year, period.month],
+  );
 
   useEffect(() => {
     setIncomeNotice('');
@@ -926,6 +1004,10 @@ function FilingCheckPageInner() {
   const handleTaxChange = (next: FilingTaxId) => {
     if (next === tax) return;
     setTax(next);
+    // 세목 전환 시 원천·간이지급은 현재 신고월로 맞춤
+    if (next === 'withholding' || next === 'simplePayroll' || next === 'yearEnd') {
+      setPeriod(p => ({ ...p, ...defaultPeriod() }));
+    }
   };
 
   // 현재 세목 전체 신고대상(담당자 무관) — 담당자별 카운트·필터 기준
@@ -933,14 +1015,14 @@ function FilingCheckPageInner() {
   const taxTargetsAll = useMemo(() => {
     const raw =
       tax === 'withholding'
-        ? withholdingTargetsForPeriod(clients, period.month)
+        ? withholdingTargetsForPeriod(clients, attribution.month)
         : tax === 'simplePayroll'
-          ? simplePayrollTargetsForPeriod(clients, period.month)
+          ? simplePayrollTargetsForPeriod(clients, attribution.month)
           : tax === 'vat'
             ? filingTargets(clients, 'vat', { vatPhase: period.vatPhase })
             : filingTargets(clients, tax);
     return raw.filter(c => !isClosedBeforeFilingPeriod(c, tax, period));
-  }, [clients, tax, period]);
+  }, [clients, tax, period, attribution.month]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
   const extraClientIds = useMemo(
@@ -949,31 +1031,33 @@ function FilingCheckPageInner() {
   );
 
   const periodCompare = useMemo(() => {
-    if (!prevSession) return null;
     const pk = periodKey(tax, period);
     const prevPk =
       tax === 'withholding' ? prevWithholdingPeriodKey(pk) : previousPeriodKey(tax, pk);
     if (!prevPk) return null;
     const prevP = parsePeriodKey(tax, prevPk);
+    // 직전 세션이 없어도 대상 목록 기준으로 대비 표시 (담당자마다 세션 유무와 무관)
+    const prevRec = prevSession ?? EMPTY_RECORD;
 
     if (tax === 'withholding') {
-      // 담당자별 세션·수임처만 전월 대비 (전체 업체 비교 시 타 담당이 '신규'로 뜸)
+      const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
       return compareWithholdingMonths(
         scopeByManager(taxTargetsAll),
-        prevSession,
+        prevRec,
         record,
-        prevP.month,
-        period.month,
+        prevAttr.month,
+        attribution.month,
       );
     }
     if (tax === 'simplePayroll') {
-      const prevTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, prevP.month));
-      const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, period.month));
-      return compareSessionTargets(prevTargets, currTargets, prevSession, record, {
+      const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
+      const prevTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, prevAttr.month));
+      const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, attribution.month));
+      return compareSessionTargets(prevTargets, currTargets, prevRec, record, {
         isAutoExcluded: (c, which) =>
           isSemiAnnualOffMonthExcluded(
             c.intakeData ?? {},
-            which === 'prev' ? prevP.month : period.month,
+            which === 'prev' ? prevAttr.month : attribution.month,
           ),
       });
     }
@@ -982,15 +1066,15 @@ function FilingCheckPageInner() {
         scopeByManager(filingTargets(clients, tax)),
       );
       const currGroups = groupComprehensiveFilingTargets(scopeByManager(taxTargetsAll));
-      return compareComprehensiveGroups(prevGroups, currGroups, prevSession, record);
+      return compareComprehensiveGroups(prevGroups, currGroups, prevRec, record);
     }
 
     const prevAll =
       tax === 'vat'
         ? filingTargets(clients, tax, { vatPhase: prevP.vatPhase })
         : filingTargets(clients, tax);
-    return compareSessionTargets(scopeByManager(prevAll), scopeByManager(taxTargetsAll), prevSession, record);
-  }, [tax, period, clients, prevSession, record, scopeByManager, taxTargetsAll]);
+    return compareSessionTargets(scopeByManager(prevAll), scopeByManager(taxTargetsAll), prevRec, record);
+  }, [tax, period, clients, prevSession, record, scopeByManager, taxTargetsAll, attribution.month]);
 
   const compareLabels = useMemo(() => {
     if (usesMonthOverMonthCompare(tax)) {
@@ -1067,11 +1151,11 @@ function FilingCheckPageInner() {
   /** 간이지급·연말정산 — 원천세(동일 월) 목록 순서 기준 */
   const withholdingOrderIds = useMemo(() => {
     if (!isIncomeTypeTax) return [];
-    const whAll = withholdingTargetsForPeriod(clients, period.month);
+    const whAll = withholdingTargetsForPeriod(clients, attribution.month);
     const scoped =
       selManager === ALL_MANAGERS
         ? whAll
-        : whAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager);
+        : whAll.filter(c => matchesSelManager(c.manager));
     const ordered =
       selManager === ALL_MANAGERS
         ? applyManagerScopedClientOrder(
@@ -1086,8 +1170,9 @@ function FilingCheckPageInner() {
   }, [
     isIncomeTypeTax,
     clients,
-    period.month,
+    attribution.month,
     selManager,
+    matchesSelManager,
     clientListSort,
     managerOrder,
     clientOrderVersion,
@@ -1097,7 +1182,7 @@ function FilingCheckPageInner() {
     const scoped =
       selManager === ALL_MANAGERS
         ? taxTargetsAll
-        : taxTargetsAll.filter(c => clientManagerKey(c) === selManager);
+        : taxTargetsAll.filter(c => matchesSelManager(c.manager));
     const ordered =
       selManager === ALL_MANAGERS
         ? applyManagerScopedClientOrder(
@@ -1111,7 +1196,7 @@ function FilingCheckPageInner() {
     const seen = new Set(ordered.map(c => c.id));
 
     const manual = resolveExtraClients(record.extraClients, clients, seen).filter(c => {
-      if (selManager !== ALL_MANAGERS && clientManagerKey(c) !== selManager) return false;
+      if (selManager !== ALL_MANAGERS && !matchesSelManager(c.manager)) return false;
       return true;
     });
 
@@ -1119,6 +1204,7 @@ function FilingCheckPageInner() {
   }, [
     taxTargetsAll,
     selManager,
+    matchesSelManager,
     record.extraClients,
     clientListSort,
     managerOrder,
@@ -1127,7 +1213,43 @@ function FilingCheckPageInner() {
     clients,
   ]);
 
-  // 직전 신고분 승계로 불러온 경우 — 유출·폐업 사업장 특이사항이 비어 있으면 안내 문구 채움
+  // 부가세 1기 확정: 접수완료가 아닌 업체는 제외 체크 (기존 수동 사유·강제포함 유지)
+  useEffect(() => {
+    if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) return;
+    if (tax !== 'vat' || period.vatPhase !== '1기 확정' || locked) return;
+    const AUTO = '미접수 자동제외';
+    let changed = false;
+    const nextExcluded = { ...record.excluded };
+    for (const c of targets) {
+      if (Boolean(record.forceIncluded?.[c.id])) continue;
+      const received = record.overrides[c.id] ?? excelSet.has(normalizeBizNo(c.businessNo));
+      if (received) {
+        if (nextExcluded[c.id] === AUTO) {
+          delete nextExcluded[c.id];
+          changed = true;
+        }
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(nextExcluded, c.id)) {
+        nextExcluded[c.id] = AUTO;
+        changed = true;
+      }
+    }
+    if (changed) {
+      patchRecord({ excluded: nextExcluded });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tax,
+    period.vatPhase,
+    locked,
+    keyId,
+    targets,
+    record.excelBizNos,
+    record.overrides,
+    record.forceIncluded,
+    excelSet,
+  ]);
   useEffect(() => {
     if (!carriedFrom || !sessionReadyRef.current) return;
     const pk = periodKey(tax, period);
@@ -1198,7 +1320,7 @@ function FilingCheckPageInner() {
     if (isForceIncluded(c.id)) return null;
     if (
       (tax === 'withholding' || tax === 'simplePayroll') &&
-      isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, period.month)
+      isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, attribution.month)
     ) {
       return SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON;
     }
@@ -1209,12 +1331,12 @@ function FilingCheckPageInner() {
   const activeTargets = useMemo(
     () => targets.filter(c => excludeReasonOf(c) === null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded, record.forceIncluded, tax, period.month],
+    [targets, record.excluded, record.forceIncluded, tax, attribution.month],
   );
   const excludedTargets = useMemo(
     () => targets.filter(c => excludeReasonOf(c) !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, record.excluded, record.forceIncluded, tax, period.month],
+    [targets, record.excluded, record.forceIncluded, tax, attribution.month],
   );
 
   const isGroupReceived = (g: ComprehensiveFilingGroup) => isGroupFilingReceived(g);
@@ -1270,7 +1392,9 @@ function FilingCheckPageInner() {
     return activeTargets.filter(c => isVatSummaryOnlyClient(c));
   }, [tax, activeTargets]);
   const tableExtraCols = (tax === 'withholding' ? 1 : 0) + (vatProvisional ? 1 : 0);
-  const tableColSpan = 7 + tableExtraCols;
+  const showsReviewFeeColumn = tax === 'vat' || tax === 'comprehensive' || tax === 'corporate';
+  const tableColSpan = (showsReviewFeeColumn ? 7 : 6) + tableExtraCols;
+  const comprehensiveColSpan = showsReviewFeeColumn ? 8 : 7;
   const diff =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.length -
@@ -1429,7 +1553,7 @@ function FilingCheckPageInner() {
   const patchWithholdingRowNote = useCallback(
     async (id: string, note: string) => {
       if (!selManager) return;
-      const whPk = simplePayrollMonthlyPeriodKey(period.year, period.month);
+      const whPk = simplePayrollMonthlyPeriodKey(attribution.year, attribution.month);
       try {
         const res = await fetch(
           `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=withholding&periodKey=${encodeURIComponent(whPk)}`,
@@ -1465,7 +1589,7 @@ function FilingCheckPageInner() {
   const patchWithholdingExcludeReason = useCallback(
     async (id: string, reason: string) => {
       if (!selManager) return;
-      const whPk = simplePayrollMonthlyPeriodKey(period.year, period.month);
+      const whPk = simplePayrollMonthlyPeriodKey(attribution.year, attribution.month);
       try {
         const res = await fetch(
           `/api/filing-check/session?manager=${encodeURIComponent(selManager)}&taxType=withholding&periodKey=${encodeURIComponent(whPk)}`,
@@ -1502,8 +1626,8 @@ function FilingCheckPageInner() {
     () =>
       selManager === ALL_MANAGERS
         ? []
-        : taxTargetsAll.filter(c => (c.manager?.trim() || UNCategorized) === selManager),
-    [taxTargetsAll, selManager],
+        : taxTargetsAll.filter(c => matchesSelManager(c.manager)),
+    [taxTargetsAll, selManager, matchesSelManager],
   );
 
   const canReorderTargets = !locked && selManager !== ALL_MANAGERS;
@@ -1574,6 +1698,274 @@ function FilingCheckPageInner() {
       .filter((c): c is ClientRecord => !!c);
     return [...ordered, ...manual];
   }, [canReorderTargets, tax, displayedTargets, reorderableOrderedIds]);
+
+  const reviewFeeAmountForClient = useCallback(
+    (c: ClientRecord): number | null => {
+      if (tax === 'vat') {
+        return readVatFilingFee(
+          c.intakeData,
+          vatProgressPeriodKey(period.year, period.vatPhase),
+        );
+      }
+      if (tax === 'comprehensive' || tax === 'corporate') {
+        const v = reviewFeeByClientId[c.id];
+        return v == null || !Number.isFinite(v) ? null : v;
+      }
+      return null;
+    },
+    [tax, period.year, period.vatPhase, reviewFeeByClientId],
+  );
+
+  const formatReviewFee = (amount: number | null | undefined) => {
+    if (amount == null || !Number.isFinite(amount)) return '—';
+    return `${amount.toLocaleString('ko-KR')}`;
+  };
+
+  const feeFilterLabel = (key: string) => {
+    if (key === COLUMN_FILTER_EMPTY) return '미입력';
+    return `${Number(key).toLocaleString('ko-KR')}원`;
+  };
+
+  const filingRowFilterValues = useCallback(
+    (c: ClientRecord) => {
+      const excluded = excludeReasonOf(c) !== null;
+      const vatObligation = tax === 'vat' ? readVatObligation(c, period.vatPhase) : null;
+      const vatNoticeOnly = vatObligation === '예정고지';
+      const vatSummaryOnly = tax === 'vat' && isVatSummaryOnlyClient(c);
+      const skipReceipt = vatNoticeOnly || vatSummaryOnly;
+      const received = !excluded && !skipReceipt && isReceived(c.id, c.businessNo);
+      const receipt = skipReceipt
+        ? vatSummaryOnly
+          ? '합계표제출'
+          : '예정고지'
+        : excluded
+          ? '제외'
+          : received
+            ? '접수완료'
+            : '미접수';
+      let kind = '일반';
+      if (tax === 'vat') {
+        if (vatSummaryOnly) kind = '합계표제출';
+        else if (isSimplifiedVatClient(c)) kind = '간이';
+      }
+      const closure = filingClosureNotice(c) || '정상';
+      const note = excluded
+        ? (excludeReasonOf(c) ?? '').trim() || COLUMN_FILTER_EMPTY
+        : (record.rowNotes[c.id] ?? '').trim() || COLUMN_FILTER_EMPTY;
+      const fee = reviewFeeAmountForClient(c);
+      return {
+        receipt,
+        fee: fee == null ? COLUMN_FILTER_EMPTY : String(fee),
+        company: c.companyName?.trim() || '(이름없음)',
+        bizNo: c.businessNo?.trim() || COLUMN_FILTER_EMPTY,
+        kind,
+        closure,
+        note,
+        exclude: excluded ? '제외' : '대상',
+        obligation: vatObligation || COLUMN_FILTER_EMPTY,
+        filingType:
+          tax === 'withholding'
+            ? String((c.intakeData as { filingType?: string } | undefined)?.filingType ?? '당월')
+            : COLUMN_FILTER_EMPTY,
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      tax,
+      period.vatPhase,
+      period.year,
+      record.excluded,
+      record.overrides,
+      record.rowNotes,
+      excelSet,
+      vatProvisional,
+      reviewFeeAmountForClient,
+    ],
+  );
+
+  const filteredTargetsForTable = useMemo(() => {
+    const f = colFilters.filters;
+    return displayedTargetsForTable.filter(c => {
+      const v = filingRowFilterValues(c);
+      if (!matchesColumnFilter(f.receipt, v.receipt)) return false;
+      if (showsReviewFeeColumn && !matchesColumnFilter(f.fee, v.fee)) return false;
+      if (!matchesColumnFilter(f.company, v.company)) return false;
+      if (!matchesColumnFilter(f.bizNo, v.bizNo)) return false;
+      if (tax === 'vat' && !matchesColumnFilter(f.kind, v.kind)) return false;
+      if (!matchesColumnFilter(f.closure, v.closure)) return false;
+      if (!matchesColumnFilter(f.note, v.note)) return false;
+      if (!matchesColumnFilter(f.exclude, v.exclude)) return false;
+      if (vatProvisional && !matchesColumnFilter(f.obligation, v.obligation)) return false;
+      if (tax === 'withholding' && !matchesColumnFilter(f.filingType, v.filingType)) return false;
+      return true;
+    });
+  }, [
+    displayedTargetsForTable,
+    colFilters.filters,
+    filingRowFilterValues,
+    tax,
+    vatProvisional,
+    showsReviewFeeColumn,
+  ]);
+
+  const targetColumnFilterOptions = useMemo(() => {
+    const rows = displayedTargetsForTable.map(c => filingRowFilterValues(c));
+    return {
+      receipt: buildColumnFilterOptions(rows.map(r => r.receipt)),
+      fee: buildColumnFilterOptions(
+        rows.map(r => r.fee),
+        {
+          labelOf: feeFilterLabel,
+          sortKeys: (a, b) => {
+            if (a === COLUMN_FILTER_EMPTY) return -1;
+            if (b === COLUMN_FILTER_EMPTY) return 1;
+            return Number(a) - Number(b);
+          },
+        },
+      ),
+      company: buildColumnFilterOptions(rows.map(r => r.company)),
+      bizNo: buildColumnFilterOptions(rows.map(r => r.bizNo)),
+      kind: buildColumnFilterOptions(rows.map(r => r.kind)),
+      closure: buildColumnFilterOptions(rows.map(r => r.closure)),
+      note: buildColumnFilterOptions(rows.map(r => r.note), {
+        labelOf: k => (k === COLUMN_FILTER_EMPTY ? '미입력' : k),
+      }),
+      exclude: buildColumnFilterOptions(rows.map(r => r.exclude)),
+      obligation: buildColumnFilterOptions(rows.map(r => r.obligation)),
+      filingType: buildColumnFilterOptions(rows.map(r => r.filingType)),
+    };
+  }, [displayedTargetsForTable, filingRowFilterValues]);
+
+  const filteredComprehensiveGroupsOrdered = useMemo(() => {
+    const f = colFilters.filters;
+    return displayedComprehensiveGroupsOrdered.filter(g => {
+      const primary = g.clients[0];
+      if (!primary) return false;
+      const excluded = excludeReasonOf(primary) !== null;
+      const received = !excluded && isGroupReceived(g);
+      const receipt = excluded ? '제외' : received ? '접수완료' : '미접수';
+      const company = primary.companyName?.trim() || g.representative?.trim() || '(이름없음)';
+      const closure =
+        filingClosureNotice(primary) ??
+        g.clients.map(c => filingClosureNotice(c)).find(Boolean) ??
+        '정상';
+      const note = excluded
+        ? (excludeReasonOf(primary) ?? '').trim() || COLUMN_FILTER_EMPTY
+        : (record.rowNotes[primary.id] ?? '').trim() || COLUMN_FILTER_EMPTY;
+      if (!matchesColumnFilter(f.receipt, receipt)) return false;
+      if (
+        showsReviewFeeColumn &&
+        !matchesColumnFilter(
+          f.fee,
+          (() => {
+            const fee = reviewFeeAmountForClient(primary);
+            return fee == null ? COLUMN_FILTER_EMPTY : String(fee);
+          })(),
+        )
+      ) {
+        return false;
+      }
+      if (!matchesColumnFilter(f.company, company)) return false;
+      if (!matchesColumnFilter(f.closure, closure)) return false;
+      if (!matchesColumnFilter(f.note, note)) return false;
+      if (!matchesColumnFilter(f.exclude, excluded ? '제외' : '대상')) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    displayedComprehensiveGroupsOrdered,
+    colFilters.filters,
+    record.excluded,
+    record.rowNotes,
+    record.overrides,
+    excelSet,
+    showsReviewFeeColumn,
+    reviewFeeAmountForClient,
+  ]);
+
+  const comprehensiveColumnFilterOptions = useMemo(() => {
+    const rows = displayedComprehensiveGroupsOrdered.map(g => {
+      const primary = g.clients[0];
+      const excluded = primary ? excludeReasonOf(primary) !== null : false;
+      const received = primary ? !excluded && isGroupReceived(g) : false;
+      const fee = primary ? reviewFeeAmountForClient(primary) : null;
+      return {
+        receipt: excluded ? '제외' : received ? '접수완료' : '미접수',
+        fee: fee == null ? COLUMN_FILTER_EMPTY : String(fee),
+        company: primary?.companyName?.trim() || g.representative?.trim() || '(이름없음)',
+        closure:
+          (primary && filingClosureNotice(primary)) ||
+          g.clients.map(c => filingClosureNotice(c)).find(Boolean) ||
+          '정상',
+        note: primary
+          ? excluded
+            ? (excludeReasonOf(primary) ?? '').trim() || COLUMN_FILTER_EMPTY
+            : (record.rowNotes[primary.id] ?? '').trim() || COLUMN_FILTER_EMPTY
+          : COLUMN_FILTER_EMPTY,
+        exclude: excluded ? '제외' : '대상',
+      };
+    });
+    return {
+      receipt: buildColumnFilterOptions(rows.map(r => r.receipt)),
+      fee: buildColumnFilterOptions(
+        rows.map(r => r.fee),
+        {
+          labelOf: feeFilterLabel,
+          sortKeys: (a, b) => {
+            if (a === COLUMN_FILTER_EMPTY) return -1;
+            if (b === COLUMN_FILTER_EMPTY) return 1;
+            return Number(a) - Number(b);
+          },
+        },
+      ),
+      company: buildColumnFilterOptions(rows.map(r => r.company)),
+      closure: buildColumnFilterOptions(rows.map(r => r.closure)),
+      note: buildColumnFilterOptions(rows.map(r => r.note), {
+        labelOf: k => (k === COLUMN_FILTER_EMPTY ? '미입력' : k),
+      }),
+      exclude: buildColumnFilterOptions(rows.map(r => r.exclude)),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedComprehensiveGroupsOrdered, record.excluded, record.rowNotes, reviewFeeAmountForClient]);
+
+  const renderColFilter = (
+    key: string,
+    label: string,
+    options: ReturnType<typeof buildColumnFilterOptions>,
+    className?: string,
+    extraMenus?: ReactNode,
+  ) => (
+    <ColumnValueFilterHeader
+      columnKey={key}
+      label={label}
+      options={options}
+      filter={colFilters.filters[key]}
+      open={colFilters.openKey === key}
+      onToggleOpen={() => colFilters.toggleOpen(key)}
+      onToggleValue={v => colFilters.toggleValue(key, v, options.map(o => o.key))}
+      onClear={() => colFilters.clear(key)}
+      align="center"
+      className={className}
+      extraMenus={extraMenus}
+    />
+  );
+
+  const renderExtraFilterMenu = (
+    key: string,
+    title: string,
+    options: ReturnType<typeof buildColumnFilterOptions>,
+  ) => (
+    <ColumnFilterMenu
+      columnKey={key}
+      title={title}
+      options={options}
+      filter={colFilters.filters[key]}
+      open={colFilters.openKey === key}
+      onToggleOpen={() => colFilters.toggleOpen(key)}
+      onToggleValue={v => colFilters.toggleValue(key, v, options.map(o => o.key))}
+      onClear={() => colFilters.clear(key)}
+    />
+  );
 
   useEffect(() => {
     if (!focusClientId || focusAppliedRef.current === focusClientId) return;
@@ -1709,7 +2101,7 @@ function FilingCheckPageInner() {
 
   const clientAddBar =
     !locked ? (
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="relative z-40 mb-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setShowAdd(v => !v)}
@@ -1821,7 +2213,7 @@ function FilingCheckPageInner() {
       const managerScopedClients =
         selManager === ALL_MANAGERS
           ? clients
-          : clients.filter(c => clientManagerKey(c) === selManager);
+          : clients.filter(c => matchesSelManager(c.manager));
       const clientByBiz = new Map<string, ClientRecord>();
       for (const c of managerScopedClients) {
         const b = normalizeBizNo(c.businessNo);
@@ -1838,7 +2230,7 @@ function FilingCheckPageInner() {
         const full = clients.find(c => c.id === m.id);
         if (!full) return selManager === ALL_MANAGERS;
         if (selManager === ALL_MANAGERS) return true;
-        return clientManagerKey(full) === selManager;
+        return matchesSelManager(full.manager);
       });
       const nextOrder = [...targetDisplayOrder];
       const added: string[] = [];
@@ -1857,7 +2249,7 @@ function FilingCheckPageInner() {
         // 반기 자동제외 등이면 수기 강제포함으로 살려서 접수 체크 가능하게
         const wouldAutoExclude =
           (tax === 'withholding' || tax === 'simplePayroll') &&
-          isSemiAnnualOffMonthExcluded(client.intakeData ?? {}, period.month) &&
+          isSemiAnnualOffMonthExcluded(client.intakeData ?? {}, attribution.month) &&
           !nextForce[client.id];
         if (wouldAutoExclude) {
           nextForce[client.id] = true;
@@ -2254,6 +2646,7 @@ function FilingCheckPageInner() {
           ))}
         </select>
         {cycle === 'month' && (
+          <>
           <select
             value={period.month}
             onChange={e => setPeriod(p => ({ ...p, month: Number(e.target.value) }))}
@@ -2261,10 +2654,14 @@ function FilingCheckPageInner() {
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
               <option key={m} value={m}>
-                {m}월
+                {m}월 신고
               </option>
             ))}
           </select>
+          <span className="text-xs text-slate-500">
+            {attribution.month}월 귀속 · 마감 매월 10일(휴일 시 다음 평일)
+          </span>
+          </>
         )}
         {cycle === 'vat' && (
           <select
@@ -2472,10 +2869,16 @@ function FilingCheckPageInner() {
             mode={tax === 'simplePayroll' ? 'simplePayroll' : 'yearEnd'}
             manager={selManager}
             clients={clients}
-            year={period.year}
-            month={period.month}
-            onYearChange={y => setPeriod(p => ({ ...p, year: y }))}
-            onMonthChange={m => setPeriod(p => ({ ...p, month: m }))}
+            year={attribution.year}
+            month={attribution.month}
+            onYearChange={y => {
+              const report = reportMonthFromAttributionMonth(y, attribution.month);
+              setPeriod(p => ({ ...p, year: report.year, month: report.month }));
+            }}
+            onMonthChange={m => {
+              const report = reportMonthFromAttributionMonth(attribution.year, m);
+              setPeriod(p => ({ ...p, year: report.year, month: report.month }));
+            }}
             embedded
             locked={locked}
             rowFilter={statFilter}
@@ -2554,6 +2957,11 @@ function FilingCheckPageInner() {
             mineLabel="신고대상"
             allLabel="전체"
           />
+          {colFilters.anyActive ? (
+            <button type="button" className={portalBtnSecondary} onClick={colFilters.clearAll}>
+              열 필터 해제
+            </button>
+          ) : null}
           {canReorderTargets && (
             <span className="text-[11px] text-slate-400">순번 ▲▼ 순서 변경 (담당자·세목별 전용)</span>
           )}
@@ -2624,26 +3032,43 @@ function FilingCheckPageInner() {
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">접수</th>
+              {renderColFilter('receipt', '접수', comprehensiveColumnFilterOptions.receipt, 'w-12')}
               <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
-              <th className="sticky top-0 z-20 w-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">코드</th>
+              {showsReviewFeeColumn
+                ? renderColFilter('fee', '수수료', comprehensiveColumnFilterOptions.fee, 'w-24')
+                : null}
               <th className="sticky top-0 z-20 w-28 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">대표자명</th>
               <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">주민등록번호</th>
-              <th className="sticky top-0 z-20 w-48 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">상호</th>
-              <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">특이사항(제외사유 등)</th>
-              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">제외</th>
+              {renderColFilter(
+                'company',
+                '상호',
+                comprehensiveColumnFilterOptions.company,
+                'w-48',
+                <>
+                  <span className="text-[9px] font-medium text-slate-400">유출</span>
+                  {renderExtraFilterMenu('closure', '유출', comprehensiveColumnFilterOptions.closure)}
+                </>,
+              )}
+              {renderColFilter('note', '특이사항(제외사유 등)', comprehensiveColumnFilterOptions.note)}
+              {renderColFilter('exclude', '제외', comprehensiveColumnFilterOptions.exclude, 'w-12')}
             </tr>
           </thead>
           <tbody>
             {comprehensiveGroups.length === 0 && record.extraClients.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={comprehensiveColSpan} className="px-3 py-10 text-center text-slate-400">
                   {taxLabel} 신고대상 수임처가 없습니다.
+                </td>
+              </tr>
+            ) : filteredComprehensiveGroupsOrdered.length === 0 ? (
+              <tr>
+                <td colSpan={comprehensiveColSpan} className="px-3 py-10 text-center text-slate-400">
+                  열 필터 조건에 맞는 업체가 없습니다.
                 </td>
               </tr>
             ) : (
               <>
-                {displayedComprehensiveGroupsOrdered.map((g, i) => {
+                {filteredComprehensiveGroupsOrdered.map((g, i) => {
                   const primary = g.clients[0];
                   const manualExcluded = isManualExcluded(g.primaryClientId);
                   const reason = excludeReasonOf(primary);
@@ -2656,7 +3081,7 @@ function FilingCheckPageInner() {
                   const siteState = groupSiteDoneState(g);
                   const restCount = g.clients.length - 1;
                   const siteLabel = g.displayCompanyLabel;
-                  const groupCount = displayedComprehensiveGroupsOrdered.length;
+                  const groupCount = filteredComprehensiveGroupsOrdered.length;
                   return (
                     <tr
                       key={g.groupKey}
@@ -2685,7 +3110,11 @@ function FilingCheckPageInner() {
                           onMoveDown={() => moveDown(g.primaryClientId)}
                         />
                       </td>
-                      <td className="px-2 py-2 tabular-nums text-slate-500">{g.douzoneCode || '-'}</td>
+                      {showsReviewFeeColumn ? (
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700">
+                          {formatReviewFee(reviewFeeAmountForClient(primary))}
+                        </td>
+                      ) : null}
                       <td className="px-2 py-2 text-center text-sm font-semibold text-slate-800">{g.representative}</td>
                       <td className="whitespace-nowrap px-2 py-2 text-center tabular-nums text-slate-600">
                         {formatResidentNoDisplay(g.residentNo)}
@@ -2774,7 +3203,7 @@ function FilingCheckPageInner() {
                   const excluded = reason !== null;
                   const closureNotice = filingClosureNotice(c);
                   const received = !excluded && isReceived(c.id, c.businessNo);
-                  const rowNo = displayedComprehensiveGroupsOrdered.length + mi + 1;
+                  const rowNo = filteredComprehensiveGroupsOrdered.length + mi + 1;
                   return (
                     <tr
                       key={c.id}
@@ -2797,7 +3226,11 @@ function FilingCheckPageInner() {
                         />
                       </td>
                       <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{rowNo}</td>
-                      <td className="px-2 py-2 text-center tabular-nums text-slate-500">-</td>
+                      {showsReviewFeeColumn ? (
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700">
+                          {formatReviewFee(reviewFeeAmountForClient(c))}
+                        </td>
+                      ) : null}
                       <td className="px-2 py-2 text-center text-sm font-semibold text-slate-800">
                         {c.representative || c.companyName}
                       </td>
@@ -2875,19 +3308,34 @@ function FilingCheckPageInner() {
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">접수</th>
+              {renderColFilter('receipt', '접수', targetColumnFilterOptions.receipt, 'w-12')}
               <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
-              <th className="sticky top-0 z-20 w-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">코드</th>
-              <th className="sticky top-0 z-20 w-64 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">업체명</th>
-              <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">사업자번호</th>
-              {tax === 'withholding' && (
-                <th className="sticky top-0 z-20 w-28 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">신고유형</th>
+              {showsReviewFeeColumn
+                ? renderColFilter('fee', '수수료', targetColumnFilterOptions.fee, 'w-24')
+                : null}
+              {renderColFilter(
+                'company',
+                '업체명',
+                targetColumnFilterOptions.company,
+                'w-64',
+                <>
+                  {tax === 'vat' ? (
+                    <>
+                      <span className="text-[9px] font-medium text-slate-400">간이</span>
+                      {renderExtraFilterMenu('kind', '간이·합계표', targetColumnFilterOptions.kind)}
+                    </>
+                  ) : null}
+                  <span className="text-[9px] font-medium text-slate-400">유출</span>
+                  {renderExtraFilterMenu('closure', '유출', targetColumnFilterOptions.closure)}
+                </>,
               )}
-              {vatProvisional && (
-                <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">구분</th>
-              )}
-              <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">특이사항(제외사유 등)</th>
-              <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">제외</th>
+              {renderColFilter('bizNo', '사업자번호', targetColumnFilterOptions.bizNo, 'w-32')}
+              {tax === 'withholding' &&
+                renderColFilter('filingType', '신고유형', targetColumnFilterOptions.filingType, 'w-28')}
+              {vatProvisional &&
+                renderColFilter('obligation', '구분', targetColumnFilterOptions.obligation, 'w-32')}
+              {renderColFilter('note', '특이사항(제외사유 등)', targetColumnFilterOptions.note)}
+              {renderColFilter('exclude', '제외', targetColumnFilterOptions.exclude, 'w-12')}
             </tr>
           </thead>
           <tbody>
@@ -2897,8 +3345,14 @@ function FilingCheckPageInner() {
                   {taxLabel} 신고대상 수임처가 없습니다.
                 </td>
               </tr>
+            ) : filteredTargetsForTable.length === 0 ? (
+              <tr>
+                <td colSpan={tableColSpan} className="px-3 py-10 text-center text-slate-400">
+                  열 필터 조건에 맞는 업체가 없습니다.
+                </td>
+              </tr>
             ) : (
-              displayedTargetsForTable.map((c, i) => {
+              filteredTargetsForTable.map((c, i) => {
                 const manualExcluded = isManualExcluded(c.id);
                 const reason = excludeReasonOf(c);
                 const excluded = reason !== null;
@@ -2914,8 +3368,8 @@ function FilingCheckPageInner() {
                 const vatSummaryOnly = tax === 'vat' && isVatSummaryOnlyClient(c);
                 const skipReceipt = vatNoticeOnly || vatSummaryOnly;
                 const received = !excluded && !skipReceipt && isReceived(c.id, c.businessNo);
-                const reorderableCount = displayedTargetsForTable.filter(x => !isManualId(x.id)).length;
-                const reorderIndex = displayedTargetsForTable
+                const reorderableCount = filteredTargetsForTable.filter(x => !isManualId(x.id)).length;
+                const reorderIndex = filteredTargetsForTable
                   .slice(0, i + 1)
                   .filter(x => !isManualId(x.id)).length - 1;
                 const canReorderRow = canReorderTargets && !isManualId(c.id);
@@ -2964,7 +3418,11 @@ function FilingCheckPageInner() {
                         onMoveDown={() => moveDown(c.id)}
                       />
                     </td>
-                    <td className="px-2 py-2 tabular-nums text-slate-500">{getClientDouzoneCode(c) || '-'}</td>
+                    {showsReviewFeeColumn ? (
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-700">
+                        {formatReviewFee(reviewFeeAmountForClient(c))}
+                      </td>
+                    ) : null}
                     <td className="px-2 py-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {isManualId(c.id) ? (

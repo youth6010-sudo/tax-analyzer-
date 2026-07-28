@@ -8,6 +8,11 @@ import {
   type ChecklistTaxType,
   type PersonalChecklistDto,
   formatCalendarCreatedAt,
+  formatCheckoffCompletedAt,
+  forcedAssigneesForTaxType,
+  isRoutedRequestTaxType,
+  isSuppliesOrderTaxType,
+  isImprovementRequestTaxType,
 } from '@/app/types/calendar';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
 import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
@@ -15,25 +20,45 @@ import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/compone
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 import { WEEKDAY_OPTIONS, INTERVAL_OPTIONS, previewRepeatCount, type RepeatMode, type RepeatIntervalKind } from '@/lib/calendarRepeat';
+import { undismissRoutedRequest } from '@/app/utils/routedRequestDismiss';
 
 type Props = {
   onCreated?: () => void;
   onUpdated?: () => void;
   onDeleted?: () => void;
   onCancel?: () => void;
+  /** 처리완료 토글 후 목록만 갱신 (모달은 유지) */
+  onCheckoffChange?: () => void;
   defaultClientId?: string;
   editItem?: PersonalChecklistDto | null;
   inModal?: boolean;
 };
 
-function checklistTaxToFilingTax(taxType: Exclude<ChecklistTaxType, 'other'>): FilingTaxId {
+type FilingChecklistTax = Exclude<ChecklistTaxType, 'other' | 'supplies' | 'improvement'>;
+
+function checklistTaxToFilingTax(taxType: FilingChecklistTax): FilingTaxId {
   return taxType;
 }
 
-function clientsForTaxType(clients: ClientRecord[], taxType: Exclude<ChecklistTaxType, 'other'>): ClientRecord[] {
+function clientsForTaxType(clients: ClientRecord[], taxType: FilingChecklistTax): ClientRecord[] {
   return filingTargets(clients, checklistTaxToFilingTax(taxType))
     .filter(c => c.status !== 'churned')
     .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
+}
+
+function ensureForcedAssignees(
+  taxType: ChecklistTaxType | '',
+  names: string[],
+  owner: string,
+): string[] {
+  const forced = forcedAssigneesForTaxType(taxType);
+  if (forced.length === 0) return names;
+  let out = names.filter(n => n !== owner);
+  for (const name of forced) {
+    if (name === owner) continue;
+    if (!out.includes(name)) out = [...out, name];
+  }
+  return out;
 }
 
 function FormRow({
@@ -61,6 +86,7 @@ export default function PersonalChecklistAddForm({
   onUpdated,
   onDeleted,
   onCancel,
+  onCheckoffChange,
   defaultClientId,
   editItem = null,
   inModal,
@@ -82,6 +108,8 @@ export default function PersonalChecklistAddForm({
   const [reflectInNotes, setReflectInNotes] = useState(false);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [memoDraft, setMemoDraft] = useState('');
+  const [myCheckoff, setMyCheckoff] = useState(false);
+  const [checkoffBusy, setCheckoffBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [allClients, setAllClients] = useState<ClientRecord[]>([]);
@@ -118,7 +146,12 @@ export default function PersonalChecklistAddForm({
       setDueDate(editItem.dueDate || '');
       setRepeatOn(false);
       setReflectInNotes(editItem.reflectInNotes);
-      setAssigneeNames(editItem.assigneeNames ?? []);
+      setAssigneeNames(
+        isRoutedRequestTaxType(editItem.taxType)
+          ? ensureForcedAssignees(editItem.taxType, editItem.assigneeNames ?? [], editItem.ownerName)
+          : (editItem.assigneeNames ?? []),
+      );
+      setMyCheckoff(editItem.myCheckoff ?? false);
       setMemoDraft('');
       return;
     }
@@ -135,6 +168,7 @@ export default function PersonalChecklistAddForm({
     setEveryDays(3);
     setReflectInNotes(false);
     setAssigneeNames([]);
+    setMyCheckoff(false);
     setMemoDraft('');
   }, [editItem, defaultClientId]);
 
@@ -145,6 +179,8 @@ export default function PersonalChecklistAddForm({
   );
 
   const toggleAssignee = (name: string) => {
+    const forced = forcedAssigneesForTaxType(taxType);
+    if (forced.includes(name)) return;
     setAssigneeNames(prev =>
       prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name],
     );
@@ -172,12 +208,12 @@ export default function PersonalChecklistAddForm({
   );
 
   const clients = useMemo(() => {
-    if (!taxType || taxType === 'other') {
+    if (!taxType || taxType === 'other' || isRoutedRequestTaxType(taxType)) {
       return allClients
         .filter(c => c.status !== 'churned')
         .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
     }
-    return clientsForTaxType(allClients, taxType);
+    return clientsForTaxType(allClients, taxType as FilingChecklistTax);
   }, [allClients, taxType]);
 
   useEffect(() => {
@@ -185,9 +221,52 @@ export default function PersonalChecklistAddForm({
     if (!clients.some(c => c.id === clientId)) setClientId('');
   }, [clients, clientId]);
 
+  const isRouted = isRoutedRequestTaxType(taxType);
+  const isSupplies = isSuppliesOrderTaxType(taxType);
+  const isImprovement = isImprovementRequestTaxType(taxType);
+  const checkoffNames =
+    editItem?.participants?.length
+      ? editItem.participants
+      : isRouted
+        ? (editItem?.assigneeNames ?? [])
+        : [];
+  const canCheckoff =
+    isEdit &&
+    isRouted &&
+    !!currentUser &&
+    checkoffNames.includes(currentUser);
+
+  const toggleRoutedCheckoff = async (completed: boolean) => {
+    if (!editItem || !canCheckoff) return;
+    setCheckoffBusy(true);
+    setError('');
+    try {
+      if (!completed) undismissRoutedRequest(editItem.id);
+      const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '처리 상태 변경 실패');
+      setMyCheckoff(completed);
+      onCheckoffChange?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '처리 상태 변경 실패');
+    } finally {
+      setCheckoffBusy(false);
+    }
+  };
+
   const handleTaxTypeChange = (next: ChecklistTaxType | '') => {
     setTaxType(next);
     if (!isEdit) setClientId('');
+    if (isRoutedRequestTaxType(next)) {
+      setRepeatOn(false);
+      setDueDate('');
+      const owner = editItem?.ownerName || currentUser;
+      setAssigneeNames(prev => ensureForcedAssignees(next, prev, owner));
+    }
   };
 
   const handleDelete = async () => {
@@ -217,22 +296,24 @@ export default function PersonalChecklistAddForm({
         window.alert('체크리스트 내용을 입력해주세요.');
         return;
       }
-      if (!isEdit && repeatOn) {
-        if (!repeatFrom.trim() || !repeatTo.trim()) {
-          window.alert('반복 기간(시작·종료)을 입력해주세요.');
+      if (!isRoutedRequestTaxType(taxType)) {
+        if (!isEdit && repeatOn) {
+          if (!repeatFrom.trim() || !repeatTo.trim()) {
+            window.alert('반복 기간(시작·종료)을 입력해주세요.');
+            return;
+          }
+          if (repeatMode === 'weekdays' && weekdays.length === 0) {
+            window.alert('반복할 요일을 선택해주세요.');
+            return;
+          }
+          if (repeatMode === 'interval' && interval === 'custom' && (!everyDays || everyDays < 1)) {
+            window.alert('반복 주기(일)를 입력해주세요.');
+            return;
+          }
+        } else if (!dueDate.trim()) {
+          window.alert('마감일을 입력해주세요.');
           return;
         }
-        if (repeatMode === 'weekdays' && weekdays.length === 0) {
-          window.alert('반복할 요일을 선택해주세요.');
-          return;
-        }
-        if (repeatMode === 'interval' && interval === 'custom' && (!everyDays || everyDays < 1)) {
-          window.alert('반복 주기(일)를 입력해주세요.');
-          return;
-        }
-      } else if (!dueDate.trim()) {
-        window.alert('마감일을 입력해주세요.');
-        return;
       }
     } else if (isEdit && !memoDraft.trim()) {
       window.alert('추가할 메모를 입력해주세요.');
@@ -240,27 +321,31 @@ export default function PersonalChecklistAddForm({
     }
     setSaving(true);
     setError('');
+    const ownerForAssignees = editItem?.ownerName || currentUser;
+    const finalAssignees = isRoutedRequestTaxType(taxType)
+      ? ensureForcedAssignees(taxType, assigneeNames, ownerForAssignees)
+      : assigneeNames;
     const payload = isEdit
       ? {
           ...(isOwner
             ? {
                 title,
                 taxType,
-                clientId: clientId || null,
-                dueDate,
-                reflectInNotes,
-                assigneeNames,
+                clientId: isRoutedRequestTaxType(taxType) ? null : (clientId || null),
+                dueDate: isRoutedRequestTaxType(taxType) ? '' : dueDate,
+                reflectInNotes: isRoutedRequestTaxType(taxType) ? false : reflectInNotes,
+                assigneeNames: finalAssignees,
               }
             : {}),
           ...(memoDraft.trim() ? { addMemo: memoDraft.trim() } : {}),
         }
-      : repeatOn
+      : !isRoutedRequestTaxType(taxType) && repeatOn
         ? {
             title,
             taxType,
             clientId: clientId || null,
             reflectInNotes,
-            assigneeNames,
+            assigneeNames: finalAssignees,
             ...(memoDraft.trim() ? { memo: memoDraft.trim() } : {}),
             repeat: {
               from: repeatFrom,
@@ -274,10 +359,10 @@ export default function PersonalChecklistAddForm({
         : {
             title,
             taxType,
-            clientId: clientId || null,
-            dueDate,
-            reflectInNotes,
-            assigneeNames,
+            clientId: isRoutedRequestTaxType(taxType) ? null : (clientId || null),
+            dueDate: isRoutedRequestTaxType(taxType) ? '' : dueDate,
+            reflectInNotes: isRoutedRequestTaxType(taxType) ? false : reflectInNotes,
+            assigneeNames: finalAssignees,
             ...(memoDraft.trim() ? { memo: memoDraft.trim() } : {}),
           };
     try {
@@ -347,16 +432,20 @@ export default function PersonalChecklistAddForm({
         </select>
       </FormRow>
 
-      <FormRow label="체크리스트 내용" required={isOwner}>
+      <FormRow label={isRouted ? '요청 내용' : '체크리스트 내용'} required={isOwner}>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           className={portalInput + ' w-full text-xs py-1.5'}
           aria-required={isOwner}
           readOnly={!isOwner}
+          placeholder={
+            isSupplies ? '주문할 비품 내용' : isImprovement ? '개선 요청 내용' : undefined
+          }
         />
       </FormRow>
 
+      {!isRouted && (
       <FormRow label="마감일" required={isOwner}>
         <div className="space-y-2">
           {!isEdit && isOwner && (
@@ -495,9 +584,19 @@ export default function PersonalChecklistAddForm({
           )}
         </div>
       </FormRow>
+      )}
+
+      {isRouted && (
+        <p className="pl-[6.5rem] text-[11px] text-slate-500">
+          {isSupplies
+            ? '캘린더에는 표시되지 않으며, 캘린더의 비품 주문 목록 탭에서 요청일·주문일을 확인할 수 있습니다.'
+            : '캘린더에는 표시되지 않으며, 캘린더의 시스템 개선 요청 탭에서 요청·처리 현황을 확인할 수 있습니다.'}
+        </p>
+      )}
 
       {isOwner && (
         <>
+          {!isRouted && (
           <FormRow label="수임처">
             <ScopedClientSearch
               candidates={clients}
@@ -514,32 +613,41 @@ export default function PersonalChecklistAddForm({
               }
             />
           </FormRow>
+          )}
 
           <FormRow label="협업자">
             <div className="flex flex-wrap gap-1.5">
               {staffOptions.map(name => {
-                const on = assigneeNames.includes(name);
+                const forced = forcedAssigneesForTaxType(taxType).includes(name);
+                const on = forced || assigneeNames.includes(name);
                 return (
                   <button
                     key={name}
                     type="button"
                     onClick={() => toggleAssignee(name)}
+                    disabled={forced}
                     className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
                       on
                         ? 'border-blue-500 bg-blue-50 text-blue-800'
                         : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    }`}
+                    } ${forced ? 'cursor-default opacity-90' : ''}`}
                   >
                     {name}
+                    {forced ? ' (고정)' : ''}
                   </button>
                 );
               })}
             </div>
             <p className="mt-1 text-[10px] text-slate-400">
-              선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.
+              {isSupplies
+                ? '비품 주문 요청은 다야가 협업자로 고정됩니다.'
+                : isImprovement
+                  ? '시스템 개선 요청은 리아·찰리가 협업자로 고정됩니다.'
+                  : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}
             </p>
           </FormRow>
 
+          {!isRouted && (
           <label className="flex items-start gap-2 pl-[6.5rem] text-xs text-slate-600 cursor-pointer">
             <input
               type="checkbox"
@@ -549,6 +657,7 @@ export default function PersonalChecklistAddForm({
             />
             <span>업체별 특이사항에 반영</span>
           </label>
+          )}
         </>
       )}
 
@@ -561,6 +670,57 @@ export default function PersonalChecklistAddForm({
             <p>협업 {editItem.assigneeNames.join(', ')}</p>
           )}
         </div>
+      )}
+
+      {isEdit && isRouted && (
+        <FormRow label="처리완료">
+          <div className="space-y-2">
+            {canCheckoff ? (
+              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={myCheckoff}
+                  disabled={checkoffBusy || saving}
+                  onChange={e => void toggleRoutedCheckoff(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-emerald-600"
+                />
+                <span>{isSupplies ? '주문·처리 완료' : '처리 완료'}</span>
+              </label>
+            ) : (
+              <p className="pt-1.5 text-xs text-slate-500">
+                {isOwner
+                  ? '요청자는 완료 체크할 수 없습니다. 담당 협업자가 처리합니다.'
+                  : '이 요청의 처리 담당자가 아닙니다.'}
+              </p>
+            )}
+            {checkoffNames.length > 0 && (
+              <ul className="space-y-1 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
+                {checkoffNames.map(name => {
+                  const done =
+                    name === currentUser
+                      ? myCheckoff
+                      : Boolean(editItem?.checkoffs?.[name]);
+                  const at = editItem?.checkoffDetails?.[name]?.completedAt;
+                  return (
+                    <li key={name} className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="font-semibold text-slate-700">{name}</span>
+                      {done ? (
+                        <span className="rounded bg-emerald-50 px-1.5 py-px font-semibold text-emerald-700">
+                          완료
+                          {at ? ` · ${formatCheckoffCompletedAt(at)}` : ''}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-slate-100 px-1.5 py-px font-semibold text-slate-500">
+                          미처리
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </FormRow>
       )}
 
       <FormRow label="메모">

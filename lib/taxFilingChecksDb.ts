@@ -7,6 +7,7 @@ import {
   hasCarryFieldsData,
   mergeCarryFieldLayers,
 } from '@/app/utils/filingCheckStorage';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 export type FilingCheckSessionData = {
   overrides: Record<string, boolean>;
@@ -145,6 +146,73 @@ function receiptSlice(rec: Partial<FilingCheckSessionData> | null | undefined) {
   };
 }
 
+/** 담당자별 접수(엑셀·수동체크)를 합침 — 「전체」조회·닉네임/실명 세션 동기화용 */
+function mergeReceiptSlices(
+  parts: Array<Partial<FilingCheckSessionData> | null | undefined>,
+): ReturnType<typeof receiptSlice> {
+  const excelBizNos = new Set<string>();
+  const excelNamesByBiz: Record<string, string> = {};
+  const overrides: Record<string, boolean> = {};
+  const specialFilings: FilingCheckSessionData['specialFilings'] = [];
+  const specialKeys = new Set<string>();
+  const fileNames: string[] = [];
+  let siteDone: Record<string, boolean> = {};
+  let anyDone = false;
+
+  for (const rec of parts) {
+    if (!rec) continue;
+    for (const b of rec.excelBizNos ?? []) {
+      const n = String(b).trim();
+      if (n) excelBizNos.add(n);
+    }
+    for (const [biz, name] of Object.entries(rec.excelNamesByBiz ?? {})) {
+      if (!excelNamesByBiz[biz] && name) excelNamesByBiz[biz] = name;
+    }
+    for (const [id, v] of Object.entries(rec.overrides ?? {})) {
+      if (v) overrides[id] = true;
+      else if (!Object.prototype.hasOwnProperty.call(overrides, id)) overrides[id] = false;
+    }
+    for (const s of rec.specialFilings ?? []) {
+      const k = `${s.bizNo}|${s.type}`;
+      if (specialKeys.has(k)) continue;
+      specialKeys.add(k);
+      specialFilings.push(s);
+    }
+    const fn = rec.fileName?.trim();
+    if (fn && !fileNames.includes(fn)) fileNames.push(fn);
+    if (rec.siteDone) siteDone = { ...siteDone, ...rec.siteDone };
+    if (rec.done) anyDone = true;
+  }
+
+  return {
+    overrides,
+    excelBizNos: [...excelBizNos],
+    excelNamesByBiz,
+    fileName: fileNames.join(' · '),
+    specialFilings,
+    done: anyDone,
+    siteDone,
+  };
+}
+
+/** 해당 세목·기간의 모든 담당자 세션 */
+async function listFilingCheckSessionsForPeriod(
+  taxType: FilingTaxId | string,
+  periodKey: string,
+): Promise<FilingCheckSessionData[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(filingCheckSessions)
+    .where(
+      and(eq(filingCheckSessions.taxType, taxType), eq(filingCheckSessions.periodKey, periodKey)),
+    );
+  return rows.map(row => ({
+    ...EMPTY_SESSION_DATA,
+    ...(row.data as Partial<FilingCheckSessionData>),
+  }));
+}
+
 /** 전월 제외 키가 당월에 빠져 있으면 승계가 더 필요 */
 function carryNeedsPreviousMerge(
   previous: FilingCheckSessionData | null | undefined,
@@ -182,21 +250,39 @@ export async function loadFilingCheckSessionWithCarry(
   const current = await getFilingCheckSession(manager, taxType, periodKey);
   const previous = await findPreviousCompletedFilingCheckSession(manager, taxType, periodKey);
 
+  // 「전체」·닉네임/실명 별칭 세션의 접수를 합쳐 관리자 화면과 담당자 화면이 어긋나지 않게 함
+  const receiptParts: Array<Partial<FilingCheckSessionData> | null> = [current];
+  if (manager === '전체') {
+    receiptParts.push(...(await listFilingCheckSessionsForPeriod(taxType, periodKey)));
+  } else {
+    const aliases = getManagerMatchNames(manager).filter(n => n !== manager);
+    if (aliases.length > 0) {
+      const aliasSessions = await Promise.all(
+        aliases.map(n => getFilingCheckSession(n, taxType, periodKey)),
+      );
+      receiptParts.push(...aliasSessions);
+    }
+  }
+  const mergedReceipt = mergeReceiptSlices(receiptParts);
+
   if (current === null) {
     if (previous) {
       return {
         data: {
           ...EMPTY_SESSION_DATA,
           ...carryFieldsFromRecord(previous.data),
-          ...receiptSlice(null),
+          ...mergedReceipt,
+          done: false,
         },
         carriedFromPeriodKey: previous.periodKey,
       };
     }
-    return { data: { ...EMPTY_SESSION_DATA }, carriedFromPeriodKey: null };
+    return {
+      data: { ...EMPTY_SESSION_DATA, ...mergedReceipt, done: false },
+      carriedFromPeriodKey: null,
+    };
   }
 
-  const receipt = receiptSlice(current);
   // 직전 완료분이 있으면 7월 등 다음 리스트에 승계 출처를 항상 표시
   const carriedFromPeriodKey = previous?.periodKey ?? null;
 
@@ -205,21 +291,34 @@ export async function loadFilingCheckSessionWithCarry(
     const merged: FilingCheckSessionData = {
       ...EMPTY_SESSION_DATA,
       ...carry,
-      ...receipt,
+      ...mergedReceipt,
+      // 담당자 본인 세션의 완료 여부 유지 (전체 합산 done은 쓰지 않음)
+      done: current.done,
       forceIncluded: {
         ...(previous.data.forceIncluded ?? {}),
         ...(current.forceIncluded ?? {}),
       },
       clientOrder: current.clientOrder,
-      siteDone: current.siteDone,
+      siteDone: mergedReceipt.siteDone ?? current.siteDone,
     };
-    // 누락 승계분을 DB에도 반영해 다음 로드·다른 기기와 맞춤
-    await upsertFilingCheckSession(manager, taxType, periodKey, merged);
+    // 「전체」는 합산 접수를 저장하지 않음 — 담당자별 원본만 유지
+    if (manager !== '전체') {
+      await upsertFilingCheckSession(manager, taxType, periodKey, {
+        ...merged,
+        ...receiptSlice(current), // DB에는 본인 접수만 유지
+        done: current.done,
+      });
+    }
     return { data: merged, carriedFromPeriodKey };
   }
 
   return {
-    data: { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt },
+    data: {
+      ...EMPTY_SESSION_DATA,
+      ...carryFieldsFromRecord(current),
+      ...mergedReceipt,
+      done: current.done,
+    },
     carriedFromPeriodKey,
   };
 }

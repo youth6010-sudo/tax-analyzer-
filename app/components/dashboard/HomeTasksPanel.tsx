@@ -7,14 +7,17 @@ import type {
   ChecklistTaxType,
   CompanyEventDto,
   PersonalChecklistDto,
-  PersonalChecklistNotificationDto,
 } from '@/app/types/calendar';
 import {
+  formatCalendarCreatedAt,
   formatCompanyEventSchedule,
   formatChecklistDueDate,
   formatCheckoffCompletedAt,
   getChecklistTypeLabel,
   isChecklistPastDue,
+  isImprovementRequestTaxType,
+  isRoutedRequestTaxType,
+  isSuppliesOrderTaxType,
 } from '@/app/types/calendar';
 import { prefetchPortal, usePortalTasks, getPortalChurnRecords, getPortalClients, filterNtsTasksForHandledChurn, refreshPortalBootstrap } from '@/app/utils/portalStore';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
@@ -22,6 +25,12 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
 import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgress';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
+import {
+  dismissRoutedRequest,
+  readRoutedRequestDismissed,
+  ROUTED_REQUEST_DISMISSED_KEY,
+  undismissRoutedRequest,
+} from '@/app/utils/routedRequestDismiss';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -32,17 +41,27 @@ const TYPE_LABEL: Record<DashboardTask['type'], string> = {
 const SECTION_KEY = 'portalTasksSections.v1';
 const SHOW_COMPLETED_KEY = 'portalTasksShowCompleted.v1';
 
-type SectionState = { personal: boolean; company: boolean; client: boolean };
+type SectionState = { personal: boolean; company: boolean; client: boolean; processed: boolean };
 type AddModal = 'personal' | 'company' | null;
 type EditModal = 'personal' | 'company' | null;
 
 function readSectionState(): SectionState {
-  if (typeof window === 'undefined') return { personal: true, company: true, client: true };
+  if (typeof window === 'undefined') {
+    return { personal: true, company: true, client: true, processed: true };
+  }
   try {
     const raw = localStorage.getItem(SECTION_KEY);
-    if (raw) return JSON.parse(raw) as SectionState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<SectionState>;
+      return {
+        personal: parsed.personal ?? true,
+        company: parsed.company ?? true,
+        client: parsed.client ?? true,
+        processed: parsed.processed ?? true,
+      };
+    }
   } catch { /* ignore */ }
-  return { personal: true, company: true, client: true };
+  return { personal: true, company: true, client: true, processed: true };
 }
 
 function readShowCompleted(): boolean {
@@ -55,6 +74,27 @@ function readShowCompleted(): boolean {
 
 function taxLabel(taxType: ChecklistTaxType): string {
   return getChecklistTypeLabel(taxType);
+}
+
+function personalEditModalMeta(
+  item: PersonalChecklistDto | null,
+  currentUser: string,
+): {
+  title: string;
+  description?: string;
+} {
+  const isOwner = Boolean(item && currentUser && item.ownerName === currentUser);
+  // 요청자 → 개인 체크리스트 / 그 외(협업자) → 비품·시스템개선 요청
+  if (!isOwner && item && isSuppliesOrderTaxType(item.taxType)) {
+    return { title: '비품 주문 요청' };
+  }
+  if (!isOwner && item && isImprovementRequestTaxType(item.taxType)) {
+    return { title: '시스템 개선 요청' };
+  }
+  return {
+    title: '개인 체크리스트 수정',
+    description: '내용을 수정하거나 삭제할 수 있습니다.',
+  };
 }
 
 function CountBadge({ count }: { count: number }) {
@@ -118,7 +158,8 @@ export default function HomeTasksPanel() {
   const [sections, setSections] = useState<SectionState>(readSectionState);
   const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
-  const [personalNotifications, setPersonalNotifications] = useState<PersonalChecklistNotificationDto[]>([]);
+  const [routedOpen, setRoutedOpen] = useState<PersonalChecklistDto[]>([]);
+  const [dismissedRouted, setDismissedRouted] = useState<Set<string>>(() => new Set());
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
   const [addModal, setAddModal] = useState<AddModal>(null);
   const [editModal, setEditModal] = useState<EditModal>(null);
@@ -132,8 +173,9 @@ export default function HomeTasksPanel() {
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
 
-  /** 미완료 배지·필터용 — 작성자는 전원 완료 전까지 개인 체크리스트에 유지 */
+  /** 미완료 배지·필터용 — 비품·시스템개선은 전용 섹션 */
   const isPersonalDone = (p: PersonalChecklistDto) => {
+    if (isRoutedRequestTaxType(p.taxType)) return true;
     if (!p.collaborative) return p.completed;
     if (currentUser && p.ownerName === currentUser) {
       return (p.checkoffDone ?? 0) >= (p.checkoffTotal ?? 0);
@@ -203,10 +245,11 @@ export default function HomeTasksPanel() {
       if (pRes.ok) {
         const payload = pData as {
           items: PersonalChecklistDto[];
-          notifications?: PersonalChecklistNotificationDto[];
+          routedOpen?: PersonalChecklistDto[];
         };
         setPersonal(payload.items || []);
-        setPersonalNotifications(payload.notifications || []);
+        setRoutedOpen(payload.routedOpen || []);
+        setDismissedRouted(readRoutedRequestDismissed());
       }
       if (cRes.ok) {
         const payload = cData as {
@@ -264,24 +307,51 @@ export default function HomeTasksPanel() {
     };
   }, [refresh, showCompleted]);
 
-  const dismissNotifications = async () => {
-    const ids = personalNotifications.map(n => n.id);
-    setPersonalNotifications([]);
-    if (ids.length === 0) return;
-    await fetch('/api/calendar/personal-checklist/notifications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
+  useEffect(() => {
+    setDismissedRouted(readRoutedRequestDismissed());
+    const sync = () => setDismissedRouted(readRoutedRequestDismissed());
+    window.addEventListener(`local-storage:${ROUTED_REQUEST_DISMISSED_KEY}`, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(`local-storage:${ROUTED_REQUEST_DISMISSED_KEY}`, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const routedVisible = useMemo(() => {
+    return routedOpen.filter(item => {
+      const isAssignee =
+        !!currentUser && item.assigneeNames.includes(currentUser);
+      if (!isAssignee) return true;
+      // 협업자: 본인 완료 후 「확인」한 건은 숨김
+      if ((item.myCheckoff ?? false) && dismissedRouted.has(item.id)) return false;
+      return true;
     });
-  };
+  }, [routedOpen, dismissedRouted, currentUser]);
+
+  const routedPendingCount = useMemo(() => {
+    return routedVisible.filter(item => {
+      if (currentUser && item.ownerName === currentUser && !item.assigneeNames.includes(currentUser)) {
+        return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
+      }
+      return !(item.myCheckoff ?? false);
+    }).length;
+  }, [routedVisible, currentUser]);
 
   const toggleComplete = async (id: string, completed: boolean) => {
+    if (!completed) undismissRoutedRequest(id);
     await fetch(`/api/calendar/personal-checklist/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed }),
     });
+    if (!completed) setDismissedRouted(readRoutedRequestDismissed());
     void refresh();
+  };
+
+  const confirmRoutedDone = (id: string) => {
+    dismissRoutedRequest(id);
+    setDismissedRouted(readRoutedRequestDismissed());
   };
 
   const closeModal = () => {
@@ -316,6 +386,8 @@ export default function HomeTasksPanel() {
   const companySectionTitle = companyMonth
     ? `회사 일정 (${companyMonth.month}월)`
     : '회사 일정';
+
+  const editModalMeta = personalEditModalMeta(editItem, currentUser);
 
   return (
     <>
@@ -354,28 +426,6 @@ export default function HomeTasksPanel() {
               onToggle={() => toggleSection('personal')}
               onAdd={() => setAddModal('personal')}
             >
-                {personalNotifications.length > 0 && (
-                  <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-bold text-amber-800">완료 알림</p>
-                      <button
-                        type="button"
-                        onClick={() => void dismissNotifications()}
-                        className="text-[10px] font-semibold text-amber-700 underline-offset-2 hover:underline"
-                      >
-                        모두 확인
-                      </button>
-                    </div>
-                    <ul className="space-y-1">
-                      {personalNotifications.map(n => (
-                        <li key={n.id} className="text-[11px] text-amber-900">
-                          <span className="font-semibold">{n.actorName}</span>
-                          님이 「{n.title}」을(를) 완료했습니다
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
                 {personalVisible.length === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">
                     {showCompleted ? '항목 없음' : '미완료 항목 없음'}
@@ -516,6 +566,106 @@ export default function HomeTasksPanel() {
                   </ul>
                 )}
               </SectionCard>
+
+            <SectionCard
+              title="비품주문/시스템개선"
+              count={routedPendingCount}
+              open={sections.processed}
+              onToggle={() => toggleSection('processed')}
+            >
+              {routedVisible.length === 0 ? (
+                <p className="py-3 text-center text-sm text-slate-400">요청 없음</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {routedVisible.map(item => {
+                    const isOwner = !!currentUser && item.ownerName === currentUser;
+                    const isAssignee =
+                      !!currentUser && item.assigneeNames.includes(currentUser);
+                    const myDone = item.myCheckoff ?? false;
+                    const lastMemo = item.memos?.[item.memos.length - 1];
+                    return (
+                      <li
+                        key={item.id}
+                        onClick={() => openPersonalEdit(item)}
+                        className={[
+                          'cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm',
+                          myDone && isAssignee
+                            ? 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-300'
+                            : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30',
+                        ].join(' ')}
+                        title="클릭하여 상세"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {isAssignee && (
+                            <input
+                              type="checkbox"
+                              checked={myDone}
+                              onChange={e => void toggleComplete(item.id, e.target.checked)}
+                              onClick={e => e.stopPropagation()}
+                              className="mt-0.5"
+                              title={myDone ? '대기로 되돌리기' : '처리 완료'}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold leading-snug text-slate-800">{item.title}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={[
+                                  'rounded px-2 py-0.5 text-[10px] font-bold',
+                                  myDone && isAssignee
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-slate-100 text-slate-600',
+                                ].join(' ')}
+                              >
+                                {taxLabel(item.taxType)}
+                              </span>
+                              {myDone && isAssignee ? (
+                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                  처리완료
+                                </span>
+                              ) : (
+                                <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                                  대기
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500">
+                                {isOwner ? '내가 요청' : `요청 ${item.ownerName}`}
+                              </span>
+                              {(item.assigneeNames?.length ?? 0) > 0 && (
+                                <span className="text-[10px] text-violet-700">
+                                  협력 {item.assigneeNames.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                            {lastMemo && (
+                              <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
+                                <span className="font-semibold text-slate-600">{lastMemo.authorName}</span>
+                                {': '}
+                                {lastMemo.body}
+                              </p>
+                            )}
+                            {isAssignee && myDone && (
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    confirmRoutedDone(item.id);
+                                  }}
+                                  className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                                >
+                                  확인
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </SectionCard>
 
             <SectionCard
               title={companySectionTitle}
@@ -668,8 +818,8 @@ export default function HomeTasksPanel() {
 
       <CenterModal
         open={editModal === 'personal' && editItem !== null}
-        title="개인 체크리스트 수정"
-        description="내용을 수정하거나 삭제할 수 있습니다."
+        title={editModalMeta.title}
+        description={editModalMeta.description}
         onClose={closeModal}
       >
         {editItem && (
@@ -678,6 +828,7 @@ export default function HomeTasksPanel() {
             editItem={editItem}
             onUpdated={() => { closeModal(); void refresh(); }}
             onDeleted={() => { closeModal(); void refresh(); }}
+            onCheckoffChange={() => void refresh()}
             onCancel={closeModal}
           />
         )}
