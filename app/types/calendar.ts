@@ -75,6 +75,8 @@ export type PersonalChecklistDto = {
   myCheckoff?: boolean;
   /** 비품·시스템개선 — 본인이 「확인」으로 목록에서 숨김 (계정별) */
   myDismissed?: boolean;
+  /** 본인 처리완료 시각 */
+  myCompletedAt?: string | null;
   checkoffDone?: number;
   checkoffTotal?: number;
   checkoffs?: Record<string, boolean>;
@@ -93,7 +95,7 @@ export type SuppliesOrderDto = PersonalChecklistDto & {
 /** 업무개선요청 목록 탭 */
 export type ImprovementRequestDto = PersonalChecklistDto & {
   requestedAt: string;
-  /** 협업자 전원 처리 완료일 (마지막 완료 시각) */
+  /** 리아·찰리 중 1명 이상 처리 완료일 */
   processedAt: string | null;
   /** 처리 담당자(고정 협업자) */
   handlerNames: string[];

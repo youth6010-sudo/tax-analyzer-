@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { personalChecklistCheckoffs, personalChecklistItems, personalChecklistNotifications } from '@/db/schema';
 import type { PersonalChecklistNotificationDto } from '@/app/types/calendar';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 
 export type { PersonalChecklistNotificationDto };
 
@@ -12,7 +13,12 @@ export async function createCompletionNotification(input: {
   title: string;
 }): Promise<void> {
   if (!input.recipientName || input.recipientName === input.actorName) return;
+  // 실명·닉네임이 같아도 중복 알림 방지
+  if (getManagerMatchNames(input.recipientName).includes(input.actorName.trim())) return;
+  if (getManagerMatchNames(input.actorName).includes(input.recipientName.trim())) return;
+
   const db = getDb();
+  const recipientAliases = getManagerMatchNames(input.recipientName);
   // 같은 항목·협업자 미확인 알림이 겹치지 않게 정리 후 추가
   await db
     .delete(personalChecklistNotifications)
@@ -20,7 +26,7 @@ export async function createCompletionNotification(input: {
       eq(personalChecklistNotifications.itemId, input.itemId),
       eq(personalChecklistNotifications.actorName, input.actorName),
       eq(personalChecklistNotifications.kind, 'completed'),
-      eq(personalChecklistNotifications.recipientName, input.recipientName),
+      inArray(personalChecklistNotifications.recipientName, recipientAliases),
       isNull(personalChecklistNotifications.readAt),
     ));
   await db.insert(personalChecklistNotifications).values({
@@ -38,11 +44,12 @@ export async function clearCompletionNotifications(input: {
   actorName: string;
 }): Promise<void> {
   const db = getDb();
+  const actorAliases = getManagerMatchNames(input.actorName);
   await db
     .delete(personalChecklistNotifications)
     .where(and(
       eq(personalChecklistNotifications.itemId, input.itemId),
-      eq(personalChecklistNotifications.actorName, input.actorName),
+      inArray(personalChecklistNotifications.actorName, actorAliases),
       eq(personalChecklistNotifications.kind, 'completed'),
     ));
 }
@@ -53,6 +60,9 @@ export async function listUnreadPersonalChecklistNotifications(
   limit = 20,
 ): Promise<PersonalChecklistNotificationDto[]> {
   const db = getDb();
+  const recipientAliases = getManagerMatchNames(recipientName);
+  if (recipientAliases.length === 0) return [];
+
   const rows = await db
     .select({
       notification: personalChecklistNotifications,
@@ -64,7 +74,7 @@ export async function listUnreadPersonalChecklistNotifications(
       eq(personalChecklistItems.id, personalChecklistNotifications.itemId),
     )
     .where(and(
-      eq(personalChecklistNotifications.recipientName, recipientName),
+      inArray(personalChecklistNotifications.recipientName, recipientAliases),
       isNull(personalChecklistNotifications.readAt),
       eq(personalChecklistNotifications.kind, 'completed'),
       inArray(personalChecklistItems.taxType, ['supplies', 'improvement']),
@@ -81,17 +91,23 @@ export async function listUnreadPersonalChecklistNotifications(
     .from(personalChecklistCheckoffs)
     .where(inArray(personalChecklistCheckoffs.itemId, itemIds));
 
-  const stillDone = new Set(
-    checkRows
-      .filter(r => r.completed)
-      .map(r => `${r.itemId}\0${r.memberName}`),
-  );
+  const stillDone = new Set<string>();
+  for (const r of checkRows) {
+    if (!r.completed) continue;
+    stillDone.add(`${r.itemId}\0${r.memberName}`);
+    for (const n of getManagerMatchNames(r.memberName)) {
+      stillDone.add(`${r.itemId}\0${n}`);
+    }
+  }
 
   const staleIds: string[] = [];
   const alive = [];
   for (const row of rows) {
     const r = row.notification;
-    if (stillDone.has(`${r.itemId}\0${r.actorName}`)) {
+    const actorAliases = getManagerMatchNames(r.actorName);
+    const done = actorAliases.some(a => stillDone.has(`${r.itemId}\0${a}`))
+      || stillDone.has(`${r.itemId}\0${r.actorName}`);
+    if (done) {
       alive.push(r);
     } else {
       staleIds.push(r.id);
@@ -120,6 +136,9 @@ export async function markPersonalChecklistNotificationsRead(
 ): Promise<number> {
   const db = getDb();
   const now = new Date();
+  const recipientAliases = getManagerMatchNames(recipientName);
+  if (recipientAliases.length === 0) return 0;
+
   if (ids && ids.length > 0) {
     let updated = 0;
     for (const id of ids) {
@@ -128,7 +147,7 @@ export async function markPersonalChecklistNotificationsRead(
         .set({ readAt: now })
         .where(and(
           eq(personalChecklistNotifications.id, id),
-          eq(personalChecklistNotifications.recipientName, recipientName),
+          inArray(personalChecklistNotifications.recipientName, recipientAliases),
           isNull(personalChecklistNotifications.readAt),
         ))
         .returning({ id: personalChecklistNotifications.id });
@@ -141,7 +160,7 @@ export async function markPersonalChecklistNotificationsRead(
     .update(personalChecklistNotifications)
     .set({ readAt: now })
     .where(and(
-      eq(personalChecklistNotifications.recipientName, recipientName),
+      inArray(personalChecklistNotifications.recipientName, recipientAliases),
       isNull(personalChecklistNotifications.readAt),
     ))
     .returning({ id: personalChecklistNotifications.id });
@@ -154,11 +173,13 @@ export async function markItemNotificationsRead(
   itemId: string,
 ): Promise<number> {
   const db = getDb();
+  const recipientAliases = getManagerMatchNames(recipientName);
+  if (recipientAliases.length === 0) return 0;
   const rows = await db
     .update(personalChecklistNotifications)
     .set({ readAt: new Date() })
     .where(and(
-      eq(personalChecklistNotifications.recipientName, recipientName),
+      inArray(personalChecklistNotifications.recipientName, recipientAliases),
       eq(personalChecklistNotifications.itemId, itemId),
       isNull(personalChecklistNotifications.readAt),
     ))

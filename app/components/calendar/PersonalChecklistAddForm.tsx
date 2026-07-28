@@ -7,6 +7,7 @@ import {
   CHECKLIST_TAX_OPTIONS,
   type ChecklistTaxType,
   type PersonalChecklistDto,
+  type PersonalChecklistMemo,
   formatCalendarCreatedAt,
   formatCheckoffCompletedAt,
   forcedAssigneesForTaxType,
@@ -19,15 +20,17 @@ import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
+import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 import { WEEKDAY_OPTIONS, INTERVAL_OPTIONS, previewRepeatCount, type RepeatMode, type RepeatIntervalKind } from '@/lib/calendarRepeat';
 
 type Props = {
   onCreated?: () => void;
-  onUpdated?: () => void;
+  /** 수정 저장 후 — item이 있으면 모달 유지·내용 갱신 */
+  onUpdated?: (item?: PersonalChecklistDto) => void;
   onDeleted?: () => void;
   onCancel?: () => void;
-  /** 처리완료 토글 후 목록만 갱신 (모달은 유지) */
-  onCheckoffChange?: () => void;
+  /** 처리완료 토글 후 목록·모달 갱신 */
+  onCheckoffChange?: (item?: PersonalChecklistDto) => void;
   defaultClientId?: string;
   editItem?: PersonalChecklistDto | null;
   inModal?: boolean;
@@ -51,8 +54,11 @@ function ensureForcedAssignees(
   owner: string,
 ): string[] {
   const forced = forcedAssigneesForTaxType(taxType);
-  if (forced.length === 0) return names;
   let out = names.filter(n => n !== owner);
+  if (isImprovementRequestTaxType(taxType)) {
+    out = out.filter(n => !managerNamesMatch(n, '다야'));
+  }
+  if (forced.length === 0) return out;
   for (const name of forced) {
     if (name === owner) continue;
     if (!out.includes(name)) out = [...out, name];
@@ -107,6 +113,10 @@ export default function PersonalChecklistAddForm({
   const [reflectInNotes, setReflectInNotes] = useState(false);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [memoDraft, setMemoDraft] = useState('');
+  const [memos, setMemos] = useState<PersonalChecklistMemo[]>([]);
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingMemoBody, setEditingMemoBody] = useState('');
+  const [memoBusy, setMemoBusy] = useState(false);
   const [myCheckoff, setMyCheckoff] = useState(false);
   const [checkoffBusy, setCheckoffBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -151,6 +161,9 @@ export default function PersonalChecklistAddForm({
           : (editItem.assigneeNames ?? []),
       );
       setMyCheckoff(editItem.myCheckoff ?? false);
+      setMemos(editItem.memos ?? []);
+      setEditingMemoId(null);
+      setEditingMemoBody('');
       setMemoDraft('');
       return;
     }
@@ -168,14 +181,67 @@ export default function PersonalChecklistAddForm({
     setReflectInNotes(false);
     setAssigneeNames([]);
     setMyCheckoff(false);
+    setMemos([]);
+    setEditingMemoId(null);
+    setEditingMemoBody('');
     setMemoDraft('');
   }, [editItem, defaultClientId]);
 
-  const isOwner = !editItem || !currentUser || editItem.ownerName === currentUser;
-  const staffOptions = useMemo(
-    () => MANAGER_DISPLAY_ORDER.filter(n => n !== (editItem?.ownerName || currentUser)),
-    [editItem?.ownerName, currentUser],
-  );
+  const isOwner = !editItem || !currentUser || managerNamesMatch(editItem.ownerName, currentUser);
+  const staffOptions = useMemo(() => {
+    const owner = editItem?.ownerName || currentUser;
+    return MANAGER_DISPLAY_ORDER.filter(n => {
+      if (owner && managerNamesMatch(n, owner)) return false;
+      // 시스템 개선: 다야는 협업자 선택에서 제외
+      if (taxType === 'improvement' && managerNamesMatch(n, '다야')) return false;
+      return true;
+    });
+  }, [editItem?.ownerName, currentUser, taxType]);
+
+  const canEditMemo = (m: PersonalChecklistMemo) => {
+    if (!currentUser) return false;
+    if (isOwner) return true;
+    return managerNamesMatch(m.authorName, currentUser);
+  };
+
+  const patchMemo = async (body: Record<string, unknown>) => {
+    if (!editItem) return;
+    setMemoBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '메모 저장 실패');
+      const next = (data as { item?: PersonalChecklistDto }).item;
+      if (next?.memos) setMemos(next.memos);
+      setEditingMemoId(null);
+      setEditingMemoBody('');
+      onUpdated?.(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '메모 저장 실패');
+    } finally {
+      setMemoBusy(false);
+    }
+  };
+
+  const saveMemoEdit = async () => {
+    if (!editingMemoId) return;
+    const body = editingMemoBody.trim();
+    if (!body) {
+      window.alert('메모 내용을 입력해주세요.');
+      return;
+    }
+    await patchMemo({ updateMemo: { id: editingMemoId, body } });
+  };
+
+  const deleteMemo = async (memoId: string) => {
+    if (!confirm('이 메모를 삭제할까요?')) return;
+    await patchMemo({ deleteMemo: memoId });
+  };
 
   const toggleAssignee = (name: string) => {
     const forced = forcedAssigneesForTaxType(taxType);
@@ -231,11 +297,27 @@ export default function PersonalChecklistAddForm({
         : isRouted
           ? (editItem?.assigneeNames ?? [])
           : [];
+  const userAliases = currentUser ? getManagerMatchNames(currentUser) : [];
   const canCheckoff =
     isEdit &&
     isRouted &&
-    !!currentUser &&
-    checkoffNames.includes(currentUser);
+    userAliases.some(a => checkoffNames.some(n => managerNamesMatch(n, a)));
+
+  const isNameDone = (name: string) => {
+    if (userAliases.some(a => managerNamesMatch(name, a))) return myCheckoff;
+    if (editItem?.checkoffs?.[name]) return true;
+    return Object.entries(editItem?.checkoffs ?? {}).some(
+      ([n, done]) => done && managerNamesMatch(n, name),
+    );
+  };
+
+  const improvementSomeoneDone =
+    isImprovement
+    && (
+      checkoffNames.some(n => isNameDone(n))
+      || (editItem?.checkoffDone ?? 0) >= 1
+      || Boolean(editItem?.completed)
+    );
 
   const toggleRoutedCheckoff = async (completed: boolean) => {
     if (!editItem || !canCheckoff) return;
@@ -250,7 +332,8 @@ export default function PersonalChecklistAddForm({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '처리 상태 변경 실패');
       setMyCheckoff(completed);
-      onCheckoffChange?.();
+      const next = (data as { item?: PersonalChecklistDto }).item;
+      onCheckoffChange?.(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : '처리 상태 변경 실패');
     } finally {
@@ -403,7 +486,9 @@ export default function PersonalChecklistAddForm({
         onCreated?.();
       } else {
         setMemoDraft('');
-        onUpdated?.();
+        const next = (data as { item?: PersonalChecklistDto }).item;
+        if (next?.memos) setMemos(next.memos);
+        onUpdated?.(next);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
@@ -642,7 +727,7 @@ export default function PersonalChecklistAddForm({
               {isSupplies
                 ? '비품 주문 요청은 다야가 협업자로 고정됩니다.'
                 : isImprovement
-                  ? '시스템 개선 요청은 리아·찰리 중 한 명이 처리하면 완료됩니다.'
+                  ? '시스템 개선 요청은 리아·찰리만 고정 협업자이며, 다야는 제외됩니다. 한 명이 처리하면 완료됩니다.'
                   : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}
             </p>
           </FormRow>
@@ -696,18 +781,34 @@ export default function PersonalChecklistAddForm({
             {checkoffNames.length > 0 && (
               <ul className="space-y-1 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
                 {checkoffNames.map(name => {
-                  const done =
-                    name === currentUser
-                      ? myCheckoff
-                      : Boolean(editItem?.checkoffs?.[name]);
-                  const at = editItem?.checkoffDetails?.[name]?.completedAt;
+                  const done = isNameDone(name);
+                  const at =
+                    editItem?.checkoffDetails?.[name]?.completedAt
+                    ?? Object.entries(editItem?.checkoffDetails ?? {}).find(
+                      ([n]) => managerNamesMatch(n, name),
+                    )?.[1]?.completedAt;
+                  const strike = improvementSomeoneDone && !done;
                   return (
                     <li key={name} className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                      <span className="font-semibold text-slate-700">{name}</span>
+                      <span
+                        className={
+                          strike
+                            ? 'font-semibold text-slate-400 line-through'
+                            : done
+                              ? 'font-semibold text-emerald-800'
+                              : 'font-semibold text-slate-700'
+                        }
+                      >
+                        {name}
+                      </span>
                       {done ? (
                         <span className="rounded bg-emerald-50 px-1.5 py-px font-semibold text-emerald-700">
                           완료
                           {at ? ` · ${formatCheckoffCompletedAt(at)}` : ''}
+                        </span>
+                      ) : strike ? (
+                        <span className="rounded bg-slate-100 px-1.5 py-px font-semibold text-slate-400 line-through">
+                          미처리
                         </span>
                       ) : (
                         <span className="rounded bg-slate-100 px-1.5 py-px font-semibold text-slate-500">
@@ -725,26 +826,93 @@ export default function PersonalChecklistAddForm({
 
       <FormRow label="메모">
         <div className="space-y-2">
-          {isEdit && (editItem?.memos?.length ?? 0) > 0 && (
-            <ul className="max-h-36 space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 p-2">
-              {editItem!.memos.map(m => (
-                <li key={m.id} className="text-xs leading-snug">
-                  <span className="font-semibold text-slate-700">{m.authorName}</span>
-                  <span className="ml-1.5 text-[10px] text-slate-400">
-                    {formatCalendarCreatedAt(m.createdAt)}
-                  </span>
-                  <p className="mt-0.5 whitespace-pre-wrap text-slate-600">{m.body}</p>
-                </li>
-              ))}
+          {isEdit && memos.length > 0 && (
+            <ul className="max-h-52 space-y-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 p-2">
+              {memos.map(m => {
+                const editable = canEditMemo(m);
+                const isEditing = editingMemoId === m.id;
+                return (
+                  <li key={m.id} className="rounded-md bg-white/80 px-2 py-1.5 text-xs leading-snug ring-1 ring-slate-100">
+                    <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                      <span className="font-semibold text-[#4b6cb7]">{m.authorName}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {formatCalendarCreatedAt(m.createdAt)}
+                      </span>
+                      {editable && !isEditing && (
+                        <span className="ml-auto flex gap-1">
+                          <button
+                            type="button"
+                            disabled={memoBusy || saving}
+                            onClick={() => {
+                              setEditingMemoId(m.id);
+                              setEditingMemoBody(m.body);
+                            }}
+                            className="text-[10px] font-semibold text-slate-500 hover:text-[#4b6cb7] disabled:opacity-50"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            disabled={memoBusy || saving}
+                            onClick={() => void deleteMemo(m.id)}
+                            className="text-[10px] font-semibold text-red-500 hover:text-red-600 disabled:opacity-50"
+                          >
+                            삭제
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    {isEditing ? (
+                      <div className="mt-1.5 space-y-1.5">
+                        <textarea
+                          value={editingMemoBody}
+                          onChange={e => setEditingMemoBody(e.target.value)}
+                          rows={2}
+                          className={portalInput + ' w-full resize-y text-xs py-1.5'}
+                          disabled={memoBusy}
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            disabled={memoBusy}
+                            onClick={() => void saveMemoEdit()}
+                            className="rounded-md bg-[#4b6cb7] px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-50"
+                          >
+                            {memoBusy ? '저장 중…' : '메모 저장'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={memoBusy}
+                            onClick={() => {
+                              setEditingMemoId(null);
+                              setEditingMemoBody('');
+                            }}
+                            className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 disabled:opacity-50"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{m.body}</p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <textarea
             value={memoDraft}
             onChange={e => setMemoDraft(e.target.value)}
             rows={2}
-            placeholder={isEdit ? '메모 추가…' : '메모 (선택)'}
+            placeholder={isEdit ? '메모 추가… (저장 후에도 계속 추가 가능)' : '메모 (선택)'}
             className={portalInput + ' w-full resize-y text-xs py-1.5'}
           />
+          {isEdit && (
+            <p className="text-[10px] leading-snug text-slate-400">
+              여러 명이 메모를 남길 수 있습니다. 본인이 작성한 메모는 수정·삭제할 수 있습니다.
+            </p>
+          )}
         </div>
       </FormRow>
 

@@ -39,14 +39,16 @@ function enrichCheckoffs(
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requireUser();
+    const home = new URL(request.url).searchParams.get('home') === '1';
     const { from, to, year, month } = currentMonthRange();
-    const taxLookbackFrom = `${year - 1}-01-01`;
+    // 홈 TODO는 당월만 — 작년 세무마감·과거 일정 전부 불러오지 않음
+    const taxLookbackFrom = home ? from : `${year - 1}-01-01`;
 
     const [items, team] = await Promise.all([
-      listCompanyEvents({ to }),
+      listCompanyEvents(home ? { from, to, limit: 80 } : { to }),
       listCalendarTeamMembers(),
     ]);
     const taxItems = taxDeadlinesToCompanyEvents(listTaxDeadlines(taxLookbackFrom, to));

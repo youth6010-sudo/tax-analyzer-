@@ -26,6 +26,7 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
 import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgress';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
+import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -78,7 +79,7 @@ function personalEditModalMeta(
   title: string;
   description?: string;
 } {
-  const isOwner = Boolean(item && currentUser && item.ownerName === currentUser);
+  const isOwner = Boolean(item && currentUser && managerNamesMatch(item.ownerName, currentUser));
   // 요청자 → 개인 체크리스트 / 그 외(협업자) → 비품·시스템개선 요청
   if (!isOwner && item && isSuppliesOrderTaxType(item.taxType)) {
     return { title: '비품 주문 요청' };
@@ -229,16 +230,11 @@ export default function HomeTasksPanel() {
       const personalUrl = includeCompleted
         ? '/api/calendar/personal-checklist?includeCompleted=1'
         : '/api/calendar/personal-checklist';
-      const [pRes, cRes] = await Promise.all([
-        fetch(personalUrl),
-        fetch('/api/calendar/company-events'),
-      ]);
-      const [pData, cData] = await Promise.all([
-        pRes.json(),
-        cRes.json(),
-      ]);
+
+      // 개인·비품 먼저 그린 뒤 회사일정 — 체감 대기 시간 단축
+      const pRes = await fetch(personalUrl);
       if (pRes.ok) {
-        const payload = pData as {
+        const payload = (await pRes.json()) as {
           items: PersonalChecklistDto[];
           routedOpen?: PersonalChecklistDto[];
           routedShared?: ProcessedRoutedRequestDto[];
@@ -247,8 +243,11 @@ export default function HomeTasksPanel() {
         setRoutedOpen(payload.routedOpen || []);
         setRoutedShared(payload.routedShared || []);
       }
+      setLoading(false);
+
+      const cRes = await fetch('/api/calendar/company-events?home=1');
       if (cRes.ok) {
-        const payload = cData as {
+        const payload = (await cRes.json()) as {
           items: CompanyEventDto[];
           team?: string[];
           month?: { year: number; month: number };
@@ -290,15 +289,12 @@ export default function HomeTasksPanel() {
 
   useEffect(() => {
     void prefetchPortal();
-    const timer = window.setTimeout(() => {
-      void refresh(showCompleted);
-    }, 400);
+    void refresh(showCompleted);
     const onFocus = () => {
       void refresh(showCompleted);
     };
     window.addEventListener('focus', onFocus);
     return () => {
-      window.clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
     };
   }, [refresh, showCompleted]);
@@ -310,14 +306,15 @@ export default function HomeTasksPanel() {
   );
 
   const routedPendingCount = useMemo(() => {
+    const aliases = currentUser ? getManagerMatchNames(currentUser) : [];
     return routedVisible.filter(item => {
       // 미확인 완료 알림은 배지에 포함
       if (routedSharedById.has(item.id)) return true;
       const handlers = item.participants?.length ? item.participants : item.assigneeNames;
-      if (currentUser && handlers.includes(currentUser)) {
+      if (aliases.some(a => handlers.includes(a) || item.assigneeNames.includes(a))) {
         return !(item.myCheckoff ?? false);
       }
-      if (currentUser && item.ownerName === currentUser) {
+      if (aliases.some(a => a === item.ownerName)) {
         return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
       }
       return !(item.myCheckoff ?? false);
@@ -498,6 +495,11 @@ export default function HomeTasksPanel() {
                                   {overdue ? '기한 경과 · ' : ''}마감 {formatChecklistDueDate(item.dueDate)}
                                 </span>
                               )}
+                              {myDone && !!formatCheckoffCompletedAt(item.myCompletedAt) && (
+                                <span className="text-[10px] font-semibold tabular-nums text-emerald-700">
+                                  완료 {formatCheckoffCompletedAt(item.myCompletedAt)}
+                                </span>
+                              )}
                               {item.clientName && (
                                 <span className="text-[10px] text-[#4b6cb7]">{item.clientName}</span>
                               )}
@@ -574,11 +576,14 @@ export default function HomeTasksPanel() {
               ) : (
                 <ul className="space-y-1.5">
                   {routedVisible.map(item => {
-                    const isOwner = !!currentUser && item.ownerName === currentUser;
-                    const isHandler =
-                      !!currentUser &&
-                      (item.participants?.includes(currentUser) ||
-                        item.assigneeNames.includes(currentUser));
+                    const aliases = currentUser ? getManagerMatchNames(currentUser) : [];
+                    const isOwner = aliases.some(a => a === item.ownerName);
+                    const handlers = item.participants?.length
+                      ? item.participants
+                      : item.assigneeNames;
+                    const isHandler = aliases.some(
+                      a => handlers.includes(a) || item.assigneeNames.includes(a),
+                    );
                     const myDone = item.myCheckoff ?? false;
                     const shared = routedSharedById.get(item.id);
                     const isNotifiedDone = Boolean(shared);
@@ -631,11 +636,33 @@ export default function HomeTasksPanel() {
                                 {taxLabel(item.taxType)}
                               </span>
                               {showDoneStyle ? (
-                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                  {processedBy.length > 0
-                                    ? `${processedBy.join(', ')} 처리완료`
-                                    : '처리완료'}
-                                </span>
+                                <>
+                                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                    {processedBy.length > 0
+                                      ? `${processedBy.join(', ')} 처리완료`
+                                      : '처리완료'}
+                                  </span>
+                                  {(() => {
+                                    const doneAt =
+                                      shared?.processedAt
+                                      ?? item.myCompletedAt
+                                      ?? aliases
+                                        .map(a => item.checkoffDetails?.[a]?.completedAt)
+                                        .find(Boolean)
+                                      ?? Object.values(item.checkoffDetails ?? {})
+                                        .filter(d => d.completed && d.completedAt)
+                                        .map(d => d.completedAt as string)
+                                        .sort()
+                                        .at(-1)
+                                      ?? null;
+                                    const label = formatCheckoffCompletedAt(doneAt);
+                                    return label ? (
+                                      <span className="text-[10px] font-semibold tabular-nums text-emerald-700">
+                                        {label}
+                                      </span>
+                                    ) : null;
+                                  })()}
+                                </>
                               ) : (
                                 <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
                                   대기
@@ -646,7 +673,31 @@ export default function HomeTasksPanel() {
                               </span>
                               {(item.participants ?? item.assigneeNames)?.length > 0 && (
                                 <span className="text-[10px] text-violet-700">
-                                  협력 {(item.participants ?? item.assigneeNames).join(', ')}
+                                  협력{' '}
+                                  {(item.participants ?? item.assigneeNames).map((name, idx, arr) => {
+                                    const isImprove = item.taxType === 'improvement';
+                                    const did = processedBy.some(
+                                      p => p === name || getManagerMatchNames(p).includes(name),
+                                    );
+                                    const someoneDone = isImprove && processedBy.length > 0;
+                                    const strike = someoneDone && !did;
+                                    return (
+                                      <span key={name}>
+                                        <span
+                                          className={
+                                            strike
+                                              ? 'text-slate-400 line-through'
+                                              : did && someoneDone
+                                                ? 'font-semibold text-emerald-700'
+                                                : undefined
+                                          }
+                                        >
+                                          {name}
+                                        </span>
+                                        {idx < arr.length - 1 ? ', ' : ''}
+                                      </span>
+                                    );
+                                  })}
                                 </span>
                               )}
                             </div>
@@ -846,9 +897,15 @@ export default function HomeTasksPanel() {
           <PersonalChecklistAddForm
             inModal
             editItem={editItem}
-            onUpdated={() => { closeModal(); void refresh(); }}
+            onUpdated={(item) => {
+              if (item) setEditItem(item);
+              void refresh();
+            }}
             onDeleted={() => { closeModal(); void refresh(); }}
-            onCheckoffChange={() => void refresh()}
+            onCheckoffChange={(item) => {
+              if (item) setEditItem(item);
+              void refresh();
+            }}
             onCancel={closeModal}
           />
         )}

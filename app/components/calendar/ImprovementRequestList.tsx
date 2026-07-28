@@ -8,6 +8,7 @@ import {
 } from '@/app/types/calendar';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 function formatDateOnly(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -46,9 +47,17 @@ export default function ImprovementRequestList() {
   }, [load]);
 
   const visible = hideCompleted
-    ? items.filter(i => !(i.checkoffDone != null && i.checkoffTotal != null
-      ? i.checkoffDone >= i.checkoffTotal
-      : i.completed))
+    ? items.filter(i => {
+        const done =
+          Boolean(i.processedAt)
+          || i.processedBy.length >= 1
+          || (
+            i.checkoffDone != null
+            && i.checkoffTotal != null
+            && i.checkoffDone >= i.checkoffTotal
+          );
+        return !done;
+      })
     : items;
 
   return (
@@ -91,9 +100,13 @@ export default function ImprovementRequestList() {
             <tbody>
               {visible.map(item => {
                 const allDone =
-                  item.checkoffDone != null && item.checkoffTotal != null
-                    ? item.checkoffDone >= item.checkoffTotal
-                    : Boolean(item.processedAt);
+                  Boolean(item.processedAt)
+                  || item.processedBy.length >= 1
+                  || (
+                    item.checkoffDone != null
+                    && item.checkoffTotal != null
+                    && item.checkoffDone >= item.checkoffTotal
+                  );
                 return (
                   <tr
                     key={item.id}
@@ -110,11 +123,11 @@ export default function ImprovementRequestList() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
-                      {item.processedAt ? (
+                      {item.processedAt || allDone ? (
                         <>
-                          {formatDateOnly(item.processedAt)}
+                          {formatDateOnly(item.processedAt ?? item.updatedAt)}
                           <span className="mt-0.5 block text-[10px] text-slate-400">
-                            {formatCheckoffCompletedAt(item.processedAt)}
+                            {formatCheckoffCompletedAt(item.processedAt ?? item.updatedAt)}
                           </span>
                         </>
                       ) : (
@@ -122,8 +135,31 @@ export default function ImprovementRequestList() {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
-                      <span title={item.handlerNames.join(', ')}>
-                        {item.handlerNames.join(', ') || '—'}
+                      <span className="inline-flex flex-wrap gap-x-1">
+                        {item.handlerNames.map((name, idx) => {
+                          const did = item.processedBy.some(p => managerNamesMatch(p, name));
+                          // 리아·찰리 중 1명 완료 → 나머지 취소선, 처리일은 완료로 표시
+                          const strike = allDone && item.processedBy.length > 0 && !did;
+                          return (
+                            <span key={name}>
+                              <span
+                                className={
+                                  strike
+                                    ? 'text-slate-400 line-through'
+                                    : did
+                                      ? 'font-semibold text-emerald-700'
+                                      : undefined
+                                }
+                              >
+                                {name}
+                              </span>
+                              {idx < item.handlerNames.length - 1 ? (
+                                <span className="text-slate-400">, </span>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                        {item.handlerNames.length === 0 ? '—' : null}
                       </span>
                       {item.processedBy.length > 0 && (
                         <span className="mt-0.5 block text-[10px] text-emerald-600">
@@ -166,15 +202,18 @@ export default function ImprovementRequestList() {
           <PersonalChecklistAddForm
             editItem={editItem}
             inModal
-            onUpdated={() => {
-              setEditItem(null);
+            onUpdated={(item) => {
+              if (item) setEditItem(item);
               void load();
             }}
             onDeleted={() => {
               setEditItem(null);
               void load();
             }}
-            onCheckoffChange={() => void load()}
+            onCheckoffChange={item => {
+              if (item) setEditItem(item);
+              void load();
+            }}
             onCancel={() => setEditItem(null)}
           />
         ) : null}

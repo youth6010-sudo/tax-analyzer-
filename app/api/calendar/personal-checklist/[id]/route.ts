@@ -40,6 +40,8 @@ export async function PATCH(
       reflectInNotes?: boolean;
       assigneeNames?: string[];
       addMemo?: string;
+      updateMemo?: { id: string; body: string };
+      deleteMemo?: string;
       dismiss?: boolean;
     };
 

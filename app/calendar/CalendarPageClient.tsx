@@ -31,6 +31,7 @@ import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklis
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import SuppliesOrderList from '@/app/components/calendar/SuppliesOrderList';
 import ImprovementRequestList from '@/app/components/calendar/ImprovementRequestList';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
@@ -629,12 +630,12 @@ export default function CalendarPageClient() {
         title={
           editItem &&
           currentUser &&
-          editItem.ownerName !== currentUser &&
+          !managerNamesMatch(editItem.ownerName, currentUser) &&
           isSuppliesOrderTaxType(editItem.taxType)
             ? '비품 주문 요청'
             : editItem &&
                 currentUser &&
-                editItem.ownerName !== currentUser &&
+                !managerNamesMatch(editItem.ownerName, currentUser) &&
                 isImprovementRequestTaxType(editItem.taxType)
               ? '시스템 개선 요청'
               : '개인 체크리스트 수정'
@@ -642,7 +643,7 @@ export default function CalendarPageClient() {
         description={
           editItem &&
           currentUser &&
-          editItem.ownerName !== currentUser &&
+          !managerNamesMatch(editItem.ownerName, currentUser) &&
           isRoutedRequestTaxType(editItem.taxType)
             ? undefined
             : '내용을 수정한 뒤 저장하세요.'
@@ -653,8 +654,8 @@ export default function CalendarPageClient() {
           <PersonalChecklistAddForm
             inModal
             editItem={editItem}
-            onUpdated={() => {
-              setEditItem(null);
+            onUpdated={(item) => {
+              if (item) setEditItem(item);
               void loadEvents();
             }}
             onDeleted={() => {
@@ -662,7 +663,10 @@ export default function CalendarPageClient() {
               setSelectedEvent(null);
               void loadEvents();
             }}
-            onCheckoffChange={() => void loadEvents()}
+            onCheckoffChange={(item) => {
+              if (item) setEditItem(item);
+              void loadEvents();
+            }}
             onCancel={() => setEditItem(null)}
           />
         )}

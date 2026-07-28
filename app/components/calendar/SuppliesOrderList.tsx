@@ -156,15 +156,18 @@ export default function SuppliesOrderList() {
           <PersonalChecklistAddForm
             editItem={editItem}
             inModal
-            onUpdated={() => {
-              setEditItem(null);
+            onUpdated={(item) => {
+              if (item) setEditItem(item);
               void load();
             }}
             onDeleted={() => {
               setEditItem(null);
               void load();
             }}
-            onCheckoffChange={() => void load()}
+            onCheckoffChange={(item) => {
+              if (item) setEditItem(item);
+              void load();
+            }}
             onCancel={() => setEditItem(null)}
           />
         ) : null}
