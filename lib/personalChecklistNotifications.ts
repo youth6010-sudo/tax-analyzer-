@@ -147,3 +147,21 @@ export async function markPersonalChecklistNotificationsRead(
     .returning({ id: personalChecklistNotifications.id });
   return rows.length;
 }
+
+/** 특정 항목에 대한 내 미확인 알림만 읽음 처리 (확인 버튼) */
+export async function markItemNotificationsRead(
+  recipientName: string,
+  itemId: string,
+): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .update(personalChecklistNotifications)
+    .set({ readAt: new Date() })
+    .where(and(
+      eq(personalChecklistNotifications.recipientName, recipientName),
+      eq(personalChecklistNotifications.itemId, itemId),
+      isNull(personalChecklistNotifications.readAt),
+    ))
+    .returning({ id: personalChecklistNotifications.id });
+  return rows.length;
+}

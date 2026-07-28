@@ -121,6 +121,7 @@ function personalChecklistId(event: CalendarEventDto): string | null {
 export default function CalendarPageClient() {
   const searchParams = useSearchParams();
   const highlight = searchParams.get('highlight');
+  const tabParam = searchParams.get('tab');
 
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
@@ -142,7 +143,15 @@ export default function CalendarPageClient() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [pageTab, setPageTab] = useState<'calendar' | 'supplies' | 'improvement'>('calendar');
+  const [pageTab, setPageTab] = useState<'calendar' | 'supplies' | 'improvement'>(
+    tabParam === 'supplies' || tabParam === 'improvement' ? tabParam : 'calendar',
+  );
+
+  useEffect(() => {
+    if (tabParam === 'supplies' || tabParam === 'improvement' || tabParam === 'calendar') {
+      setPageTab(tabParam);
+    }
+  }, [tabParam]);
 
   const range = useMemo(
     () => (mode === 'month' ? monthRange(year, month) : weekRange(selectedDate)),

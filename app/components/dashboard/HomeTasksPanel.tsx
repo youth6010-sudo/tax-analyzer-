@@ -7,6 +7,7 @@ import type {
   ChecklistTaxType,
   CompanyEventDto,
   PersonalChecklistDto,
+  ProcessedRoutedRequestDto,
 } from '@/app/types/calendar';
 import {
   formatCalendarCreatedAt,
@@ -153,6 +154,7 @@ export default function HomeTasksPanel() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
   const [routedOpen, setRoutedOpen] = useState<PersonalChecklistDto[]>([]);
+  const [routedShared, setRoutedShared] = useState<ProcessedRoutedRequestDto[]>([]);
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
   const [addModal, setAddModal] = useState<AddModal>(null);
   const [editModal, setEditModal] = useState<EditModal>(null);
@@ -239,9 +241,11 @@ export default function HomeTasksPanel() {
         const payload = pData as {
           items: PersonalChecklistDto[];
           routedOpen?: PersonalChecklistDto[];
+          routedShared?: ProcessedRoutedRequestDto[];
         };
         setPersonal(payload.items || []);
         setRoutedOpen(payload.routedOpen || []);
+        setRoutedShared(payload.routedShared || []);
       }
       if (cRes.ok) {
         const payload = cData as {
@@ -300,9 +304,15 @@ export default function HomeTasksPanel() {
   }, [refresh, showCompleted]);
 
   const routedVisible = useMemo(() => routedOpen, [routedOpen]);
+  const routedSharedById = useMemo(
+    () => new Map(routedShared.map(s => [s.id, s])),
+    [routedShared],
+  );
 
   const routedPendingCount = useMemo(() => {
     return routedVisible.filter(item => {
+      // 미확인 완료 알림은 배지에 포함
+      if (routedSharedById.has(item.id)) return true;
       const handlers = item.participants?.length ? item.participants : item.assigneeNames;
       if (currentUser && handlers.includes(currentUser)) {
         return !(item.myCheckoff ?? false);
@@ -312,7 +322,7 @@ export default function HomeTasksPanel() {
       }
       return !(item.myCheckoff ?? false);
     }).length;
-  }, [routedVisible, currentUser]);
+  }, [routedVisible, routedSharedById, currentUser]);
 
   const toggleComplete = async (id: string, completed: boolean) => {
     await fetch(`/api/calendar/personal-checklist/${id}`, {
@@ -562,14 +572,27 @@ export default function HomeTasksPanel() {
                       (item.participants?.includes(currentUser) ||
                         item.assigneeNames.includes(currentUser));
                     const myDone = item.myCheckoff ?? false;
+                    const shared = routedSharedById.get(item.id);
+                    const isNotifiedDone = Boolean(shared);
+                    const showDoneStyle = (myDone && isHandler) || isNotifiedDone;
+                    const processedBy = shared?.processedBy?.length
+                      ? shared.processedBy
+                      : Object.entries(item.checkoffs ?? {})
+                          .filter(([, done]) => done)
+                          .map(([name]) => name);
                     const lastMemo = item.memos?.[item.memos.length - 1];
+                    const calendarHref =
+                      item.taxType === 'supplies'
+                        ? '/calendar?tab=supplies'
+                        : '/calendar?tab=improvement';
+                    const canConfirm = (isHandler && myDone) || isNotifiedDone;
                     return (
                       <li
                         key={item.id}
                         onClick={() => openPersonalEdit(item)}
                         className={[
                           'cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm',
-                          myDone && isHandler
+                          showDoneStyle
                             ? 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-300'
                             : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30',
                         ].join(' ')}
@@ -592,16 +615,18 @@ export default function HomeTasksPanel() {
                               <span
                                 className={[
                                   'rounded px-2 py-0.5 text-[10px] font-bold',
-                                  myDone && isHandler
+                                  showDoneStyle
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : 'bg-slate-100 text-slate-600',
                                 ].join(' ')}
                               >
                                 {taxLabel(item.taxType)}
                               </span>
-                              {myDone && isHandler ? (
+                              {showDoneStyle ? (
                                 <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                  처리완료
+                                  {processedBy.length > 0
+                                    ? `${processedBy.join(', ')} 처리완료`
+                                    : '처리완료'}
                                 </span>
                               ) : (
                                 <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
@@ -624,8 +649,8 @@ export default function HomeTasksPanel() {
                                 {lastMemo.body}
                               </p>
                             )}
-                            {isHandler && myDone && (
-                              <div className="mt-2">
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {canConfirm && (
                                 <button
                                   type="button"
                                   onClick={e => {
@@ -636,8 +661,15 @@ export default function HomeTasksPanel() {
                                 >
                                   확인
                                 </button>
-                              </div>
-                            )}
+                              )}
+                              <Link
+                                href={calendarHref}
+                                onClick={e => e.stopPropagation()}
+                                className="text-[11px] font-semibold text-[#4b6cb7] underline-offset-2 hover:underline"
+                              >
+                                캘린더에서 보기
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       </li>

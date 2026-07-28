@@ -7,6 +7,7 @@ import type {
   ImprovementRequestDto,
   PersonalChecklistDto,
   PersonalChecklistMemo,
+  PersonalChecklistNotificationDto,
   ProcessedRoutedRequestDto,
   SuppliesOrderDto,
 } from '@/app/types/calendar';
@@ -29,7 +30,8 @@ import {
   setPersonalChecklistCheckoff,
   type PersonalChecklistCheckoffDetailMap,
 } from '@/lib/personalChecklistCheckoffs';
-import { createCompletionNotification } from '@/lib/personalChecklistNotifications';
+import { createCompletionNotification, listUnreadPersonalChecklistNotifications, markItemNotificationsRead } from '@/lib/personalChecklistNotifications';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 
 function normalizeAssignees(names: string[] | undefined | null, ownerName: string): string[] {
   const seen = new Set<string>();
@@ -406,13 +408,14 @@ export async function listImprovementRequests(
   });
 }
 
-/** 홈 「비품주문/시스템개선」— 미완료(요청자·접수자) + 미확인 완료 공유 */
+/** 홈 「비품주문/시스템개선」— 미완료 + 본인 미확인 완료 알림 */
 export async function listRoutedRequestsForHome(
   viewerName: string,
 ): Promise<{
   open: PersonalChecklistDto[];
-  /** @deprecated 처리알림 피드 제거 — 항상 빈 배열 */
+  /** 미확인 완료 알림 (완료자 제외 전원) */
   sharedCompleted: ProcessedRoutedRequestDto[];
+  notifications: PersonalChecklistNotificationDto[];
 }> {
   const db = getDb();
   const assigneeAccess = sql`COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb) ? ${viewerName}`;
@@ -435,8 +438,8 @@ export async function listRoutedRequestsForHome(
     ))
     .orderBy(desc(personalChecklistItems.createdAt));
 
-  // 협업자가 본인 완료 후 「확인」하기 전까지 목록에 남기기 위해 완료 건도 포함
-  const completedAssigneeRows = await db
+  // 협업자: 본인 완료 후 「확인」 전까지
+  const completedHandlerRows = await db
     .select({
       item: personalChecklistItems,
       clientName: clients.companyName,
@@ -451,8 +454,11 @@ export async function listRoutedRequestsForHome(
     .orderBy(desc(personalChecklistItems.updatedAt))
     .limit(40);
 
+  const unread = await listUnreadPersonalChecklistNotifications(viewerName, 80);
+  const unreadItemIds = [...new Set(unread.map(n => n.itemId))];
+
   const byId = new Map<string, { item: typeof personalChecklistItems.$inferSelect; clientName?: string }>();
-  for (const r of [...incompleteRows, ...completedAssigneeRows]) {
+  for (const r of [...incompleteRows, ...completedHandlerRows]) {
     if (!byId.has(r.item.id)) {
       byId.set(r.item.id, {
         item: r.item,
@@ -461,21 +467,44 @@ export async function listRoutedRequestsForHome(
     }
   }
 
+  // 미확인 알림 항목 — 요청자·다른 담당자 등 (완료자 제외하고 받은 알림)
+  if (unreadItemIds.length > 0) {
+    const missing = unreadItemIds.filter(id => !byId.has(id));
+    if (missing.length > 0) {
+      const notifRows = await db
+        .select({
+          item: personalChecklistItems,
+          clientName: clients.companyName,
+        })
+        .from(personalChecklistItems)
+        .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
+        .where(inArray(personalChecklistItems.id, missing));
+      for (const r of notifRows) {
+        byId.set(r.item.id, {
+          item: r.item,
+          clientName: r.clientName?.trim() || undefined,
+        });
+      }
+    }
+  }
+
   const openBase = [...byId.values()].map(r => toBaseDto(r.item, r.clientName));
   const openEnriched = await enrichItems(openBase, viewerName);
+  const unreadSet = new Set(unreadItemIds);
 
   const open = openEnriched
     .filter(item => {
+      // 미확인 완료 알림이 있으면 목록에 표시 (완료자 외 전원)
+      if (unreadSet.has(item.id)) return true;
+
       const handlers = item.participants?.length
         ? item.participants
         : item.assigneeNames;
       const isHandler = handlers.includes(viewerName);
       if (isHandler) {
-        // 본인이 「확인」한 건만 본인 목록에서 제외 (다른 협업자·요청자 무관)
         if (item.myDismissed) return false;
         return true;
       }
-      // 요청자(처리 담당 아님): 담당자 전원 처리 전까지
       if (item.ownerName === viewerName) {
         return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
       }
@@ -483,7 +512,28 @@ export async function listRoutedRequestsForHome(
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return { open, sharedCompleted: [] };
+  // 알림용 공유 완료 카드 (표시용 메타)
+  const detailMap = await listCheckoffDetailsForPersonalItems(unreadItemIds);
+  const sharedCompleted: ProcessedRoutedRequestDto[] = open
+    .filter(item => unreadSet.has(item.id))
+    .map(item => {
+      const notifs = unread.filter(n => n.itemId === item.id);
+      const processedBy = [...new Set(notifs.map(n => n.actorName))];
+      const details = detailMap.get(item.id) ?? {};
+      let latest: string | null = null;
+      for (const name of processedBy) {
+        const at = details[name]?.completedAt;
+        if (at && (!latest || at > latest)) latest = at;
+      }
+      return {
+        ...item,
+        requestedAt: item.createdAt,
+        processedAt: latest || item.updatedAt,
+        processedBy,
+      };
+    });
+
+  return { open, sharedCompleted, notifications: unread };
 }
 
 /** 홈 TODO 하단 — 완료된 비품·업무개선요청 (전원 공유) */
@@ -695,10 +745,15 @@ export async function updatePersonalChecklistItem(
       existing.ownerName,
     );
     const handlers = checkoffParticipants(taxType, existing.ownerName, assignees);
-    if (!handlers.includes(actorName)) {
-      throw new Error('협력자만 확인할 수 있습니다.');
+    // 처리 담당자: 본인 checkoff 확인(숨김). 요청자·그 외: 알림만 읽음 처리
+    if (handlers.includes(actorName)) {
+      try {
+        await dismissPersonalChecklistCheckoff(id, actorName);
+      } catch {
+        /* 미완료 상태면 알림만 닫기 */
+      }
     }
-    await dismissPersonalChecklistCheckoff(id, actorName);
+    await markItemNotificationsRead(actorName, id);
     const item = await getPersonalChecklistById(id, actorName);
     if (!item) throw new Error('NOT_FOUND');
     return item;
@@ -759,18 +814,27 @@ export async function updatePersonalChecklistItem(
     const doneCount = await countCompletedAmongMembers(id, participants);
     patchCompleted = doneCount >= participants.length;
 
-    // 일반 협업만 작성자에게 완료 알림. 비품·시스템개선은 처리알림 없음.
-    if (
-      patch.completed &&
-      actorName !== existing.ownerName &&
-      !isRoutedRequestTaxType(nextTaxType)
-    ) {
-      await createCompletionNotification({
-        itemId: id,
-        recipientName: existing.ownerName,
-        actorName,
-        title: existing.title,
-      });
+    if (patch.completed) {
+      if (isRoutedRequestTaxType(nextTaxType)) {
+        // 비품·시스템개선: 완료한 사람 제외하고 전원에게 알림 (요청자 포함)
+        const members = await listCalendarTeamMembers();
+        for (const member of members) {
+          if (member === actorName) continue;
+          await createCompletionNotification({
+            itemId: id,
+            recipientName: member,
+            actorName,
+            title: existing.title,
+          });
+        }
+      } else if (actorName !== existing.ownerName) {
+        await createCompletionNotification({
+          itemId: id,
+          recipientName: existing.ownerName,
+          actorName,
+          title: existing.title,
+        });
+      }
     }
   }
 

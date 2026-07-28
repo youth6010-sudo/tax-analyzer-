@@ -22,9 +22,9 @@ export async function GET(req: Request) {
     ]);
     return NextResponse.json({
       items,
-      notifications: [],
+      notifications: routed.notifications,
       routedOpen: routed.open,
-      routedShared: [],
+      routedShared: routed.sharedCompleted,
     });
   } catch (e) {
     return handleApiError(e);
