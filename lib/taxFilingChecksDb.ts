@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { filingCheckSessions, taxFilingChecks } from '@/db/schema';
 import type { FilingTaxId } from '@/app/utils/filingCheck';
+import { specialFilingKey } from '@/app/utils/filingCheck';
 import {
   carryFieldsFromRecord,
   hasCarryFieldsData,
@@ -199,7 +200,7 @@ function mergeReceiptSlices(
 async function listFilingCheckSessionsForPeriod(
   taxType: FilingTaxId | string,
   periodKey: string,
-): Promise<FilingCheckSessionData[]> {
+): Promise<Array<{ manager: string; data: FilingCheckSessionData }>> {
   const db = getDb();
   const rows = await db
     .select()
@@ -208,9 +209,51 @@ async function listFilingCheckSessionsForPeriod(
       and(eq(filingCheckSessions.taxType, taxType), eq(filingCheckSessions.periodKey, periodKey)),
     );
   return rows.map(row => ({
-    ...EMPTY_SESSION_DATA,
-    ...(row.data as Partial<FilingCheckSessionData>),
+    manager: row.manager,
+    data: {
+      ...EMPTY_SESSION_DATA,
+      ...(row.data as Partial<FilingCheckSessionData>),
+    },
   }));
+}
+
+/** 「전체」조회 — 담당자별 기한후·수정신고 사유를 결재자가 모두 볼 수 있게 합침 */
+function mergeSpecialsFromManagerSessions(
+  sessions: Array<{ manager: string; data: FilingCheckSessionData }>,
+): Pick<FilingCheckSessionData, 'specialFilings' | 'specialReasons'> {
+  const filingsMap = new Map<string, FilingCheckSessionData['specialFilings'][number]>();
+  const reasonParts: Record<string, string[]> = {};
+
+  for (const { manager, data } of sessions) {
+    const mgr = manager.trim();
+    if (!mgr || mgr === '전체') continue;
+
+    for (const s of data.specialFilings ?? []) {
+      const k = specialFilingKey(s.bizNo, s.type);
+      if (!filingsMap.has(k)) filingsMap.set(k, s);
+      const r = (data.specialReasons?.[k] ?? '').trim();
+      if (r) {
+        const label = `${mgr}: ${r}`;
+        if (!reasonParts[k]) reasonParts[k] = [];
+        if (!reasonParts[k].includes(label)) reasonParts[k].push(label);
+      }
+    }
+
+    for (const [k, raw] of Object.entries(data.specialReasons ?? {})) {
+      const r = raw?.trim();
+      if (!r) continue;
+      const label = `${mgr}: ${r}`;
+      if (!reasonParts[k]) reasonParts[k] = [];
+      if (!reasonParts[k].includes(label)) reasonParts[k].push(label);
+    }
+  }
+
+  return {
+    specialFilings: [...filingsMap.values()],
+    specialReasons: Object.fromEntries(
+      Object.entries(reasonParts).map(([k, parts]) => [k, parts.join(' · ')]),
+    ),
+  };
 }
 
 /** 전월 제외 키가 당월에 빠져 있으면 승계가 더 필요 */
@@ -252,8 +295,10 @@ export async function loadFilingCheckSessionWithCarry(
 
   // 「전체」·닉네임/실명 별칭 세션의 접수를 합쳐 관리자 화면과 담당자 화면이 어긋나지 않게 함
   const receiptParts: Array<Partial<FilingCheckSessionData> | null> = [current];
+  let periodSessions: Array<{ manager: string; data: FilingCheckSessionData }> = [];
   if (manager === '전체') {
-    receiptParts.push(...(await listFilingCheckSessionsForPeriod(taxType, periodKey)));
+    periodSessions = await listFilingCheckSessionsForPeriod(taxType, periodKey);
+    receiptParts.push(...periodSessions.map(s => s.data));
   } else {
     const aliases = getManagerMatchNames(manager).filter(n => n !== manager);
     if (aliases.length > 0) {
@@ -264,6 +309,10 @@ export async function loadFilingCheckSessionWithCarry(
     }
   }
   const mergedReceipt = mergeReceiptSlices(receiptParts);
+  const mergedSpecials =
+    manager === '전체' && periodSessions.length > 0
+      ? mergeSpecialsFromManagerSessions(periodSessions)
+      : null;
 
   if (current === null) {
     if (previous) {
@@ -272,13 +321,19 @@ export async function loadFilingCheckSessionWithCarry(
           ...EMPTY_SESSION_DATA,
           ...carryFieldsFromRecord(previous.data),
           ...mergedReceipt,
+          ...(mergedSpecials ?? {}),
           done: false,
         },
         carriedFromPeriodKey: previous.periodKey,
       };
     }
     return {
-      data: { ...EMPTY_SESSION_DATA, ...mergedReceipt, done: false },
+      data: {
+        ...EMPTY_SESSION_DATA,
+        ...mergedReceipt,
+        ...(mergedSpecials ?? {}),
+        done: false,
+      },
       carriedFromPeriodKey: null,
     };
   }
@@ -292,6 +347,7 @@ export async function loadFilingCheckSessionWithCarry(
       ...EMPTY_SESSION_DATA,
       ...carry,
       ...mergedReceipt,
+      ...(mergedSpecials ?? {}),
       // 담당자 본인 세션의 완료 여부 유지 (전체 합산 done은 쓰지 않음)
       done: current.done,
       forceIncluded: {
@@ -317,6 +373,7 @@ export async function loadFilingCheckSessionWithCarry(
       ...EMPTY_SESSION_DATA,
       ...carryFieldsFromRecord(current),
       ...mergedReceipt,
+      ...(mergedSpecials ?? {}),
       done: current.done,
     },
     carriedFromPeriodKey,

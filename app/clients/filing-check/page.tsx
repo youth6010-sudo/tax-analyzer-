@@ -1073,8 +1073,28 @@ function FilingCheckPageInner() {
       tax === 'vat'
         ? filingTargets(clients, tax, { vatPhase: prevP.vatPhase })
         : filingTargets(clients, tax);
-    return compareSessionTargets(scopeByManager(prevAll), scopeByManager(taxTargetsAll), prevRec, record);
-  }, [tax, period, clients, prevSession, record, scopeByManager, taxTargetsAll, attribution.month]);
+    const vatAutoUnreceived =
+      tax === 'vat' &&
+      period.vatPhase === '1기 확정' &&
+      (excelSet.size > 0 || Object.values(record.overrides).some(Boolean) || record.done);
+    return compareSessionTargets(
+      scopeByManager(prevAll),
+      scopeByManager(taxTargetsAll),
+      prevRec,
+      record,
+      vatAutoUnreceived
+        ? {
+            isAutoExcluded: (c, which) => {
+              if (which !== 'curr') return false;
+              if (Boolean(record.forceIncluded?.[c.id])) return false;
+              const received =
+                record.overrides[c.id] ?? excelSet.has(normalizeBizNo(c.businessNo));
+              return !received;
+            },
+          }
+        : undefined,
+    );
+  }, [tax, period, clients, prevSession, record, scopeByManager, taxTargetsAll, attribution.month, excelSet]);
 
   const compareLabels = useMemo(() => {
     if (usesMonthOverMonthCompare(tax)) {
@@ -1213,10 +1233,16 @@ function FilingCheckPageInner() {
     clients,
   ]);
 
-  // 부가세 1기 확정: 접수완료가 아닌 업체는 제외 체크 (기존 수동 사유·강제포함 유지)
+  // 부가세 1기 확정: 접수완료가 아닌 업체는 제외 체크 (완료 후에도 간이 추가 등 미접수 반영)
   useEffect(() => {
     if (!sessionReadyRef.current || loadedKeyRef.current !== keyId) return;
-    if (tax !== 'vat' || period.vatPhase !== '1기 확정' || locked) return;
+    if (tax !== 'vat' || period.vatPhase !== '1기 확정') return;
+    const hasReceipt =
+      excelSet.size > 0 ||
+      Object.values(record.overrides).some(Boolean) ||
+      record.done;
+    if (!hasReceipt) return;
+
     const AUTO = '미접수 자동제외';
     let changed = false;
     const nextExcluded = { ...record.excluded };
@@ -1230,24 +1256,29 @@ function FilingCheckPageInner() {
         }
         continue;
       }
+      // 미접수 → 제외 (수동 사유가 있으면 유지, 없으면 자동제외)
       if (!Object.prototype.hasOwnProperty.call(nextExcluded, c.id)) {
         nextExcluded[c.id] = AUTO;
         changed = true;
       }
     }
-    if (changed) {
-      patchRecord({ excluded: nextExcluded });
-    }
+    if (!changed) return;
+    // 완료(done) 잠금이어도 미접수 자동제외는 반영·저장
+    setRecord(prev => {
+      const next = { ...prev, excluded: nextExcluded };
+      void persistSession(next, { flush: true });
+      return next;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tax,
     period.vatPhase,
-    locked,
     keyId,
     targets,
     record.excelBizNos,
     record.overrides,
     record.forceIncluded,
+    record.done,
     excelSet,
   ]);
   useEffect(() => {

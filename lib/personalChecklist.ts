@@ -174,14 +174,19 @@ function enrichDto(
     || participants.includes(viewerName)
   );
 
+  const isImprovement = isImprovementRequestTaxType(base.taxType);
+  // 시스템개선: 1명 완료 = 전체 완료 (진행 표시 1/1)
+  const checkoffDone = isImprovement ? (done >= 1 || legacyAllDone ? 1 : 0) : done;
+  const checkoffTotal = isImprovement ? 1 : participants.length;
+
   return {
     ...base,
     /** 목록 표시용: 본인 완료 여부 */
     completed: myCheckoff,
     myCheckoff,
     myDismissed,
-    checkoffDone: done,
-    checkoffTotal: participants.length,
+    checkoffDone,
+    checkoffTotal,
     checkoffs,
     checkoffDetails: canViewDetails ? checkoffDetails : undefined,
   };
@@ -503,6 +508,10 @@ export async function listRoutedRequestsForHome(
       const isHandler = handlers.includes(viewerName);
       if (isHandler) {
         if (item.myDismissed) return false;
+        // 시스템개선 등: 다른 사람이 이미 완료한 경우 → 알림으로만 표시(위에서 처리)
+        const itemDone =
+          (item.checkoffDone ?? 0) >= (item.checkoffTotal ?? 1) || Boolean(item.completed && item.checkoffTotal === 1);
+        if (!item.myCheckoff && itemDone) return false;
         return true;
       }
       if (item.ownerName === viewerName) {
@@ -812,7 +821,10 @@ export async function updatePersonalChecklistItem(
     await setPersonalChecklistCheckoff(id, actorName, patch.completed);
 
     const doneCount = await countCompletedAmongMembers(id, participants);
-    patchCompleted = doneCount >= participants.length;
+    // 시스템개선: 리아·찰리 중 1명만 완료해도 항목 완료
+    patchCompleted = isImprovementRequestTaxType(nextTaxType)
+      ? doneCount >= 1
+      : doneCount >= participants.length;
 
     if (patch.completed) {
       if (isRoutedRequestTaxType(nextTaxType)) {

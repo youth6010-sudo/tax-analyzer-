@@ -84,7 +84,7 @@ export default function FilingCheckSessionPanel({
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/40 p-3">
           <p className="mb-2 text-sm font-semibold text-rose-700">
             수정·기한후·경정청구 신고 {record.specialFilings.length}건 — 사유를 적으면 요약에 함께
-            들어갑니다.
+            들어갑니다. (「전체」에서는 담당자별 사유가 함께 표시됩니다)
           </p>
           <div className="space-y-1.5">
             {record.specialFilings.map(s => {
