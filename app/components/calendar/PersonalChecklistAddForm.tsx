@@ -226,9 +226,11 @@ export default function PersonalChecklistAddForm({
   const checkoffNames =
     editItem?.participants?.length
       ? editItem.participants
-      : isRouted
-        ? (editItem?.assigneeNames ?? [])
-        : [];
+      : isImprovement
+        ? [...forcedAssigneesForTaxType('improvement')]
+        : isRouted
+          ? (editItem?.assigneeNames ?? [])
+          : [];
   const canCheckoff =
     isEdit &&
     isRouted &&
@@ -640,7 +642,7 @@ export default function PersonalChecklistAddForm({
               {isSupplies
                 ? '비품 주문 요청은 다야가 협업자로 고정됩니다.'
                 : isImprovement
-                  ? '시스템 개선 요청은 리아·찰리가 협업자로 고정됩니다.'
+                  ? '시스템 개선 요청은 리아·찰리가 처리·확인할 수 있습니다. (요청자가 리아여도 본인 처리 가능)'
                   : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}
             </p>
           </FormRow>

@@ -13,6 +13,8 @@ import type {
 import {
   checklistTaxTypeFromRow,
   forcedAssigneesForTaxType,
+  IMPROVEMENT_REQUEST_ASSIGNEES,
+  isImprovementRequestTaxType,
   isRoutedRequestTaxType,
   isSuppliesOrderTaxType,
   normalizeChecklistTaxType,
@@ -62,12 +64,15 @@ function participantsOf(ownerName: string, assigneeNames: string[]): string[] {
   return [ownerName, ...assigneeNames];
 }
 
-/** 비품·업무개선: 요청자 제외, 협업자만 완료 체크 */
+/** 비품·업무개선: 협업자만 완료 체크. 시스템개선은 리아·찰리 항상(요청자가 리아여도 포함) */
 function checkoffParticipants(
   taxType: ChecklistTaxType,
   ownerName: string,
   assigneeNames: string[],
 ): string[] {
+  if (isImprovementRequestTaxType(taxType)) {
+    return [...IMPROVEMENT_REQUEST_ASSIGNEES];
+  }
   if (isRoutedRequestTaxType(taxType)) return assigneeNames;
   return participantsOf(ownerName, assigneeNames);
 }
@@ -461,13 +466,16 @@ export async function listRoutedRequestsForHome(
 
   const open = openEnriched
     .filter(item => {
-      const isAssignee = item.assigneeNames.includes(viewerName);
-      if (isAssignee) {
+      const handlers = item.participants?.length
+        ? item.participants
+        : item.assigneeNames;
+      const isHandler = handlers.includes(viewerName);
+      if (isHandler) {
         // 본인이 「확인」한 건만 본인 목록에서 제외 (다른 협업자·요청자 무관)
         if (item.myDismissed) return false;
         return true;
       }
-      // 요청자(협업 아님): 담당자 전원 처리 전까지
+      // 요청자(처리 담당 아님): 담당자 전원 처리 전까지
       if (item.ownerName === viewerName) {
         return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
       }
@@ -686,7 +694,8 @@ export async function updatePersonalChecklistItem(
       (existing.assigneeNames as string[] | null | undefined) ?? [],
       existing.ownerName,
     );
-    if (!assignees.includes(actorName)) {
+    const handlers = checkoffParticipants(taxType, existing.ownerName, assignees);
+    if (!handlers.includes(actorName)) {
       throw new Error('협력자만 확인할 수 있습니다.');
     }
     await dismissPersonalChecklistCheckoff(id, actorName);

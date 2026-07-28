@@ -303,7 +303,11 @@ export default function HomeTasksPanel() {
 
   const routedPendingCount = useMemo(() => {
     return routedVisible.filter(item => {
-      if (currentUser && item.ownerName === currentUser && !item.assigneeNames.includes(currentUser)) {
+      const handlers = item.participants?.length ? item.participants : item.assigneeNames;
+      if (currentUser && handlers.includes(currentUser)) {
+        return !(item.myCheckoff ?? false);
+      }
+      if (currentUser && item.ownerName === currentUser) {
         return (item.checkoffDone ?? 0) < (item.checkoffTotal ?? 1);
       }
       return !(item.myCheckoff ?? false);
@@ -553,8 +557,10 @@ export default function HomeTasksPanel() {
                 <ul className="space-y-1.5">
                   {routedVisible.map(item => {
                     const isOwner = !!currentUser && item.ownerName === currentUser;
-                    const isAssignee =
-                      !!currentUser && item.assigneeNames.includes(currentUser);
+                    const isHandler =
+                      !!currentUser &&
+                      (item.participants?.includes(currentUser) ||
+                        item.assigneeNames.includes(currentUser));
                     const myDone = item.myCheckoff ?? false;
                     const lastMemo = item.memos?.[item.memos.length - 1];
                     return (
@@ -563,14 +569,14 @@ export default function HomeTasksPanel() {
                         onClick={() => openPersonalEdit(item)}
                         className={[
                           'cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm',
-                          myDone && isAssignee
+                          myDone && isHandler
                             ? 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-300'
                             : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30',
                         ].join(' ')}
                         title="클릭하여 상세"
                       >
                         <div className="flex items-start gap-2.5">
-                          {isAssignee && (
+                          {isHandler && (
                             <input
                               type="checkbox"
                               checked={myDone}
@@ -586,14 +592,14 @@ export default function HomeTasksPanel() {
                               <span
                                 className={[
                                   'rounded px-2 py-0.5 text-[10px] font-bold',
-                                  myDone && isAssignee
+                                  myDone && isHandler
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : 'bg-slate-100 text-slate-600',
                                 ].join(' ')}
                               >
                                 {taxLabel(item.taxType)}
                               </span>
-                              {myDone && isAssignee ? (
+                              {myDone && isHandler ? (
                                 <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                                   처리완료
                                 </span>
@@ -605,9 +611,9 @@ export default function HomeTasksPanel() {
                               <span className="text-[10px] text-slate-500">
                                 {isOwner ? '내가 요청' : `요청 ${item.ownerName}`}
                               </span>
-                              {(item.assigneeNames?.length ?? 0) > 0 && (
+                              {(item.participants ?? item.assigneeNames)?.length > 0 && (
                                 <span className="text-[10px] text-violet-700">
-                                  협력 {item.assigneeNames.join(', ')}
+                                  협력 {(item.participants ?? item.assigneeNames).join(', ')}
                                 </span>
                               )}
                             </div>
@@ -618,7 +624,7 @@ export default function HomeTasksPanel() {
                                 {lastMemo.body}
                               </p>
                             )}
-                            {isAssignee && myDone && (
+                            {isHandler && myDone && (
                               <div className="mt-2">
                                 <button
                                   type="button"
