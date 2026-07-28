@@ -22,6 +22,7 @@ import { syncChecklistToClientNotes, unsyncChecklistFromClientNotes } from '@/li
 import { getClientById } from '@/lib/clientsDb';
 import {
   countCompletedAmongMembers,
+  dismissPersonalChecklistCheckoff,
   listCheckoffDetailsForPersonalItems,
   setPersonalChecklistCheckoff,
   type PersonalChecklistCheckoffDetailMap,
@@ -148,6 +149,7 @@ function enrichDto(
     checkoffDetails[name] = {
       completed,
       completedAt: legacyAllDone ? null : (d?.completedAt ?? null),
+      dismissedAt: legacyAllDone ? null : (d?.dismissedAt ?? null),
     };
     if (completed) done += 1;
   }
@@ -155,6 +157,9 @@ function enrichDto(
   const myCheckoff = viewerName
     ? (checkoffs[viewerName] ?? false)
     : false;
+  const myDismissed = Boolean(
+    viewerName && detailMap[viewerName]?.dismissedAt,
+  );
 
   // 작성자는 완료시각까지, 협업자도 각자 진행 현황은 개인 체크리스트에서 확인
   const canViewDetails = !!viewerName && (
@@ -167,6 +172,7 @@ function enrichDto(
     /** 목록 표시용: 본인 완료 여부 */
     completed: myCheckoff,
     myCheckoff,
+    myDismissed,
     checkoffDone: done,
     checkoffTotal: participants.length,
     checkoffs,
@@ -457,7 +463,8 @@ export async function listRoutedRequestsForHome(
     .filter(item => {
       const isAssignee = item.assigneeNames.includes(viewerName);
       if (isAssignee) {
-        // 미처리 + 본인 처리완료(확인 전) — 확인은 클라이언트에서 dismiss
+        // 본인이 「확인」한 건만 본인 목록에서 제외 (다른 협업자·요청자 무관)
+        if (item.myDismissed) return false;
         return true;
       }
       // 요청자(협업 아님): 담당자 전원 처리 전까지
@@ -640,6 +647,8 @@ export type UpdateChecklistInput = Partial<{
   assigneeNames: string[];
   /** 새 메모 추가 (작성자 = actorName) */
   addMemo: string;
+  /** 비품·시스템개선 — 본인 목록에서만 숨김 */
+  dismiss: boolean;
 }>;
 
 export async function updatePersonalChecklistItem(
@@ -658,14 +667,32 @@ export async function updatePersonalChecklistItem(
   if (!canAccessItem(existing, actorName)) throw new Error('NOT_FOUND');
 
   const isOwner = existing.ownerName === actorName;
-  // 협업자는 완료·메모만, 작성자는 전체 수정
+  // 협업자는 완료·메모·확인만, 작성자는 전체 수정
   if (!isOwner) {
-    const allowedKeys = new Set(['completed', 'addMemo']);
+    const allowedKeys = new Set(['completed', 'addMemo', 'dismiss']);
     for (const key of Object.keys(patch)) {
       if (!allowedKeys.has(key)) {
         throw new Error('작성자만 수정할 수 있습니다.');
       }
     }
+  }
+
+  if (patch.dismiss) {
+    const taxType = checklistTaxTypeFromRow(existing);
+    if (!isRoutedRequestTaxType(taxType)) {
+      throw new Error('비품·시스템개선 요청만 확인할 수 있습니다.');
+    }
+    const assignees = normalizeAssignees(
+      (existing.assigneeNames as string[] | null | undefined) ?? [],
+      existing.ownerName,
+    );
+    if (!assignees.includes(actorName)) {
+      throw new Error('협력자만 확인할 수 있습니다.');
+    }
+    await dismissPersonalChecklistCheckoff(id, actorName);
+    const item = await getPersonalChecklistById(id, actorName);
+    if (!item) throw new Error('NOT_FOUND');
+    return item;
   }
 
   const nextTaxType = patch.taxType !== undefined

@@ -40,6 +40,7 @@ export async function PATCH(
       reflectInNotes?: boolean;
       assigneeNames?: string[];
       addMemo?: string;
+      dismiss?: boolean;
     };
 
     const item = await updatePersonalChecklistItem(id, user.name, body);

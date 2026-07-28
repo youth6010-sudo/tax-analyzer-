@@ -356,6 +356,8 @@ export const personalChecklistCheckoffs = pgTable('personal_checklist_checkoffs'
   memberName: text('member_name').notNull(),
   completed: boolean('completed').notNull().default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),
+  /** 본인 목록에서 「확인」으로 숨긴 시각 (계정별) */
+  dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
 }, t => [
   primaryKey({ columns: [t.itemId, t.memberName] }),
   index('personal_checklist_checkoffs_member_idx').on(t.memberName),

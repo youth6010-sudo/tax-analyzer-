@@ -25,12 +25,6 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
 import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgress';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
-import {
-  dismissRoutedRequest,
-  readRoutedRequestDismissed,
-  ROUTED_REQUEST_DISMISSED_KEY,
-  undismissRoutedRequest,
-} from '@/app/utils/routedRequestDismiss';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -159,7 +153,6 @@ export default function HomeTasksPanel() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
   const [routedOpen, setRoutedOpen] = useState<PersonalChecklistDto[]>([]);
-  const [dismissedRouted, setDismissedRouted] = useState<Set<string>>(() => new Set());
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
   const [addModal, setAddModal] = useState<AddModal>(null);
   const [editModal, setEditModal] = useState<EditModal>(null);
@@ -249,7 +242,6 @@ export default function HomeTasksPanel() {
         };
         setPersonal(payload.items || []);
         setRoutedOpen(payload.routedOpen || []);
-        setDismissedRouted(readRoutedRequestDismissed());
       }
       if (cRes.ok) {
         const payload = cData as {
@@ -307,27 +299,7 @@ export default function HomeTasksPanel() {
     };
   }, [refresh, showCompleted]);
 
-  useEffect(() => {
-    setDismissedRouted(readRoutedRequestDismissed());
-    const sync = () => setDismissedRouted(readRoutedRequestDismissed());
-    window.addEventListener(`local-storage:${ROUTED_REQUEST_DISMISSED_KEY}`, sync);
-    window.addEventListener('storage', sync);
-    return () => {
-      window.removeEventListener(`local-storage:${ROUTED_REQUEST_DISMISSED_KEY}`, sync);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
-
-  const routedVisible = useMemo(() => {
-    return routedOpen.filter(item => {
-      const isAssignee =
-        !!currentUser && item.assigneeNames.includes(currentUser);
-      if (!isAssignee) return true;
-      // 협업자: 본인 완료 후 「확인」한 건은 숨김
-      if ((item.myCheckoff ?? false) && dismissedRouted.has(item.id)) return false;
-      return true;
-    });
-  }, [routedOpen, dismissedRouted, currentUser]);
+  const routedVisible = useMemo(() => routedOpen, [routedOpen]);
 
   const routedPendingCount = useMemo(() => {
     return routedVisible.filter(item => {
@@ -339,19 +311,21 @@ export default function HomeTasksPanel() {
   }, [routedVisible, currentUser]);
 
   const toggleComplete = async (id: string, completed: boolean) => {
-    if (!completed) undismissRoutedRequest(id);
     await fetch(`/api/calendar/personal-checklist/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed }),
     });
-    if (!completed) setDismissedRouted(readRoutedRequestDismissed());
     void refresh();
   };
 
-  const confirmRoutedDone = (id: string) => {
-    dismissRoutedRequest(id);
-    setDismissedRouted(readRoutedRequestDismissed());
+  const confirmRoutedDone = async (id: string) => {
+    await fetch(`/api/calendar/personal-checklist/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dismiss: true }),
+    });
+    void refresh();
   };
 
   const closeModal = () => {
@@ -650,7 +624,7 @@ export default function HomeTasksPanel() {
                                   type="button"
                                   onClick={e => {
                                     e.stopPropagation();
-                                    confirmRoutedDone(item.id);
+                                    void confirmRoutedDone(item.id);
                                   }}
                                   className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
                                 >

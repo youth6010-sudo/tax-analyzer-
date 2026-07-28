@@ -73,6 +73,8 @@ export type PersonalChecklistDto = {
   /** 참여자 (작성자 + 협업자) */
   participants?: string[];
   myCheckoff?: boolean;
+  /** 비품·시스템개선 — 본인이 「확인」으로 목록에서 숨김 (계정별) */
+  myDismissed?: boolean;
   checkoffDone?: number;
   checkoffTotal?: number;
   checkoffs?: Record<string, boolean>;
@@ -113,6 +115,8 @@ export type CheckoffDetail = {
   completed: boolean;
   /** ISO string */
   completedAt: string | null;
+  /** 본인 「확인」으로 목록에서 숨긴 시각 */
+  dismissedAt?: string | null;
 };
 
 export type CompanyEventDto = {

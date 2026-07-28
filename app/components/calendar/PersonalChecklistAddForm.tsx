@@ -20,7 +20,6 @@ import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/compone
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 import { WEEKDAY_OPTIONS, INTERVAL_OPTIONS, previewRepeatCount, type RepeatMode, type RepeatIntervalKind } from '@/lib/calendarRepeat';
-import { undismissRoutedRequest } from '@/app/utils/routedRequestDismiss';
 
 type Props = {
   onCreated?: () => void;
@@ -241,7 +240,6 @@ export default function PersonalChecklistAddForm({
     setCheckoffBusy(true);
     setError('');
     try {
-      if (!completed) undismissRoutedRequest(editItem.id);
       const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
