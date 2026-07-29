@@ -18,6 +18,7 @@ import npsData from '@/data/nps-branches.json';
 import comwelData from '@/data/comwel-branches.json';
 import {
   filterInsuranceBranches,
+  formatContactNumberRanges,
   INSURANCE_ORGS,
   type InsuranceBranch,
   type InsuranceBranchDataset,
@@ -57,9 +58,9 @@ function prioritizeContacts(branch: InsuranceBranch) {
   return [...contacts].sort((a, b) => {
     const score = (item: { label: string; role?: string; phone?: string }) => {
       const hay = `${item.label} ${item.role || ''}`;
-      let value = splitContactNumbers(item.phone).length ? 4 : 0;
-      if (/지사장|총괄|행정지원|가입지원|연금지급|대표/.test(hay)) value += 6;
-      if (/센터|TF|지원팀/.test(hay)) value -= 1;
+      let value = formatContactNumberRanges(item.phone).length ? 4 : 0;
+      if (/지사장|총괄|행정지원|가입지원|연금지급|자격징수|대표/.test(hay)) value += 6;
+      if (/센터|TF|지원팀|행복|장애인/.test(hay)) value -= 2;
       return value;
     };
     return score(b) - score(a);
@@ -67,45 +68,43 @@ function prioritizeContacts(branch: InsuranceBranch) {
 }
 
 function extractRegionTags(text: string) {
-  const matches = String(text || '').match(/[가-힣]+(?:시|군|구|동|읍|면|리)/g) ?? [];
-  return [...new Set(matches)].slice(0, 6);
-}
-
-function splitContactNumbers(value?: string): string[] {
-  const text = String(value || '').trim();
-  if (!text || text === '-') return [];
-  const matches = text.match(/\d{2,4}-\d{3,4}-\d{4}/g);
-  if (!matches?.length) return [text];
-  return [...new Set(matches)];
+  const matches = String(text || '').match(/[가-힣]+(?:시|군|구)/g) ?? [];
+  return [...new Set(matches)].slice(0, 4);
 }
 
 function hasVisibleContact(item: { phone?: string; fax?: string }) {
-  return splitContactNumbers(item.phone).length > 0 || splitContactNumbers(item.fax).length > 0;
+  return formatContactNumberRanges(item.phone).length > 0 || formatContactNumberRanges(item.fax).length > 0;
 }
 
 function ContactNumberBlock({
   value,
   label,
-  limit = 2,
+  compact = false,
 }: {
   value?: string;
   label?: string;
-  limit?: number;
+  compact?: boolean;
 }) {
-  const numbers = splitContactNumbers(value);
+  const numbers = formatContactNumberRanges(value);
   if (!numbers.length) return null;
-  const visible = numbers.slice(0, limit);
-  const hiddenCount = numbers.length - visible.length;
+
+  if (compact) {
+    return (
+      <p className="font-semibold tabular-nums break-all text-slate-900">
+        {label ? `${label} ` : ''}
+        {numbers.join(', ')}
+      </p>
+    );
+  }
 
   return (
     <div>
-      {visible.map(number => (
+      {numbers.map(number => (
         <p key={`${label || 'num'}-${number}`} className="font-semibold tabular-nums break-all text-slate-900">
           {label ? `${label} ` : ''}
           {number}
         </p>
       ))}
-      {hiddenCount > 0 ? <p className="text-[10px] text-slate-500">외 {hiddenCount}개</p> : null}
     </div>
   );
 }
@@ -114,14 +113,15 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
   const priorityContacts = prioritizeContacts(branch);
   const regionTags = extractRegionTags(branch.jurisdiction);
   const [contactQuery, setContactQuery] = useState('');
-  const hasAnyContacts = priorityContacts.length > 0 || (branch.departmentPhones?.length ?? 0) > 0;
+  const hasAnyContacts = priorityContacts.length > 0;
   const filteredContacts = contactQuery.trim()
     ? priorityContacts.filter(item =>
         `${item.label} ${item.role || ''} ${item.phone || ''} ${item.fax || ''}`.includes(contactQuery.trim()),
       )
     : priorityContacts;
-  const topContacts = filteredContacts.slice(0, 2);
-  const restContacts = filteredContacts.slice(2);
+  // 핵심은 대표번호 + 업무부서 1~2개만. 나머지는 접기
+  const topContacts = filteredContacts.slice(0, contactQuery.trim() ? 4 : 2);
+  const restContacts = filteredContacts.slice(topContacts.length);
 
   return (
     <article className={`${portalCard} p-4`}>
@@ -221,9 +221,9 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
                       <p className="mt-0.5 break-words text-[10px] leading-relaxed text-slate-500">{item.role}</p>
                     ) : null}
                   </div>
-                  <div className="shrink-0 text-right">
-                    <ContactNumberBlock value={item.phone} limit={2} />
-                    <ContactNumberBlock value={item.fax} label="팩스" limit={1} />
+                  <div className="max-w-[58%] shrink-0 text-right">
+                    <ContactNumberBlock value={item.phone} compact />
+                    <ContactNumberBlock value={item.fax} label="팩스" compact />
                   </div>
                 </li>
               ))}
@@ -239,33 +239,15 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
                       <p className="font-medium break-words text-slate-800">{item.label}</p>
                       {item.role ? <p className="mt-0.5 break-words text-slate-500">{item.role}</p> : null}
                     </div>
-                    <div className="shrink-0 text-right">
-                      <ContactNumberBlock value={item.phone} limit={3} />
-                      <ContactNumberBlock value={item.fax} label="팩스" limit={1} />
+                    <div className="max-w-[58%] shrink-0 text-right">
+                      <ContactNumberBlock value={item.phone} compact />
+                      <ContactNumberBlock value={item.fax} label="팩스" compact />
                     </div>
                   </li>
                 ))}
               </ul>
             </details>
           ) : null}
-        </div>
-      ) : branch.departmentPhones?.length ? (
-        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-          <p className="mb-1 text-xs font-semibold text-slate-600">업무별 연락처</p>
-          <ul className="space-y-1 text-xs text-slate-700">
-            {branch.departmentPhones.slice(0, 2).map((item, idx) => (
-              <li key={`${item.label}-${item.phone}-${idx}`} className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium break-words text-slate-800">{item.label}</p>
-                  {item.role ? <p className="mt-0.5 break-words text-slate-500">{item.role}</p> : null}
-                </div>
-                <div className="shrink-0 text-right">
-                  <ContactNumberBlock value={item.phone} limit={2} />
-                  <ContactNumberBlock value={item.fax} label="팩스" limit={1} />
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       ) : null}
     </article>
@@ -288,7 +270,7 @@ export default function InsuranceBranchesPageClient({
 
   const data = DATASETS[org];
   const orgMeta = INSURANCE_ORGS.find(o => o.id === org)!;
-  const results = useMemo(() => filterInsuranceBranches(data.branches, query, 12), [data.branches, query]);
+  const results = useMemo(() => filterInsuranceBranches(data.branches, query, 3), [data.branches, query]);
 
   const trimmed = query.trim();
   const showHint = trimmed.length === 0;

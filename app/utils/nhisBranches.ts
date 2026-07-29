@@ -81,8 +81,13 @@ function tokenVariants(token: string): string[] {
 }
 
 function extractQueryTokens(query: string): string[] {
-  const raw = query
-    .split(/[\s,./]+/)
+  const cleaned = query
+    .replace(/\([^)]*\)/g, m => ` ${m.slice(1, -1)} `)
+    .replace(/[0-9]+(?:호|층|번길|길|로)/g, ' ')
+    .replace(/[,./()]/g, ' ');
+
+  const raw = cleaned
+    .split(/\s+/)
     .map(t => t.trim())
     .filter(Boolean);
 
@@ -92,10 +97,16 @@ function extractQueryTokens(query: string): string[] {
   const orgTokens = raw.filter(t => /지사|본부|센터|위원회/.test(t));
 
   if (adminTokens.length || orgTokens.length) {
-    return [...adminTokens, ...orgTokens];
+    // 주소형 검색은 시·구 단위를 우선하고, 동은 보조 매칭에만 씀
+    const primary = adminTokens.filter(t => !/(동|읍|면|리)$/.test(t));
+    return [...(primary.length ? primary : adminTokens), ...orgTokens];
   }
 
   return raw.filter(t => !/[0-9]/.test(t) && t.length >= 2);
+}
+
+function isAddressLikeQuery(query: string): boolean {
+  return /[가-힣]+(특별자치도|특별자치시|광역시|특별시|시|군|구)/.test(query);
 }
 
 /** 검색어 토큰이 기관명·주소·관할에 모두 포함되면 매칭 */
@@ -117,7 +128,7 @@ export function filterInsuranceBranches(
     const scored: { branch: InsuranceBranch; score: number }[] = [];
     for (const b of branches) {
       const hay = normalize(
-        `${b.shortName} ${b.name} ${b.address} ${b.jurisdiction} ${b.zip} ${b.role || ''} ${b.hqName || ''} ${(b.departmentPhones ?? []).map(d => `${d.label} ${d.role || ''}`).join(' ')}`,
+        `${b.shortName} ${b.name} ${b.address} ${b.jurisdiction} ${b.zip} ${b.role || ''} ${b.hqName || ''}`,
       );
       if (!groups.every(group => group.some(t => hay.includes(t)))) continue;
 
@@ -152,7 +163,67 @@ export function filterInsuranceBranches(
   scored.sort(
     (a, b) => b.score - a.score || a.branch.shortName.localeCompare(b.branch.shortName, 'ko'),
   );
-  return scored.slice(0, limit).map(s => s.branch);
+
+  // 주소형 검색은 관할이 맞는 최상위 지사만 (동점만 최대 2개)
+  const effectiveLimit = isAddressLikeQuery(q) ? Math.min(limit, 2) : limit;
+  if (!scored.length) return [];
+  const best = scored[0].score;
+  const tight = scored.filter(s => s.score >= best - (isAddressLikeQuery(q) ? 0 : 2));
+  return tight.slice(0, effectiveLimit).map(s => s.branch);
+}
+
+/** 연속 전화번호를 051-550-7513~7515 형태로 묶음 */
+export function formatContactNumberRanges(value?: string): string[] {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return [];
+  const matches = text.match(/\d{2,4}-\d{3,4}-\d{4}/g);
+  if (!matches?.length) return [text];
+
+  type Parsed = { raw: string; prefix: string | null; last: number | null };
+  const parsed: Parsed[] = [...new Set(matches)].map(n => {
+    const m = n.match(/^(\d{2,4}-\d{3,4})-(\d{4})$/);
+    return m ? { raw: n, prefix: m[1], last: Number(m[2]) } : { raw: n, prefix: null, last: null };
+  });
+
+  const byPrefix = new Map<string, Parsed[]>();
+  const others: string[] = [];
+  for (const item of parsed) {
+    if (!item.prefix || item.last == null) {
+      others.push(item.raw);
+      continue;
+    }
+    const list = byPrefix.get(item.prefix) ?? [];
+    list.push(item);
+    byPrefix.set(item.prefix, list);
+  }
+
+  const out: string[] = [];
+  for (const [prefix, items] of byPrefix) {
+    items.sort((a, b) => (a.last ?? 0) - (b.last ?? 0));
+    let start = items[0];
+    let prev = items[0];
+    const flush = () => {
+      if (start.last === prev.last) out.push(start.raw);
+      else {
+        out.push(
+          `${prefix}-${String(start.last).padStart(4, '0')}~${String(prev.last).padStart(4, '0')}`,
+        );
+      }
+    };
+    for (let i = 1; i < items.length; i += 1) {
+      const cur = items[i];
+      if ((cur.last ?? 0) === (prev.last ?? 0) + 1) {
+        prev = cur;
+        continue;
+      }
+      flush();
+      start = cur;
+      prev = cur;
+    }
+    flush();
+  }
+
+  return [...out, ...others];
 }
 
 /** @deprecated use filterInsuranceBranches */
