@@ -51,7 +51,7 @@ type EditModal = 'personal' | 'company' | null;
 
 function readSectionState(): SectionState {
   if (typeof window === 'undefined') {
-    return { personal: true, company: true, client: true, processed: true };
+    return { personal: true, company: true, client: true, processed: true, leave: true };
   }
   try {
     const raw = localStorage.getItem(SECTION_KEY);
