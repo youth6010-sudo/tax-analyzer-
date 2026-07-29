@@ -3,28 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TAX_MENU } from '../config/taxTypes';
 import { isNavHrefActive } from '../utils/navActive';
+import { useResolvedTaxMenu } from '../utils/useResolvedTaxMenu';
+import MenuEditModal from './dashboard/MenuEditModal';
 
 export default function TaxMenuButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [canCharlieFeatures, setCanCharlieFeatures] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        setIsAdmin(!!data?.isDeveloper);
-        setCanCharlieFeatures(!!data?.canUseCharlieFeatures);
-      })
-      .catch(() => {
-        setIsAdmin(false);
-        setCanCharlieFeatures(false);
-      });
-  }, []);
+  const { groups, catalog, prefs, savePrefs, resetPrefs } = useResolvedTaxMenu();
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -69,10 +57,22 @@ export default function TaxMenuButton() {
           role="menu"
           className="absolute left-0 top-full mt-2 w-56 z-50 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden py-1"
         >
-          {TAX_MENU.filter(group => !('adminOnly' in group && group.adminOnly) || isAdmin).map(group => {
-            // href만 있는 그룹(예: 블루홀)은 라벨 자체를 클릭 가능한 단일 메뉴로 렌더
+          <div className="border-b border-gray-100 px-2 py-1.5">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setEditOpen(true);
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-gray-100"
+            >
+              메뉴 편집…
+            </button>
+          </div>
+          {groups.map(group => {
             if ('href' in group) {
-              const groupHref = group.href as string;
+              const groupHref = group.href;
               const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
               return (
                 <div key={group.id} role="none" className="px-2 py-1.5">
@@ -91,46 +91,53 @@ export default function TaxMenuButton() {
               );
             }
             return (
-            <div key={group.id} role="none" className="px-2 py-1.5">
-              <p
-                role="none"
-                className={`px-2 py-1 text-xs font-black uppercase tracking-wide ${
-                  group.items.length > 0 ? 'text-gray-800' : 'text-gray-500 cursor-default'
-                }`}
-              >
-                {group.label}
-              </p>
-              {group.items.length > 0 && (
-                <ul role="none" className="mt-0.5 space-y-0.5">
-                  {group.items
-                    .filter(item => !('charlieOnly' in item && item.charlieOnly) || canCharlieFeatures)
-                    .map(item => {
-                    const active = isNavHrefActive(pathname, item.href);
-                    return (
-                      <li key={item.href} role="none">
-                        <Link
-                          href={item.href}
-                          role="menuitem"
-                          onClick={() => setOpen(false)}
-                          className={`block px-3 py-2 text-sm rounded-xl transition-colors ${
-                            active
-                              ? 'bg-blue-600 text-white font-semibold'
-                              : 'text-gray-700 hover:bg-gray-100 font-medium'
-                          }`}
-                          aria-current={active ? 'page' : undefined}
-                        >
-                          {item.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+              <div key={group.id} role="none" className="px-2 py-1.5">
+                <p
+                  role="none"
+                  className={`px-2 py-1 text-xs font-black uppercase tracking-wide ${
+                    group.items.length > 0 ? 'text-gray-800' : 'text-gray-500 cursor-default'
+                  }`}
+                >
+                  {group.label}
+                </p>
+                {group.items.length > 0 && (
+                  <ul role="none" className="mt-0.5 space-y-0.5">
+                    {group.items.map(item => {
+                      const active = isNavHrefActive(pathname, item.href);
+                      return (
+                        <li key={item.href} role="none">
+                          <Link
+                            href={item.href}
+                            role="menuitem"
+                            onClick={() => setOpen(false)}
+                            className={`block px-3 py-2 text-sm rounded-xl transition-colors ${
+                              active
+                                ? 'bg-blue-600 text-white font-semibold'
+                                : 'text-gray-700 hover:bg-gray-100 font-medium'
+                            }`}
+                            aria-current={active ? 'page' : undefined}
+                          >
+                            {item.label}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             );
           })}
         </div>
       )}
+
+      <MenuEditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        catalog={catalog}
+        prefs={prefs}
+        onSave={savePrefs}
+        onReset={resetPrefs}
+      />
     </div>
   );
 }

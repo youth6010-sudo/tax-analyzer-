@@ -178,11 +178,11 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
 }
 
 const HREF_ICON: Record<string, string> = {
-  '/': 'dashboard',
   '/calendar': 'calendar',
   '/youth-ids': 'youth-id',
   '/clients': 'clients',
   '/clients/directory': 'clients-directory',
+  '/clients/review-sheet': 'filing-check',
   '/clients/intake': 'intake',
   '/clients/churn': 'churn',
   '/clients/nts-monitor': 'nts-monitor',
@@ -196,6 +196,7 @@ const HREF_ICON: Record<string, string> = {
   '/gacha?tab=manager': 'gacha-manager',
   '/admin/backup': 'backup',
   '/admin/bluehole-unlinked': 'unlinked',
+  '/admin/review-client-links': 'unlinked',
   '/admin/data-import': 'data-import',
   '/admin/data-reset': 'data-reset',
 };

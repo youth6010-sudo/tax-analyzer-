@@ -48,6 +48,8 @@ export const users = pgTable('users', {
   pinHash: text('pin_hash').notNull(),
   role: userRoleEnum('role').notNull().default('staff'),
   noticeTemplate: text('notice_template').notNull().default(''),
+  /** 사이드바·헤더 메뉴 표시/순서 개인화 */
+  menuPrefs: jsonb('menu_prefs').notNull().$type<Record<string, unknown>>().default({}),
   blueholeLoginId: text('bluehole_login_id').notNull().default(''),
   blueholePasswordEnc: text('bluehole_password_enc').notNull().default(''),
   blueholeSessionCookie: text('bluehole_session_cookie').notNull().default(''),

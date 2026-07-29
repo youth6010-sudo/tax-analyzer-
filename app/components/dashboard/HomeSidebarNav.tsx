@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { TAX_MENU } from '@/app/config/taxTypes';
+import { useState } from 'react';
 import { isNavHrefActive } from '@/app/utils/navActive';
+import { useResolvedTaxMenu } from '@/app/utils/useResolvedTaxMenu';
+import MenuEditModal from './MenuEditModal';
 import SidebarNavIcon, { iconForHref } from './SidebarNavIcon';
 
 const linkBase = 'flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors';
@@ -22,29 +23,24 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function HomeSidebarNav() {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [canCharlieFeatures, setCanCharlieFeatures] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        setIsAdmin(!!data?.isDeveloper);
-        setCanCharlieFeatures(!!data?.canUseCharlieFeatures);
-      })
-      .catch(() => {
-        setIsAdmin(false);
-        setCanCharlieFeatures(false);
-      });
-  }, []);
-
-  const groups = TAX_MENU.filter(g => !('adminOnly' in g && g.adminOnly) || isAdmin);
+  const { groups, catalog, prefs, savePrefs, resetPrefs } = useResolvedTaxMenu();
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <nav className="space-y-4 text-sm" aria-label="포털 메뉴">
+      <div className="px-1">
+        <button
+          type="button"
+          onClick={() => setEditOpen(true)}
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          메뉴 편집
+        </button>
+      </div>
+
       {groups.map(group => {
         if ('href' in group) {
-          const href = group.href as string;
+          const href = group.href;
           const active = isActive(pathname, href);
           return (
             <div key={group.id}>
@@ -62,9 +58,7 @@ export default function HomeSidebarNav() {
           <div key={group.id}>
             <p className="px-2 text-[11px] font-bold tracking-wide text-slate-400">{group.label}</p>
             <ul className="mt-1 space-y-0.5">
-              {group.items
-                .filter(item => !('charlieOnly' in item && item.charlieOnly) || canCharlieFeatures)
-                .map(item => {
+              {group.items.map(item => {
                 const active = isActive(pathname, item.href);
                 return (
                   <li key={item.href}>
@@ -82,6 +76,15 @@ export default function HomeSidebarNav() {
           </div>
         );
       })}
+
+      <MenuEditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        catalog={catalog}
+        prefs={prefs}
+        onSave={savePrefs}
+        onReset={resetPrefs}
+      />
     </nav>
   );
 }

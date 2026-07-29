@@ -505,7 +505,7 @@ function FilingBottomStats({
 
 export default function FilingCheckPage() {
   return (
-    <Suspense fallback={<PortalLoading label="신고대상확인 불러오는 중…" />}>
+    <Suspense fallback={<PortalLoading label="신고검토 불러오는 중…" />}>
       <ReviewClientIdMapProvider>
         <FilingCheckPageInner />
       </ReviewClientIdMapProvider>
@@ -2532,7 +2532,7 @@ function FilingCheckPageInner() {
     const statReceived = isIncomeTypeTax ? incomeStats.received : receivedCount;
     const statDiff = isIncomeTypeTax ? incomeStats.diff : diff;
     const lines = [
-      `[신고대상확인] ${taxLabel} · ${periodLabel(tax, period)} · ${mgrLabel}`,
+      `[신고검토] ${taxLabel} · ${periodLabel(tax, period)} · ${mgrLabel}`,
       vatProvisional
         ? `· 신고대상: ${targetCount}곳 · 예정고지: ${vatNoticeTargetCount}곳`
         : `· 신고대상: ${statTarget}곳`,
@@ -2742,7 +2742,7 @@ function FilingCheckPageInner() {
     <PortalPageShell>
       <div className={`${portalStickyBar} -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-3 mb-3 space-y-3`}>
       <PortalPageHeader
-        title="신고대상확인"
+        title="신고검토"
         description="세목·기간별 신고대상 대비 홈택스 접수 현황을 대조하고 요약을 만듭니다. (신고분별 자동 저장)"
         icon={<PageHeaderIcon name="filing-check" />}
       />
@@ -2789,7 +2789,7 @@ function FilingCheckPageInner() {
           <div>
             <p>
               {blockingLoading
-                ? '신고대상확인 불러오는 중…'
+                ? '신고검토 불러오는 중…'
                 : '신고 기록 불러오는 중…'}
             </p>
             <p className="mt-0.5 text-xs font-normal text-blue-600/90">

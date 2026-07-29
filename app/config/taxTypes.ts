@@ -9,12 +9,13 @@ export type TaxTypeId = (typeof TAX_TYPES)[number]['id'];
 
 export const TAX_MENU = [
   {
-    id: 'home',
-    label: '홈',
+    id: 'tools',
+    label: '도구',
     items: [
-      { label: '대시보드', href: '/' },
       { label: '캘린더', href: '/calendar' },
       { label: '청년들 ID', href: '/youth-ids' },
+      { label: '우편물 대장', href: '/mail-ledger' },
+      { label: '검토표', href: '/clients/review-sheet' },
     ],
   },
   {
@@ -23,11 +24,9 @@ export const TAX_MENU = [
     items: [
       { label: '수임처 관리', href: '/clients' },
       { label: '수임처 목록', href: '/clients/directory' },
-      { label: '검토표', href: '/clients/review-sheet' },
       { label: '유입', href: '/clients/intake' },
       { label: '유출', href: '/clients/churn' },
       { label: '폐업·휴업 점검', href: '/clients/nts-monitor' },
-      { label: '우편물 대장', href: '/mail-ledger' },
     ],
   },
   {
@@ -40,10 +39,14 @@ export const TAX_MENU = [
     id: 'filing-help',
     label: '신고도움',
     items: [
-      { label: '신고대상확인', href: '/clients/filing-check' },
+      { label: '신고검토', href: '/clients/filing-check' },
       { label: '안내문 생성기', href: '/tools/notice-generator' },
-      { label: '종합소득세 분석', href: '/tax/comprehensive' },
     ],
+  },
+  {
+    id: 'misc',
+    label: '기타',
+    items: [{ label: '종합소득세 분석', href: '/tax/comprehensive' }],
   },
   {
     id: 'fun',
