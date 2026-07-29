@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/apiError';
 import {
   createPersonalChecklistItem,
   createPersonalChecklistItems,
+  HOME_CHECKLIST_LEAD_DAYS,
   listPersonalChecklistForOwner,
   listRoutedRequestsForHome,
 } from '@/lib/personalChecklist';
@@ -16,8 +17,16 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const includeCompleted = url.searchParams.get('includeCompleted') === '1'
       || url.searchParams.get('includeCompleted') === 'true';
+    // 홈 할 일 기본: 마감 N일 전부터만 노출 (먼 미래 반복분이 한꺼번에 쌓이지 않게)
+    const leadRaw = url.searchParams.get('leadDays');
+    const leadDays =
+      leadRaw === 'all' || leadRaw === '-1'
+        ? undefined
+        : leadRaw != null && leadRaw !== ''
+          ? Math.max(0, Math.floor(Number(leadRaw)) || HOME_CHECKLIST_LEAD_DAYS)
+          : HOME_CHECKLIST_LEAD_DAYS;
     const [items, routed] = await Promise.all([
-      listPersonalChecklistForOwner(user.name, { includeCompleted }),
+      listPersonalChecklistForOwner(user.name, { includeCompleted, leadDays }),
       listRoutedRequestsForHome(user.name),
     ]);
     return NextResponse.json({

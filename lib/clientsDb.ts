@@ -256,6 +256,33 @@ export async function setClientNtsStatus(id: string, status: NtsStatusInput): Pr
     .where(eq(clients.id, id));
 }
 
+/** 휴업(02) 알림 확인 — 유출 등록 없이 할 일에서 제거 */
+export async function ackClientNtsRestingAlert(id: string): Promise<{ ok: true; statusCode: string }> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: clients.id,
+      status: clients.status,
+      ntsStatusCode: clients.ntsStatusCode,
+    })
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+  if (!row) throw new Error('NOT_FOUND');
+  if (row.status === 'churned') throw new Error('이미 유출 처리된 수임처입니다.');
+  if (row.ntsStatusCode !== '02') {
+    throw new Error('휴업 상태에서만 확인할 수 있습니다.');
+  }
+  await db
+    .update(clients)
+    .set({
+      ntsAlertAckedAt: new Date(),
+      ntsAlertAckedCode: '02',
+    })
+    .where(eq(clients.id, id));
+  return { ok: true, statusCode: '02' };
+}
+
 /** 휴/폐업 제외 전체 활성 수임처의 사업자번호 (정기 점검용). [{ id, businessNo }] */
 export async function listActiveClientBusinessNos(): Promise<Array<{ id: string; businessNo: string }>> {
   const db = getDb();

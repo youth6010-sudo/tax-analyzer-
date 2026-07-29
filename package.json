@@ -30,6 +30,7 @@
     "import:verify-clients": "node scripts/verify-client-import.mjs",
     "db:ensure-bluehole-log-action": "node scripts/ensure-bluehole-sync-log-action.mjs",
     "db:ensure-nts-columns": "node scripts/ensure-nts-columns.mjs",
+    "db:ensure-nts-alert-ack": "node scripts/ensure-nts-alert-ack.mjs",
     "db:ensure-filing-tables": "node scripts/ensure-filing-tables.mjs",
     "db:migrate-income-types": "node scripts/migrate-income-types.mjs",
     "db:push": "node scripts/db-push-env.mjs",

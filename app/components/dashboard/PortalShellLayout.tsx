@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import HomeTasksPanel from './HomeTasksPanel';
 import HomeSidebarNav from './HomeSidebarNav';
+import { MenuPrefsProvider } from './MenuPrefsProvider';
 import ContactHeaderSearch from '@/app/components/ContactHeaderSearch';
 import AppHeaderUser from '@/app/components/AppHeaderUser';
 import PortalPrefetch from '@/app/components/PortalPrefetch';
@@ -149,6 +150,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
   const effectiveRightWidth = rightMode === 'collapsed' ? COLLAPSED_RIGHT : rightWidth;
 
   return (
+    <MenuPrefsProvider>
     <div className="flex min-h-[100dvh] w-full">
       <PortalPrefetch />
       <aside
@@ -249,5 +251,6 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
         </div>
       </aside>
     </div>
+    </MenuPrefsProvider>
   );
 }

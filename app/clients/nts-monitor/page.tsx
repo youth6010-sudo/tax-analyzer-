@@ -12,7 +12,7 @@ import {
 } from '../../components/portal/uiClasses';
 import type { ClientRecord, ChurnRecordView, NtsStatusCache } from '../../types/client';
 import { formatNtsDate, ntsBadgeClass, ntsStatusLabel } from '@/app/utils/ntsStatus';
-import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import {
   getPortalChurnRecords,
   hydratePortal,
@@ -128,8 +128,16 @@ export default function NtsMonitorPage() {
       const t = Date.parse(nts.checkedAt) || 0;
       if (t > last) last = t;
       if (isClosedCode(nts.statusCode)) {
-        if (clientHasHandledNtsChurn(c, churnRecords)) continue;
-        flaggedList.push({ client: c, nts });
+        const merged = {
+          ...c,
+          nts: {
+            ...nts,
+            alertAckedAt: nts.alertAckedAt ?? c.nts?.alertAckedAt,
+            alertAckedCode: nts.alertAckedCode ?? c.nts?.alertAckedCode ?? '',
+          },
+        };
+        if (!clientNeedsNtsAttention(merged, churnRecords)) continue;
+        flaggedList.push({ client: merged, nts: merged.nts! });
         if (nts.statusCode === '03') closed += 1;
         else resting += 1;
       }
@@ -233,12 +241,56 @@ export default function NtsMonitorPage() {
                     .join(' · ')}
                 </p>
               </div>
-              <Link
-                href={`/clients/churn?prefillClientId=${client.id}`}
-                className={`${portalBtnSecondary} shrink-0`}
-              >
-                유출 등록 →
-              </Link>
+              {nts.statusCode === '02' ? (
+                <button
+                  type="button"
+                  className={`${portalBtnSecondary} shrink-0`}
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/clients/${client.id}/nts-ack`, { method: 'POST' });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data.error || '확인 실패');
+                      setClients(prev =>
+                        prev.map(c =>
+                          c.id === client.id && c.nts
+                            ? {
+                                ...c,
+                                nts: {
+                                  ...c.nts,
+                                  alertAckedAt: new Date().toISOString(),
+                                  alertAckedCode: '02',
+                                },
+                              }
+                            : c,
+                        ),
+                      );
+                      setOverride(prev => {
+                        const cur = prev[client.id] ?? client.nts;
+                        if (!cur) return prev;
+                        return {
+                          ...prev,
+                          [client.id]: {
+                            ...cur,
+                            alertAckedAt: new Date().toISOString(),
+                            alertAckedCode: '02',
+                          },
+                        };
+                      });
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : '확인 실패');
+                    }
+                  }}
+                >
+                  확인
+                </button>
+              ) : (
+                <Link
+                  href={`/clients/churn?prefillClientId=${client.id}`}
+                  className={`${portalBtnSecondary} shrink-0`}
+                >
+                  유출 등록 →
+                </Link>
+              )}
             </li>
           ))}
         </ul>

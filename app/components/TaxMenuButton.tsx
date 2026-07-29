@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isNavHrefActive } from '../utils/navActive';
-import { useResolvedTaxMenu } from '../utils/useResolvedTaxMenu';
+import { useMenuPrefs } from './dashboard/MenuPrefsProvider';
 import MenuEditModal from './dashboard/MenuEditModal';
 
 export default function TaxMenuButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const { groups, catalog, prefs, savePrefs, resetPrefs } = useResolvedTaxMenu();
+  const { loaded, groups, catalog, prefs, savePrefs, resetPrefs } = useMenuPrefs();
   const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
@@ -70,63 +70,67 @@ export default function TaxMenuButton() {
               메뉴 편집…
             </button>
           </div>
-          {groups.map(group => {
-            if ('href' in group) {
-              const groupHref = group.href;
-              const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
+          {!loaded ? (
+            <p className="px-4 py-3 text-xs text-slate-500">메뉴 불러오는 중…</p>
+          ) : (
+            groups.map(group => {
+              if ('href' in group) {
+                const groupHref = group.href;
+                const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
+                return (
+                  <div key={group.id} role="none" className="px-2 py-1.5">
+                    <Link
+                      href={groupHref}
+                      role="menuitem"
+                      onClick={() => setOpen(false)}
+                      className={`block px-3 py-2 text-sm rounded-xl font-semibold transition-colors ${
+                        active ? 'bg-blue-600 text-white' : 'text-gray-800 hover:bg-gray-100'
+                      }`}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {group.label}
+                    </Link>
+                  </div>
+                );
+              }
               return (
                 <div key={group.id} role="none" className="px-2 py-1.5">
-                  <Link
-                    href={groupHref}
-                    role="menuitem"
-                    onClick={() => setOpen(false)}
-                    className={`block px-3 py-2 text-sm rounded-xl font-semibold transition-colors ${
-                      active ? 'bg-blue-600 text-white' : 'text-gray-800 hover:bg-gray-100'
+                  <p
+                    role="none"
+                    className={`px-2 py-1 text-xs font-black uppercase tracking-wide ${
+                      group.items.length > 0 ? 'text-gray-800' : 'text-gray-500 cursor-default'
                     }`}
-                    aria-current={active ? 'page' : undefined}
                   >
                     {group.label}
-                  </Link>
+                  </p>
+                  {group.items.length > 0 && (
+                    <ul role="none" className="mt-0.5 space-y-0.5">
+                      {group.items.map(item => {
+                        const active = isNavHrefActive(pathname, item.href);
+                        return (
+                          <li key={item.href} role="none">
+                            <Link
+                              href={item.href}
+                              role="menuitem"
+                              onClick={() => setOpen(false)}
+                              className={`block px-3 py-2 text-sm rounded-xl transition-colors ${
+                                active
+                                  ? 'bg-blue-600 text-white font-semibold'
+                                  : 'text-gray-700 hover:bg-gray-100 font-medium'
+                              }`}
+                              aria-current={active ? 'page' : undefined}
+                            >
+                              {item.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               );
-            }
-            return (
-              <div key={group.id} role="none" className="px-2 py-1.5">
-                <p
-                  role="none"
-                  className={`px-2 py-1 text-xs font-black uppercase tracking-wide ${
-                    group.items.length > 0 ? 'text-gray-800' : 'text-gray-500 cursor-default'
-                  }`}
-                >
-                  {group.label}
-                </p>
-                {group.items.length > 0 && (
-                  <ul role="none" className="mt-0.5 space-y-0.5">
-                    {group.items.map(item => {
-                      const active = isNavHrefActive(pathname, item.href);
-                      return (
-                        <li key={item.href} role="none">
-                          <Link
-                            href={item.href}
-                            role="menuitem"
-                            onClick={() => setOpen(false)}
-                            className={`block px-3 py-2 text-sm rounded-xl transition-colors ${
-                              active
-                                ? 'bg-blue-600 text-white font-semibold'
-                                : 'text-gray-700 hover:bg-gray-100 font-medium'
-                            }`}
-                            aria-current={active ? 'page' : undefined}
-                          >
-                            {item.label}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+            })
+          )}
         </div>
       )}
 

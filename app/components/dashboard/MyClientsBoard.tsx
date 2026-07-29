@@ -14,7 +14,7 @@ import {
 import { CATEGORY_COLORS } from '@/app/utils/categoryColors';
 import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
-import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { getPortalChurnRecords, getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 import {
   CLIENT_SORT_STORAGE_KEY,
@@ -366,13 +366,25 @@ export default function MyClientsBoard() {
     return s;
   }, [clients, taxFilter]);
 
-  // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합 (유출 이력 있으면 제외)
+  // 국세청 휴/폐업(02·03) — 캐시값 + 일괄 점검 결과 병합 (유출·휴업확인 완료면 제외)
   const ntsClosedIds = useMemo(() => {
     const s = new Set<string>();
     for (const c of clients) {
-      if (clientHasHandledNtsChurn(c, churnRecords)) continue;
       const code = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
-      if (code === '02' || code === '03') s.add(c.id);
+      if (code !== '02' && code !== '03') continue;
+      const merged = {
+        ...c,
+        nts: {
+          status: c.nts?.status ?? '',
+          statusCode: code,
+          taxType: c.nts?.taxType ?? '',
+          closedDate: c.nts?.closedDate ?? '',
+          checkedAt: c.nts?.checkedAt ?? null,
+          alertAckedAt: c.nts?.alertAckedAt,
+          alertAckedCode: c.nts?.alertAckedCode ?? '',
+        },
+      };
+      if (clientNeedsNtsAttention(merged, churnRecords)) s.add(c.id);
     }
     return s;
   }, [clients, ntsOverride, churnRecords]);

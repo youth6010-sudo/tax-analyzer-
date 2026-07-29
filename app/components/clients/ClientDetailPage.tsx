@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ClientRecord } from '@/app/types/client';
 import type { ContactUpdatePayload } from '@/app/types/contact';
-import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { businessEntityTypeForCategory } from '@/app/utils/clientBizNo';
 import { SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import {
@@ -127,7 +127,7 @@ export default function ClientDetailPage({
   }, []);
 
   const suppressChurnPrompt = useMemo(
-    () => clientHasHandledNtsChurn(rosterClient, churnRecords),
+    () => !clientNeedsNtsAttention(rosterClient, churnRecords),
     [rosterClient, churnRecords],
   );
 

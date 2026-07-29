@@ -6,6 +6,8 @@ export interface NtsStatusView {
   taxType: string;
   closedDate: string;
   checkedAt: string | null;
+  alertAckedAt?: string | null;
+  alertAckedCode?: string;
 }
 
 /** 02(휴업)·03(폐업)이면 주의 대상 */

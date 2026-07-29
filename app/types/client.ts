@@ -35,6 +35,10 @@ export interface NtsStatusCache {
   taxType: string;
   closedDate: string;
   checkedAt: string | null;
+  /** 휴업 알림 확인 시각 */
+  alertAckedAt?: string | null;
+  /** 확인 당시 코드(현재 statusCode와 같을 때만 유효) */
+  alertAckedCode?: string;
 }
 
 export interface ChurnRecordView {

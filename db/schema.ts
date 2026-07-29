@@ -85,6 +85,9 @@ export const clients = pgTable('clients', {
   ntsTaxType: text('nts_tax_type').notNull().default(''),
   ntsClosedDate: text('nts_closed_date').notNull().default(''),
   ntsCheckedAt: timestamp('nts_checked_at', { withTimezone: true }),
+  /** 휴업(02) 알림 확인 — 유출 없이 닫기 */
+  ntsAlertAckedAt: timestamp('nts_alert_acked_at', { withTimezone: true }),
+  ntsAlertAckedCode: text('nts_alert_acked_code').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [

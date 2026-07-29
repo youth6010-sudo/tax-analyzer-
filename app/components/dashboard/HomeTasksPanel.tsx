@@ -916,10 +916,7 @@ export default function HomeTasksPanel() {
                   <ul className="space-y-1.5">
                     {clientTasks.map(t => (
                       <li key={t.id}>
-                        <Link
-                          href={t.href}
-                          className="relative flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm hover:border-[#4b6cb7]/30"
-                        >
+                        <div className="relative flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm hover:border-[#4b6cb7]/30">
                           <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
                             1
                           </span>
@@ -932,9 +929,12 @@ export default function HomeTasksPanel() {
                           >
                             {TYPE_LABEL[t.type]}
                           </span>
-                          <span className="min-w-0 flex-1 pr-4 font-semibold leading-snug text-slate-800">
+                          <Link
+                            href={t.href}
+                            className="min-w-0 flex-1 pr-4 font-semibold leading-snug text-slate-800 hover:underline"
+                          >
                             {t.title}
-                          </span>
+                          </Link>
                           {t.type === 'onboarding_incomplete' && t.progress && (
                             <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#4b6cb7] ring-1 ring-blue-100">
                               {t.progress.done}/{t.progress.total}
@@ -943,7 +943,28 @@ export default function HomeTasksPanel() {
                           {t.subtitle && (
                             <span className="text-[10px] text-slate-400">{t.subtitle}</span>
                           )}
-                        </Link>
+                          {t.type === 'nts_alert' && t.ntsKind === 'resting' && t.clientId ? (
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-100"
+                              onClick={async e => {
+                                e.preventDefault();
+                                try {
+                                  const res = await fetch(`/api/clients/${t.clientId}/nts-ack`, {
+                                    method: 'POST',
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data.error || '확인 실패');
+                                  await refreshPortalBootstrap();
+                                } catch (err) {
+                                  window.alert(err instanceof Error ? err.message : '확인 실패');
+                                }
+                              }}
+                            >
+                              확인
+                            </button>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>

@@ -24,7 +24,7 @@ import {
 } from '@/app/utils/clientListPrefs';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
-import { clientNeedsNtsChurnPrompt } from '@/app/utils/churnMatch';
+import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManagerColors';
 import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
@@ -390,7 +390,7 @@ function EntityPanel({
                   corpRevenueThisYear={corpRevenueByClientId?.[c.id]}
                   reorderProps={getItemProps(c.id)}
                   consumeReorderClick={consumeClick}
-                  showNtsClosed={clientNeedsNtsChurnPrompt(c, churnRecords)}
+                  showNtsClosed={clientNeedsNtsAttention(c, churnRecords)}
                 />
               ))}
             </ul>

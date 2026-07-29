@@ -115,7 +115,7 @@ export function clientHasChurnRegistration(
 }
 
 /**
- * 폐업·휴업 「유출 처리」 안내 억제용.
+ * 폐업 「유출 처리」 안내 억제용.
  * - 연결된 clientId / orphan 상호 매칭
  * - 이미 유출이력에 같은 상호가 있으면(다른 수임처에 묶여 있어도) 다시 띄우지 않음
  */
@@ -131,14 +131,35 @@ export function clientHasHandledNtsChurn(
   return records.some(r => compactSearchText(r.companyName ?? '') === nameKey);
 }
 
-/** 국세청 폐업·휴업 안내(유출 등록 링크)가 필요한지 */
+/** 휴업(02) 알림을 담당자가 확인(ack)했는지 */
+export function clientHasAckedNtsResting(client: ChurnClientRef): boolean {
+  const code = client.nts?.statusCode;
+  if (code !== '02') return false;
+  return (client.nts?.alertAckedCode || '') === '02';
+}
+
+/** 폐업(03) — 유출 등록 안내가 필요한지 */
 export function clientNeedsNtsChurnPrompt(
   client: ChurnClientRef,
   records: ChurnRecordView[],
 ): boolean {
-  const code = client.nts?.statusCode;
-  if (code !== '02' && code !== '03') return false;
+  if (client.nts?.statusCode !== '03') return false;
   return !clientHasHandledNtsChurn(client, records);
+}
+
+/** 휴업(02) — 확인만 하면 되는 안내가 필요한지 */
+export function clientNeedsNtsRestingAck(client: ChurnClientRef): boolean {
+  if (client.nts?.statusCode !== '02') return false;
+  if (client.status === 'churned') return false;
+  return !clientHasAckedNtsResting(client);
+}
+
+/** 국세청 폐업·휴업 중 아직 처리(유출 또는 휴업 확인)되지 않은 경우 */
+export function clientNeedsNtsAttention(
+  client: ChurnClientRef,
+  records: ChurnRecordView[],
+): boolean {
+  return clientNeedsNtsChurnPrompt(client, records) || clientNeedsNtsRestingAck(client);
 }
 
 export function filterClientsForChurnRegistration<T extends ClientRecord>(

@@ -256,10 +256,27 @@ function isOpenForViewer(item: PersonalChecklistDto, viewerName: string): boolea
   return !(item.myCheckoff ?? item.completed);
 }
 
+/** 홈 할 일 — 마감 N일 전부터 노출 (반복 일정이 한꺼번에 쌓이지 않도록) */
+export const HOME_CHECKLIST_LEAD_DAYS = 3;
+
+function localIsoDatePlusDays(days: number): string {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** 내가 작성했거나 협업자로 지정된 항목 */
 export async function listPersonalChecklistForOwner(
   ownerName: string,
-  opts?: { includeCompleted?: boolean },
+  opts?: {
+    includeCompleted?: boolean;
+    /** 지정 시 dueDate가 없거나 오늘+N일 이내인 항목만 (과거 미완료 포함) */
+    leadDays?: number;
+  },
 ): Promise<PersonalChecklistDto[]> {
   const db = getDb();
   const aliases = getManagerMatchNames(ownerName);
@@ -274,6 +291,29 @@ export async function listPersonalChecklistForOwner(
   // 비품·시스템개선은 홈 전용 목록에서 조회 — 여기서 빼서 enrich 비용 절감
   const notRouted = not(inArray(personalChecklistItems.taxType, ['supplies', 'improvement']));
 
+  const leadDays =
+    typeof opts?.leadDays === 'number' && Number.isFinite(opts.leadDays) && opts.leadDays >= 0
+      ? Math.floor(opts.leadDays)
+      : null;
+
+  const baseConds = [access, notRouted];
+  if (leadDays != null) {
+    baseConds.push(
+      or(
+        eq(personalChecklistItems.dueDate, ''),
+        lte(personalChecklistItems.dueDate, localIsoDatePlusDays(leadDays)),
+      )!,
+    );
+  }
+  if (!opts?.includeCompleted) {
+    baseConds.push(
+      or(
+        sql`jsonb_array_length(COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb)) > 0`,
+        eq(personalChecklistItems.completed, false),
+      )!,
+    );
+  }
+
   // 완료 포함: 전부. 미완료만: 단독(completed=false) + 협업(아래에서 뷰어 기준 필터)
   const rows = await db
     .select({
@@ -282,18 +322,7 @@ export async function listPersonalChecklistForOwner(
     })
     .from(personalChecklistItems)
     .leftJoin(clients, eq(clients.id, personalChecklistItems.clientId))
-    .where(
-      opts?.includeCompleted
-        ? and(access, notRouted)
-        : and(
-            access,
-            notRouted,
-            or(
-              sql`jsonb_array_length(COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb)) > 0`,
-              eq(personalChecklistItems.completed, false),
-            ),
-          ),
-    )
+    .where(and(...baseConds))
     .orderBy(
       // 마감 임박순 · 마감 없음은 뒤
       sql`CASE WHEN ${personalChecklistItems.dueDate} = '' THEN 1 ELSE 0 END`,

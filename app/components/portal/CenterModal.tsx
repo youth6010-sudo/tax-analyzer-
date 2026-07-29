@@ -38,7 +38,7 @@ export default function CenterModal({ open, title, description, onClose, childre
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl overflow-visible"
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">

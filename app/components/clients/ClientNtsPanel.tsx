@@ -49,6 +49,7 @@ export default function ClientNtsPanel({
   const normalizedBiz = (businessNumber || '').replace(/\D/g, '');
   const [nts, setNts] = useState<NtsStatusView | null>(initialNts);
   const [loading, setLoading] = useState(false);
+  const [acking, setAcking] = useState(false);
   const [error, setError] = useState('');
 
   const check = useCallback(async () => {
@@ -74,11 +75,32 @@ export default function ClientNtsPanel({
     }
   }, [clientId]);
 
+  const ackResting = useCallback(async () => {
+    setAcking(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/clients/${clientId}/nts-ack`, { method: 'POST' });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error((data.error as string) || '확인 실패');
+      setNts(prev =>
+        prev
+          ? { ...prev, alertAckedAt: new Date().toISOString(), alertAckedCode: '02' }
+          : prev,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '확인 실패');
+    } finally {
+      setAcking(false);
+    }
+  }, [clientId]);
+
   if (!normalizedBiz) {
     return null;
   }
 
   const alert = nts ? isNtsAlert(nts.statusCode) : false;
+  const restingAcked = nts?.statusCode === '02' && nts.alertAckedCode === '02';
+  const showPrompt = alert && !suppressChurnPrompt && !restingAcked;
   const taxLabel = nts ? normalizeNtsTaxType(nts.taxType) : '';
 
   return (
@@ -118,9 +140,21 @@ export default function ClientNtsPanel({
               조회: {new Date(nts.checkedAt).toLocaleString('ko-KR')}
             </p>
           )}
-          {alert && !suppressChurnPrompt && (
+          {showPrompt && nts.statusCode === '02' ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-950">
+              <b>{ntsStatusLabel(nts)}</b> 상태로 확인됩니다. 담당자 확인만 하면 알림이 사라집니다. (유출 등록 불필요)
+              <button
+                type="button"
+                disabled={acking}
+                onClick={() => void ackResting()}
+                className="ml-2 font-semibold underline disabled:opacity-50"
+              >
+                {acking ? '확인 중…' : '확인'}
+              </button>
+            </div>
+          ) : showPrompt ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-relaxed text-red-900">
-              <b>{ntsStatusLabel(nts)}</b> 상태로 확인됩니다. 내용을 확인 후 유출(폐업·휴업) 등록을 진행하세요.
+              <b>{ntsStatusLabel(nts)}</b> 상태로 확인됩니다. 내용을 확인 후 유출(폐업) 등록을 진행하세요.
               <Link
                 href={`/clients/churn?prefillClientId=${clientId}`}
                 className="ml-1 font-semibold underline"
@@ -128,7 +162,7 @@ export default function ClientNtsPanel({
                 유출 등록 →
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       ) : (
         <p className="py-1 text-sm text-gray-400">아직 조회하지 않았습니다.</p>

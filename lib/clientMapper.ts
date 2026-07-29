@@ -105,6 +105,8 @@ function buildListClientSelect(intakeData: ReturnType<typeof listIntakeDataSql>)
     ntsTaxType: clients.ntsTaxType,
     ntsClosedDate: clients.ntsClosedDate,
     ntsCheckedAt: clients.ntsCheckedAt,
+    ntsAlertAckedAt: clients.ntsAlertAckedAt,
+    ntsAlertAckedCode: clients.ntsAlertAckedCode,
     createdAt: clients.createdAt,
     updatedAt: clients.updatedAt,
   };
@@ -151,6 +153,8 @@ export function clientToRecord(row: Client, opts?: { primaryContactMobile?: stri
           taxType: row.ntsTaxType ?? '',
           closedDate: row.ntsClosedDate ?? '',
           checkedAt: row.ntsCheckedAt.toISOString(),
+          alertAckedAt: row.ntsAlertAckedAt ? row.ntsAlertAckedAt.toISOString() : null,
+          alertAckedCode: row.ntsAlertAckedCode ?? '',
         }
       : null,
     createdAt: row.createdAt.toISOString(),

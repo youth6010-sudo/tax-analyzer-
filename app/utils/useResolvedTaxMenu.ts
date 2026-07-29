@@ -60,9 +60,15 @@ export function useResolvedTaxMenu() {
     return () => window.removeEventListener(MENU_PREFS_EVENT, onUpdated);
   }, []);
 
-  const groups = useMemo(() => resolveMenuGroups(prefs, auth), [prefs, auth]);
+  const groups = useMemo(
+    () => (loaded ? resolveMenuGroups(prefs, auth) : []),
+    [loaded, prefs, auth],
+  );
 
-  const catalog = useMemo(() => catalogMenuForEdit(auth), [auth]);
+  const catalog = useMemo(
+    () => (loaded ? catalogMenuForEdit(auth) : []),
+    [loaded, auth],
+  );
 
   const savePrefs = useCallback(async (next: UserMenuPrefs) => {
     const res = await fetch('/api/auth/me/menu-prefs', {

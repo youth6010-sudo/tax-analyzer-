@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, intakeInquiries, intakeProcesses, clients } from '@/db/schema';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
-import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { clientHasAckedNtsResting, clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
@@ -26,6 +26,9 @@ export type DashboardTask = {
   href: string;
   priority: number;
   progress?: { done: number; total: number };
+  /** 국세청 알림 — 휴업은 확인만, 폐업은 유출 등록 */
+  ntsKind?: 'resting' | 'closed';
+  clientId?: string;
 };
 
 export type DashboardTaskUser = {
@@ -249,24 +252,48 @@ export async function listDashboardTasks(
       status: clients.status,
       ntsStatus: clients.ntsStatus,
       ntsStatusCode: clients.ntsStatusCode,
+      ntsAlertAckedCode: clients.ntsAlertAckedCode,
     })
     .from(clients)
     .where(and(
       ne(clients.status, 'churned'),
-      inArray(clients.ntsStatusCode, ['03']),
+      inArray(clients.ntsStatusCode, ['02', '03']),
     ));
 
   for (const c of ntsRows) {
-    if (clientHasHandledNtsChurn(c, churnRows)) continue;
+    const code = c.ntsStatusCode;
+    if (code === '03') {
+      if (clientHasHandledNtsChurn(c, churnRows)) continue;
+    } else if (code === '02') {
+      if (clientHasAckedNtsResting({
+        id: c.id,
+        companyName: c.companyName,
+        status: c.status,
+        nts: {
+          status: c.ntsStatus || '',
+          statusCode: code,
+          taxType: '',
+          closedDate: '',
+          checkedAt: null,
+          alertAckedCode: c.ntsAlertAckedCode || '',
+        },
+      })) continue;
+    } else {
+      continue;
+    }
+
     const manager = (c.manager || '').trim();
     if (!visibleToUser(manager, user)) continue;
+    const resting = code === '02';
     tasks.push({
       id: `nts-${c.id}`,
       type: 'nts_alert',
-      title: `${c.companyName || '업체명 미정'} - 폐업 확인`,
+      title: `${c.companyName || '업체명 미정'} - ${resting ? '휴업 확인' : '폐업 확인'}`,
       subtitle: manager ? '국세청 상태' : '담당 미지정 · 국세청',
-      href: `/clients/${c.id}`,
+      href: resting ? `/clients/nts-monitor` : `/clients/churn?prefillClientId=${c.id}`,
       priority: 0,
+      ntsKind: resting ? 'resting' : 'closed',
+      clientId: c.id,
     });
   }
 

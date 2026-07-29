@@ -3,10 +3,10 @@
 import { useSyncExternalStore } from 'react';
 import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { ChurnRecordView, ClientRecord, ClientSearchResult } from '@/app/types/client';
-import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
+import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { filterClientSearchIndex } from '@/app/utils/searchFilter';
 
-/** 유출 처리된 업체의 국세청 할 일을 목록에서 제거 */
+/** 처리된 업체의 국세청 할 일을 목록에서 제거 (폐업=유출, 휴업=확인) */
 export function filterNtsTasksForHandledChurn(
   tasks: DashboardTask[],
   churnRecords: ChurnRecordView[],
@@ -21,7 +21,7 @@ export function filterNtsTasksForHandledChurn(
     if (!m) return true;
     const client = clientById.get(m[1]);
     if (!client) return false;
-    return !clientHasHandledNtsChurn(client, churnRecords);
+    return clientNeedsNtsAttention(client, churnRecords);
   });
 }
 

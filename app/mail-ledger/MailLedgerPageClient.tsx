@@ -51,6 +51,7 @@ function MailClientPicker({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,17 +90,26 @@ function MailClientPicker({
       const local = searchPortalClients(q);
       setResults(local);
       setLoading(true);
+      setError('');
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      fetch(`/api/clients/search?q=${encodeURIComponent(q)}&activeOnly=1`, { signal: ac.signal })
-        .then(r => (r.ok ? r.json() : { clients: [] }))
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+        .then(async r => {
+          if (!r.ok) {
+            const body = await r.json().catch(() => null);
+            throw new Error(body?.error || `검색 실패 (${r.status})`);
+          }
+          return r.json();
+        })
         .then(data => {
           const api = (data.clients ?? []) as ClientSearchResult[];
           setResults(mergeClientSearchResults(local, api));
         })
         .catch(err => {
-          if (err?.name !== 'AbortError') setResults(local);
+          if (err?.name === 'AbortError') return;
+          setResults(local);
+          setError(err instanceof Error ? err.message : '검색에 실패했습니다.');
         })
         .finally(() => setLoading(false));
     }, 150);
@@ -135,9 +145,11 @@ function MailClientPicker({
         className={`${portalInput} w-full`}
       />
       {open && query.trim() ? (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <ul className="absolute z-[70] mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {loading && results.length === 0 ? (
             <li className="px-3 py-2 text-xs text-slate-500">검색 중…</li>
+          ) : error && results.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-rose-600">{error}</li>
           ) : results.length === 0 ? (
             <li className="px-3 py-2 text-xs text-slate-500">검색 결과 없음</li>
           ) : (
@@ -146,7 +158,10 @@ function MailClientPicker({
                 <button
                   type="button"
                   className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-slate-50"
-                  onClick={() => onSelect({ id: c.id, companyName: c.companyName })}
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    onSelect({ id: c.id, companyName: c.companyName });
+                  }}
                 >
                   <span className="text-sm font-medium text-slate-900">{c.companyName}</span>
                   <span className="text-[11px] text-slate-500">
