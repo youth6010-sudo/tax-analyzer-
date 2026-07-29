@@ -495,6 +495,26 @@ export const lunchSpotRequests = pgTable('lunch_spot_requests', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** 우편물·증빙 대장 (수임처별 영수증/사진) */
+export const mailReceipts = pgTable('mail_receipts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  receivedAt: text('received_at').notNull().default(''),
+  title: text('title').notNull().default(''),
+  tags: jsonb('tags').notNull().$type<string[]>().default([]),
+  memo: text('memo').notNull().default(''),
+  images: jsonb('images')
+    .notNull()
+    .$type<{ id: string; name: string; contentType: string; dataUrl: string }[]>()
+    .default([]),
+  createdByName: text('created_by_name').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('mail_receipts_client_id_idx').on(t.clientId),
+  index('mail_receipts_received_at_idx').on(t.receivedAt),
+]);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -506,6 +526,7 @@ export type FilingCheckSession = typeof filingCheckSessions.$inferSelect;
 export type SimplePayrollFiling = typeof simplePayrollFilings.$inferSelect;
 export type YearEndFiling = typeof yearEndFilings.$inferSelect;
 export type LunchSpotRequest = typeof lunchSpotRequests.$inferSelect;
+export type MailReceipt = typeof mailReceipts.$inferSelect;
 export type PersonalChecklistItem = typeof personalChecklistItems.$inferSelect;
 export type PersonalChecklistCheckoff = typeof personalChecklistCheckoffs.$inferSelect;
 export type PersonalChecklistNotification = typeof personalChecklistNotifications.$inferSelect;

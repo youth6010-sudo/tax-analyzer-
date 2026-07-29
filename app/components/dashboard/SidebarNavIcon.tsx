@@ -86,6 +86,13 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
           <path d="M12 8v4M12 16h.01" />
         </svg>
       );
+    case 'mail-ledger':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="m22 7-10 7L2 7" />
+        </svg>
+      );
     case 'bluehole':
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -179,6 +186,7 @@ const HREF_ICON: Record<string, string> = {
   '/clients/intake': 'intake',
   '/clients/churn': 'churn',
   '/clients/nts-monitor': 'nts-monitor',
+  '/mail-ledger': 'mail-ledger',
   '/bluehole': 'bluehole',
   '/clients/filing-check': 'filing-check',
   '/tools/notice-generator': 'notice-generator',

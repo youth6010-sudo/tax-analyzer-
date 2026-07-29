@@ -27,6 +27,7 @@ export const TAX_MENU = [
       { label: '유입', href: '/clients/intake' },
       { label: '유출', href: '/clients/churn' },
       { label: '폐업·휴업 점검', href: '/clients/nts-monitor' },
+      { label: '우편물 대장', href: '/mail-ledger' },
     ],
   },
   {

@@ -34,6 +34,7 @@
     "db:migrate-income-types": "node scripts/migrate-income-types.mjs",
     "db:push": "node scripts/db-push-env.mjs",
     "db:ensure-calendar-tables": "node scripts/ensure-calendar-tables.mjs",
+    "db:ensure-mail-receipts": "node scripts/ensure-mail-receipts.mjs",
     "db:seed": "node scripts/seed-users.mjs",
     "db:backup": "node scripts/backup-db.mjs",
     "db:wipe-clients": "node scripts/wipe-all-client-data.mjs --confirm",
