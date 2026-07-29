@@ -5,6 +5,7 @@ import type {
   ChecklistTaxType,
   CheckoffDetail,
   ImprovementRequestDto,
+  PersonalChecklistAttachment,
   PersonalChecklistDto,
   PersonalChecklistMemo,
   PersonalChecklistNotificationDto,
@@ -94,8 +95,25 @@ function normalizeMemos(raw: unknown): PersonalChecklistMemo[] {
     const authorName = typeof rec.authorName === 'string' ? rec.authorName.trim() : '';
     const body = typeof rec.body === 'string' ? rec.body.trim() : '';
     const createdAt = typeof rec.createdAt === 'string' ? rec.createdAt : '';
+    const attachments = Array.isArray(rec.attachments)
+      ? rec.attachments
+        .filter((att): att is Record<string, unknown> => !!att && typeof att === 'object')
+        .map(att => ({
+          id: typeof att.id === 'string' ? att.id : crypto.randomUUID(),
+          name: typeof att.name === 'string' ? att.name.trim() : 'image',
+          contentType: typeof att.contentType === 'string' ? att.contentType : 'image/*',
+          dataUrl: typeof att.dataUrl === 'string' ? att.dataUrl : '',
+        }))
+        .filter(att => att.dataUrl.startsWith('data:image/'))
+      : [];
     if (!id || !authorName || !body) continue;
-    out.push({ id, authorName, body, createdAt: createdAt || new Date().toISOString() });
+    out.push({
+      id,
+      authorName,
+      body,
+      createdAt: createdAt || new Date().toISOString(),
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
   }
   return out;
 }
@@ -659,7 +677,7 @@ export type CreateChecklistInput = {
   reflectInNotes?: boolean;
   assigneeNames?: string[];
   /** 생성 시 첫 메모 (작성자 = owner) */
-  memo?: string;
+  memo?: string | { body: string; attachments?: PersonalChecklistAttachment[] };
 };
 
 export async function createPersonalChecklistItem(
@@ -692,13 +710,17 @@ export async function createPersonalChecklistItems(
   const normalized = normalizeChecklistTaxType(input.taxType);
   const assigneeNames = assigneesForTaxType(input.taxType, input.assigneeNames, ownerName);
   const memos: PersonalChecklistMemo[] = [];
-  const memoBody = input.memo?.trim();
+  const memoBody = typeof input.memo === 'string' ? input.memo.trim() : input.memo?.body?.trim();
+  const memoAttachments = typeof input.memo === 'object' && input.memo && Array.isArray(input.memo.attachments)
+    ? input.memo.attachments.filter(att => att?.dataUrl?.startsWith('data:image/'))
+    : [];
   if (memoBody) {
     memos.push({
       id: crypto.randomUUID(),
       authorName: ownerName,
       body: memoBody,
       createdAt: new Date().toISOString(),
+      ...(memoAttachments.length > 0 ? { attachments: memoAttachments } : {}),
     });
   }
 
@@ -747,7 +769,7 @@ export type UpdateChecklistInput = Partial<{
   reflectInNotes: boolean;
   assigneeNames: string[];
   /** 새 메모 추가 (작성자 = actorName) */
-  addMemo: string;
+  addMemo: string | { body: string; attachments?: PersonalChecklistAttachment[] };
   /** 본인(또는 요청자) 메모 수정 */
   updateMemo: { id: string; body: string };
   /** 본인(또는 요청자) 메모 삭제 */
@@ -785,6 +807,22 @@ async function applyMemoPatches(
 ): Promise<PersonalChecklistMemo[]> {
   let next = normalizeMemos(existingMemos);
 
+  const normalizeAddMemo = (
+    value: UpdateChecklistInput['addMemo'],
+  ): { body: string; attachments: PersonalChecklistAttachment[] } | null => {
+    if (typeof value === 'string') {
+      const body = value.trim();
+      return body ? { body, attachments: [] } : null;
+    }
+    if (!value || typeof value !== 'object') return null;
+    const body = typeof value.body === 'string' ? value.body.trim() : '';
+    if (!body) return null;
+    const attachments = Array.isArray(value.attachments)
+      ? value.attachments.filter(att => att?.dataUrl?.startsWith('data:image/'))
+      : [];
+    return { body, attachments };
+  };
+
   if (patch.deleteMemo !== undefined) {
     const memoId = patch.deleteMemo.trim();
     const target = next.find(m => m.id === memoId);
@@ -809,16 +847,17 @@ async function applyMemoPatches(
   }
 
   if (patch.addMemo !== undefined) {
-    const body = patch.addMemo.trim();
-    if (body) {
+    const nextMemo = normalizeAddMemo(patch.addMemo);
+    if (nextMemo) {
       const members = await listCalendarTeamMembers();
       next = [
         ...next,
         {
           id: crypto.randomUUID(),
           authorName: resolveCanonicalMemberName(actorName, members),
-          body,
+          body: nextMemo.body,
           createdAt: new Date().toISOString(),
+          ...(nextMemo.attachments.length > 0 ? { attachments: nextMemo.attachments } : {}),
         },
       ];
     }
@@ -1006,8 +1045,18 @@ export async function updatePersonalChecklistItem(
       : doneCount >= participants.length;
 
     if (patch.completed) {
-      if (isRoutedRequestTaxType(nextTaxType)) {
-        // 비품·시스템개선: 완료한 사람 제외하고 전원에게 알림 (요청자 포함)
+      if (isSuppliesOrderTaxType(nextTaxType)) {
+        // 비품주문: 완료 알림은 요청자에게만
+        if (!managerNamesMatch(actorName, existing.ownerName)) {
+          await createCompletionNotification({
+            itemId: id,
+            recipientName: existing.ownerName,
+            actorName: canonicalActor,
+            title: existing.title,
+          });
+        }
+      } else if (isImprovementRequestTaxType(nextTaxType)) {
+        // 시스템개선: 완료한 사람 제외하고 전원에게 알림
         const members = await listCalendarTeamMembers();
         for (const member of members) {
           if (managerNamesMatch(member, actorName)) continue;

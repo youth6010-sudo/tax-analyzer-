@@ -33,11 +33,19 @@ export function forcedAssigneesForTaxType(
 }
 
 /** 개인 체크리스트 메모 — 작성자 표시 */
+export type PersonalChecklistAttachment = {
+  id: string;
+  name: string;
+  contentType: string;
+  dataUrl: string;
+};
+
 export type PersonalChecklistMemo = {
   id: string;
   authorName: string;
   body: string;
   createdAt: string;
+  attachments?: PersonalChecklistAttachment[];
 };
 
 /** 개인 체크리스트 — 작성자용 완료 알림 */

@@ -28,6 +28,21 @@ export function useTriangleListReorder(itemIds: string[], onCommit: (nextIds: st
 
   const moveUp = useCallback((id: string) => move(id, -1), [move]);
   const moveDown = useCallback((id: string) => move(id, 1), [move]);
+  const moveTo = useCallback(
+    (id: string, beforeId: string) => {
+      setOrder(prev => {
+        const from = prev.indexOf(id);
+        const to = prev.indexOf(beforeId);
+        if (from < 0 || to < 0 || from === to) return prev;
+        const next = [...prev];
+        next.splice(from, 1);
+        next.splice(to, 0, id);
+        onCommit(next);
+        return next;
+      });
+    },
+    [onCommit],
+  );
 
-  return { orderedIds: order, moveUp, moveDown };
+  return { orderedIds: order, moveUp, moveDown, moveTo };
 }

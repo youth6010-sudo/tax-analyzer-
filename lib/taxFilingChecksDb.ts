@@ -27,7 +27,7 @@ export type FilingCheckSessionData = {
    */
   forceIncluded?: Record<string, boolean>;
   rowNotes: Record<string, string>;
-  extraClients: { id: string; companyName: string; businessNo: string; representative?: string }[];
+  extraClients: { id: string; companyName: string; businessNo: string; representative?: string; filingType?: '당월' | '전월' }[];
   /** 신고대상확인 화면 전용 업체 순서 */
   clientOrder?: string[];
   /** 종소세 — 사업장별 작업 완료(접수 엑셀 검증과 별도) */

@@ -1,7 +1,10 @@
 import type { ClientRecord } from '@/app/types/client';
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import {
   applyClientDisplayOrder,
   MANAGER_DISPLAY_ORDER,
+  sortClientRecords,
+  splitManagerClientsByCategory,
   UNCategorized,
 } from '@/app/utils/clientsGrouping';
 
@@ -111,8 +114,15 @@ export function readManagerClientOrderStore(): ManagerClientOrderStore {
 }
 
 export function readManagerClientOrder(manager: string): string[] | null {
-  const order = readManagerClientOrderStore()[manager];
-  return order?.length ? order : null;
+  const store = readManagerClientOrderStore();
+  const direct = store[manager];
+  if (direct?.length) return direct;
+  for (const alias of getManagerMatchNames(manager)) {
+    if (alias === manager) continue;
+    const order = store[alias];
+    if (order?.length) return order;
+  }
+  return null;
 }
 
 export function writeManagerClientOrder(manager: string, ids: string[]): void {
@@ -127,6 +137,28 @@ export function writeManagerClientOrder(manager: string, ids: string[]): void {
   }
 }
 
+/**
+ * 수임처관리와 동일한 표시 순서.
+ * - 커스텀 순서 있으면 그대로
+ * - 없으면 법인 → 개인 → 기타 대분류, 각 그룹 내 이름/코드 정렬
+ *   (신고대상확인이 이름순으로 개인·법인을 섞지 않도록)
+ */
+export function applyManagerRosterDisplayOrder(
+  clients: ClientRecord[],
+  sort: ClientSortKey,
+  customOrder?: string[] | null,
+): ClientRecord[] {
+  if (customOrder?.length) {
+    return applyClientDisplayOrder(clients, sort, customOrder);
+  }
+  const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
+  return [
+    ...sortClientRecords(corporate, sort),
+    ...sortClientRecords(personal, sort),
+    ...otherCategories.flatMap(({ clients: list }) => sortClientRecords(list, sort)),
+  ];
+}
+
 /** 패널(법인/개인 등) 안에서 드래그한 순서를 담당자 전체 순서에 반영 */
 export function commitClientListReorder(
   manager: string,
@@ -134,7 +166,7 @@ export function commitClientListReorder(
   allManagerClients: ClientRecord[],
   sort: ClientSortKey,
 ): void {
-  const fullOrder = applyClientDisplayOrder(
+  const fullOrder = applyManagerRosterDisplayOrder(
     allManagerClients,
     sort,
     readManagerClientOrder(manager),
@@ -151,7 +183,7 @@ export function commitClientListReorder(
   writeManagerClientOrder(manager, next);
 }
 
-/** 신고대상확인 — 담당자별(또는 전체 시 담당자 묶음) 대시보드 순서 적용 */
+/** 신고대상확인 — 담당자별(또는 전체 시 담당자 묶음) 수임처관리 순서 적용 */
 export function applyManagerScopedClientOrder(
   clients: ClientRecord[],
   sort: ClientSortKey,
@@ -160,7 +192,7 @@ export function applyManagerScopedClientOrder(
   managerOrder: readonly string[],
 ): ClientRecord[] {
   if (selManager !== allManagersKey) {
-    return applyClientDisplayOrder(clients, sort, readManagerClientOrder(selManager));
+    return applyManagerRosterDisplayOrder(clients, sort, readManagerClientOrder(selManager));
   }
   const byMgr = new Map<string, ClientRecord[]>();
   for (const c of clients) {
@@ -174,7 +206,9 @@ export function applyManagerScopedClientOrder(
     compareManagersByOrder(a, b, managerOrder, UNCategorized),
   );
   for (const m of mgrs) {
-    result.push(...applyClientDisplayOrder(byMgr.get(m) ?? [], sort, readManagerClientOrder(m)));
+    result.push(
+      ...applyManagerRosterDisplayOrder(byMgr.get(m) ?? [], sort, readManagerClientOrder(m)),
+    );
   }
   return result;
 }
@@ -212,12 +246,15 @@ export function readFilingCheckClientOrderStore(): FilingCheckClientOrderStore {
 
 export function readFilingCheckClientOrder(manager: string, taxType: string): string[] | null {
   const store = readFilingCheckClientOrderStore();
-  const order = store[filingCheckOrderScopeKey(manager, taxType)];
-  if (order?.length) return order;
-  // 부가세 기수 키 → 예전 `vat` 키 fallback
-  if (taxType.startsWith('vat:')) {
-    const legacy = store[filingCheckOrderScopeKey(manager, 'vat')];
-    if (legacy?.length) return legacy;
+  const managers = [manager, ...getManagerMatchNames(manager).filter(n => n !== manager)];
+  for (const m of managers) {
+    const order = store[filingCheckOrderScopeKey(m, taxType)];
+    if (order?.length) return order;
+    // 부가세 기수 키 → 예전 `vat` 키 fallback
+    if (taxType.startsWith('vat:')) {
+      const legacy = store[filingCheckOrderScopeKey(m, 'vat')];
+      if (legacy?.length) return legacy;
+    }
   }
   return null;
 }
@@ -325,7 +362,7 @@ export function commitFilingCheckClientReorder(
   const store = readFilingCheckClientOrderStore();
   const existing = store[scopeKey];
   const managerFallback = readManagerClientOrder(manager);
-  const fullOrder = applyClientDisplayOrder(
+  const fullOrder = applyManagerRosterDisplayOrder(
     allTargetsInScope,
     sort,
     existing?.length ? existing : managerFallback,
@@ -333,7 +370,7 @@ export function commitFilingCheckClientReorder(
   writeFilingCheckClientOrder(manager, taxType, mergeSubsetIntoOrder(fullOrder, reorderedSubsetIds));
 }
 
-/** 신고대상확인 목록 순서 — 전용 순서 우선, 없으면 수임처 관리 순서를 초기값으로 사용 */
+/** 신고대상확인 목록 순서 — 전용 순서 우선, 없으면 수임처관리(법인→개인) 순서를 초기값으로 사용 */
 export function applyFilingCheckClientOrder(
   clients: ClientRecord[],
   sort: ClientSortKey,
@@ -344,5 +381,34 @@ export function applyFilingCheckClientOrder(
   if (custom?.length) {
     return applyClientDisplayOrder(clients, sort, custom);
   }
-  return applyClientDisplayOrder(clients, sort, readManagerClientOrder(manager));
+  return applyManagerRosterDisplayOrder(clients, sort, readManagerClientOrder(manager));
+}
+
+/** 담당자 전체 보기 — 담당자별 신고대상확인 순서(없으면 수임처관리)를 이어 붙임 */
+export function applyManagerScopedFilingCheckOrder(
+  clients: ClientRecord[],
+  sort: ClientSortKey,
+  selManager: string,
+  allManagersKey: string,
+  managerOrder: readonly string[],
+  taxType: string,
+): ClientRecord[] {
+  if (selManager !== allManagersKey) {
+    return applyFilingCheckClientOrder(clients, sort, selManager, taxType);
+  }
+  const byMgr = new Map<string, ClientRecord[]>();
+  for (const c of clients) {
+    const m = c.manager?.trim() || UNCategorized;
+    const arr = byMgr.get(m) ?? [];
+    arr.push(c);
+    byMgr.set(m, arr);
+  }
+  const result: ClientRecord[] = [];
+  const mgrs = [...byMgr.keys()].sort((a, b) =>
+    compareManagersByOrder(a, b, managerOrder, UNCategorized),
+  );
+  for (const m of mgrs) {
+    result.push(...applyFilingCheckClientOrder(byMgr.get(m) ?? [], sort, m, taxType));
+  }
+  return result;
 }

@@ -16,12 +16,12 @@ import {
   UNCategorized,
 } from '@/app/utils/clientsGrouping';
 import {
-  applyFilingCheckClientOrder,
-  applyManagerScopedClientOrder,
+  applyManagerScopedFilingCheckOrder,
   CLIENT_SORT_STORAGE_KEY,
   commitFilingCheckClientReorder,
   FILING_CHECK_CLIENT_ORDER_STORAGE_KEY,
   filingCheckOrderTaxKey,
+  MANAGER_CLIENT_ORDER_STORAGE_KEY,
   MANAGER_ORDER_STORAGE_KEY,
   compareManagersByOrder,
   type ClientSortKey,
@@ -108,6 +108,7 @@ type ManualClient = {
   companyName: string;
   businessNo: string;
   representative?: string;
+  filingType?: '당월' | '전월';
 };
 
 function manualToClient(m: ManualClient): ClientRecord {
@@ -128,7 +129,7 @@ function manualToClient(m: ManualClient): ClientRecord {
     status: 'active',
     assignedUserId: null,
     intakeStep: 0,
-    intakeData: {},
+    intakeData: m.filingType ? { filingType: m.filingType } : {},
     source: 'manual_intake',
     feeSummary: null,
     program: '',
@@ -335,6 +336,17 @@ function readFilingType(intakeData: Record<string, unknown> | undefined): '당�
   return '당월';
 }
 
+function readManualFilingType(client: ManualClient | undefined): '당월' | '전월' {
+  return client?.filingType === '전월' ? '전월' : '당월';
+}
+
+function isContractProgressClient(client: ClientRecord): boolean {
+  const status = String(client.status ?? '').trim();
+  if (status !== 'intake') return true;
+  const contractStatus = String(client.intakeData?.contractStatus ?? '').trim();
+  return contractStatus.includes('계약');
+}
+
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20';
 
@@ -503,52 +515,14 @@ export default function FilingCheckPage() {
 
 function FilingReorderIndexCell({
   index,
-  enabled,
-  canMoveUp,
-  canMoveDown,
-  onMoveUp,
-  onMoveDown,
 }: {
   index: number;
-  enabled: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
 }) {
-  if (!enabled) {
-    return <span className="text-xs tabular-nums text-slate-400">{index + 1}</span>;
-  }
-  return (
-    <div className="flex flex-col items-center justify-center gap-0 leading-none">
-      <button
-        type="button"
-        disabled={!canMoveUp}
-        onClick={e => {
-          e.stopPropagation();
-          onMoveUp();
-        }}
-        className="flex h-3.5 w-4 items-center justify-center text-[9px] leading-none text-slate-400 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-25"
-        aria-label="위로"
-      >
-        ▲
-      </button>
-      <span className="text-xs tabular-nums text-slate-400">{index + 1}</span>
-      <button
-        type="button"
-        disabled={!canMoveDown}
-        onClick={e => {
-          e.stopPropagation();
-          onMoveDown();
-        }}
-        className="flex h-3.5 w-4 items-center justify-center text-[9px] leading-none text-slate-400 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-25"
-        aria-label="아래로"
-      >
-        ▼
-      </button>
-    </div>
-  );
+  return <span className="text-xs tabular-nums text-slate-400">{index + 1}</span>;
 }
+
+const FILING_LONG_PRESS_MS = 280;
+const FILING_MOVE_THRESHOLD = 6;
 
 function FilingCheckPageInner() {
   const searchParams = useSearchParams();
@@ -673,9 +647,17 @@ function FilingCheckPageInner() {
   useEffect(() => {
     const onStorage = () => setClientOrderVersion(v => v + 1);
     window.addEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
-    return () =>
+    window.addEventListener(`local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
+    return () => {
       window.removeEventListener(`local-storage:${FILING_CHECK_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
+      window.removeEventListener(`local-storage:${MANAGER_CLIENT_ORDER_STORAGE_KEY}`, onStorage);
+    };
   }, []);
+
+  useEffect(() => {
+    if (clientOrderVersion === 0) return;
+    setDisplayOrderEpoch(e => e + 1);
+  }, [clientOrderVersion]);
 
   const flushPersistSession = useCallback(async () => {
     if (persistTimerRef.current) {
@@ -835,8 +817,8 @@ function FilingCheckPageInner() {
       }
 
       const url = master
-        ? '/api/clients?includeChurned=1'
-        : '/api/clients?mine=1&scope=filing&includeChurned=1';
+        ? '/api/clients?includeChurned=1&includeIntake=1'
+        : '/api/clients?mine=1&scope=filing&includeChurned=1&includeIntake=1';
       try {
         const res = await fetch(url, { cache: 'no-store' });
         const d = res.ok ? await res.json() : null;
@@ -1052,7 +1034,7 @@ function FilingCheckPageInner() {
           : tax === 'vat'
             ? filingTargets(clients, 'vat', { vatPhase: period.vatPhase })
             : filingTargets(clients, tax);
-    return raw.filter(c => !isClosedBeforeFilingPeriod(c, tax, period));
+    return raw.filter(c => isContractProgressClient(c) && !isClosedBeforeFilingPeriod(c, tax, period));
   }, [clients, tax, period, attribution.month]);
 
   const excelSet = useMemo(() => new Set(record.excelBizNos), [record.excelBizNos]);
@@ -1088,9 +1070,9 @@ function FilingCheckPageInner() {
     if (tax === 'simplePayroll') {
       const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
       const prevTargets = withExtras(
-        scopeByManager(simplePayrollTargetsForPeriod(clients, prevAttr.month)),
+        scopeByManager(simplePayrollTargetsForPeriod(clients, prevAttr.month).filter(isContractProgressClient)),
       );
-      const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, attribution.month));
+      const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, attribution.month).filter(isContractProgressClient));
       return compareSessionTargets(prevTargets, currTargets, prevRec, record, {
         isAutoExcluded: (c, which) =>
           isSemiAnnualOffMonthExcluded(
@@ -1101,7 +1083,7 @@ function FilingCheckPageInner() {
     }
     if (tax === 'comprehensive') {
       const prevGroups = groupComprehensiveFilingTargets(
-        withExtras(scopeByManager(filingTargets(clients, tax))),
+        withExtras(scopeByManager(filingTargets(clients, tax).filter(isContractProgressClient))),
       );
       const currGroups = groupComprehensiveFilingTargets(scopeByManager(taxTargetsAll));
       return compareComprehensiveGroups(prevGroups, currGroups, prevRec, record);
@@ -1109,8 +1091,8 @@ function FilingCheckPageInner() {
 
     const prevAll =
       tax === 'vat'
-        ? filingTargets(clients, tax, { vatPhase: prevP.vatPhase })
-        : filingTargets(clients, tax);
+        ? filingTargets(clients, tax, { vatPhase: prevP.vatPhase }).filter(isContractProgressClient)
+        : filingTargets(clients, tax).filter(isContractProgressClient);
     const prevExcelSet = new Set(
       (prevRec.excelBizNos ?? []).map(b => normalizeBizNo(String(b))),
     );
@@ -1289,21 +1271,19 @@ function FilingCheckPageInner() {
   /** 간이지급·연말정산 — 원천세(동일 월) 목록 순서 기준 */
   const withholdingOrderIds = useMemo(() => {
     if (!isIncomeTypeTax) return [];
-    const whAll = withholdingTargetsForPeriod(clients, attribution.month);
+    const whAll = withholdingTargetsForPeriod(clients, attribution.month).filter(isContractProgressClient);
     const scoped =
       selManager === ALL_MANAGERS
         ? whAll
         : whAll.filter(c => matchesSelManager(c.manager));
-    const ordered =
-      selManager === ALL_MANAGERS
-        ? applyManagerScopedClientOrder(
-            scoped,
-            clientListSort,
-            selManager,
-            ALL_MANAGERS,
-            managerOrder,
-          )
-        : applyFilingCheckClientOrder(scoped, clientListSort, selManager, 'withholding');
+    const ordered = applyManagerScopedFilingCheckOrder(
+      scoped,
+      clientListSort,
+      selManager,
+      ALL_MANAGERS,
+      managerOrder,
+      'withholding',
+    );
     return ordered.map(c => c.id);
   }, [
     isIncomeTypeTax,
@@ -1321,16 +1301,14 @@ function FilingCheckPageInner() {
       selManager === ALL_MANAGERS
         ? taxTargetsAll
         : taxTargetsAll.filter(c => matchesSelManager(c.manager));
-    const ordered =
-      selManager === ALL_MANAGERS
-        ? applyManagerScopedClientOrder(
-            scoped,
-            clientListSort,
-            selManager,
-            ALL_MANAGERS,
-            managerOrder,
-          )
-        : applyFilingCheckClientOrder(scoped, clientListSort, selManager, orderTaxKey);
+    const ordered = applyManagerScopedFilingCheckOrder(
+      scoped,
+      clientListSort,
+      selManager,
+      ALL_MANAGERS,
+      managerOrder,
+      orderTaxKey,
+    );
     const seen = new Set(ordered.map(c => c.id));
 
     const manual = resolveExtraClients(record.extraClients, clients, seen).filter(c => {
@@ -1844,8 +1822,76 @@ function FilingCheckPageInner() {
       comprehensiveGroups,
     ],
   );
-  const { orderedIds: reorderableOrderedIds, moveUp, moveDown } =
+  const { orderedIds: reorderableOrderedIds, moveTo } =
     useTriangleListReorder(reorderableTargetIds, handleTargetOrderCommit);
+  const [draggingTargetId, setDraggingTargetId] = useState<string | null>(null);
+  const targetDragRef = useRef<{
+    id: string;
+    moved: boolean;
+    longPress: boolean;
+    timer: number | null;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const suppressTargetClickRef = useRef(false);
+
+  const endTargetDrag = useCallback(() => {
+    if (targetDragRef.current?.timer) {
+      window.clearTimeout(targetDragRef.current.timer);
+    }
+    targetDragRef.current = null;
+    setDraggingTargetId(null);
+  }, []);
+
+  const handleTargetPointerDown = useCallback((e: React.PointerEvent<HTMLElement>, id: string) => {
+    if (!canReorderTargets) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
+    suppressTargetClickRef.current = false;
+    const timer = window.setTimeout(() => {
+      if (targetDragRef.current?.id === id) {
+        targetDragRef.current.longPress = true;
+        suppressTargetClickRef.current = true;
+        setDraggingTargetId(id);
+      }
+    }, FILING_LONG_PRESS_MS);
+    targetDragRef.current = {
+      id,
+      moved: false,
+      longPress: false,
+      timer,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+  }, [canReorderTargets]);
+
+  const handleTargetPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const drag = targetDragRef.current;
+    if (!drag) return;
+    if (
+      Math.abs(e.clientX - drag.startX) > FILING_MOVE_THRESHOLD ||
+      Math.abs(e.clientY - drag.startY) > FILING_MOVE_THRESHOLD
+    ) {
+      drag.moved = true;
+    }
+    if (!drag.longPress) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const target = el?.closest('[data-filing-reorder-id]') as HTMLElement | null;
+    const overId = target?.getAttribute('data-filing-reorder-id');
+    if (!overId || overId === drag.id) return;
+    moveTo(drag.id, overId);
+  }, [moveTo]);
+
+  const handleTargetPointerUp = useCallback(() => {
+    if (targetDragRef.current?.longPress) {
+      suppressTargetClickRef.current = true;
+    }
+    endTargetDrag();
+  }, [endTargetDrag]);
 
   const displayedComprehensiveGroupsOrdered = useMemo(() => {
     if (!canReorderTargets || tax !== 'comprehensive') return displayedComprehensiveGroups;
@@ -2148,7 +2194,16 @@ function FilingCheckPageInner() {
   }, [focusClientId, displayedTargetsForTable, displayedComprehensiveGroupsOrdered]);
 
   const setClientFilingType = async (c: ClientRecord, value: '당월' | '전월') => {
-    if (isManualId(c.id) || locked) return;
+    if (locked) return;
+    const extraIdx = record.extraClients.findIndex(m => m.id === c.id);
+    if (extraIdx >= 0) {
+      const nextExtras = [...record.extraClients];
+      nextExtras[extraIdx] = { ...nextExtras[extraIdx]!, filingType: value };
+      const nextRecord = { ...record, extraClients: nextExtras };
+      setRecord(nextRecord);
+      await persistSession(nextRecord, { flush: true });
+    }
+    if (isManualId(c.id)) return;
     const prevIntake = c.intakeData ?? {};
     const nextIntake = { ...prevIntake, filingType: value };
     setAllClients(prev =>
@@ -2253,6 +2308,7 @@ function FilingCheckPageInner() {
       companyName: c.companyName,
       businessNo: c.businessNo,
       representative: c.representative || undefined,
+      filingType: readFilingType(c.intakeData),
     };
     const nextExtras = alreadyInExtras ? record.extraClients : [...record.extraClients, m];
     const nextRecord = { ...record, extraClients: nextExtras };
@@ -3164,7 +3220,7 @@ function FilingCheckPageInner() {
             </button>
           ) : null}
           {canReorderTargets && (
-            <span className="text-[11px] text-slate-400">순번 ▲▼ 순서 변경 (담당자·세목별 전용)</span>
+            <span className="text-[11px] text-slate-400">업체명을 꾹 눌러 순서 변경 (담당자·세목별 전용)</span>
           )}
           {listScope === 'targets' && excludedTargets.length > 0 && (
             <span className="text-xs text-slate-500">
@@ -3227,7 +3283,7 @@ function FilingCheckPageInner() {
         <>
           {canReorderTargets && (
             <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-400">
-              순번 ▲▼ 으로 순서 변경 (담당자·세목별 전용 — 수임처 관리와 별도)
+              업체명을 꾹 눌러 순서 변경 (담당자·세목별 전용 — 수임처 관리 기준 위에 이 세목만 덮어씀)
             </p>
           )}
         <table className="w-full table-fixed text-sm">
@@ -3306,11 +3362,6 @@ function FilingCheckPageInner() {
                       <td className="px-2 py-2 text-center">
                         <FilingReorderIndexCell
                           index={i}
-                          enabled={canReorderTargets}
-                          canMoveUp={i > 0}
-                          canMoveDown={i < groupCount - 1}
-                          onMoveUp={() => moveUp(g.primaryClientId)}
-                          onMoveDown={() => moveDown(g.primaryClientId)}
                         />
                       </td>
                       {showsReviewFeeColumn ? (
@@ -3323,7 +3374,24 @@ function FilingCheckPageInner() {
                         {formatResidentNoDisplay(g.residentNo)}
                       </td>
                       <td className="max-w-0 px-2 py-2">
-                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                        <div
+                          data-filing-reorder-id={canReorderTargets ? g.primaryClientId : undefined}
+                          onPointerDown={e => handleTargetPointerDown(e, g.primaryClientId)}
+                          onPointerMove={handleTargetPointerMove}
+                          onPointerUp={handleTargetPointerUp}
+                          onPointerCancel={endTargetDrag}
+                          onClickCapture={e => {
+                            if (suppressTargetClickRef.current) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              suppressTargetClickRef.current = false;
+                            }
+                          }}
+                          className={`flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap ${
+                            draggingTargetId === g.primaryClientId ? 'rounded-md bg-blue-50/80' : ''
+                          } ${canReorderTargets ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                          style={canReorderTargets ? { touchAction: 'none' } : undefined}
+                        >
                           <ComprehensiveGroupReceiveCheckbox
                             checked={siteState.checked}
                             indeterminate={siteState.indeterminate}
@@ -3505,7 +3573,7 @@ function FilingCheckPageInner() {
         <>
           {canReorderTargets && (
             <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-400">
-              순번 ▲▼ 으로 순서 변경 (담당자·세목별 전용 — 수임처 관리와 별도)
+              업체명을 꾹 눌러 순서 변경 (담당자·세목별 전용 — 수임처 관리 기준 위에 이 세목만 덮어씀)
             </p>
           )}
         <table className="w-full table-fixed text-sm">
@@ -3573,7 +3641,6 @@ function FilingCheckPageInner() {
                 const vatSummaryOnly = tax === 'vat' && isVatSummaryOnlyClient(c);
                 const skipReceipt = vatNoticeOnly || vatSummaryOnly;
                 const received = !excluded && !skipReceipt && isReceived(c.id, c.businessNo);
-                const reorderableCount = filteredTargetsForTable.filter(x => !isManualId(x.id)).length;
                 const reorderIndex = filteredTargetsForTable
                   .slice(0, i + 1)
                   .filter(x => !isManualId(x.id)).length - 1;
@@ -3616,11 +3683,6 @@ function FilingCheckPageInner() {
                     <td className="px-2 py-2 text-center">
                       <FilingReorderIndexCell
                         index={canReorderRow ? reorderIndex : i}
-                        enabled={canReorderRow}
-                        canMoveUp={canReorderRow && reorderIndex > 0}
-                        canMoveDown={canReorderRow && reorderIndex < reorderableCount - 1}
-                        onMoveUp={() => moveUp(c.id)}
-                        onMoveDown={() => moveDown(c.id)}
                       />
                     </td>
                     {showsReviewFeeColumn ? (
@@ -3628,8 +3690,25 @@ function FilingCheckPageInner() {
                         {formatReviewFee(reviewFeeAmountForClient(c))}
                       </td>
                     ) : null}
-                    <td className="px-2 py-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <td className="px-2 py-2">
+                        <div
+                          data-filing-reorder-id={canReorderRow ? c.id : undefined}
+                          onPointerDown={e => handleTargetPointerDown(e, c.id)}
+                          onPointerMove={handleTargetPointerMove}
+                          onPointerUp={handleTargetPointerUp}
+                          onPointerCancel={endTargetDrag}
+                          onClickCapture={e => {
+                            if (suppressTargetClickRef.current) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              suppressTargetClickRef.current = false;
+                            }
+                          }}
+                          className={`flex min-w-0 flex-wrap items-center gap-1.5 ${
+                            draggingTargetId === c.id ? 'rounded-md bg-blue-50/80' : ''
+                          } ${canReorderRow ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                          style={canReorderRow ? { touchAction: 'none' } : undefined}
+                        >
                         {isManualId(c.id) ? (
                           <span className={nameCls}>{c.companyName || '(이름 없음)'}</span>
                         ) : tax === 'withholding' ? (
@@ -3721,7 +3800,7 @@ function FilingCheckPageInner() {
                     <td className="whitespace-nowrap px-2 py-2 text-sm tabular-nums text-slate-600">{c.businessNo || '-'}</td>
                     {tax === 'withholding' && (
                       <td className="px-2 py-2 text-center">
-                        {isManualId(c.id) || isExtraAdded(c.id) ? (
+                        {isManualId(c.id) ? (
                           <span className="text-xs text-slate-300">—</span>
                         ) : (
                           <div
@@ -3730,7 +3809,11 @@ function FilingCheckPageInner() {
                             } border-slate-200 bg-slate-50`}
                           >
                             {(['당월', '전월'] as const).map(opt => {
-                              const active = readFilingType(c.intakeData) === opt;
+                              const active = (
+                                isExtraAdded(c.id)
+                                  ? readManualFilingType(record.extraClients.find(m => m.id === c.id))
+                                  : readFilingType(c.intakeData)
+                              ) === opt;
                               return (
                                 <button
                                   key={opt}
@@ -3920,7 +4003,7 @@ function FilingCheckPageInner() {
           canEdit={!locked}
           onClose={() => setIncomePanelClient(null)}
           onSaved={() => {
-            const url = isMaster ? '/api/clients' : '/api/clients?mine=1&scope=filing';
+            const url = isMaster ? '/api/clients?includeIntake=1' : '/api/clients?mine=1&scope=filing&includeIntake=1';
             fetch(url, { cache: 'no-store' })
               .then(r => (r.ok ? r.json() : null))
               .then(d => {

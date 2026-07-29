@@ -19,6 +19,11 @@ import {
 import { syncMainCategory } from '@/app/utils/clientsGrouping';
 import type { BusinessEntityType } from '@/app/types/contact';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import {
+  applyManagerToLinkedInquiries,
+  nextManagerAfterChange,
+  type ManagerActor,
+} from '@/lib/intakeManagerSync';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -45,6 +50,7 @@ function applySyncedCategory(
 export interface ClientListFilters {
   status?: ClientStatus;
   includeChurned?: boolean;
+  includeIntake?: boolean;
   assignedUserId?: string;
   businessEntityType?: string;
   managerName?: string;
@@ -62,7 +68,13 @@ export async function listClients(filters: ClientListFilters = {}) {
   if (filters.status) {
     conditions.push(eq(clients.status, filters.status));
   } else if (filters.includeChurned) {
-    conditions.push(or(eq(clients.status, 'active'), eq(clients.status, 'churned')));
+    conditions.push(
+      filters.includeIntake
+        ? or(eq(clients.status, 'active'), eq(clients.status, 'intake'), eq(clients.status, 'churned'))
+        : or(eq(clients.status, 'active'), eq(clients.status, 'churned')),
+    );
+  } else if (filters.includeIntake) {
+    conditions.push(or(eq(clients.status, 'active'), eq(clients.status, 'intake')));
   } else {
     conditions.push(ne(clients.status, 'churned'));
   }
@@ -534,7 +546,11 @@ export async function completeIntake(id: string, assignedUserId: string) {
   return clientToRecord(row);
 }
 
-export async function updateClient(id: string, payload: ClientPatch) {
+export async function updateClient(
+  id: string,
+  payload: ClientPatch,
+  actor?: ManagerActor | null,
+) {
   const db = getDb();
   if (!payload.companyName.trim()) throw new Error('COMPANY_NAME_REQUIRED');
 
@@ -543,7 +559,14 @@ export async function updateClient(id: string, payload: ClientPatch) {
 
   const nextEntity = payload.businessEntityType || '';
   const nextServices = payload.serviceTypes ?? existing.serviceTypes ?? [];
-  const nextManager = payload.manager.trim();
+  let nextManager = payload.manager.trim();
+  if (actor) {
+    nextManager = nextManagerAfterChange({
+      current: existing.manager,
+      requested: nextManager,
+      actor,
+    });
+  }
 
   let mergedIntake = mergeIntakeDataPatch(existing.intakeData, payload.intakeData ?? {});
   if (payload.mobilePhone !== undefined) {
@@ -582,6 +605,11 @@ export async function updateClient(id: string, payload: ClientPatch) {
     .returning();
 
   if (!row) throw new Error('NOT_FOUND');
+
+  if (nextManager !== (existing.manager || '').trim()) {
+    await applyManagerToLinkedInquiries(id, nextManager);
+  }
+
   return clientToRecord(row);
 }
 

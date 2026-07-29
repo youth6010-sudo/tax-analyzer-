@@ -24,14 +24,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
     const body = (await request.json()) as InquiryPatch;
-    const inquiry = await updateInquiry(id, body);
+    const inquiry = await updateInquiry(id, body, {
+      name: user.name,
+      loginId: user.loginId,
+      role: user.role,
+      adminMode: user.adminMode,
+    });
     return NextResponse.json({ inquiry });
   } catch (e) {
     if (e instanceof Error && e.message === 'NOT_FOUND') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    if (e instanceof Error && e.message === 'MANAGER_LOCKED') {
+      return NextResponse.json(
+        { error: '담당자 지정 후에는 해당 담당자만 변경할 수 있습니다.' },
+        { status: 403 },
+      );
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

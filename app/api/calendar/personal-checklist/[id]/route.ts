@@ -5,7 +5,7 @@ import {
   getPersonalChecklistById,
   updatePersonalChecklistItem,
 } from '@/lib/personalChecklist';
-import type { ChecklistTaxType } from '@/app/types/calendar';
+import type { ChecklistTaxType, PersonalChecklistAttachment } from '@/app/types/calendar';
 
 export async function GET(
   _req: Request,
@@ -39,7 +39,7 @@ export async function PATCH(
       completed?: boolean;
       reflectInNotes?: boolean;
       assigneeNames?: string[];
-      addMemo?: string;
+      addMemo?: string | { body: string; attachments?: PersonalChecklistAttachment[] };
       updateMemo?: { id: string; body: string };
       deleteMemo?: string;
       dismiss?: boolean;

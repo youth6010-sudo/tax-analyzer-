@@ -19,7 +19,8 @@ export type InquiryColumnKey =
   | 'adminPhone'
   | 'address'
   | 'email'
-  | 'contractStatus';
+  | 'contractStatus'
+  | 'consultTypes';
 
 export type ProcessColumnKey =
   | 'companyName'
@@ -39,7 +40,8 @@ export type SheetColumn = {
 };
 
 export const INQUIRY_LIST_COLUMNS: SheetColumn[] = [
-  { key: 'inquiryDate', label: '문의 일자', width: '5.25rem', sticky: true },
+  { key: 'consultTypes', label: '문의유형', width: '5.5rem', sticky: true },
+  { key: 'inquiryDate', label: '문의일자', width: '4.25rem', sticky: true },
   { key: 'companyName', label: '업체명', width: '9rem', sticky: true },
   { key: 'phone', label: '연락처', width: '6.75rem' },
   { key: 'consultant', label: '초회상담자', width: '5.25rem' },

@@ -7,7 +7,7 @@ export interface ConsultationField {
   key: string;
   label: string;
   required?: boolean;
-  type?: 'textarea' | 'date' | 'number' | 'email' | 'password' | 'select';
+  type?: 'textarea' | 'date' | 'number' | 'email' | 'password' | 'select' | 'multiselect';
   options?: string[];
   placeholder?: string;
   showWhen?: FieldCondition;
@@ -68,7 +68,7 @@ export type ConsultationPhaseColumn = {
   steps: ConsultationStep[];
 };
 
-/** 단계별 마법사 대신 3열(전화·대면·마무리) 레이아웃용 */
+/** 단계별 마법사 대신 전화 / 대면·마무리 열 레이아웃용 */
 export function getPhaseColumns(config: ConsultationFormConfig): ConsultationPhaseColumn[] {
   const steps = getActiveSteps(config);
   return config.phases.map(p => ({
@@ -76,4 +76,21 @@ export function getPhaseColumns(config: ConsultationFormConfig): ConsultationPha
     label: p.label,
     steps: steps.filter(s => s.phase === p.id),
   }));
+}
+
+/** 구 3열(전화·대면·마무리) 설정도 2열(전화 · 대면·마무리)로 합쳐 표시 */
+export function getDisplayPhaseColumns(config: ConsultationFormConfig): ConsultationPhaseColumn[] {
+  const cols = getPhaseColumns(config).filter(c => c.steps.length > 0);
+  if (cols.length <= 2) return cols;
+  const phone = cols.find(c => c.phaseId === 'phone');
+  const rest = cols.filter(c => c.phaseId !== 'phone');
+  if (!phone || rest.length === 0) return cols;
+  return [
+    phone,
+    {
+      phaseId: 'visitClose',
+      label: rest.map(r => r.label).join(' · ') || '대면·마무리',
+      steps: rest.flatMap(r => r.steps),
+    },
+  ];
 }

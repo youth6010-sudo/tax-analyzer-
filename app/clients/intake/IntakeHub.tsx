@@ -12,6 +12,7 @@ import {
   companyMatchKeys,
   findInquiryForProcess,
   findProcessForInquiry,
+  inquiryConsultTypes,
   normalizeCompanyKey,
   sortInquiries,
   sortProcesses,
@@ -26,12 +27,14 @@ import {
   getPortalClients,
   getPortalInquiries,
   getPortalProcesses,
+  patchPortalInquiry,
   patchPortalIntake,
   patchPortalProcess,
   subscribePortal,
 } from '@/app/utils/portalStore';
 import ScopeToggle from '@/app/components/portal/ScopeToggle';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { CONSULT_TYPE_OPTIONS } from '@/lib/consultTypes';
 
 function pick(raw: Record<string, unknown>, camel: string, snake?: string): unknown {
   if (raw[camel] !== undefined && raw[camel] !== null) return raw[camel];
@@ -95,36 +98,63 @@ function IntakeToolbar({
   search,
   sort,
   scope,
+  consultTypeFilters,
   onSearchChange,
   onSortChange,
   onScopeChange,
+  onToggleConsultType,
 }: {
   search: string;
   sort: IntakeSort;
   scope: 'mine' | 'all';
+  consultTypeFilters: string[];
   onSearchChange: (v: string) => void;
   onSortChange: (v: IntakeSort) => void;
   onScopeChange: (v: 'mine' | 'all') => void;
+  onToggleConsultType: (v: string) => void;
 }) {
+  const consultTypes = CONSULT_TYPE_OPTIONS;
   return (
-    <div className={`${portalToolbar} flex-wrap`}>
-      <ScopeToggle value={scope} onChange={onScopeChange} />
-      <input
-        type="search"
-        value={search}
-        onChange={e => onSearchChange(e.target.value)}
-        placeholder="상호 검색…"
-        className={`${portalInput} w-full max-w-md`}
-      />
-      <select
-        value={sort}
-        onChange={e => onSortChange(e.target.value as IntakeSort)}
-        className={portalSelect}
-        aria-label="정렬"
-      >
-        <option value="inquiryDate">문의일순</option>
-        <option value="name">이름순</option>
-      </select>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[11px] font-semibold text-slate-500">문의유형</span>
+        {consultTypes.map(type => {
+          const active = consultTypeFilters.includes(type);
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onToggleConsultType(type)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                active
+                  ? 'border-blue-300 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              {type}
+            </button>
+          );
+        })}
+      </div>
+      <div className={`${portalToolbar} flex-wrap`}>
+        <ScopeToggle value={scope} onChange={onScopeChange} />
+        <input
+          type="search"
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder="상호 검색…"
+          className={`${portalInput} w-full max-w-md`}
+        />
+        <select
+          value={sort}
+          onChange={e => onSortChange(e.target.value as IntakeSort)}
+          className={portalSelect}
+          aria-label="정렬"
+        >
+          <option value="inquiryDate">문의일순</option>
+          <option value="name">이름순</option>
+        </select>
+      </div>
     </div>
   );
 }
@@ -158,6 +188,7 @@ export default function IntakeHub() {
   );
   const [selectedId, setSelectedId] = useState<string | null>(urlInquiry);
   const [scope, setScope] = useState<'mine' | 'all'>('all');
+  const [consultTypeFilters, setConsultTypeFilters] = useState<string[]>([]);
   const [currentUserName, setCurrentUserName] = useState('');
 
   useEffect(() => {
@@ -315,6 +346,12 @@ export default function IntakeHub() {
   const filterFn = (list: InquiryRow[]) => {
     let out = list;
     if (scope === 'mine') out = out.filter(inquiryMatchesMine);
+    if (consultTypeFilters.length > 0) {
+      out = out.filter(inquiry => {
+        const selected = inquiryConsultTypes(inquiry.extra);
+        return consultTypeFilters.some(type => selected.includes(type));
+      });
+    }
     if (!filterText) return out;
     return out.filter(i => i.companyName.toLowerCase().includes(filterText));
   };
@@ -328,10 +365,24 @@ export default function IntakeHub() {
     const pinned = inquiries.find(i => i.id === pinInquiryId);
     if (!pinned) return base;
     return sortInquiries([pinned, ...base], sort);
-  }, [inquiries, filterText, sort, pinInquiryId, scope, inquiryMatchesMine]);
+  }, [inquiries, filterText, sort, pinInquiryId, scope, inquiryMatchesMine, consultTypeFilters]);
   const filteredProcesses = useMemo(
     () => {
       let list = processes;
+      if (consultTypeFilters.length > 0) {
+        const matchedInquiryIds = new Set(
+          inquiries
+            .filter(inquiry => {
+              const selected = inquiryConsultTypes(inquiry.extra);
+              return consultTypeFilters.some(type => selected.includes(type));
+            })
+            .map(inquiry => inquiry.id),
+        );
+        list = list.filter(p => {
+          const inq = findInquiryForProcess(p, inquiries, [], clientRefs);
+          return inq ? matchedInquiryIds.has(inq.id) : false;
+        });
+      }
       if (scope === 'mine') {
         const mineInquiryIds = new Set(inquiries.filter(inquiryMatchesMine).map(i => i.id));
         list = list.filter(p => {
@@ -349,11 +400,12 @@ export default function IntakeHub() {
         sort,
       );
     },
-    [processes, inquiries, filterText, sort, scope, inquiryMatchesMine, clientRefs, clientManagerById, currentUserName],
+    [processes, inquiries, filterText, sort, scope, inquiryMatchesMine, clientRefs, clientManagerById, currentUserName, consultTypeFilters],
   );
 
   const onInquiryUpdated = useCallback((row: InquiryRow) => {
-    setInquiries(prev => prev.map(q => q.id === row.id ? row : q));
+    setInquiries(prev => prev.map(q => (q.id === row.id ? row : q)));
+    patchPortalInquiry(row.id, row as unknown as Record<string, unknown>);
   }, []);
 
   const onProcessUpdated = useCallback((row: ProcessRow) => {
@@ -551,9 +603,15 @@ export default function IntakeHub() {
           search={search}
           sort={sort}
           scope={scope}
+          consultTypeFilters={consultTypeFilters}
           onSearchChange={onSearchChange}
           onSortChange={onSortChange}
           onScopeChange={setScope}
+          onToggleConsultType={type =>
+            setConsultTypeFilters(prev =>
+              prev.includes(type) ? prev.filter(v => v !== type) : [...prev, type],
+            )
+          }
         />
       )}
 

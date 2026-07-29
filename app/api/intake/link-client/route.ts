@@ -4,7 +4,7 @@ import { updateInquiry, updateProcessField } from '@/lib/consultationDb';
 
 export async function POST(request: Request) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const body = (await request.json()) as {
       inquiryId?: string;
       processId?: string | null;
@@ -18,7 +18,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'clientId가 필요합니다.' }, { status: 400 });
     }
 
-    const inquiry = await updateInquiry(inquiryId, { clientId });
+    const inquiry = await updateInquiry(
+      inquiryId,
+      { clientId },
+      {
+        name: user.name,
+        loginId: user.loginId,
+        role: user.role,
+        adminMode: user.adminMode,
+      },
+    );
     let process = null;
     if (processId) {
       process = await updateProcessField(processId, { clientId });
@@ -31,6 +40,12 @@ export async function POST(request: Request) {
     }
     if (e instanceof Error && e.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (e instanceof Error && e.message === 'MANAGER_LOCKED') {
+      return NextResponse.json(
+        { error: '담당자 지정 후에는 해당 담당자만 변경할 수 있습니다.' },
+        { status: 403 },
+      );
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ConsultationField, ConsultationFormConfig, ConsultationPhaseColumn } from '../../types/consultation';
-import { getPhaseColumns, isFieldVisible } from '../../types/consultation';
-import { allFormKeys, applyConsultationLinks, isPhoneSourceField, PHONE_SOURCE_KEYS } from '@/lib/consultationFormLinks';
+import type { ConsultationFormConfig } from '../../types/consultation';
+import { allFormKeys, applyConsultationLinks } from '@/lib/consultationFormLinks';
 import {
   buildBookkeepingConsultSheetText,
   formRecordToBookkeepingSource,
 } from '@/lib/bookkeepingConsultCopy';
 import BookkeepingConsultCopyButton from './BookkeepingConsultCopyButton';
+import ConsultationPhaseGrid, {
+  CONSULT_MULTI_VALUE_DELIM,
+  CONSULT_REGISTER_REQUIRED_KEYS,
+  isConsultRequiredFilled,
+  splitConsultMultiValue,
+} from './ConsultationPhaseGrid';
 
 type DraftSummary = {
   id: string;
@@ -19,212 +24,6 @@ type DraftSummary = {
   stepTitle: string;
   updatedAt: string;
 };
-
-const REGISTER_REQUIRED_KEYS = new Set(['phone', 'companyName']);
-
-const PHASE_HEADER: Record<string, string> = {
-  phone: 'from-blue-50 to-sky-50 border-blue-100',
-  visit: 'from-indigo-50 to-violet-50 border-indigo-100',
-  close: 'from-amber-50 to-orange-50 border-amber-100',
-};
-
-const PHASE_ACCENT: Record<string, string> = {
-  phone: 'text-blue-700',
-  visit: 'text-indigo-700',
-  close: 'text-amber-800',
-};
-
-const PHONE_LINK_LABELS: Record<string, string> = {
-  phone: '연락처',
-  companyName: '상호명',
-  representative: '성함',
-  openDate: '개업일',
-  location: '사업장 위치',
-  industry: '업종',
-  revenue: '매출 규모',
-  channel: '유입경로',
-  channelDetail: '유입 상세',
-  payrollFullTime: '상용직',
-  payrollDaily: '일용직',
-  payrollOther: '사업/기타',
-  businessEntityType: '사업자 유형',
-  vatTaxStatus: '과·면세',
-  hasPrevAccountant: '이전 세무사',
-  prevTerminated: '해지',
-  prevDocsReturned: '자료 반환',
-  prevUnpaidIssues: '미수·분쟁',
-  prevComplaints: '이전 불만',
-  clientNeeds: '고객 니즈',
-  taxStatusSummary: '세무현황요약',
-  potentialTaxIssues: '세무 이슈',
-  proposedServiceScope: '서비스 범위',
-  feeDirection: '수임료 방향',
-  consultRemarks: '비고',
-};
-
-function LinkedPhoneSummary({ form }: { form: Record<string, string> }) {
-  const items = PHONE_SOURCE_KEYS.map(key => ({
-    key,
-    label: PHONE_LINK_LABELS[key] ?? key,
-    value: form[key]?.trim() ?? '',
-  })).filter(i => i.value && !(i.key === 'hasPrevAccountant' && i.value === '없음'));
-
-  if (!items.length) {
-    return (
-      <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/40 px-3 py-2.5 text-[11px] text-blue-700/80">
-        전화 상담 열에서 입력한 내용이 여기에 연동됩니다.
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2.5 space-y-1.5">
-      <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wide">전화 상담 연동</p>
-      <dl className="grid grid-cols-1 gap-x-2 gap-y-1 text-[11px]">
-        {items.map(({ key, label, value }) => (
-          <div key={key} className="min-w-0">
-            <dt className="text-blue-600/90 font-semibold inline">{label}</dt>
-            <dd className="text-slate-800 whitespace-pre-line break-words mt-0.5">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function LinkedVisitSummary({ form }: { form: Record<string, string> }) {
-  const items: { label: string; value: string }[] = [];
-  if (form.recordMeetingAt?.trim()) items.push({ label: '상담 일시', value: form.recordMeetingAt.trim() });
-  if (form.coreNeeds?.trim()) items.push({ label: '핵심 니즈', value: form.coreNeeds.trim() });
-  if (form.proposedFee?.trim()) items.push({ label: '예상 수임료', value: form.proposedFee.trim() });
-  if (form.serviceBasic?.trim()) items.push({ label: '기본 서비스', value: form.serviceBasic.trim() });
-
-  if (!items.length) return null;
-
-  return (
-    <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2.5 space-y-1.5">
-      <p className="text-[10px] font-bold text-indigo-800 uppercase tracking-wide">대면 상담 연동</p>
-      <dl className="space-y-1 text-[11px]">
-        {items.map(({ label, value }) => (
-          <div key={label}>
-            <dt className="text-indigo-600/90 font-semibold">{label}</dt>
-            <dd className="text-slate-800 whitespace-pre-line break-words mt-0.5">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function FieldRow({ field, value, onChange }: { field: ConsultationField; value: string; onChange: (v: string) => void }) {
-  const base =
-    'mt-1 w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
-  if (field.type === 'textarea') {
-    return (
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        rows={2}
-        className={`${base} resize-y min-h-[2.5rem]`}
-        placeholder={field.placeholder}
-      />
-    );
-  }
-  if (field.type === 'select') {
-    return (
-      <select value={value} onChange={e => onChange(e.target.value)} className={base}>
-        {(field.options ?? []).map(o => (
-          <option key={o} value={o}>
-            {o || '선택…'}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  return (
-    <input
-      type={
-        field.type === 'number'
-          ? 'number'
-          : field.type === 'date'
-            ? 'date'
-            : field.type === 'email'
-              ? 'email'
-              : 'text'
-      }
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={base}
-      placeholder={field.placeholder}
-    />
-  );
-}
-
-function PhaseColumn({
-  column,
-  form,
-  onChange,
-}: {
-  column: ConsultationPhaseColumn;
-  form: Record<string, string>;
-  onChange: (key: string, v: string) => void;
-}) {
-  const header = PHASE_HEADER[column.phaseId] ?? 'from-slate-50 to-slate-100 border-slate-200';
-  const accent = PHASE_ACCENT[column.phaseId] ?? 'text-slate-700';
-  const showPhoneLink = column.phaseId !== 'phone';
-  const phoneLinkAtBottom = column.phaseId === 'visit';
-  const showVisitLink = column.phaseId === 'close';
-
-  return (
-    <article className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-      <header className={`shrink-0 border-b bg-gradient-to-r px-4 py-3 ${header}`}>
-        <h3 className={`text-sm font-black ${accent}`}>{column.label}</h3>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 space-y-4 max-h-[min(72vh,calc(100dvh-14rem))]">
-        {showPhoneLink && !phoneLinkAtBottom && <LinkedPhoneSummary form={form} />}
-        {showVisitLink && <LinkedVisitSummary form={form} />}
-        {column.steps.map(step => {
-          const fields = step.fields.filter(
-            f => isFieldVisible(f, form) && !(showPhoneLink && isPhoneSourceField(f.key)),
-          );
-          if (!fields.length) return null;
-          return (
-            <section key={step.id} className="space-y-2.5">
-              <div>
-                <h4 className="text-xs font-bold text-slate-800">{step.title}</h4>
-                {step.description && (
-                  <p className="mt-0.5 text-[11px] text-slate-500 leading-snug">{step.description}</p>
-                )}
-                {step.guide && (
-                  <p className="mt-1 text-[11px] text-blue-800 bg-blue-50/80 rounded-md px-2 py-1.5 border-l-2 border-blue-300 leading-snug">
-                    {step.guide}
-                  </p>
-                )}
-              </div>
-              {fields.map(f => {
-                const required = Boolean(f.required || REGISTER_REQUIRED_KEYS.has(f.key));
-                return (
-                <label key={f.key} className="block">
-                  <span className={`text-xs font-semibold ${required ? 'text-rose-700' : 'text-gray-700'}`}>
-                    {f.label}
-                    {required && (
-                      <span className="ml-0.5 font-bold text-rose-600" title="필수">
-                        *
-                      </span>
-                    )}
-                  </span>
-                  <FieldRow field={f} value={form[f.key] ?? ''} onChange={v => onChange(f.key, v)} />
-                </label>
-              );
-              })}
-            </section>
-          );
-        })}
-        {showPhoneLink && phoneLinkAtBottom && <LinkedPhoneSummary form={form} />}
-      </div>
-    </article>
-  );
-}
 
 function emptyForm(config: ConsultationFormConfig): Record<string, string> {
   const init: Record<string, string> = {};
@@ -236,7 +35,8 @@ function mergeForm(config: ConsultationFormConfig, saved: Record<string, unknown
   const init = emptyForm(config);
   for (const key of Object.keys(init)) {
     const v = saved[key];
-    if (v != null) init[key] = String(v);
+    if (Array.isArray(v)) init[key] = v.map(item => String(item).trim()).filter(Boolean).join(CONSULT_MULTI_VALUE_DELIM);
+    else if (v != null) init[key] = String(v);
   }
   return applyConsultationLinks(init);
 }
@@ -245,7 +45,7 @@ export default function ConsultationFormPanel({
   onSuccess,
   initialDraftId,
 }: {
-  onSuccess?: (result: { inquiryId: string; processId: string }) => void;
+  onSuccess?: (result: { inquiryId: string; processId: string | null }) => void;
   initialDraftId?: string | null;
 }) {
   const router = useRouter();
@@ -259,7 +59,6 @@ export default function ConsultationFormPanel({
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
-  const phaseColumns = useMemo(() => (config ? getPhaseColumns(config) : []), [config]);
   const bookkeepingCopyText = useMemo(
     () => buildBookkeepingConsultSheetText(formRecordToBookkeepingSource(applyConsultationLinks(form))),
     [form],
@@ -312,6 +111,7 @@ export default function ConsultationFormPanel({
     const linked = applyConsultationLinks(form);
     const payload: Record<string, unknown> = { ...linked };
     if (linked.proposedFee) payload.proposedFee = Number(linked.proposedFee);
+    if (linked.consultTypes) payload.consultTypes = splitConsultMultiValue(linked.consultTypes);
     return payload;
   };
 
@@ -327,7 +127,7 @@ export default function ConsultationFormPanel({
           inquiryId: draftId ?? undefined,
           data: buildPayload(),
           stepIdx: 0,
-          stepTitle: '3단계 통합',
+          stepTitle: '2단계 통합',
         }),
       });
       const data = await res.json();
@@ -384,7 +184,10 @@ export default function ConsultationFormPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '저장 실패');
       if (onSuccess) {
-        onSuccess({ inquiryId: String(data.inquiryId), processId: String(data.processId) });
+        onSuccess({
+          inquiryId: String(data.inquiryId),
+          processId: data.processId != null ? String(data.processId) : null,
+        });
       } else {
         router.push(`/clients/intake?tab=intake&inquiry=${data.inquiryId}`);
       }
@@ -396,18 +199,26 @@ export default function ConsultationFormPanel({
   };
 
   const registerNow = async () => {
-    if (!form.phone?.trim()) {
-      setError('연락처를 입력해 주세요.');
-      return;
-    }
-    if (!form.companyName?.trim()) {
-      setError('상호명을 입력해 주세요.');
+    for (const key of CONSULT_REGISTER_REQUIRED_KEYS) {
+      const value = form[key] ?? '';
+      if (isConsultRequiredFilled(key, value)) continue;
+      if (key === 'phone') {
+        setError('연락처를 입력해 주세요.');
+      } else if (key === 'companyName') {
+        setError('상호명을 입력해 주세요.');
+      } else if (key === 'consultTypes') {
+        setError('문의 유형을 하나 이상 선택해 주세요.');
+      } else {
+        setError('필수 항목을 입력해 주세요.');
+      }
       return;
     }
     await doSubmit();
   };
 
-  const canRegister = Boolean(form.phone?.trim() && form.companyName?.trim());
+  const canRegister = [...CONSULT_REGISTER_REQUIRED_KEYS].every(key =>
+    isConsultRequiredFilled(key, form[key] ?? ''),
+  );
 
   if (!config || !ready) {
     return <p className="text-sm text-gray-400 py-8 text-center">불러오는 중…</p>;
@@ -478,11 +289,7 @@ export default function ConsultationFormPanel({
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4 lg:items-stretch">
-        {phaseColumns.map(col => (
-          <PhaseColumn key={col.phaseId} column={col} form={form} onChange={onChange} />
-        ))}
-      </div>
+      <ConsultationPhaseGrid config={config} form={form} onChange={onChange} />
 
       {draftMsg && (
         <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -520,7 +327,7 @@ export default function ConsultationFormPanel({
       </div>
 
       <p className="mt-2 text-center text-[10px] text-gray-400">
-        <span className="font-bold text-rose-600">*</span> 연락처·상호명 필수 · 초회상담자는 로그인 계정으로 자동 기록 · 나머지는 등록 후 보완
+        <span className="font-bold text-rose-600">*</span> 연락처·상호명·문의유형 필수 · 기장·신고는 체크리스트·담당자 알림 대상 · 초회상담자는 로그인 계정으로 자동 기록(유입프로세스에서 수정 가능)
       </p>
     </div>
   );

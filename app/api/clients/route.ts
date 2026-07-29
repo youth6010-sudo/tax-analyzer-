@@ -12,11 +12,13 @@ export async function GET(request: NextRequest) {
     const mineOnly =
       searchParams.get('mine') === '1' || shouldFilterClientsToMine(user, scope);
     const includeChurned = searchParams.get('includeChurned') === '1';
+    const includeIntake = searchParams.get('includeIntake') === '1';
     const businessEntityType = searchParams.get('entity') ?? undefined;
 
     const clients = await listClients({
       status: status ?? undefined,
       includeChurned: includeChurned || undefined,
+      includeIntake: includeIntake || undefined,
       mineOnly,
       userId: user.id,
       userName: user.name,

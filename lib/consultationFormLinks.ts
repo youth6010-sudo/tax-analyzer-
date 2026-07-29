@@ -1,5 +1,6 @@
 /** 전화 상담에서만 입력·다른 열에는 연동 요약으로 표시 */
 export const PHONE_SOURCE_KEYS = [
+  'consultTypes',
   'phone',
   'companyName',
   'representative',

@@ -5,6 +5,7 @@ import { getPortalClients, hydratePortal } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
 import {
   CHECKLIST_TAX_OPTIONS,
+  type PersonalChecklistAttachment,
   type ChecklistTaxType,
   type PersonalChecklistDto,
   type PersonalChecklistMemo,
@@ -113,10 +114,12 @@ export default function PersonalChecklistAddForm({
   const [reflectInNotes, setReflectInNotes] = useState(false);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [memoDraft, setMemoDraft] = useState('');
+  const [memoAttachments, setMemoAttachments] = useState<PersonalChecklistAttachment[]>([]);
   const [memos, setMemos] = useState<PersonalChecklistMemo[]>([]);
   const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
   const [editingMemoBody, setEditingMemoBody] = useState('');
   const [memoBusy, setMemoBusy] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ url: string; name: string } | null>(null);
   const [myCheckoff, setMyCheckoff] = useState(false);
   const [checkoffBusy, setCheckoffBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -165,6 +168,7 @@ export default function PersonalChecklistAddForm({
       setEditingMemoId(null);
       setEditingMemoBody('');
       setMemoDraft('');
+      setMemoAttachments([]);
       return;
     }
     setTaxType('');
@@ -185,6 +189,7 @@ export default function PersonalChecklistAddForm({
     setEditingMemoId(null);
     setEditingMemoBody('');
     setMemoDraft('');
+    setMemoAttachments([]);
   }, [editItem, defaultClientId]);
 
   const isOwner = !editItem || !currentUser || managerNamesMatch(editItem.ownerName, currentUser);
@@ -220,6 +225,8 @@ export default function PersonalChecklistAddForm({
       if (next?.memos) setMemos(next.memos);
       setEditingMemoId(null);
       setEditingMemoBody('');
+      setMemoDraft('');
+      setMemoAttachments([]);
       onUpdated?.(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : '메모 저장 실패');
@@ -241,6 +248,38 @@ export default function PersonalChecklistAddForm({
   const deleteMemo = async (memoId: string) => {
     if (!confirm('이 메모를 삭제할까요?')) return;
     await patchMemo({ deleteMemo: memoId });
+  };
+
+  const onPickMemoImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const picked = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (picked.length === 0) {
+      setError('이미지 파일만 올릴 수 있습니다.');
+      return;
+    }
+    const next = await Promise.all(
+      picked.map(
+        file =>
+          new Promise<PersonalChecklistAttachment>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                id: crypto.randomUUID(),
+                name: file.name,
+                contentType: file.type || 'image/*',
+                dataUrl: String(reader.result ?? ''),
+              });
+            reader.onerror = () => reject(new Error(`${file.name} 이미지를 읽지 못했습니다.`));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).catch(err => {
+      setError(err instanceof Error ? err.message : '이미지 업로드 실패');
+      return null;
+    });
+    if (!next) return;
+    setError('');
+    setMemoAttachments(prev => [...prev, ...next]);
   };
 
   const toggleAssignee = (name: string) => {
@@ -398,8 +437,8 @@ export default function PersonalChecklistAddForm({
           return;
         }
       }
-    } else if (isEdit && !memoDraft.trim()) {
-      window.alert('추가할 메모를 입력해주세요.');
+    } else if (isEdit && !memoDraft.trim() && memoAttachments.length === 0) {
+      window.alert('추가할 메모나 이미지를 입력해주세요.');
       return;
     }
     setSaving(true);
@@ -420,7 +459,9 @@ export default function PersonalChecklistAddForm({
                 assigneeNames: finalAssignees,
               }
             : {}),
-          ...(memoDraft.trim() ? { addMemo: memoDraft.trim() } : {}),
+          ...(memoDraft.trim() || memoAttachments.length > 0
+            ? { addMemo: { body: memoDraft.trim(), attachments: memoAttachments } }
+            : {}),
         }
       : !isRoutedRequestTaxType(taxType) && repeatOn
         ? {
@@ -429,7 +470,9 @@ export default function PersonalChecklistAddForm({
             clientId: clientId || null,
             reflectInNotes,
             assigneeNames: finalAssignees,
-            ...(memoDraft.trim() ? { memo: memoDraft.trim() } : {}),
+            ...(memoDraft.trim() || memoAttachments.length > 0
+              ? { memo: { body: memoDraft.trim(), attachments: memoAttachments } }
+              : {}),
             repeat: {
               from: repeatFrom,
               to: repeatTo,
@@ -446,7 +489,9 @@ export default function PersonalChecklistAddForm({
             dueDate: isRoutedRequestTaxType(taxType) ? '' : dueDate,
             reflectInNotes: isRoutedRequestTaxType(taxType) ? false : reflectInNotes,
             assigneeNames: finalAssignees,
-            ...(memoDraft.trim() ? { memo: memoDraft.trim() } : {}),
+            ...(memoDraft.trim() || memoAttachments.length > 0
+              ? { memo: { body: memoDraft.trim(), attachments: memoAttachments } }
+              : {}),
           };
     try {
       const res = await fetch(
@@ -483,9 +528,11 @@ export default function PersonalChecklistAddForm({
         setReflectInNotes(false);
         setAssigneeNames([]);
         setMemoDraft('');
+        setMemoAttachments([]);
         onCreated?.();
       } else {
         setMemoDraft('');
+        setMemoAttachments([]);
         const next = (data as { item?: PersonalChecklistDto }).item;
         if (next?.memos) setMemos(next.memos);
         onUpdated?.(next);
@@ -894,7 +941,28 @@ export default function PersonalChecklistAddForm({
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{m.body}</p>
+                      <>
+                        <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{m.body}</p>
+                        {(m.attachments?.length ?? 0) > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {m.attachments!.map(att => (
+                              <button
+                                key={att.id}
+                                type="button"
+                                onClick={() => setImagePreview({ url: att.dataUrl, name: att.name })}
+                                className="block"
+                                title="미리보기"
+                              >
+                                <img
+                                  src={att.dataUrl}
+                                  alt={att.name}
+                                  className="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </li>
                 );
@@ -908,9 +976,52 @@ export default function PersonalChecklistAddForm({
             placeholder={isEdit ? '메모 추가… (저장 후에도 계속 추가 가능)' : '메모 (선택)'}
             className={portalInput + ' w-full resize-y text-xs py-1.5'}
           />
+          <div className="space-y-1.5">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-[#4b6cb7]">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e => {
+                  void onPickMemoImages(e.target.files);
+                  e.currentTarget.value = '';
+                }}
+                className="hidden"
+              />
+              <span className="rounded-md bg-[#4b6cb7]/10 px-2 py-1">이미지 추가</span>
+              <span className="font-normal text-slate-400">클릭하면 미리보기</span>
+            </label>
+            {memoAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {memoAttachments.map(att => (
+                  <div key={att.id} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setImagePreview({ url: att.dataUrl, name: att.name })}
+                      className="block"
+                      title="미리보기"
+                    >
+                      <img
+                        src={att.dataUrl}
+                        alt={att.name}
+                        className="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMemoAttachments(prev => prev.filter(x => x.id !== att.id))}
+                      className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {isEdit && (
             <p className="text-[10px] leading-snug text-slate-400">
-              여러 명이 메모를 남길 수 있습니다. 본인이 작성한 메모는 수정·삭제할 수 있습니다.
+              여러 명이 메모를 남길 수 있습니다. 본인이 작성한 메모는 수정·삭제할 수 있고, 메모에 이미지도 첨부할 수 있습니다.
             </p>
           )}
         </div>
@@ -960,6 +1071,36 @@ export default function PersonalChecklistAddForm({
           <span className="text-red-500">*</span> 필수입력
         </span>
       </div>
+
+      {imagePreview && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setImagePreview(null)}
+          role="presentation"
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw]"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={imagePreview.name}
+          >
+            <button
+              type="button"
+              onClick={() => setImagePreview(null)}
+              className="absolute -right-2 -top-2 z-10 rounded-full bg-white px-2 py-0.5 text-sm font-bold text-slate-700 shadow"
+            >
+              ×
+            </button>
+            <img
+              src={imagePreview.url}
+              alt={imagePreview.name}
+              className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-xl"
+            />
+            <p className="mt-2 truncate text-center text-xs text-white/90">{imagePreview.name}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

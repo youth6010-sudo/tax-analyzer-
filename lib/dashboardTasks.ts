@@ -1,14 +1,17 @@
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, intakeInquiries, intakeProcesses, clients } from '@/db/schema';
-import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
 import {
   buildIntakeDeepLink,
   findInquiryForProcess,
+  inquiryAssigneeManager,
   inquiryBlueholeCase,
+  inquiryChecklistKeys,
   intakeChecklistProgress,
   isIntakeProcessComplete,
+  inquiryNeedsOnboardingChecklist,
   resolveClientIdByName,
   type ClientNameRef,
   type InquiryRow,
@@ -38,12 +41,12 @@ export type DashboardTaskClientRef = {
 
 /**
  * 담당자 기준 노출 규칙:
- *  - 담당자가 지정된 업체 → 그 담당자에게만
- *  - 담당자가 없는 업체 → 관리자에게만
+ *  - 담당자(수임처·유입 배정)가 지정된 건 → 그 담당자에게만
+ *  - 담당자가 없는 건 → 관리자에게만
  */
 function visibleToUser(manager: string, user: DashboardTaskUser): boolean {
   const mgr = (manager || '').trim();
-  if (mgr) return getManagerMatchNames(user.name).includes(mgr);
+  if (mgr) return managerNamesMatch(mgr, user.name);
   return user.isAdmin;
 }
 
@@ -203,16 +206,21 @@ export async function listDashboardTasks(
     const company = (raw.clientCompanyName?.trim() || raw.companyName.trim() || '업체명 미정');
     const manager = (raw.clientManager ?? (resolvedClientId ? managerByClientId.get(resolvedClientId) : '') ?? '').trim();
 
-    if (!user.isAdmin && !visibleToUser(manager, user)) continue;
-
     const altNames = [raw.clientCompanyName, raw.companyName].filter(
       (n): n is string => Boolean(n?.trim()),
     );
     const inquiry = findInquiryForProcess(process, inquiries, altNames, clientRefs);
+    if (inquiry && !inquiryNeedsOnboardingChecklist(inquiry.extra)) continue;
     const inquiryBluehole = inquiry ? inquiryBlueholeCase(inquiry.extra) : '';
-    if (isIntakeProcessComplete(process.checklist, inquiryBluehole)) continue;
+    const checklistKeys = inquiry ? inquiryChecklistKeys(inquiry.extra) : [];
+    if (checklistKeys.length === 0) continue;
+    if (isIntakeProcessComplete(process.checklist, inquiryBluehole, checklistKeys)) continue;
 
-    const { done, total } = intakeChecklistProgress(process.checklist, inquiryBluehole);
+    const assignee = inquiry ? inquiryAssigneeManager(inquiry.extra) : '';
+    const notifyManager = assignee || manager;
+    if (!user.isAdmin && !visibleToUser(notifyManager, user)) continue;
+
+    const { done, total } = intakeChecklistProgress(process.checklist, inquiryBluehole, checklistKeys);
 
     tasks.push({
       id: `onboard-${process.id}`,
@@ -228,7 +236,7 @@ export async function listDashboardTasks(
     });
   }
 
-  // 국세청 사업자상태 폐업(03)·휴업(02) 업체 → 담당자(없으면 관리자) 할 일 (유출·유출상태면 제외)
+  // 국세청 사업자상태 폐업(03) 업체만 → 담당자(없으면 관리자) 할 일 (유출·유출상태면 제외)
   const churnRows = await db
     .select({ clientId: churnRecords.clientId, companyName: churnRecords.companyName })
     .from(churnRecords);
@@ -245,18 +253,17 @@ export async function listDashboardTasks(
     .from(clients)
     .where(and(
       ne(clients.status, 'churned'),
-      inArray(clients.ntsStatusCode, ['02', '03']),
+      inArray(clients.ntsStatusCode, ['03']),
     ));
 
   for (const c of ntsRows) {
     if (clientHasHandledNtsChurn(c, churnRows)) continue;
     const manager = (c.manager || '').trim();
     if (!visibleToUser(manager, user)) continue;
-    const label = c.ntsStatusCode === '03' ? '폐업' : '휴업';
     tasks.push({
       id: `nts-${c.id}`,
       type: 'nts_alert',
-      title: `${c.companyName || '업체명 미정'} - ${label} 확인`,
+      title: `${c.companyName || '업체명 미정'} - 폐업 확인`,
       subtitle: manager ? '국세청 상태' : '담당 미지정 · 국세청',
       href: `/clients/${c.id}`,
       priority: 0,

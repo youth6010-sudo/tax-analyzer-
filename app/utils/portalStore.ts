@@ -252,6 +252,20 @@ export function patchPortalClient(id: string, patch: Partial<ClientRecord>): voi
   notify();
 }
 
+/** 유입관리 단건 수정 — bootstrap 캐시의 inquiries 갱신 */
+export function patchPortalInquiry(id: string, inquiry: Record<string, unknown>): void {
+  if (!memory) return;
+  const inquiries = memory.inquiries ?? [];
+  const idx = inquiries.findIndex(q => String(q.id) === id);
+  const next =
+    idx >= 0
+      ? inquiries.map((q, i) => (i === idx ? { ...q, ...inquiry } : q))
+      : [inquiry, ...inquiries];
+  memory = { ...memory, inquiries: next, fetchedAt: Date.now() };
+  writeStorage(memory);
+  notify();
+}
+
 /** 유입 프로세스 체크리스트 등 — bootstrap 캐시의 processes·tasks 갱신 */
 export function patchPortalProcess(id: string, process: Record<string, unknown>): void {
   if (!memory) return;

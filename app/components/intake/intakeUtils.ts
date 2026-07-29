@@ -13,7 +13,7 @@ export const CHECKLIST_LABEL: Record<string, string> = {
   consent: '수임동의',
   cms: 'CMS 등록',
   assignee: '담당자 배정',
-  programClient: '프로그램 거래처 생성',
+  programClient: '세무사랑 거래처 등록',
   blueholeClient: '블루홀 거래처 등록',
   tpClient: 'TP 거래처 등록',
   semoReport: '위멤버스 및 세모리포트 등록',
@@ -43,17 +43,19 @@ export function isChecklistKeyComplete(
 export function isIntakeProcessComplete(
   checklist: ProcessRow['checklist'] | undefined,
   inquiryBluehole = '',
+  keys: readonly string[] = CHECKLIST_KEYS,
 ): boolean {
-  return CHECKLIST_KEYS.every(k => isChecklistKeyComplete(k, checklist, inquiryBluehole));
+  return keys.every(k => isChecklistKeyComplete(k, checklist, inquiryBluehole));
 }
 
 /** 표시용 진행 — 숨긴 항목은 분모에서 제외, 남은 항목이 모두 체크되면 n/n */
 export function intakeChecklistProgress(
   checklist: ProcessRow['checklist'] | undefined,
   inquiryBluehole = '',
+  keys: readonly string[] = CHECKLIST_KEYS,
 ): { done: number; total: number } {
   const hidden = hiddenChecklistKeys(checklist);
-  const visibleKeys = CHECKLIST_KEYS.filter(k => !hidden.includes(k));
+  const visibleKeys = keys.filter(k => !hidden.includes(k));
   const done = visibleKeys.filter(k =>
     isChecklistItemDone(k, checklist, inquiryBluehole),
   ).length;
@@ -63,8 +65,9 @@ export function intakeChecklistProgress(
 export function checklistDone(
   checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined,
   inquiryBluehole = '',
+  keys: readonly string[] = CHECKLIST_KEYS,
 ) {
-  return CHECKLIST_KEYS.filter(k =>
+  return keys.filter(k =>
     isChecklistKeyComplete(k, checklist as ProcessRow['checklist'], inquiryBluehole),
   ).length;
 }
@@ -72,11 +75,12 @@ export function checklistDone(
 export function progressPct(
   checklist: Record<string, boolean | string | string[] | Record<string, unknown>> | undefined,
   inquiryBluehole = '',
+  keys: readonly string[] = CHECKLIST_KEYS,
 ) {
   const hidden = hiddenChecklistKeys(checklist as ProcessRow['checklist']);
-  const total = CHECKLIST_KEYS.length - hidden.length;
+  const total = keys.filter(k => !hidden.includes(k)).length;
   if (total <= 0) return 100;
-  const { done } = intakeChecklistProgress(checklist as ProcessRow['checklist'], inquiryBluehole);
+  const { done } = intakeChecklistProgress(checklist as ProcessRow['checklist'], inquiryBluehole, keys);
   return Math.round((done / total) * 100);
 }
 
@@ -174,6 +178,44 @@ export function inquiryEmail(extra: Record<string, unknown> | undefined): string
   return typeof extra?.email === 'string' ? extra.email : '';
 }
 
+/** 유입프로세스 담당자 (사람 이름) */
+export function inquiryAssigneeManager(extra: Record<string, unknown> | undefined): string {
+  const v = extra?.assigneeManager;
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+export const INTAKE_CONTRACT_STATUS_OPTIONS = ['계약완료', '보류', '취소'] as const;
+
+import {
+  BOOKKEEPING_CONSULT_TYPE,
+  checklistKeysForConsultTypes,
+  consultTypesNeedOnboardingChecklist,
+  parseConsultTypes,
+} from '@/lib/consultTypes';
+
+/** 온보딩 체크리스트·업체 알림 대상 문의유형 */
+export { BOOKKEEPING_CONSULT_TYPE, checklistKeysForConsultTypes };
+
+export function inquiryConsultTypes(extra: Record<string, unknown> | undefined): string[] {
+  const form = inquiryFormFields(extra);
+  return parseConsultTypes(form?.consultTypes);
+}
+
+/** 기장·신고가 포함된 경우 체크리스트·담당자 알림 대상 */
+export function inquiryNeedsOnboardingChecklist(
+  extra: Record<string, unknown> | undefined,
+): boolean {
+  return consultTypesNeedOnboardingChecklist(inquiryConsultTypes(extra));
+}
+
+export function inquiryChecklistKeys(
+  extra: Record<string, unknown> | undefined,
+): readonly string[] {
+  return checklistKeysForConsultTypes(inquiryConsultTypes(extra), CHECKLIST_KEYS);
+}
+
+export { consultTypesNeedOnboardingChecklist };
+
 export function inquiryFieldValue(row: InquiryRow, key: string): string {
   switch (key) {
     case 'inquiryDate': return formatIntakeDate(row.inquiryDate);
@@ -194,6 +236,7 @@ export function inquiryFieldValue(row: InquiryRow, key: string): string {
     case 'address': return row.address;
     case 'email': return inquiryEmail(row.extra);
     case 'contractStatus': return row.contractStatus;
+    case 'consultTypes': return inquiryConsultTypes(row.extra).join(', ');
     default: return '';
   }
 }

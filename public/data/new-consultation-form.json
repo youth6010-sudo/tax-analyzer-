@@ -1,11 +1,16 @@
 {
-  "version": 9,
+  "version": 10,
   "title": "신규 고객 초기 상담",
-  "subtitle": "전화 상담 · 대면 상담 · 마무리·후속 — 기장상담지 연동",
+  "subtitle": "전화 상담 · 대면·마무리 — 기장상담지 연동",
   "phases": [
-    { "id": "phone", "label": "전화 상담" },
-    { "id": "visit", "label": "대면 상담" },
-    { "id": "close", "label": "마무리·후속" }
+    {
+      "id": "phone",
+      "label": "전화 상담"
+    },
+    {
+      "id": "visitClose",
+      "label": "대면·마무리"
+    }
   ],
   "steps": [
     {
@@ -16,13 +21,49 @@
       "description": "통화 중 가장 먼저 확인하는 연락처·상호·성함·개업일·사업장 위치 순으로 입력합니다.",
       "guide": "「왜 세무사를 바꾸려 하는지」 또는 「왜 처음 세무사를 찾는지」가 핵심 맥락입니다.",
       "fields": [
-        { "key": "phone", "label": "연락처", "required": true },
-        { "key": "companyName", "label": "상호명", "required": true },
-        { "key": "representative", "label": "성함" },
-        { "key": "openDate", "label": "개업일", "type": "date" },
-        { "key": "location", "label": "사업장 위치" },
-        { "key": "industry", "label": "업종" },
-        { "key": "revenue", "label": "매출 규모", "placeholder": "예) 10억" }
+        {
+          "key": "consultTypes",
+          "label": "문의 유형",
+          "type": "multiselect",
+          "required": true,
+          "options": [
+            "기장",
+            "신고",
+            "양도·증여"
+          ]
+        },
+        {
+          "key": "phone",
+          "label": "연락처",
+          "required": true
+        },
+        {
+          "key": "companyName",
+          "label": "상호명",
+          "required": true
+        },
+        {
+          "key": "representative",
+          "label": "성함"
+        },
+        {
+          "key": "openDate",
+          "label": "개업일",
+          "type": "date"
+        },
+        {
+          "key": "location",
+          "label": "사업장 위치"
+        },
+        {
+          "key": "industry",
+          "label": "업종"
+        },
+        {
+          "key": "revenue",
+          "label": "매출 규모",
+          "placeholder": "예) 10억"
+        }
       ]
     },
     {
@@ -32,8 +73,30 @@
       "title": "유입",
       "description": "유입경로를 기록합니다.",
       "fields": [
-        { "key": "channel", "label": "유입경로", "type": "select", "options": ["", "지인 소개", "블로그", "인터넷 검색", "AI", "홍보앱", "SNS", "거래처확장", "기존 세무사 불만", "신규 창업", "기타"] },
-        { "key": "channelDetail", "label": "소개·검색경로 상세", "type": "textarea", "placeholder": "블로그, AI, 홍보앱, SNS 등" }
+        {
+          "key": "channel",
+          "label": "유입경로",
+          "type": "select",
+          "options": [
+            "",
+            "지인 소개",
+            "블로그",
+            "인터넷 검색",
+            "AI",
+            "홍보앱",
+            "SNS",
+            "거래처확장",
+            "기존 세무사 불만",
+            "신규 창업",
+            "기타"
+          ]
+        },
+        {
+          "key": "channelDetail",
+          "label": "소개·검색경로 상세",
+          "type": "textarea",
+          "placeholder": "블로그, AI, 홍보앱, SNS 등"
+        }
       ]
     },
     {
@@ -43,11 +106,46 @@
       "title": "인건비 · 사업자 구분",
       "description": "인건비 신고 여부(사대보험 등)와 사업자·과면세 구분을 확인합니다.",
       "fields": [
-        { "key": "payrollFullTime", "label": "인건비 신고 — 상용직(명)", "type": "number", "placeholder": "0" },
-        { "key": "payrollDaily", "label": "인건비 신고 — 일용직(명)", "type": "number", "placeholder": "0" },
-        { "key": "payrollOther", "label": "인건비 신고 — 사업/기타(명)", "type": "number", "placeholder": "0" },
-        { "key": "businessEntityType", "label": "사업자 유형", "type": "select", "options": ["", "개인", "법인", "간이"] },
-        { "key": "vatTaxStatus", "label": "과·면세 여부", "type": "select", "options": ["", "과세", "면세", "비영리"] }
+        {
+          "key": "payrollFullTime",
+          "label": "인건비 신고 — 상용직(명)",
+          "type": "number",
+          "placeholder": "0"
+        },
+        {
+          "key": "payrollDaily",
+          "label": "인건비 신고 — 일용직(명)",
+          "type": "number",
+          "placeholder": "0"
+        },
+        {
+          "key": "payrollOther",
+          "label": "인건비 신고 — 사업/기타(명)",
+          "type": "number",
+          "placeholder": "0"
+        },
+        {
+          "key": "businessEntityType",
+          "label": "사업자 유형",
+          "type": "select",
+          "options": [
+            "",
+            "개인",
+            "법인",
+            "간이"
+          ]
+        },
+        {
+          "key": "vatTaxStatus",
+          "label": "과·면세 여부",
+          "type": "select",
+          "options": [
+            "",
+            "과세",
+            "면세",
+            "비영리"
+          ]
+        }
       ]
     },
     {
@@ -58,11 +156,66 @@
       "description": "이전 세무사가 있는 경우 반드시 확인합니다.",
       "guide": "「혹시 이전에 세무 업무를 맡기셨던 곳이 있으신가요?」",
       "fields": [
-        { "key": "hasPrevAccountant", "label": "이전 세무사 유무", "type": "select", "options": ["", "없음", "있음"] },
-        { "key": "prevTerminated", "label": "계약 해지 여부 / 예정 시점", "showWhen": { "field": "hasPrevAccountant", "values": ["있음"] } },
-        { "key": "prevDocsReturned", "label": "자료 반환 요청", "type": "select", "options": ["", "요청함", "반환완료", "미요청", "진행중"], "showWhen": { "field": "hasPrevAccountant", "values": ["있음"] } },
-        { "key": "prevUnpaidIssues", "label": "미수금·분쟁 이슈", "type": "textarea", "showWhen": { "field": "hasPrevAccountant", "values": ["있음"] } },
-        { "key": "prevComplaints", "label": "이전 세무사 불만 사항", "type": "textarea", "showWhen": { "field": "hasPrevAccountant", "values": ["있음"] } }
+        {
+          "key": "hasPrevAccountant",
+          "label": "이전 세무사 유무",
+          "type": "select",
+          "options": [
+            "",
+            "없음",
+            "있음"
+          ]
+        },
+        {
+          "key": "prevTerminated",
+          "label": "계약 해지 여부 / 예정 시점",
+          "showWhen": {
+            "field": "hasPrevAccountant",
+            "values": [
+              "있음"
+            ]
+          }
+        },
+        {
+          "key": "prevDocsReturned",
+          "label": "자료 반환 요청",
+          "type": "select",
+          "options": [
+            "",
+            "요청함",
+            "반환완료",
+            "미요청",
+            "진행중"
+          ],
+          "showWhen": {
+            "field": "hasPrevAccountant",
+            "values": [
+              "있음"
+            ]
+          }
+        },
+        {
+          "key": "prevUnpaidIssues",
+          "label": "미수금·분쟁 이슈",
+          "type": "textarea",
+          "showWhen": {
+            "field": "hasPrevAccountant",
+            "values": [
+              "있음"
+            ]
+          }
+        },
+        {
+          "key": "prevComplaints",
+          "label": "이전 세무사 불만 사항",
+          "type": "textarea",
+          "showWhen": {
+            "field": "hasPrevAccountant",
+            "values": [
+              "있음"
+            ]
+          }
+        }
       ]
     },
     {
@@ -72,126 +225,326 @@
       "title": "상담내용",
       "description": "기장상담지 상담내용 항목 — 통화 중·직후에 바로 기록합니다.",
       "fields": [
-        { "key": "clientNeeds", "label": "1) 고객의 니즈, 주요 요구사항", "type": "textarea", "placeholder": "예) 세액감면 검토, 인건비 신고 검토" },
-        { "key": "taxStatusSummary", "label": "2) 세무현황요약 (매출·비용·인건비·신고상태)", "type": "textarea", "placeholder": "예) 25년 경비부족으로 세금 많이 나왔음, 올해부터 인건비 신고 예정" },
-        { "key": "potentialTaxIssues", "label": "3) 잠재적 세무 이슈", "type": "textarea", "placeholder": "예) 창업감면 검토 필요, 25년 가공경비 가능성" },
-        { "key": "proposedServiceScope", "label": "4) 제시 서비스 범위", "type": "textarea", "placeholder": "예) 기본서비스(기장,세무신고) + 추가서비스(급여 및 4대보험 관리)" },
-        { "key": "feeDirection", "label": "5) 수임료 방향", "type": "textarea", "placeholder": "예) 기본 10만~15만원, 추가서비스 5만원, 월 15~20만원(계약시 확정)" },
-        { "key": "consultRemarks", "label": "6) 비고·특이사항", "type": "textarea" }
+        {
+          "key": "clientNeeds",
+          "label": "1) 고객의 니즈, 주요 요구사항",
+          "type": "textarea",
+          "placeholder": "예) 세액감면 검토, 인건비 신고 검토"
+        },
+        {
+          "key": "taxStatusSummary",
+          "label": "2) 세무현황요약 (매출·비용·인건비·신고상태)",
+          "type": "textarea",
+          "placeholder": "예) 25년 경비부족으로 세금 많이 나왔음, 올해부터 인건비 신고 예정"
+        },
+        {
+          "key": "potentialTaxIssues",
+          "label": "3) 잠재적 세무 이슈",
+          "type": "textarea",
+          "placeholder": "예) 창업감면 검토 필요, 25년 가공경비 가능성"
+        },
+        {
+          "key": "proposedServiceScope",
+          "label": "4) 제시 서비스 범위",
+          "type": "textarea",
+          "placeholder": "예) 기본서비스(기장,세무신고) + 추가서비스(급여 및 4대보험 관리)"
+        },
+        {
+          "key": "feeDirection",
+          "label": "5) 수임료 방향",
+          "type": "textarea",
+          "placeholder": "예) 기본 10만~15만원, 추가서비스 5만원, 월 15~20만원(계약시 확정)"
+        },
+        {
+          "key": "consultRemarks",
+          "label": "6) 비고·특이사항",
+          "type": "textarea"
+        }
       ]
     },
     {
       "id": "visit-3",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 6,
       "title": "대면 상담 일정 조율",
       "description": "대면 상담 일정과 준비 자료를 안내합니다.",
       "guide": "통화 종료 후 대면 일정과 준비 자료를 안내합니다.",
       "fields": [
-        { "key": "needMeeting", "label": "대면 상담 필요", "type": "select", "options": ["", "예", "아니오", "보류"] },
-        { "key": "meetingDate", "label": "대면 상담 예정일", "type": "date" },
-        { "key": "meetingPlace", "label": "상담 장소", "type": "select", "options": ["", "우리 사무실", "고객 사무실", "화상", "미정"] },
-        { "key": "docsToBring", "label": "준비 자료 안내", "type": "textarea", "placeholder": "재무제표, 세무조정계산서, 사업자등록증, 급여 현황 등" }
+        {
+          "key": "needMeeting",
+          "label": "대면 상담 필요",
+          "type": "select",
+          "options": [
+            "",
+            "예",
+            "아니오",
+            "보류"
+          ]
+        },
+        {
+          "key": "meetingDate",
+          "label": "대면 상담 예정일",
+          "type": "date"
+        },
+        {
+          "key": "meetingPlace",
+          "label": "상담 장소",
+          "type": "select",
+          "options": [
+            "",
+            "우리 사무실",
+            "고객 사무실",
+            "화상",
+            "미정"
+          ]
+        },
+        {
+          "key": "docsToBring",
+          "label": "준비 자료 안내",
+          "type": "textarea",
+          "placeholder": "재무제표, 세무조정계산서, 사업자등록증, 급여 현황 등"
+        }
       ]
     },
     {
       "id": "visit-4",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 7,
       "title": "사전 준비 (상담 전)",
       "description": "대면 상담 전날까지 준비할 내용입니다. 전화 상담 내용은 위 연동 카드에서 확인합니다.",
       "fields": [
-        { "key": "prepIndustryIssues", "label": "업종·매출별 예상 세무 이슈", "type": "textarea" },
-        { "key": "prepProposalReady", "label": "제안서 템플릿", "type": "select", "options": ["", "완료", "진행중", "미착수"] }
+        {
+          "key": "prepIndustryIssues",
+          "label": "업종·매출별 예상 세무 이슈",
+          "type": "textarea"
+        },
+        {
+          "key": "prepProposalReady",
+          "label": "제안서 템플릿",
+          "type": "select",
+          "options": [
+            "",
+            "완료",
+            "진행중",
+            "미착수"
+          ]
+        }
       ]
     },
     {
       "id": "visit-5",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 8,
       "title": "관계 형성 (약 10분)",
       "description": "세무 이야기 전, 사업에 대한 관심을 표현합니다.",
       "guide": "「사업을 시작하신 계기가 궁금합니다」「이 업종에서 요즘 가장 큰 고민이 뭔가요?」",
       "fields": [
-        { "key": "rapportNotes", "label": "관계 형성 대화 메모", "type": "textarea" }
+        {
+          "key": "rapportNotes",
+          "label": "관계 형성 대화 메모",
+          "type": "textarea"
+        }
       ]
     },
     {
       "id": "visit-6",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 9,
       "title": "고객 니즈 심층 파악 (약 20분)",
       "description": "전화 상담 니즈와 연동됩니다. 대면에서 추가 확인한 내용만 보완합니다.",
       "guide": "경청 후 「말씀하신 것은 OOO라는 뜻이시죠?」로 확인합니다.",
       "fields": [
-        { "key": "needPain", "label": "1. 가장 불편·걱정되는 부분", "type": "textarea" },
-        { "key": "needExpectation", "label": "2. 세무사에게 기대하는 역할", "type": "select", "options": ["", "단순 신고 대행", "절세 컨설팅", "경영 자문 포함", "복합"] },
-        { "key": "needExpectationDetail", "label": "기대 역할 상세", "type": "textarea" }
+        {
+          "key": "needPain",
+          "label": "1. 가장 불편·걱정되는 부분",
+          "type": "textarea"
+        },
+        {
+          "key": "needExpectation",
+          "label": "2. 세무사에게 기대하는 역할",
+          "type": "select",
+          "options": [
+            "",
+            "단순 신고 대행",
+            "절세 컨설팅",
+            "경영 자문 포함",
+            "복합"
+          ]
+        },
+        {
+          "key": "needExpectationDetail",
+          "label": "기대 역할 상세",
+          "type": "textarea"
+        }
       ]
     },
     {
       "id": "visit-7",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 10,
       "title": "세무 현황 진단 (약 20분)",
       "description": "전화 상담 세무현황요약과 연동됩니다.",
       "fields": [
-        { "key": "diagCostStructure", "label": "주요 비용 구조", "type": "textarea" },
-        { "key": "payrollStatus", "label": "인건비·직원·4대보험 (보완)", "type": "textarea" },
-        { "key": "diagFilingStatus", "label": "현재 신고 상태", "type": "textarea" },
-        { "key": "diagTaxRisks", "label": "잠재 세무 리스크 (보완)", "type": "textarea" },
-        { "key": "businessNo", "label": "사업자등록번호" }
+        {
+          "key": "diagCostStructure",
+          "label": "주요 비용 구조",
+          "type": "textarea"
+        },
+        {
+          "key": "payrollStatus",
+          "label": "인건비·직원·4대보험 (보완)",
+          "type": "textarea"
+        },
+        {
+          "key": "diagFilingStatus",
+          "label": "현재 신고 상태",
+          "type": "textarea"
+        },
+        {
+          "key": "diagTaxRisks",
+          "label": "잠재 세무 리스크 (보완)",
+          "type": "textarea"
+        },
+        {
+          "key": "businessNo",
+          "label": "사업자등록번호"
+        }
       ]
     },
     {
       "id": "visit-8",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 11,
       "title": "서비스 · 수임료 안내 (약 10분)",
       "description": "전화 상담 제시 범위·수임료 방향과 연동됩니다.",
       "guide": "「내부 검토 후 서비스 제안서와 함께 정확한 수임료를 안내드리겠습니다.」",
       "fields": [
-        { "key": "serviceBasic", "label": "기본 서비스", "type": "select", "options": ["", "기장+신고(표준)", "기장만", "신고만"] },
-        { "key": "serviceExtra", "label": "추가 서비스", "type": "textarea" },
-        { "key": "proposedFee", "label": "예상 수임료 (범위)", "type": "number" },
-        { "key": "feeGuidanceNote", "label": "수임료 안내 멘트", "type": "textarea" }
+        {
+          "key": "serviceBasic",
+          "label": "기본 서비스",
+          "type": "select",
+          "options": [
+            "",
+            "기장+신고(표준)",
+            "기장만",
+            "신고만"
+          ]
+        },
+        {
+          "key": "serviceExtra",
+          "label": "추가 서비스",
+          "type": "textarea"
+        },
+        {
+          "key": "proposedFee",
+          "label": "예상 수임료 (범위)",
+          "type": "number"
+        },
+        {
+          "key": "feeGuidanceNote",
+          "label": "수임료 안내 멘트",
+          "type": "textarea"
+        }
       ]
     },
     {
       "id": "visit-9",
-      "phase": "visit",
+      "phase": "visitClose",
       "order": 12,
       "title": "다음 단계 안내 (약 5분)",
       "fields": [
-        { "key": "nextContactMethod", "label": "후속 연락", "type": "select", "options": ["", "이메일", "카카오톡", "전화"] },
-        { "key": "nextContractDocs", "label": "계약 시 필요 자료", "type": "textarea" },
-        { "key": "nextQuestions", "label": "추가 질문·답변", "type": "textarea" }
+        {
+          "key": "nextContactMethod",
+          "label": "후속 연락",
+          "type": "select",
+          "options": [
+            "",
+            "이메일",
+            "카카오톡",
+            "전화"
+          ]
+        },
+        {
+          "key": "nextContractDocs",
+          "label": "계약 시 필요 자료",
+          "type": "textarea"
+        },
+        {
+          "key": "nextQuestions",
+          "label": "추가 질문·답변",
+          "type": "textarea"
+        }
       ]
     },
     {
       "id": "close-10",
-      "phase": "close",
+      "phase": "visitClose",
       "order": 13,
       "title": "상담 기록 · 제안서",
       "description": "전화·대면 상담 내용이 연동됩니다.",
       "fields": [
-        { "key": "recordAttendees", "label": "참석자" },
-        { "key": "recordSummary", "label": "현황·리스크 요약", "type": "textarea" },
-        { "key": "agreedServiceScope", "label": "합의 서비스 범위", "type": "textarea" },
-        { "key": "email", "label": "이메일", "type": "email" },
-        { "key": "proposalSentPlan", "label": "제안서", "type": "select", "options": ["", "3영업일 내 발송 예정", "발송 완료", "보류"] }
+        {
+          "key": "recordAttendees",
+          "label": "참석자"
+        },
+        {
+          "key": "recordSummary",
+          "label": "현황·리스크 요약",
+          "type": "textarea"
+        },
+        {
+          "key": "agreedServiceScope",
+          "label": "합의 서비스 범위",
+          "type": "textarea"
+        },
+        {
+          "key": "email",
+          "label": "이메일",
+          "type": "email"
+        },
+        {
+          "key": "proposalSentPlan",
+          "label": "제안서",
+          "type": "select",
+          "options": [
+            "",
+            "3영업일 내 발송 예정",
+            "발송 완료",
+            "보류"
+          ]
+        }
       ]
     },
     {
       "id": "close-11",
-      "phase": "close",
+      "phase": "visitClose",
       "order": 14,
       "title": "후속 연락 · 계약",
       "guide": "「제안서 검토해보셨나요? 궁금하신 점 있으시면 말씀해주세요.」",
       "fields": [
-        { "key": "followUpDate", "label": "후속 연락 예정일", "type": "date" },
-        { "key": "followUpResult", "label": "후속 결과", "type": "select", "options": ["", "미진행", "긍정", "검토중", "거절", "계약 진행"] },
-        { "key": "followUpNotes", "label": "후속 메모", "type": "textarea" }
+        {
+          "key": "followUpDate",
+          "label": "후속 연락 예정일",
+          "type": "date"
+        },
+        {
+          "key": "followUpResult",
+          "label": "후속 결과",
+          "type": "select",
+          "options": [
+            "",
+            "미진행",
+            "긍정",
+            "검토중",
+            "거절",
+            "계약 진행"
+          ]
+        },
+        {
+          "key": "followUpNotes",
+          "label": "후속 메모",
+          "type": "textarea"
+        }
       ]
     }
   ]

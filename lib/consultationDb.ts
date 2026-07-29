@@ -14,9 +14,28 @@ import {
   parseExternalRefs,
 } from '@/lib/externalRefs';
 import { processBelongsToInquiry } from '@/lib/intakeProcessLink';
+import { consultTypesNeedOnboardingChecklist } from '@/lib/consultTypes';
+import {
+  applyAssigneeToInquiry,
+  applyManagerToClient,
+  nextManagerAfterChange,
+  resolveLinkedManager,
+  type ManagerActor,
+} from '@/lib/intakeManagerSync';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 function str(v: unknown): string {
   return v == null ? '' : String(v).trim();
+}
+
+function strList(v: unknown): string[] {
+  if (Array.isArray(v)) {
+    return v.map(item => String(item).trim()).filter(Boolean);
+  }
+  return str(v)
+    .split(/\r?\n|,/)
+    .map(item => item.trim())
+    .filter(Boolean);
 }
 
 const ENTITY_MAP: Record<string, string> = {
@@ -34,6 +53,7 @@ export function buildInquiryContent(data: Record<string, unknown>): string {
       keys: [
         ['유입', 'channel'],
         ['유입 상세', 'channelDetail'],
+        ['문의 유형', 'consultTypes'],
         ['매출', 'revenue'],
         ['개업일', 'openDate'],
         ['사업장', 'location'],
@@ -256,11 +276,26 @@ export async function createConsultation(
   const companyName = str(data.companyName);
   if (!companyName) throw new Error('COMPANY_NAME_REQUIRED');
   if (!str(data.phone)) throw new Error('PHONE_REQUIRED');
+  if (strList(data.consultTypes).length === 0) throw new Error('CONSULT_TYPES_REQUIRED');
 
   const consultId = randomUUID();
   const today = new Date().toISOString().slice(0, 10);
   const db = getDb();
   const entityRaw = str(data.businessEntityType);
+  const consultTypes = strList(data.consultTypes);
+  const needsChecklist = consultTypesNeedOnboardingChecklist(consultTypes);
+
+  const insertProcess = async () => {
+    if (!needsChecklist) return null;
+    const [process] = await db.insert(intakeProcesses).values({
+      companyName,
+      channel: str(data.channel),
+      monthlyFee: typeof data.proposedFee === 'number' ? data.proposedFee : null,
+      checklist: emptyChecklist(),
+      excelKey: `portal||consult||${consultId}||process`,
+    }).returning();
+    return process;
+  };
 
   if (options?.draftId) {
     const [draft] = await db.select().from(intakeInquiries).where(eq(intakeInquiries.id, options.draftId)).limit(1);
@@ -287,14 +322,7 @@ export async function createConsultation(
       .where(eq(intakeInquiries.id, options.draftId))
       .returning();
 
-    const [process] = await db.insert(intakeProcesses).values({
-      companyName,
-      channel: str(data.channel),
-      monthlyFee: typeof data.proposedFee === 'number' ? data.proposedFee : null,
-      checklist: emptyChecklist(),
-      excelKey: `portal||consult||${consultId}||process`,
-    }).returning();
-
+    const process = await insertProcess();
     return { consultId, inquiry, process, businessEntityType: ENTITY_MAP[entityRaw] ?? '' };
   }
 
@@ -314,14 +342,7 @@ export async function createConsultation(
     excelKey: `portal||consult||${consultId}||inquiry`,
   }).returning();
 
-  const [process] = await db.insert(intakeProcesses).values({
-    companyName,
-    channel: str(data.channel),
-    monthlyFee: typeof data.proposedFee === 'number' ? data.proposedFee : null,
-    checklist: emptyChecklist(),
-    excelKey: `portal||consult||${consultId}||process`,
-  }).returning();
-
+  const process = await insertProcess();
   return { consultId, inquiry, process, businessEntityType: ENTITY_MAP[entityRaw] ?? '' };
 }
 
@@ -416,15 +437,22 @@ export async function getInquiryById(id: string) {
   return row;
 }
 
-export async function updateInquiry(id: string, patch: InquiryPatch) {
+export async function updateInquiry(
+  id: string,
+  patch: InquiryPatch,
+  actor?: ManagerActor | null,
+) {
   const db = getDb();
   const [existing] = await db.select().from(intakeInquiries).where(eq(intakeInquiries.id, id)).limit(1);
   if (!existing) throw new Error('NOT_FOUND');
 
   const { extra: extraPatch, ...scalarPatch } = patch;
   let extra: Record<string, unknown> | undefined;
+  let rebuiltContent: string | undefined;
+  let nextAssignee: string | undefined;
+
   if (extraPatch != null) {
-    const merged = { ...(existing.extra ?? {}), ...extraPatch };
+    const merged: Record<string, unknown> = { ...(existing.extra ?? {}), ...extraPatch };
     const prevExt = (existing.extra?.externalRefs && typeof existing.extra.externalRefs === 'object'
       ? existing.extra.externalRefs
       : {}) as Record<string, unknown>;
@@ -434,16 +462,104 @@ export async function updateInquiry(id: string, patch: InquiryPatch) {
     if (patchExt) {
       merged.externalRefs = { ...prevExt, ...patchExt };
     }
+    if (extraPatch.form && typeof extraPatch.form === 'object' && !Array.isArray(extraPatch.form)) {
+      const prevForm =
+        existing.extra?.form && typeof existing.extra.form === 'object' && !Array.isArray(existing.extra.form)
+          ? (existing.extra.form as Record<string, unknown>)
+          : {};
+      const nextForm = { ...prevForm, ...(extraPatch.form as Record<string, unknown>) };
+      merged.form = nextForm;
+      rebuiltContent = buildInquiryContent(nextForm);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(extraPatch, 'assigneeManager')) {
+      const prevAssignee =
+        typeof existing.extra?.assigneeManager === 'string' ? existing.extra.assigneeManager.trim() : '';
+      const requested =
+        typeof extraPatch.assigneeManager === 'string' ? extraPatch.assigneeManager.trim() : '';
+      if (actor) {
+        nextAssignee = nextManagerAfterChange({
+          current: prevAssignee,
+          requested,
+          actor,
+        });
+      } else {
+        nextAssignee = requested;
+      }
+      merged.assigneeManager = nextAssignee;
+    }
+
     extra = merged;
+  }
+
+  // 수임처 연결 시 수임처 담당자 → 유입 담당자 자동 반영 (수임처 기준)
+  const nextClientId =
+    patch.clientId !== undefined ? patch.clientId : existing.clientId;
+  if (
+    patch.clientId !== undefined &&
+    patch.clientId &&
+    patch.clientId !== existing.clientId &&
+    nextAssignee === undefined
+  ) {
+    const [linked] = await db.select().from(clients).where(eq(clients.id, patch.clientId)).limit(1);
+    const clientMgr = (linked?.manager || '').trim();
+    const prevAssignee =
+      typeof existing.extra?.assigneeManager === 'string' ? existing.extra.assigneeManager.trim() : '';
+    const synced = resolveLinkedManager({
+      clientManager: clientMgr,
+      inquiryAssignee: prevAssignee,
+      actorName: actor?.name,
+    });
+    if (synced) {
+      nextAssignee = synced;
+      extra = { ...(extra ?? existing.extra ?? {}), assigneeManager: synced };
+    }
   }
 
   const [row] = await db.update(intakeInquiries)
     .set({
       ...scalarPatch,
       ...(extra != null ? { extra } : {}),
+      ...(rebuiltContent != null ? { inquiryContent: rebuiltContent } : {}),
     })
     .where(eq(intakeInquiries.id, id))
     .returning();
+
+  if (nextAssignee !== undefined && nextClientId) {
+    const [linked] = await db.select().from(clients).where(eq(clients.id, nextClientId)).limit(1);
+    const prevMgr = (linked?.manager || '').trim();
+    if (!managerNamesMatch(prevMgr, nextAssignee) || prevMgr !== nextAssignee.trim()) {
+      // 연결로 수임처 담당자를 유입에 맞춘 경우(수임처→유입)는 수임처 값 유지
+      const linkingToClient =
+        patch.clientId !== undefined &&
+        patch.clientId &&
+        patch.clientId !== existing.clientId &&
+        Boolean(prevMgr) &&
+        managerNamesMatch(prevMgr, nextAssignee);
+      if (!linkingToClient) {
+        if (actor) {
+          nextManagerAfterChange({ current: prevMgr, requested: nextAssignee, actor });
+        }
+        await applyManagerToClient(nextClientId, nextAssignee);
+      }
+    }
+  }
+
+  if (row?.clientId && row.contractStatus.trim()) {
+    const [existingClient] = await db.select().from(clients).where(eq(clients.id, row.clientId)).limit(1);
+    if (existingClient?.status === 'intake') {
+      await db
+        .update(clients)
+        .set({
+          intakeData: {
+            ...(existingClient.intakeData ?? {}),
+            contractStatus: row.contractStatus.trim(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(clients.id, existingClient.id));
+    }
+  }
   return row!;
 }
 
@@ -519,7 +635,10 @@ export async function registerClientFromIntake(
     return companyNameFromIntake;
   };
 
-  const extRefs = externalRefsFromInquiryExtra(inquiry.extra ?? {}, managerName);
+  const inquiryAssignee =
+    typeof inquiry.extra?.assigneeManager === 'string' && inquiry.extra.assigneeManager.trim()
+      ? inquiry.extra.assigneeManager.trim()
+      : '';
 
   if (inquiry.clientId) {
     const [existing] = await db.select().from(clients).where(eq(clients.id, inquiry.clientId)).limit(1);
@@ -529,8 +648,19 @@ export async function registerClientFromIntake(
     const baseIntake = {
       inquiryId,
       processId: safeProcessId,
+      contractStatus: inquiry.contractStatus,
       ...(inquiry.address ? { address: inquiry.address } : {}),
     };
+
+    const extManager = resolveLinkedManager({
+      clientManager: existing?.manager,
+      inquiryAssignee,
+      actorName: managerName,
+    });
+    const extRefs = externalRefsFromInquiryExtra(
+      { ...(inquiry.extra ?? {}), assigneeManager: extManager },
+      extManager,
+    );
 
     if (existing?.status === 'active') {
       const companyName = resolveCompanyName(existing.companyName);
@@ -552,10 +682,14 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
+      await applyManagerToClient(updated.id, extManager);
+      await applyAssigneeToInquiry(inquiryId, extManager);
       if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }
-      return clientToRecord(updated);
+      return clientToRecord(
+        (await db.select().from(clients).where(eq(clients.id, updated.id)).limit(1))[0]!,
+      );
     }
     if (existing?.status === 'intake') {
       const companyName = companyNameFromIntake;
@@ -567,8 +701,6 @@ export async function registerClientFromIntake(
           representative: inquiry.representative || existing.representative,
           businessNo: inquiry.businessNo || existing.businessNo,
           feeSummary: process?.monthlyFee ?? inquiry.proposedFee ?? existing.feeSummary,
-          assignedUserId,
-          manager: managerName,
           status: 'active',
           intakeData: intakeDataWithExternalRefs({
             ...(existing.intakeData ?? {}),
@@ -578,16 +710,31 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
+      await applyManagerToClient(updated.id, extManager);
+      await applyAssigneeToInquiry(inquiryId, extManager);
       if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }
-      return clientToRecord(updated);
+      return clientToRecord(
+        (await db.select().from(clients).where(eq(clients.id, updated.id)).limit(1))[0]!,
+      );
     }
   }
+
+  const extManager = resolveLinkedManager({
+    clientManager: '',
+    inquiryAssignee,
+    actorName: managerName,
+  });
+  const extRefs = externalRefsFromInquiryExtra(
+    { ...(inquiry.extra ?? {}), assigneeManager: extManager },
+    extManager,
+  );
 
   const baseIntake = {
     inquiryId,
     processId,
+    contractStatus: inquiry.contractStatus,
     ...(inquiry.address ? { address: inquiry.address } : {}),
   };
   const intakePayload = intakeDataWithExternalRefs(baseIntake, extRefs);
@@ -599,7 +746,7 @@ export async function registerClientFromIntake(
       phone: inquiry.phone,
       representative: inquiry.representative,
       businessNo: inquiry.businessNo,
-      manager: managerName,
+      manager: extManager,
       assignedUserId,
       status: 'active',
       source: 'manual_intake',
@@ -608,7 +755,9 @@ export async function registerClientFromIntake(
     })
     .returning();
 
+  await applyManagerToClient(client.id, extManager);
   await db.update(intakeInquiries).set({ clientId: client.id }).where(eq(intakeInquiries.id, inquiryId));
+  await applyAssigneeToInquiry(inquiryId, extManager);
   if (process) {
     await db.update(intakeProcesses).set({ clientId: client.id }).where(eq(intakeProcesses.id, process.id));
   }

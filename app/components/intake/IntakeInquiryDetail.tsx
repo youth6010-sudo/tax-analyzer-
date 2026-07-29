@@ -1,64 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { ConsultationField, ConsultationFormConfig } from '../../types/consultation';
+import type { ConsultationFormConfig } from '../../types/consultation';
+import { getDisplayPhaseColumns, isFieldVisible } from '../../types/consultation';
 import { formatIntakeDate } from '../../utils/intakeDates';
-import BlueholeCaseLink from './BlueholeCaseLink';
+import { allFormKeys, applyConsultationLinks } from '@/lib/consultationFormLinks';
 import BlueholeRegisterCopyButton from './BlueholeRegisterCopyButton';
+import ConsultationPhaseGrid, {
+  CONSULT_MULTI_VALUE_DELIM,
+  splitConsultMultiValue,
+} from './ConsultationPhaseGrid';
 import {
   inquiryFormFields,
-  inquiryNote,
-  inquiryBlueholeCase,
   inquiryRepPhone,
   inquiryAdmin,
   inquiryAdminPhone,
   inquiryEmail,
+  inquiryConsultTypes,
   type InquiryRow,
 } from './intakeUtils';
-
-type EditState = {
-  companyName: string;
-  phone: string;
-  channel: string;
-  consultant: string;
-  inquiryDate: string;
-  inquiryContent: string;
-  contractStatus: string;
-  proposedFee: string;
-  industry: string;
-  businessNo: string;
-  representative: string;
-  address: string;
-  note: string;
-  blueholeCase: string;
-  repPhone: string;
-  admin: string;
-  adminPhone: string;
-  email: string;
-};
-
-function toEditState(q: InquiryRow): EditState {
-  return {
-    companyName: q.companyName,
-    phone: q.phone,
-    channel: q.channel,
-    consultant: q.consultant,
-    inquiryDate: formatIntakeDate(q.inquiryDate),
-    inquiryContent: q.inquiryContent,
-    contractStatus: q.contractStatus,
-    proposedFee: q.proposedFee != null ? String(q.proposedFee) : '',
-    industry: q.industry,
-    businessNo: q.businessNo,
-    representative: q.representative,
-    address: q.address,
-    note: inquiryNote(q.extra),
-    blueholeCase: inquiryBlueholeCase(q.extra),
-    repPhone: inquiryRepPhone(q.extra),
-    admin: inquiryAdmin(q.extra),
-    adminPhone: inquiryAdminPhone(q.extra),
-    email: inquiryEmail(q.extra),
-  };
-}
 
 function rowFromApi(inquiry: Record<string, unknown>): InquiryRow {
   return {
@@ -81,6 +41,41 @@ function rowFromApi(inquiry: Record<string, unknown>): InquiryRow {
   };
 }
 
+function formDataToStrings(form: Record<string, unknown> | null): Record<string, string> {
+  if (!form) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(form)) {
+    if (Array.isArray(v)) {
+      const joined = v.map(x => String(x).trim()).filter(Boolean).join(CONSULT_MULTI_VALUE_DELIM);
+      if (joined) out[k] = joined;
+      continue;
+    }
+    if (v != null && String(v).trim() !== '') out[k] = String(v);
+  }
+  return out;
+}
+
+function mergeConsultationForm(
+  config: ConsultationFormConfig | null,
+  inquiry: InquiryRow,
+): Record<string, string> {
+  const saved = formDataToStrings(inquiryFormFields(inquiry.extra));
+  const init: Record<string, string> = {};
+  if (config) {
+    for (const key of allFormKeys(config)) init[key] = '';
+  }
+  for (const [k, v] of Object.entries(saved)) init[k] = v;
+  if (!init.companyName) init.companyName = inquiry.companyName || '';
+  if (!init.phone) init.phone = inquiry.phone || '';
+  if (!init.channel) init.channel = inquiry.channel || '';
+  if (!init.representative) init.representative = inquiry.representative || '';
+  if (!init.industry) init.industry = inquiry.industry || '';
+  if (!init.businessNo) init.businessNo = inquiry.businessNo || '';
+  if (!init.location) init.location = inquiry.address || '';
+  if (!init.proposedFee && inquiry.proposedFee != null) init.proposedFee = String(inquiry.proposedFee);
+  return applyConsultationLinks(init);
+}
+
 function MetaGrid({ items, compact }: { items: { label: string; value: string }[]; compact?: boolean }) {
   const visible = items.filter(i => i.value);
   if (!visible.length) return null;
@@ -96,41 +91,68 @@ function MetaGrid({ items, compact }: { items: { label: string; value: string }[
   );
 }
 
-function formDataToStrings(form: Record<string, unknown> | null): Record<string, string> {
-  if (!form) return {};
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(form)) {
-    if (v != null && String(v).trim() !== '') out[k] = String(v);
-  }
-  return out;
-}
-
-function fieldLabelMap(config: ConsultationFormConfig | null): Map<string, string> {
-  const m = new Map<string, string>();
-  if (!config) return m;
-  for (const step of config.steps) {
-    for (const f of step.fields) m.set(f.key, f.label);
-  }
-  return m;
-}
-
-function FormFieldsSection({ form, config }: { form: Record<string, unknown>; config: ConsultationFormConfig | null }) {
-  const labeled = useMemo(() => {
-    if (!config) {
-      return Object.entries(form)
-        .filter(([, v]) => v != null && String(v).trim() !== '')
-        .map(([key, value]) => ({ label: key, value: String(value) }));
-    }
-    const labelMap = new Map<string, string>();
-    for (const step of config.steps) {
-      for (const f of step.fields) labelMap.set(f.key, f.label);
-    }
-    const skip = new Set(['companyName', 'phone', 'representative', 'industry', 'businessNo', 'proposedFee', 'location']);
-    return Object.entries(form)
-      .filter(([key, v]) => !skip.has(key) && v != null && String(v).trim() !== '')
-      .map(([key, value]) => ({ label: labelMap.get(key) ?? key, value: String(value) }));
+function FormFieldsSection({
+  form,
+  config,
+}: {
+  form: Record<string, unknown>;
+  config: ConsultationFormConfig | null;
+}) {
+  const columns = useMemo(() => {
+    if (!config) return null;
+    const strings = formDataToStrings(form);
+    return getDisplayPhaseColumns(config)
+      .filter(col => col.phaseId === 'phone')
+      .map(col => ({
+        ...col,
+        steps: col.steps
+          .map(step => ({
+            ...step,
+            fields: step.fields.filter(f => {
+              if (!isFieldVisible(f, strings)) return false;
+              const raw = form[f.key];
+              if (raw == null) return false;
+              if (Array.isArray(raw)) return raw.some(v => String(v).trim());
+              return String(raw).trim() !== '';
+            }),
+          }))
+          .filter(step => step.fields.length > 0),
+      }))
+      .filter(col => col.steps.length > 0);
   }, [form, config]);
 
+  if (columns?.length) {
+    return (
+      <div className="space-y-3">
+        <p className="text-[10px] font-bold text-gray-400 uppercase">전화 상담</p>
+        <div className="rounded-xl border border-blue-100 bg-white p-3 space-y-3">
+          {columns[0].steps.map(step => (
+            <section key={step.id} className="space-y-2">
+              <h4 className="text-[11px] font-bold text-slate-800">{step.title}</h4>
+              <dl className="space-y-2 text-sm">
+                {step.fields.map(f => {
+                  const raw = form[f.key];
+                  const value = Array.isArray(raw)
+                    ? raw.map(v => String(v)).filter(Boolean).join(', ')
+                    : String(raw ?? '');
+                  return (
+                    <div key={f.key} className="border-l-2 border-blue-100 pl-3">
+                      <dt className="text-xs font-semibold text-gray-500">{f.label}</dt>
+                      <dd className="text-gray-800 whitespace-pre-line mt-0.5">{value}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const labeled = Object.entries(form)
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(([key, value]) => ({ label: key, value: String(value) }));
   if (!labeled.length) return null;
   return (
     <div>
@@ -146,100 +168,6 @@ function FormFieldsSection({ form, config }: { form: Record<string, unknown>; co
     </div>
   );
 }
-
-const REGISTER_REQUIRED_KEYS = new Set(['phone', 'companyName']);
-
-function RequiredLabel({ label, required }: { label: string; required?: boolean }) {
-  return (
-    <span className={`font-semibold ${required ? 'text-rose-700' : 'text-gray-600'}`}>
-      {label}
-      {required && (
-        <span className="ml-0.5 font-bold text-rose-600" title="필수">
-          *
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ConsultationFormEditFields({
-  form,
-  config,
-  onChange,
-}: {
-  form: Record<string, string>;
-  config: ConsultationFormConfig | null;
-  onChange: (key: string, value: string) => void;
-}) {
-  const labels = fieldLabelMap(config);
-  const keys = Object.keys(form);
-  if (!keys.length) return null;
-
-  const fieldMeta = new Map<string, ConsultationField>();
-  if (config) {
-    for (const step of config.steps) {
-      for (const f of step.fields) fieldMeta.set(f.key, f);
-    }
-  }
-
-  return (
-    <div className="border-t border-gray-100 pt-3 space-y-3">
-      <p className="text-xs font-bold text-blue-700">
-        신규상담 항목 <span className="font-bold text-rose-600">*</span> 필수
-      </p>
-      {keys.map(key => {
-        const meta = fieldMeta.get(key);
-        const label = labels.get(key) ?? key;
-        const value = form[key] ?? '';
-        const required = Boolean(meta?.required || REGISTER_REQUIRED_KEYS.has(key));
-        if (meta?.type === 'textarea') {
-          return (
-            <label key={key} className="block text-xs">
-              <RequiredLabel label={label} required={required} />
-              <textarea
-                value={value}
-                onChange={e => onChange(key, e.target.value)}
-                rows={3}
-                className={inputCls}
-              />
-            </label>
-          );
-        }
-        if (meta?.type === 'select') {
-          return (
-            <label key={key} className="block text-xs">
-              <RequiredLabel label={label} required={required} />
-              <select
-                value={value}
-                onChange={e => onChange(key, e.target.value)}
-                className={inputCls}
-              >
-                {(meta.options ?? ['']).map(o => (
-                  <option key={o || '_'} value={o}>
-                    {o || '선택…'}
-                  </option>
-                ))}
-              </select>
-            </label>
-          );
-        }
-        return (
-          <label key={key} className="block text-xs">
-            <RequiredLabel label={label} required={required} />
-            <input
-              type={meta?.type === 'date' ? 'date' : meta?.type === 'number' ? 'number' : 'text'}
-              value={value}
-              onChange={e => onChange(key, e.target.value)}
-              className={inputCls}
-            />
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
 
 function TextBlock({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
   if (!value.trim()) return null;
@@ -263,30 +191,30 @@ export default function IntakeInquiryDetail({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState<EditState>(() => toEditState(inquiry));
-  const [consultationForm, setConsultationForm] = useState<Record<string, string>>(() =>
-    formDataToStrings(inquiryFormFields(inquiry.extra)),
-  );
+  const [consultationForm, setConsultationForm] = useState<Record<string, string>>({});
   const [formConfig, setFormConfig] = useState<ConsultationFormConfig | null>(null);
 
   useEffect(() => {
-    setForm(toEditState(inquiry));
-    setConsultationForm(formDataToStrings(inquiryFormFields(inquiry.extra)));
     setEditing(false);
-  }, [inquiry]);
+    setError('');
+  }, [inquiry.id]);
+
+  useEffect(() => {
+    if (editing) return;
+    setConsultationForm(mergeConsultationForm(formConfig, inquiry));
+  }, [inquiry, formConfig, editing]);
 
   useEffect(() => {
     void fetch('/data/new-consultation-form.json')
       .then(r => r.json())
-      .then(setFormConfig)
+      .then((c: ConsultationFormConfig) => setFormConfig(c))
       .catch(() => {});
   }, []);
 
   const formData = inquiryFormFields(inquiry.extra);
-  const note = inquiryNote(inquiry.extra);
-  const bluehole = inquiryBlueholeCase(inquiry.extra);
 
   const metaItems = [
+    { label: '문의유형', value: inquiryConsultTypes(inquiry.extra).join(', ') },
     { label: '문의일', value: inquiry.inquiryDate },
     { label: '유입', value: inquiry.channel },
     { label: '상담자', value: inquiry.consultant },
@@ -303,35 +231,38 @@ export default function IntakeInquiryDetail({
     { label: '제안료', value: inquiry.proposedFee != null ? `${inquiry.proposedFee.toLocaleString()}원` : '' },
   ];
 
+  const onConsultationChange = (key: string, value: string) => {
+    setConsultationForm(prev => applyConsultationLinks({ ...prev, [key]: value }));
+  };
+
   const save = async () => {
     setSaving(true);
     setError('');
     try {
-      const proposedFee = form.proposedFee.trim() ? Number(form.proposedFee.replace(/,/g, '')) : null;
+      const linked = applyConsultationLinks(consultationForm);
+      const proposedFeeRaw = (linked.proposedFee ?? '').trim().replace(/,/g, '');
+      const proposedFee = proposedFeeRaw ? Number(proposedFeeRaw) : null;
+      const channel = [linked.channel, linked.channelDetail].filter(v => v?.trim()).join(' · ')
+        || inquiry.channel;
       const res = await fetch(`/api/intake/inquiries/${inquiry.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          companyName: form.companyName.trim(),
-          phone: form.phone.trim(),
-          channel: form.channel.trim(),
-          consultant: form.consultant.trim(),
-          inquiryDate: formatIntakeDate(form.inquiryDate.trim()),
-          inquiryContent: form.inquiryContent.trim(),
-          contractStatus: form.contractStatus.trim(),
+          companyName: (linked.companyName ?? '').trim() || inquiry.companyName,
+          phone: (linked.phone ?? '').trim() || inquiry.phone,
+          channel,
           proposedFee: proposedFee != null && !Number.isNaN(proposedFee) ? proposedFee : null,
-          industry: form.industry.trim(),
-          businessNo: form.businessNo.trim(),
-          representative: form.representative.trim(),
-          address: form.address.trim(),
+          industry: (linked.industry ?? '').trim(),
+          businessNo: (linked.businessNo ?? '').trim(),
+          representative: (linked.representative ?? '').trim(),
+          address: (linked.location ?? '').trim() || inquiry.address,
           extra: {
-            note: form.note.trim(),
-            blueholeCase: form.blueholeCase.trim(),
-            repPhone: form.repPhone.trim(),
-            admin: form.admin.trim(),
-            adminPhone: form.adminPhone.trim(),
-            email: form.email.trim(),
-            ...(Object.keys(consultationForm).length > 0 ? { form: consultationForm } : {}),
+            form: Object.fromEntries(
+              Object.entries(linked).map(([key, value]) => [
+                key,
+                key === 'consultTypes' ? splitConsultMultiValue(value) : value,
+              ]),
+            ),
           },
         }),
       });
@@ -339,6 +270,7 @@ export default function IntakeInquiryDetail({
       const data = await res.json();
       const updated = rowFromApi(data.inquiry);
       onUpdated(updated);
+      setConsultationForm(mergeConsultationForm(formConfig, updated));
       setEditing(false);
     } catch {
       setError('저장에 실패했습니다.');
@@ -351,13 +283,12 @@ export default function IntakeInquiryDetail({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-bold text-blue-600">수정 중</p>
+          <p className="text-xs font-bold text-blue-600">전화 상담 수정</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => {
-                setForm(toEditState(inquiry));
-                setConsultationForm(formDataToStrings(inquiryFormFields(inquiry.extra)));
+                setConsultationForm(mergeConsultationForm(formConfig, inquiry));
                 setEditing(false);
                 setError('');
               }}
@@ -376,65 +307,17 @@ export default function IntakeInquiryDetail({
           </div>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {([
-            ['companyName', '상호'],
-            ['inquiryDate', '문의일'],
-            ['channel', '유입'],
-            ['consultant', '상담자'],
-            ['phone', '연락처'],
-            ['representative', '대표자'],
-            ['industry', '업종'],
-            ['businessNo', '사업자번호'],
-            ['repPhone', '대표 연락처'],
-            ['admin', '관리자'],
-            ['adminPhone', '관리자 연락처'],
-            ['address', '주소'],
-            ['email', '이메일'],
-            ['contractStatus', '계약 상태'],
-            ['proposedFee', '제안료'],
-          ] as const).map(([key, label]) => (
-            <label key={key} className="block text-xs">
-              <span className="font-semibold text-gray-600">{label}</span>
-              <input
-                value={form[key]}
-                onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-                className={inputCls}
-              />
-            </label>
-          ))}
-        </div>
-        <label className="block text-xs">
-          <span className="font-semibold text-gray-600">블루홀케이스</span>
-          <input
-            value={form.blueholeCase}
-            onChange={e => setForm(prev => ({ ...prev, blueholeCase: e.target.value }))}
-            className={inputCls}
+
+        {formConfig ? (
+          <ConsultationPhaseGrid
+            config={formConfig}
+            form={consultationForm}
+            onChange={onConsultationChange}
+            mode="phone"
           />
-        </label>
-        <label className="block text-xs">
-          <span className="font-semibold text-gray-600">특이사항</span>
-          <textarea
-            value={form.note}
-            onChange={e => setForm(prev => ({ ...prev, note: e.target.value }))}
-            rows={3}
-            className={inputCls}
-          />
-        </label>
-        <label className="block text-xs">
-          <span className="font-semibold text-gray-600">문의·상담 내용</span>
-          <textarea
-            value={form.inquiryContent}
-            onChange={e => setForm(prev => ({ ...prev, inquiryContent: e.target.value }))}
-            rows={8}
-            className={inputCls}
-          />
-        </label>
-        <ConsultationFormEditFields
-          form={consultationForm}
-          config={formConfig}
-          onChange={(key, value) => setConsultationForm(prev => ({ ...prev, [key]: value }))}
-        />
+        ) : (
+          <p className="text-sm text-gray-400">상담 양식을 불러오는 중…</p>
+        )}
       </div>
     );
   }
@@ -444,7 +327,10 @@ export default function IntakeInquiryDetail({
       <div className="flex items-center justify-end -mt-1">
         <button
           type="button"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setConsultationForm(mergeConsultationForm(formConfig, inquiry));
+            setEditing(true);
+          }}
           className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-700 font-semibold hover:bg-white hover:border-blue-300"
         >
           신규상담·상세 수정
@@ -454,16 +340,9 @@ export default function IntakeInquiryDetail({
       <div className="flex flex-wrap items-center gap-2">
         <BlueholeRegisterCopyButton inquiry={inquiry} />
       </div>
-      <TextBlock label="특이사항" value={note} compact={compact} />
-      {bluehole.trim() ? (
-        <div>
-          <p className="text-[10px] font-bold text-gray-500 uppercase mb-0.5">블루홀케이스</p>
-          <BlueholeCaseLink value={bluehole} className="text-xs" />
-        </div>
-      ) : null}
       <TextBlock label="문의·상담 내용" value={inquiry.inquiryContent} compact={compact} />
       {formData && <FormFieldsSection form={formData} config={formConfig} />}
-      {!note && !bluehole && !inquiry.inquiryContent && !formData && (
+      {!inquiry.inquiryContent && !formData && (
         <p className="text-sm text-gray-400">등록된 상세 내용이 없습니다. 수정 버튼으로 입력할 수 있습니다.</p>
       )}
     </div>

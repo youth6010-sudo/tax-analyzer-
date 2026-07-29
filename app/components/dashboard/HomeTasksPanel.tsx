@@ -108,6 +108,7 @@ function SectionCard({
   open,
   onToggle,
   onAdd,
+  headerAction,
   children,
 }: {
   title: string;
@@ -115,6 +116,7 @@ function SectionCard({
   open: boolean;
   onToggle: () => void;
   onAdd?: () => void;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -129,6 +131,7 @@ function SectionCard({
           <span className="truncate text-sm font-bold text-slate-800">{title}</span>
         </button>
         <CountBadge count={count} />
+        {headerAction}
         {onAdd && (
           <button
             type="button"
@@ -347,6 +350,45 @@ export default function HomeTasksPanel() {
     void refresh();
   };
 
+  const routedConfirmableIds = useMemo(() => {
+    const aliases = currentUser ? getManagerMatchNames(currentUser) : [];
+    return routedVisible
+      .filter(item => {
+        const isHandler = aliases.some(a => {
+          const handlers = item.participants?.length ? item.participants : item.assigneeNames;
+          return handlers.includes(a) || item.assigneeNames.includes(a);
+        });
+        const myDone = item.myCheckoff ?? false;
+        const isNotifiedDone = routedSharedById.has(item.id);
+        return (isHandler && myDone) || isNotifiedDone;
+      })
+      .map(item => item.id);
+  }, [routedVisible, routedSharedById, currentUser]);
+
+  const confirmAllRoutedDone = async () => {
+    if (routedConfirmableIds.length === 0) return;
+    if (!window.confirm(`확인 가능한 ${routedConfirmableIds.length}건을 일괄 확인할까요?`)) return;
+    const results = await Promise.all(
+      routedConfirmableIds.map(async id => {
+        const res = await fetch(`/api/calendar/personal-checklist/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dismiss: true }),
+        });
+        return { id, ok: res.ok };
+      }),
+    );
+    const okIds = new Set(results.filter(r => r.ok).map(r => r.id));
+    if (okIds.size > 0) {
+      setRoutedOpen(prev => prev.filter(item => !okIds.has(item.id)));
+      setRoutedShared(prev => prev.filter(item => !okIds.has(item.id)));
+    }
+    if (okIds.size < routedConfirmableIds.length) {
+      window.alert('일부 항목 확인에 실패했습니다. 목록을 새로고침합니다.');
+    }
+    void refresh();
+  };
+
   const closeModal = () => {
     setAddModal(null);
     setEditModal(null);
@@ -396,6 +438,19 @@ export default function HomeTasksPanel() {
             </span>
             <h2 className="text-sm font-bold text-slate-800">To Do List</h2>
             <CountBadge count={totalPending} />
+            <button
+              type="button"
+              onClick={() => setAddModal('personal')}
+              className="relative ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md bg-[#4b6cb7]/10 text-sm font-bold text-[#4b6cb7] hover:bg-[#4b6cb7]/15"
+              title="체크리스트 추가"
+            >
+              +
+              {personalPending > 0 && (
+                <span className="absolute -right-1.5 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  {personalPending > 99 ? '99+' : personalPending}
+                </span>
+              )}
+            </button>
           </div>
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-600">
             <input
@@ -417,7 +472,6 @@ export default function HomeTasksPanel() {
               count={personalPending}
               open={sections.personal}
               onToggle={() => toggleSection('personal')}
-              onAdd={() => setAddModal('personal')}
             >
                 {personalVisible.length === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">
@@ -570,6 +624,18 @@ export default function HomeTasksPanel() {
               count={routedPendingCount}
               open={sections.processed}
               onToggle={() => toggleSection('processed')}
+              headerAction={
+                routedConfirmableIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => void confirmAllRoutedDone()}
+                    className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                    title="확인 가능한 항목 일괄 확인"
+                  >
+                    일괄확인 ({routedConfirmableIds.length})
+                  </button>
+                ) : undefined
+              }
             >
               {routedVisible.length === 0 ? (
                 <p className="py-3 text-center text-sm text-slate-400">요청 없음</p>

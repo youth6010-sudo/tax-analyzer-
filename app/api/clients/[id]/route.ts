@@ -137,13 +137,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           expectedUpdatedAt:
             typeof body.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : undefined,
         })
-      : await updateClient(id, body as ClientPatch);
+      : await updateClient(id, body as ClientPatch, {
+          name: user.name,
+          loginId: user.loginId,
+          role: user.role,
+          adminMode: user.adminMode,
+        });
 
     return NextResponse.json(
       { client, contact: clientRecordToContact(client) },
       NO_STORE,
     );
   } catch (e) {
+    if (e instanceof Error && e.message === 'MANAGER_LOCKED') {
+      return NextResponse.json(
+        { error: '담당자 지정 후에는 해당 담당자만 변경할 수 있습니다.' },
+        { status: 403 },
+      );
+    }
     return handleApiError(e);
   }
 }

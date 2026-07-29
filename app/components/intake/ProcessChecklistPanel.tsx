@@ -12,6 +12,7 @@ import {
 export default function ProcessChecklistPanel({
   process,
   inquiryBluehole = '',
+  allowedKeys = CHECKLIST_KEYS,
   onToggleCheck,
   onSyncBlueholeCheck,
   onEnsureProcess,
@@ -20,6 +21,8 @@ export default function ProcessChecklistPanel({
 }: {
   process: ProcessRow | null;
   inquiryBluehole?: string;
+  /** 문의유형별 표시 항목 (기본: 전체) */
+  allowedKeys?: readonly string[];
   onToggleCheck: (process: ProcessRow, key: string) => void | Promise<void>;
   onSyncBlueholeCheck?: (process: ProcessRow) => void | Promise<void>;
   onEnsureProcess: () => Promise<ProcessRow>;
@@ -27,9 +30,9 @@ export default function ProcessChecklistPanel({
   onRestoreHidden?: (process: ProcessRow) => void | Promise<void>;
 }) {
   const hidden = hiddenChecklistKeys(process?.checklist);
-  const visibleKeys = CHECKLIST_KEYS.filter(k => !hidden.includes(k));
+  const visibleKeys = allowedKeys.filter(k => !hidden.includes(k));
   const blueholeCode = inquiryBluehole.trim();
-  const { done, total } = intakeChecklistProgress(process?.checklist, inquiryBluehole);
+  const { done, total } = intakeChecklistProgress(process?.checklist, inquiryBluehole, allowedKeys);
 
   const handleToggle = async (key: string) => {
     const proc = process ?? (await onEnsureProcess());
@@ -55,6 +58,8 @@ export default function ProcessChecklistPanel({
     if (!onRestoreHidden || !process) return;
     await onRestoreHidden(process);
   };
+
+  if (allowedKeys.length === 0) return null;
 
   return (
     <div className="pt-2 border-t border-indigo-200/60">

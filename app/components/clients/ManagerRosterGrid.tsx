@@ -5,7 +5,6 @@ import type { ClientRecord } from '@/app/types/client';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
 import {
-  applyClientDisplayOrder,
   groupClientsByManager,
   MANAGER_DISPLAY_ORDER,
   splitManagerClientsByCategory,
@@ -13,6 +12,7 @@ import {
   SINGO_DAERI,
 } from '@/app/utils/clientsGrouping';
 import {
+  applyManagerRosterDisplayOrder,
   commitClientListReorder,
   DEFAULT_ROSTER_COLUMN_WIDTH,
   MAX_ROSTER_COLUMN_WIDTH,
@@ -211,6 +211,7 @@ function ClientRosterRow({
     badges.push({ label: '면세', tone: 'violet' });
   }
   const ntsClosed = showNtsClosed ?? false;
+  const ntsClosedLabel = c.nts?.statusCode === '02' ? '휴업' : c.nts?.statusCode === '03' ? '폐업' : '폐업/휴업';
   const rowGrid = showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE;
   const { expanded, onNameClick, goToDetail, prefetchDetail, nameButtonClass } = useClientRowExpand(
     c.id,
@@ -238,6 +239,7 @@ function ClientRosterRow({
           isChurned={isChurned}
           badges={badges}
           ntsClosed={ntsClosed}
+          ntsClosedLabel={ntsClosedLabel}
           onNameClick={onNameClick}
           onPrefetch={prefetchDetail}
           nameButtonClass={nameButtonClass}
@@ -896,7 +898,7 @@ export default function ManagerRosterGrid({
 
     return visibleManagers.map(manager => ({
       manager,
-      clients: applyClientDisplayOrder(
+      clients: applyManagerRosterDisplayOrder(
         byManager.get(manager) ?? [],
         sort,
         readManagerClientOrder(manager),

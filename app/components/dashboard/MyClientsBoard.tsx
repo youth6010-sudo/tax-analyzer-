@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
-import { applyClientDisplayOrder, getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import {
   formatClientClosureDate,
   getClientClosureKind,
@@ -16,7 +16,14 @@ import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
 import { clientHasHandledNtsChurn } from '@/app/utils/churnMatch';
 import { getPortalChurnRecords, getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
-import { CLIENT_SORT_STORAGE_KEY, commitClientListReorder, MANAGER_CLIENT_ORDER_STORAGE_KEY, readManagerClientOrder, type ClientSortKey } from '@/app/utils/clientListPrefs';
+import {
+  CLIENT_SORT_STORAGE_KEY,
+  applyManagerRosterDisplayOrder,
+  commitClientListReorder,
+  MANAGER_CLIENT_ORDER_STORAGE_KEY,
+  readManagerClientOrder,
+  type ClientSortKey,
+} from '@/app/utils/clientListPrefs';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 
@@ -92,6 +99,7 @@ function ClientList({
         const ntsClosed = ntsClosedIds.has(c.id);
         const isChurned = c.status === 'churned';
         const ntsCode = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
+        const ntsClosedLabel = ntsCode === '02' ? '휴업' : ntsCode === '03' ? '폐업' : '폐업/휴업';
         const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
         const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
         const nameProps = getItemProps(c.id);
@@ -157,7 +165,7 @@ function ClientList({
               )}
               {ntsClosed && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                  폐업/휴업
+                  {ntsClosedLabel}
                 </span>
               )}
               {summary && (
@@ -401,7 +409,7 @@ export default function MyClientsBoard() {
 
   const { corporate, personal, singoDaeri, jisutaek, closureByYear } = useMemo(() => {
     const orderedAll = managerName
-      ? applyClientDisplayOrder(clients, sort, readManagerClientOrder(managerName))
+      ? applyManagerRosterDisplayOrder(clients, sort, readManagerClientOrder(managerName))
       : clients;
     const orderIndex = new Map(orderedAll.map((c, i) => [c.id, i]));
     const corp: ClientWithChurn[] = [];

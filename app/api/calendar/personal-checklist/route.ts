@@ -7,7 +7,7 @@ import {
   listPersonalChecklistForOwner,
   listRoutedRequestsForHome,
 } from '@/lib/personalChecklist';
-import type { ChecklistTaxType } from '@/app/types/calendar';
+import type { ChecklistTaxType, PersonalChecklistAttachment } from '@/app/types/calendar';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
 
 export async function GET(req: Request) {
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       dueDate?: string;
       reflectInNotes?: boolean;
       assigneeNames?: string[];
-      memo?: string;
+      memo?: string | { body: string; attachments?: PersonalChecklistAttachment[] };
       repeat?: CalendarRepeatInput;
     };
 

@@ -41,7 +41,7 @@
         { "key": "consent", "label": "수임동의", "type": "checklist" },
         { "key": "cms", "label": "CMS 등록", "type": "checklist" },
         { "key": "assignee", "label": "담당자 배정", "type": "checklist" },
-        { "key": "programClient", "label": "프로그램 거래처 생성", "type": "checklist" },
+        { "key": "programClient", "label": "세무사랑 거래처 등록", "type": "checklist" },
         { "key": "blueholeClient", "label": "블루홀 거래처 등록", "type": "checklist" },
         { "key": "tpClient", "label": "TP 거래처 등록", "type": "checklist" },
         { "key": "semoReport", "label": "위멤버스 및 세모리포트 등록", "type": "checklist" },

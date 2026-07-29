@@ -28,6 +28,7 @@ import {
   portalCard,
   portalInput,
 } from '@/app/components/portal/uiClasses';
+import { canChangeAssignedManager } from '@/lib/intakeManagerGate';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
@@ -110,6 +111,60 @@ export default function ContactDetailView({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [managerOptions, setManagerOptions] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<{
+    name: string;
+    loginId?: string;
+    role?: string;
+    adminMode?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/auth/login-users')
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: { users?: Array<{ name?: string }> } | null) => {
+        if (cancelled || !data?.users) return;
+        const names = [
+          ...new Set(
+            data.users.map(u => (u.name ?? '').trim()).filter(Boolean),
+          ),
+        ];
+        setManagerOptions(names);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled) return;
+        const u = (d as { user?: { name?: string; loginId?: string; role?: string; adminMode?: boolean } })?.user;
+        if (u?.name) {
+          setCurrentUser({
+            name: u.name,
+            loginId: u.loginId,
+            role: u.role,
+            adminMode: u.adminMode,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const canEditManager = canChangeAssignedManager(
+    contact.manager,
+    currentUser?.name ?? '',
+    currentUser,
+  );
 
   const startEdit = useCallback(() => {
     setForm(toFormState(contact));
@@ -445,16 +500,44 @@ export default function ContactDetailView({
         </div>
 
         <div className={flat ? 'px-4 py-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3' : 'p-5 grid gap-3 sm:grid-cols-2'}>
-          {viewFields.map(({ key, label, mono }) => (
+          {viewFields.map(({ key, label, mono }) => {
+            const selectOptions =
+              key === 'manager'
+                ? form.manager && !managerOptions.includes(form.manager)
+                  ? [form.manager, ...managerOptions]
+                  : managerOptions
+                : null;
+            return (
             <div key={key} className={flat ? 'min-w-0' : 'rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3'}>
               <p className={`font-medium text-slate-400 ${flat ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</p>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={form[key] as string}
-                  onChange={e => updateField(key, e.target.value)}
-                  className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''} ${flat ? '!py-1 !text-xs' : ''}`}
-                />
+                selectOptions ? (
+                  <select
+                    value={form.manager}
+                    onChange={e => updateField('manager', e.target.value)}
+                    className={`${portalInput} w-full font-semibold ${flat ? '!py-1 !text-xs' : ''}`}
+                    disabled={!canEditManager}
+                    title={
+                      canEditManager
+                        ? undefined
+                        : '담당자 지정 후에는 해당 담당자만 변경할 수 있습니다'
+                    }
+                  >
+                    <option value="">선택…</option>
+                    {selectOptions.map(name => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={form[key] as string}
+                    onChange={e => updateField(key, e.target.value)}
+                    className={`${portalInput} w-full font-semibold ${mono ? 'font-mono' : ''} ${flat ? '!py-1 !text-xs' : ''}`}
+                  />
+                )
               ) : (
                 <p className={`font-semibold text-slate-900 break-all ${mono ? 'font-mono' : ''} ${flat ? 'text-xs' : 'text-sm'}`}>
                   {key === 'phone'
@@ -465,7 +548,8 @@ export default function ContactDetailView({
                 </p>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </article>
     </div>

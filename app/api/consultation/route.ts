@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       consultId: result.consultId,
       inquiryId: result.inquiry.id,
-      processId: result.process.id,
+      processId: result.process?.id ?? null,
     });
   } catch (e) {
     if (e instanceof Error && e.message === 'COMPANY_NAME_REQUIRED') {
@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     }
     if (e instanceof Error && e.message === 'PHONE_REQUIRED') {
       return NextResponse.json({ error: '연락처는 필수입니다.' }, { status: 400 });
+    }
+    if (e instanceof Error && e.message === 'CONSULT_TYPES_REQUIRED') {
+      return NextResponse.json({ error: '문의 유형을 하나 이상 선택해 주세요.' }, { status: 400 });
     }
     if (e instanceof Error && e.message === 'DRAFT_NOT_FOUND') {
       return NextResponse.json({ error: '초안을 찾을 수 없습니다.' }, { status: 404 });
