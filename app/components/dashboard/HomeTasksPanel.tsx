@@ -27,6 +27,8 @@ import CenterModal from '@/app/components/portal/CenterModal';
 import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgress';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
+import type { LeaveRequestDto } from '@/app/types/leave';
+import { formatLeaveKindLabel } from '@/app/types/leave';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -37,7 +39,13 @@ const TYPE_LABEL: Record<DashboardTask['type'], string> = {
 const SECTION_KEY = 'portalTasksSections.v1';
 const SHOW_COMPLETED_KEY = 'portalTasksShowCompleted.v1';
 
-type SectionState = { personal: boolean; company: boolean; client: boolean; processed: boolean };
+type SectionState = {
+  personal: boolean;
+  company: boolean;
+  client: boolean;
+  processed: boolean;
+  leave: boolean;
+};
 type AddModal = 'personal' | 'company' | null;
 type EditModal = 'personal' | 'company' | null;
 
@@ -54,10 +62,11 @@ function readSectionState(): SectionState {
         company: parsed.company ?? true,
         client: parsed.client ?? true,
         processed: parsed.processed ?? true,
+        leave: parsed.leave ?? true,
       };
     }
   } catch { /* ignore */ }
-  return { personal: true, company: true, client: true, processed: true };
+  return { personal: true, company: true, client: true, processed: true, leave: true };
 }
 
 function readShowCompleted(): boolean {
@@ -171,6 +180,8 @@ export default function HomeTasksPanel() {
   const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [leavePending, setLeavePending] = useState<LeaveRequestDto[]>([]);
+  const [canApproveLeaveUi, setCanApproveLeaveUi] = useState(false);
 
   /** 미완료 배지·필터용 — 비품·시스템개선은 전용 섹션 */
   const isPersonalDone = (p: PersonalChecklistDto) => {
@@ -211,7 +222,8 @@ export default function HomeTasksPanel() {
     () => companyEvents.filter(e => !e.myCheckoff).length,
     [companyEvents],
   );
-  const totalPending = personalPending + companyPending + clientTasks.length;
+  const totalPending =
+    personalPending + companyPending + clientTasks.length + leavePending.length;
 
   const handleShowCompletedChange = (show: boolean) => {
     setShowCompleted(show);
@@ -260,6 +272,16 @@ export default function HomeTasksPanel() {
         setTeamMembers(payload.team || []);
         setCompanyMonth(payload.month ?? null);
         setCanViewCheckoffDetails(!!payload.canViewCheckoffDetails);
+      }
+
+      const leaveRes = await fetch('/api/leave/requests?pending=1');
+      if (leaveRes.ok) {
+        const payload = (await leaveRes.json()) as { items?: LeaveRequestDto[] };
+        setLeavePending(payload.items || []);
+        setCanApproveLeaveUi(true);
+      } else {
+        setLeavePending([]);
+        setCanApproveLeaveUi(false);
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -812,6 +834,47 @@ export default function HomeTasksPanel() {
                 </ul>
               )}
             </SectionCard>
+
+            {canApproveLeaveUi && (
+              <SectionCard
+                title="휴가 결재"
+                count={leavePending.length}
+                open={sections.leave}
+                onToggle={() => toggleSection('leave')}
+              >
+                {leavePending.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {leavePending.map(item => (
+                      <li
+                        key={item.id}
+                        className="rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-semibold text-slate-800">{item.applicantName}</p>
+                          <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                            {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
+                          </span>
+                          <span className="text-[11px] font-semibold text-teal-800">{item.days}일</span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          {item.startDate}
+                          {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
+                          {item.title ? ` · ${item.title}` : ''}
+                        </p>
+                        <Link
+                          href="/leave"
+                          className="mt-2 inline-block text-[11px] font-semibold text-teal-700 underline-offset-2 hover:underline"
+                        >
+                          휴가관리에서 결재
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+            )}
 
             <SectionCard
               title={companySectionTitle}

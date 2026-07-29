@@ -8,6 +8,10 @@ export const TAX_DEADLINE_NAVY = '#1e3a8a';
 export const TAX_DEADLINE_CHIP_COLOR =
   'border border-[#1e3a8a] bg-transparent text-[#1e3a8a] shadow-none ring-0';
 
+/** 휴가 — 민트 테두리 */
+export const LEAVE_CHIP_COLOR =
+  'border border-teal-600 bg-teal-50 text-teal-900 shadow-none ring-0';
+
 /** 담당자 고정 색 (팀 닉네임 기준) — `app/globals.css` `.cal-mgr-*` */
 export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
   다야: 'cal-mgr-daya',
@@ -70,10 +74,15 @@ const KIND_CHIP_COLORS: Record<CalendarEventDto['kind'], string> = {
   company: COMPANY_CHIP_COLOR,
   tax_deadline: TAX_DEADLINE_CHIP_COLOR,
   client_task: 'bg-rose-600',
+  leave: LEAVE_CHIP_COLOR,
 };
 
 export function isTaxDeadlineChipColor(color: string): boolean {
   return color === TAX_DEADLINE_CHIP_COLOR;
+}
+
+export function isLeaveChipColor(color: string): boolean {
+  return color === LEAVE_CHIP_COLOR;
 }
 
 export function managerChipColor(ownerName: string, members: readonly string[]): string {
@@ -91,6 +100,8 @@ export function resolveEventChipColor(
   members: readonly string[],
 ): string {
   if (event.kind === 'company') return COMPANY_CHIP_COLOR;
+  if (event.kind === 'leave') return LEAVE_CHIP_COLOR;
+  if (event.kind === 'tax_deadline') return TAX_DEADLINE_CHIP_COLOR;
   if (event.kind === 'personal' && event.ownerName) {
     return managerChipColor(event.ownerName, members);
   }
@@ -115,6 +126,7 @@ export function buildCalendarLegend(
   const legend: { key: string; label: string; color: string }[] = [
     { key: 'company', label: '사내', color: COMPANY_CHIP_COLOR },
     { key: 'tax_deadline', label: '세무신고', color: TAX_DEADLINE_CHIP_COLOR },
+    { key: 'leave', label: '휴가', color: LEAVE_CHIP_COLOR },
   ];
 
   const owners =

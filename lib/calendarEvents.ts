@@ -1,4 +1,5 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { formatLeaveKindLabel } from '@/app/types/leave';
 import { listCompanyEvents } from '@/lib/companyEvents';
 import {
   checkoffsFromDetails,
@@ -8,6 +9,7 @@ import { listPersonalChecklistInRange } from '@/lib/personalChecklist';
 import { listTaxDeadlines, taxDeadlinesToCalendarEvents } from '@/lib/taxDeadlineCalendar';
 import { listCheckoffDetailsForTaxDeadlines } from '@/lib/taxDeadlineCheckoffs';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
+import { listApprovedLeaveInRange } from '@/lib/leaveDb';
 
 export async function listCalendarEvents(
   ownerNames: string[],
@@ -19,10 +21,11 @@ export async function listCalendarEvents(
   const names = ownerNames.map(n => n.trim()).filter(Boolean);
   const viewer = (opts?.viewerName || '').trim();
 
-  const [personal, company, team] = await Promise.all([
+  const [personal, company, team, leaves] = await Promise.all([
     listPersonalChecklistInRange(names, from, to),
     listCompanyEvents({ from, to }),
     listCalendarTeamMembers(),
+    listApprovedLeaveInRange(names, from, to),
   ]);
 
   const taxEvents = taxDeadlinesToCalendarEvents(listTaxDeadlines(from, to));
@@ -84,6 +87,23 @@ export async function listCalendarEvents(
       checkoffDone: team.filter(n => checkoffs[n]).length,
       checkoffTotal: team.length,
       checkoffDetails: opts?.includeCheckoffDetails ? details : undefined,
+    });
+  }
+
+  for (const leave of leaves) {
+    const kindLabel = formatLeaveKindLabel(leave.leaveKind, leave.halfSlot);
+    events.push({
+      id: `leave-${leave.id}`,
+      kind: 'leave',
+      title: kindLabel,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      allDay: true,
+      href: '/leave',
+      subtitle: leave.title,
+      ownerName: leave.applicantName,
+      createdAt: leave.createdAt,
+      leaveHalfSlot: leave.halfSlot || '',
     });
   }
 

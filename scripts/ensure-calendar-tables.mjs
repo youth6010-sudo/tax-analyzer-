@@ -29,6 +29,7 @@ const migrationPaths = [
   path.join(root, 'drizzle', '0009_tax_deadline_checkoffs.sql'),
   path.join(root, 'drizzle', '0010_personal_checklist_checkoffs.sql'),
   path.join(root, 'drizzle', '0014_personal_checklist_series.sql'),
+  path.join(root, 'drizzle', '0015_leave.sql'),
 ];
 
 const sql = postgres(url, { max: 1, prepare: false });

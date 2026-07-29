@@ -6,11 +6,20 @@ import {
   resolveEventChipColor,
   isLightManagerChipColor,
   isTaxDeadlineChipColor,
+  isLeaveChipColor,
 } from '@/lib/calendarManagerColors';
 
 function displayTitle(event: CalendarEventDto, currentUser?: string): string {
-  if (event.kind === 'personal' && event.ownerName && currentUser && event.ownerName !== currentUser) {
+  if (
+    (event.kind === 'personal' || event.kind === 'leave') &&
+    event.ownerName &&
+    currentUser &&
+    event.ownerName !== currentUser
+  ) {
     return `[${event.ownerName}] ${event.title}`;
+  }
+  if (event.kind === 'leave' && event.ownerName) {
+    return `${event.ownerName} ${event.title}`;
   }
   return event.title;
 }
@@ -35,7 +44,9 @@ export default function CalendarEventChip({
   const color = resolveEventChipColor(event, members);
   const label = displayTitle(event, currentUser);
   const isTax = event.kind === 'tax_deadline' || isTaxDeadlineChipColor(color);
-  const lightText = !isTax && isLightManagerChipColor(color);
+  const isLeave = event.kind === 'leave' || isLeaveChipColor(color);
+  const outlined = isTax || isLeave;
+  const lightText = !outlined && isLightManagerChipColor(color);
   const canEdit = event.kind === 'personal' && Boolean(onDoubleClick);
   const done = !!event.completed;
 
@@ -53,7 +64,7 @@ export default function CalendarEventChip({
   const inner = (
     <span
       className={`block truncate rounded-md font-semibold ${
-        isTax
+        outlined
           ? color
           : `shadow-sm ring-1 ring-black/10 ${color} ${lightText ? 'text-slate-900' : 'text-white'}`
       } ${compact ? 'px-1.5 py-0.5 text-[11px] leading-snug' : 'px-2.5 py-1 text-sm leading-snug'} ${

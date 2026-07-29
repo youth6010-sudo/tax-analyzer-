@@ -523,6 +523,68 @@ export const mailReceipts = pgTable('mail_receipts', {
   index('mail_receipts_received_at_idx').on(t.receivedAt),
 ]);
 
+/** 연도별 개인 연차 잔고 — 발생/이월/증감은 페리·인디 수동 입력 */
+export const leaveBalances = pgTable('leave_balances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  memberName: text('member_name').notNull(),
+  year: integer('year').notNull(),
+  hireDate: text('hire_date').notNull().default(''),
+  resignDate: text('resign_date').notNull().default(''),
+  useHireDateBasis: boolean('use_hire_date_basis').notNull().default(false),
+  accrued: text('accrued').notNull().default('0'),
+  carryOver: text('carry_over').notNull().default('0'),
+  increase: text('increase').notNull().default('0'),
+  decrease: text('decrease').notNull().default('0'),
+  updatedBy: text('updated_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex('leave_balances_member_year_uidx').on(t.memberName, t.year),
+  index('leave_balances_year_idx').on(t.year),
+]);
+
+/** 휴가 신청·결재 — 승인은 인디만 */
+export const leaveRequests = pgTable('leave_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  applicantName: text('applicant_name').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull().default(''),
+  /** full | half */
+  leaveKind: text('leave_kind').notNull().default('full'),
+  /** am | pm | '' (연차) */
+  halfSlot: text('half_slot').notNull().default(''),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  /** 사용 일수 문자열 (0.5, 1, 2 …) */
+  days: text('days').notNull().default('1'),
+  /** pending | approved | rejected | cancelled */
+  status: text('status').notNull().default('pending'),
+  reviewNote: text('review_note').notNull().default(''),
+  reviewedBy: text('reviewed_by').notNull().default(''),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('leave_requests_applicant_idx').on(t.applicantName, t.status),
+  index('leave_requests_status_idx').on(t.status),
+  index('leave_requests_dates_idx').on(t.startDate, t.endDate),
+]);
+
+/** 휴가 신청 알림 (결재자 인디) */
+export const leaveNotifications = pgTable('leave_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  leaveRequestId: uuid('leave_request_id')
+    .notNull()
+    .references(() => leaveRequests.id, { onDelete: 'cascade' }),
+  recipientName: text('recipient_name').notNull(),
+  actorName: text('actor_name').notNull(),
+  title: text('title').notNull().default(''),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('leave_notifications_recipient_idx').on(t.recipientName, t.readAt, t.createdAt),
+]);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -541,6 +603,9 @@ export type PersonalChecklistNotification = typeof personalChecklistNotification
 export type CompanyEvent = typeof companyEvents.$inferSelect;
 export type CompanyEventCheckoff = typeof companyEventCheckoffs.$inferSelect;
 export type TaxDeadlineCheckoff = typeof taxDeadlineCheckoffs.$inferSelect;
+export type LeaveBalance = typeof leaveBalances.$inferSelect;
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type LeaveNotification = typeof leaveNotifications.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;

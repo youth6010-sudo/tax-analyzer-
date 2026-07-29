@@ -36,6 +36,8 @@
     "db:push": "node scripts/db-push-env.mjs",
     "db:ensure-calendar-tables": "node scripts/ensure-calendar-tables.mjs",
     "db:ensure-personal-checklist-series": "node scripts/ensure-personal-checklist-series.mjs",
+    "db:ensure-leave-tables": "node scripts/ensure-leave-tables.mjs",
+    "db:import-leave": "node scripts/import-leave-xlsx.mjs",
     "db:ensure-mail-receipts": "node scripts/ensure-mail-receipts.mjs",
     "db:ensure-menu-prefs": "node scripts/ensure-menu-prefs.mjs",
     "db:seed": "node scripts/seed-users.mjs",

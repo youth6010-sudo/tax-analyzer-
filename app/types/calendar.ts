@@ -165,7 +165,7 @@ export function formatCompanyEventSchedule(
   return `${ev.startDate} ~ ${ev.endDate}`;
 }
 
-export type CalendarEventKind = 'personal' | 'company' | 'tax_deadline' | 'client_task';
+export type CalendarEventKind = 'personal' | 'company' | 'tax_deadline' | 'client_task' | 'leave';
 
 export type CalendarEventDto = {
   id: string;
@@ -184,6 +184,8 @@ export type CalendarEventDto = {
   completed?: boolean;
   /** 개인 체크리스트 반복 시리즈 ID */
   repeatSeriesId?: string | null;
+  /** 휴가 오전/오후 반차 */
+  leaveHalfSlot?: 'am' | 'pm' | '';
   checkoffDone?: number;
   checkoffTotal?: number;
   checkoffDetails?: Record<string, CheckoffDetail>;

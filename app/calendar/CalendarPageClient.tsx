@@ -43,6 +43,7 @@ function kindBadgeLabel(kind: CalendarEventDto['kind']): string {
   if (kind === 'company') return '사내';
   if (kind === 'tax_deadline') return '세무신고';
   if (kind === 'client_task') return '수임처';
+  if (kind === 'leave') return '휴가';
   return '개인';
 }
 
