@@ -39,6 +39,7 @@
     "db:ensure-menu-prefs": "node scripts/ensure-menu-prefs.mjs",
     "db:seed": "node scripts/seed-users.mjs",
     "db:backup": "node scripts/backup-db.mjs",
+    "db:backup:dump": "node scripts/backup-pg-dump.mjs",
     "db:wipe-clients": "node scripts/wipe-all-client-data.mjs --confirm",
     "db:migrate-contacts": "node scripts/migrate-contacts-to-db.mjs",
     "import:lunch": "node scripts/import-lunch.mjs",
