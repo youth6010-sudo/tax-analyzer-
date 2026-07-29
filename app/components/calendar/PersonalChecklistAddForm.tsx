@@ -22,7 +22,16 @@ import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/compone
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
-import { WEEKDAY_OPTIONS, INTERVAL_OPTIONS, previewRepeatCount, type RepeatMode, type RepeatIntervalKind } from '@/lib/calendarRepeat';
+import {
+  WEEKDAY_OPTIONS,
+  INTERVAL_OPTIONS,
+  MONTH_DAY_OPTIONS,
+  TAX_DEADLINE_REPEAT_HINTS,
+  previewRepeatCount,
+  isTaxDeadlineRepeatType,
+  type RepeatMode,
+  type RepeatIntervalKind,
+} from '@/lib/calendarRepeat';
 
 type Props = {
   onCreated?: () => void;
@@ -111,6 +120,7 @@ export default function PersonalChecklistAddForm({
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [interval, setIntervalKind] = useState<RepeatIntervalKind>('weekly');
   const [everyDays, setEveryDays] = useState(3);
+  const [monthDay, setMonthDay] = useState(10);
   const [reflectInNotes, setReflectInNotes] = useState(false);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [memoDraft, setMemoDraft] = useState('');
@@ -182,6 +192,7 @@ export default function PersonalChecklistAddForm({
     setWeekdays([1, 2, 3, 4, 5]);
     setIntervalKind('weekly');
     setEveryDays(3);
+    setMonthDay(10);
     setReflectInNotes(false);
     setAssigneeNames([]);
     setMyCheckoff(false);
@@ -296,6 +307,12 @@ export default function PersonalChecklistAddForm({
     );
   };
 
+  useEffect(() => {
+    if (!repeatFrom || interval !== 'monthly') return;
+    const day = Number(repeatFrom.slice(8, 10));
+    if (day >= 1 && day <= 31) setMonthDay(day);
+  }, [repeatFrom, interval]);
+
   const previewCount = useMemo(
     () =>
       !isEdit && repeatOn
@@ -306,10 +323,14 @@ export default function PersonalChecklistAddForm({
             weekdays,
             interval,
             everyDays,
+            monthDay,
+            taxType: isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
           })
         : null,
-    [isEdit, repeatOn, repeatFrom, repeatTo, repeatMode, weekdays, interval, everyDays],
+    [isEdit, repeatOn, repeatFrom, repeatTo, repeatMode, weekdays, interval, everyDays, monthDay, taxType],
   );
+
+  const canUseTaxDeadline = isTaxDeadlineRepeatType(taxType);
 
   const clients = useMemo(() => {
     if (!taxType || taxType === 'other' || isRoutedRequestTaxType(taxType)) {
@@ -389,6 +410,9 @@ export default function PersonalChecklistAddForm({
       const owner = editItem?.ownerName || currentUser;
       setAssigneeNames(prev => ensureForcedAssignees(next, prev, owner));
     }
+    if (!isTaxDeadlineRepeatType(next) && repeatMode === 'taxDeadline') {
+      setRepeatMode('weekdays');
+    }
   };
 
   const handleDelete = async () => {
@@ -430,6 +454,14 @@ export default function PersonalChecklistAddForm({
           }
           if (repeatMode === 'interval' && interval === 'custom' && (!everyDays || everyDays < 1)) {
             window.alert('반복 주기(일)를 입력해주세요.');
+            return;
+          }
+          if (repeatMode === 'interval' && interval === 'monthly' && (!monthDay || monthDay < 1 || monthDay > 31)) {
+            window.alert('매월 반복할 일자를 선택해주세요.');
+            return;
+          }
+          if (repeatMode === 'taxDeadline' && !isTaxDeadlineRepeatType(taxType)) {
+            window.alert('세목 마감일은 원천세·부가세·종소세·법인세 구분에서만 사용할 수 있습니다.');
             return;
           }
         } else if (!dueDate.trim()) {
@@ -480,6 +512,9 @@ export default function PersonalChecklistAddForm({
               weekdays: repeatMode === 'weekdays' ? weekdays : undefined,
               interval: repeatMode === 'interval' ? interval : undefined,
               everyDays: repeatMode === 'interval' && interval === 'custom' ? everyDays : undefined,
+              monthDay: repeatMode === 'interval' && interval === 'monthly' ? monthDay : undefined,
+              taxType:
+                repeatMode === 'taxDeadline' && isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
             },
           }
         : {
@@ -524,6 +559,7 @@ export default function PersonalChecklistAddForm({
         setWeekdays([1, 2, 3, 4, 5]);
         setIntervalKind('weekly');
         setEveryDays(3);
+        setMonthDay(10);
         setClientId(defaultClientId || '');
         setReflectInNotes(false);
         setAssigneeNames([]);
@@ -633,6 +669,17 @@ export default function PersonalChecklistAddForm({
                   />
                   반복 주기
                 </label>
+                {canUseTaxDeadline ? (
+                  <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <input
+                      type="radio"
+                      name="personal-repeat-mode"
+                      checked={repeatMode === 'taxDeadline'}
+                      onChange={() => setRepeatMode('taxDeadline')}
+                    />
+                    세목 마감일
+                  </label>
+                ) : null}
               </div>
 
               {repeatMode === 'weekdays' ? (
@@ -658,6 +705,16 @@ export default function PersonalChecklistAddForm({
                     })}
                   </div>
                 </div>
+              ) : repeatMode === 'taxDeadline' && canUseTaxDeadline ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-slate-600">세목 마감일 기준</p>
+                  <p className="text-[11px] leading-relaxed text-slate-500">
+                    {TAX_DEADLINE_REPEAT_HINTS[taxType]}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    캘린더 세무신고 마감과 동일하게 휴일이면 다음 영업일로 맞춰집니다.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-[11px] font-semibold text-slate-600">주기 선택</p>
@@ -680,6 +737,24 @@ export default function PersonalChecklistAddForm({
                       );
                     })}
                   </div>
+                  {interval === 'monthly' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-slate-600">매월</span>
+                      <select
+                        value={monthDay}
+                        onChange={e => setMonthDay(Number(e.target.value) || 1)}
+                        className={portalInput + ' w-24 text-xs py-1.5'}
+                        aria-label="매월 반복 일자"
+                      >
+                        {MONTH_DAY_OPTIONS.map(day => (
+                          <option key={day} value={day}>
+                            {day}일
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-slate-400">해당 월에 없는 일자는 말일로 맞춰집니다.</span>
+                    </div>
+                  )}
                   {interval === 'custom' && (
                     <div className="flex items-center gap-2">
                       <input
@@ -693,7 +768,9 @@ export default function PersonalChecklistAddForm({
                       <span className="text-xs text-slate-600">일마다</span>
                     </div>
                   )}
-                  <p className="text-[10px] text-slate-400">시작일부터 선택한 주기로 생성됩니다.</p>
+                  {interval !== 'monthly' && (
+                    <p className="text-[10px] text-slate-400">시작일부터 선택한 주기로 생성됩니다.</p>
+                  )}
                 </div>
               )}
 

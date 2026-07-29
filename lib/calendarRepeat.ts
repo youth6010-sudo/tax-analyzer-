@@ -1,4 +1,6 @@
-/** 캘린더 반복 일정 — 기간 내 요일·주기 전개 */
+/** 캘린더 반복 일정 — 기간 내 요일·주기·세목 마감일 전개 */
+
+import { listTaxDeadlines } from '@/lib/taxDeadlineCalendar';
 
 export const WEEKDAY_OPTIONS = [
   { id: 0, label: '일' },
@@ -10,9 +12,11 @@ export const WEEKDAY_OPTIONS = [
   { id: 6, label: '토' },
 ] as const;
 
-export type RepeatMode = 'weekdays' | 'interval';
+export type RepeatMode = 'weekdays' | 'interval' | 'taxDeadline';
 
 export type RepeatIntervalKind = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+
+export type RepeatTaxDeadlineType = 'withholding' | 'vat' | 'comprehensive' | 'corporate';
 
 export const INTERVAL_OPTIONS: { id: RepeatIntervalKind; label: string }[] = [
   { id: 'daily', label: '매일' },
@@ -21,6 +25,26 @@ export const INTERVAL_OPTIONS: { id: RepeatIntervalKind; label: string }[] = [
   { id: 'monthly', label: '매월' },
   { id: 'custom', label: 'N일마다' },
 ];
+
+export const MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+export const TAX_DEADLINE_REPEAT_TYPES: RepeatTaxDeadlineType[] = [
+  'withholding',
+  'vat',
+  'comprehensive',
+  'corporate',
+];
+
+export function isTaxDeadlineRepeatType(value: string | null | undefined): value is RepeatTaxDeadlineType {
+  return TAX_DEADLINE_REPEAT_TYPES.includes(value as RepeatTaxDeadlineType);
+}
+
+export const TAX_DEADLINE_REPEAT_HINTS: Record<RepeatTaxDeadlineType, string> = {
+  withholding: '기간 내 원천세 신고 마감일(매월, 휴일이면 다음 영업일)',
+  vat: '기간 내 부가세 예정·확정 마감일',
+  comprehensive: '기간 내 종합소득세 신고 마감일(일반·성실신고)',
+  corporate: '기간 내 법인세 마감일(12월 결산 기준)',
+};
 
 export type CalendarRepeatInput = {
   from: string;
@@ -33,6 +57,10 @@ export type CalendarRepeatInput = {
   interval?: RepeatIntervalKind;
   /** interval=custom 일 때 1~90 */
   everyDays?: number;
+  /** interval=monthly 일 때 1~31 (없으면 시작일 일자) */
+  monthDay?: number;
+  /** mode=taxDeadline */
+  taxType?: RepeatTaxDeadlineType;
 };
 
 const MAX_REPEAT_DATES = 120;
@@ -52,8 +80,9 @@ function toIsoLocal(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function pushDate(dates: string[], d: Date) {
-  dates.push(toIsoLocal(d));
+function pushDate(dates: string[], d: Date | string) {
+  const iso = typeof d === 'string' ? d : toIsoLocal(d);
+  dates.push(iso);
   if (dates.length > MAX_REPEAT_DATES) {
     throw new Error(`반복 일정은 최대 ${MAX_REPEAT_DATES}건까지 등록할 수 있습니다.`);
   }
@@ -74,11 +103,19 @@ function expandByWeekdays(from: Date, to: Date, weekdays: number[]): string[] {
   return dates;
 }
 
+function normalizeMonthDay(raw: unknown, fallback: number): number {
+  const n = Math.floor(Number(raw));
+  if (Number.isFinite(n) && n >= 1 && n <= 31) return n;
+  if (Number.isFinite(fallback) && fallback >= 1 && fallback <= 31) return fallback;
+  return 1;
+}
+
 function expandByInterval(
   from: Date,
   to: Date,
   interval: RepeatIntervalKind,
   everyDays?: number,
+  monthDay?: number,
 ): string[] {
   const dates: string[] = [];
 
@@ -102,7 +139,7 @@ function expandByInterval(
   }
 
   if (interval === 'monthly') {
-    const dayOfMonth = from.getDate();
+    const dayOfMonth = normalizeMonthDay(monthDay, from.getDate());
     let y = from.getFullYear();
     let m = from.getMonth();
     while (true) {
@@ -132,7 +169,34 @@ function expandByInterval(
   return dates;
 }
 
-/** 기간(from~to) 안에서 요일 또는 주기에 해당하는 날짜 목록 */
+function expandByTaxDeadline(
+  fromIso: string,
+  toIso: string,
+  taxType: RepeatTaxDeadlineType,
+): string[] {
+  const deadlines = listTaxDeadlines(fromIso, toIso).filter(d => {
+    if (d.taxType !== taxType) return false;
+    // 법인세: 12월 결산만 (건수 폭주 방지)
+    if (taxType === 'corporate') {
+      return d.id.includes('-12') || /12월\s*결산/.test(d.periodLabel || d.title || '');
+    }
+    return true;
+  });
+
+  const dates: string[] = [];
+  const seen = new Set<string>();
+  for (const item of deadlines) {
+    const date = item.date?.trim();
+    if (!date || seen.has(date)) continue;
+    if (date < fromIso || date > toIso) continue;
+    seen.add(date);
+    pushDate(dates, date);
+  }
+  dates.sort();
+  return dates;
+}
+
+/** 기간(from~to) 안에서 요일·주기·세목 마감일에 해당하는 날짜 목록 */
 export function expandRepeatDates(input: CalendarRepeatInput): string[] {
   const from = parseIsoDate(input.from);
   const to = parseIsoDate(input.to);
@@ -143,16 +207,31 @@ export function expandRepeatDates(input: CalendarRepeatInput): string[] {
     input.mode ??
     (input.interval ? 'interval' : 'weekdays');
 
-  const dates =
-    mode === 'interval'
-      ? expandByInterval(from, to, input.interval ?? 'weekly', input.everyDays)
-      : expandByWeekdays(from, to, input.weekdays ?? []);
+  let dates: string[];
+  if (mode === 'taxDeadline') {
+    if (!input.taxType || !isTaxDeadlineRepeatType(input.taxType)) {
+      throw new Error('세목 마감일을 적용할 구분을 선택하세요.');
+    }
+    dates = expandByTaxDeadline(input.from.trim(), input.to.trim(), input.taxType);
+  } else if (mode === 'interval') {
+    dates = expandByInterval(
+      from,
+      to,
+      input.interval ?? 'weekly',
+      input.everyDays,
+      input.monthDay,
+    );
+  } else {
+    dates = expandByWeekdays(from, to, input.weekdays ?? []);
+  }
 
   if (dates.length === 0) {
     throw new Error(
-      mode === 'interval'
-        ? '선택한 주기에 해당하는 날짜가 기간 안에 없습니다.'
-        : '선택한 요일에 해당하는 날짜가 기간 안에 없습니다.',
+      mode === 'taxDeadline'
+        ? '선택한 세목 마감일이 기간 안에 없습니다.'
+        : mode === 'interval'
+          ? '선택한 주기에 해당하는 날짜가 기간 안에 없습니다.'
+          : '선택한 요일에 해당하는 날짜가 기간 안에 없습니다.',
     );
   }
   return dates;
@@ -167,6 +246,13 @@ export function previewRepeatCount(input: Partial<CalendarRepeatInput>): number 
   if (mode === 'weekdays' && !input.weekdays?.length) return null;
   if (mode === 'interval' && !input.interval) return null;
   if (mode === 'interval' && input.interval === 'custom' && !input.everyDays) return null;
+  if (mode === 'interval' && input.interval === 'monthly') {
+    const day = Number(input.monthDay);
+    if (!Number.isFinite(day) || day < 1 || day > 31) return null;
+  }
+  if (mode === 'taxDeadline' && (!input.taxType || !isTaxDeadlineRepeatType(input.taxType))) {
+    return null;
+  }
 
   try {
     return expandRepeatDates({
@@ -176,6 +262,8 @@ export function previewRepeatCount(input: Partial<CalendarRepeatInput>): number 
       weekdays: input.weekdays,
       interval: input.interval,
       everyDays: input.everyDays,
+      monthDay: input.monthDay,
+      taxType: input.taxType,
     }).length;
   } catch {
     return null;
