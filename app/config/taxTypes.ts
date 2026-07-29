@@ -42,7 +42,6 @@ export const TAX_MENU = [
       { label: '신고대상확인', href: '/clients/filing-check' },
       { label: '안내문 생성기', href: '/tools/notice-generator' },
       { label: '종합소득세 분석', href: '/tax/comprehensive' },
-      { label: '4대보험 지사 찾기', href: '/tools/nhis-branches' },
     ],
   },
   {

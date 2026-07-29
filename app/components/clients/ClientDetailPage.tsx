@@ -116,6 +116,7 @@ export default function ClientDetailPage({
   );
   const materialsSaveRef = useRef<(() => Promise<void>) | null>(null);
   const rosterClient = { ...client, intakeData };
+  const clientAddress = typeof intakeData.address === 'string' ? intakeData.address.trim() : '';
 
   useEffect(() => {
     setIntakeData(client.intakeData ?? {});
@@ -264,6 +265,23 @@ export default function ClientDetailPage({
               onSaved={setIntakeData}
               embedded
             />
+          </Section>
+
+          <Section title="4대보험 관할" accent="blue">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800">수임처 주소로 건보·연금·근로복지를 별도 페이지에서 검색합니다.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {clientAddress || '주소가 없으면 검색 페이지에서 직접 입력할 수 있습니다.'}
+                </p>
+              </div>
+              <a
+                href={`/tools/nhis-branches?returnTo=${encodeURIComponent(`/clients/${client.id}`)}&returnLabel=${encodeURIComponent(client.companyName || '수임처')}${clientAddress ? `&query=${encodeURIComponent(clientAddress)}` : ''}`}
+                className={portalBtnSecondary}
+              >
+                수임처 주소로 검색하기
+              </a>
+            </div>
           </Section>
 
           <Section title="연동 현황" accent="emerald">
