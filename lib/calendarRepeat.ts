@@ -61,9 +61,11 @@ export type CalendarRepeatInput = {
   monthDay?: number;
   /** mode=taxDeadline */
   taxType?: RepeatTaxDeadlineType;
+  /** true면 상한(120)에서 중단 (기간 미지정 시) */
+  stopAtMax?: boolean;
 };
 
-const MAX_REPEAT_DATES = 120;
+export const MAX_REPEAT_DATES = 120;
 
 function parseIsoDate(iso: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
@@ -80,15 +82,36 @@ function toIsoLocal(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function pushDate(dates: string[], d: Date | string) {
-  const iso = typeof d === 'string' ? d : toIsoLocal(d);
-  dates.push(iso);
-  if (dates.length > MAX_REPEAT_DATES) {
-    throw new Error(`반복 일정은 최대 ${MAX_REPEAT_DATES}건까지 등록할 수 있습니다.`);
-  }
+/** 기간 미지정(stopAtMax)용 — 시작일로부터 충분한 종료일 */
+export function openEndedRepeatTo(fromIso: string): string {
+  const from = parseIsoDate(fromIso);
+  if (!from) return fromIso;
+  const d = new Date(from);
+  d.setFullYear(d.getFullYear() + 40);
+  return toIsoLocal(d);
 }
 
-function expandByWeekdays(from: Date, to: Date, weekdays: number[]): string[] {
+export function todayIsoLocal(): string {
+  return toIsoLocal(new Date());
+}
+
+/** @returns false면 더 이상 추가하지 말 것 */
+function pushDate(dates: string[], d: Date | string, stopAtMax?: boolean): boolean {
+  if (dates.length >= MAX_REPEAT_DATES) {
+    if (stopAtMax) return false;
+    throw new Error(`반복 일정은 최대 ${MAX_REPEAT_DATES}건까지 등록할 수 있습니다.`);
+  }
+  const iso = typeof d === 'string' ? d : toIsoLocal(d);
+  dates.push(iso);
+  return !(stopAtMax && dates.length >= MAX_REPEAT_DATES);
+}
+
+function expandByWeekdays(
+  from: Date,
+  to: Date,
+  weekdays: number[],
+  stopAtMax?: boolean,
+): string[] {
   const weekdaySet = new Set(
     weekdays.filter(w => Number.isInteger(w) && w >= 0 && w <= 6),
   );
@@ -97,7 +120,9 @@ function expandByWeekdays(from: Date, to: Date, weekdays: number[]): string[] {
   const dates: string[] = [];
   const cursor = new Date(from);
   while (cursor <= to) {
-    if (weekdaySet.has(cursor.getDay())) pushDate(dates, cursor);
+    if (weekdaySet.has(cursor.getDay())) {
+      if (!pushDate(dates, cursor, stopAtMax)) break;
+    }
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -116,13 +141,14 @@ function expandByInterval(
   interval: RepeatIntervalKind,
   everyDays?: number,
   monthDay?: number,
+  stopAtMax?: boolean,
 ): string[] {
   const dates: string[] = [];
 
   if (interval === 'daily') {
     const cursor = new Date(from);
     while (cursor <= to) {
-      pushDate(dates, cursor);
+      if (!pushDate(dates, cursor, stopAtMax)) break;
       cursor.setDate(cursor.getDate() + 1);
     }
     return dates;
@@ -132,7 +158,7 @@ function expandByInterval(
     const step = interval === 'weekly' ? 7 : 14;
     const cursor = new Date(from);
     while (cursor <= to) {
-      pushDate(dates, cursor);
+      if (!pushDate(dates, cursor, stopAtMax)) break;
       cursor.setDate(cursor.getDate() + step);
     }
     return dates;
@@ -146,7 +172,9 @@ function expandByInterval(
       const lastDay = new Date(y, m + 1, 0).getDate();
       const d = new Date(y, m, Math.min(dayOfMonth, lastDay));
       if (d > to) break;
-      if (d >= from) pushDate(dates, d);
+      if (d >= from) {
+        if (!pushDate(dates, d, stopAtMax)) break;
+      }
       m += 1;
       if (m > 11) {
         m = 0;
@@ -163,7 +191,7 @@ function expandByInterval(
   }
   const cursor = new Date(from);
   while (cursor <= to) {
-    pushDate(dates, cursor);
+    if (!pushDate(dates, cursor, stopAtMax)) break;
     cursor.setDate(cursor.getDate() + n);
   }
   return dates;
@@ -173,6 +201,7 @@ function expandByTaxDeadline(
   fromIso: string,
   toIso: string,
   taxType: RepeatTaxDeadlineType,
+  stopAtMax?: boolean,
 ): string[] {
   const deadlines = listTaxDeadlines(fromIso, toIso).filter(d => {
     if (d.taxType !== taxType) return false;
@@ -190,7 +219,7 @@ function expandByTaxDeadline(
     if (!date || seen.has(date)) continue;
     if (date < fromIso || date > toIso) continue;
     seen.add(date);
-    pushDate(dates, date);
+    if (!pushDate(dates, date, stopAtMax)) break;
   }
   dates.sort();
   return dates;
@@ -203,6 +232,7 @@ export function expandRepeatDates(input: CalendarRepeatInput): string[] {
   if (!from || !to) throw new Error('기간 날짜 형식이 올바르지 않습니다.');
   if (to < from) throw new Error('종료일은 시작일 이후여야 합니다.');
 
+  const stopAtMax = Boolean(input.stopAtMax);
   const mode: RepeatMode =
     input.mode ??
     (input.interval ? 'interval' : 'weekdays');
@@ -212,7 +242,7 @@ export function expandRepeatDates(input: CalendarRepeatInput): string[] {
     if (!input.taxType || !isTaxDeadlineRepeatType(input.taxType)) {
       throw new Error('세목 마감일을 적용할 구분을 선택하세요.');
     }
-    dates = expandByTaxDeadline(input.from.trim(), input.to.trim(), input.taxType);
+    dates = expandByTaxDeadline(input.from.trim(), input.to.trim(), input.taxType, stopAtMax);
   } else if (mode === 'interval') {
     dates = expandByInterval(
       from,
@@ -220,9 +250,10 @@ export function expandRepeatDates(input: CalendarRepeatInput): string[] {
       input.interval ?? 'weekly',
       input.everyDays,
       input.monthDay,
+      stopAtMax,
     );
   } else {
-    dates = expandByWeekdays(from, to, input.weekdays ?? []);
+    dates = expandByWeekdays(from, to, input.weekdays ?? [], stopAtMax);
   }
 
   if (dates.length === 0) {
@@ -264,6 +295,7 @@ export function previewRepeatCount(input: Partial<CalendarRepeatInput>): number 
       everyDays: input.everyDays,
       monthDay: input.monthDay,
       taxType: input.taxType,
+      stopAtMax: input.stopAtMax,
     }).length;
   } catch {
     return null;

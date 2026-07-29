@@ -21,7 +21,7 @@ export const MANAGER_COLOR_BY_NAME: Record<string, string> = {
 
 /** 담당자 accent 보더·dot용 hex (캘린더 칩과 동일) */
 export const MANAGER_HEX_BY_NAME: Record<string, string> = {
-  다야: '#e8c84a',
+  다야: '#ffe64d',
   블루: '#9dcce8',
   리아: '#c9b8e8',
   윈터: '#e87898',

@@ -348,11 +348,14 @@ export const personalChecklistItems = pgTable('personal_checklist_items', {
     .$type<{ id: string; authorName: string; body: string; createdAt: string }[]>()
     .default([]),
   sortOrder: integer('sort_order').notNull().default(0),
+  /** 일괄 반복 등록 시 동일 UUID — 시리즈 전체 삭제용 */
+  repeatSeriesId: uuid('repeat_series_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   index('personal_checklist_owner_idx').on(t.ownerName, t.completed),
   index('personal_checklist_client_idx').on(t.clientId),
+  index('personal_checklist_series_idx').on(t.repeatSeriesId),
 ]);
 
 /** 개인 체크리스트 — 담당자별 완료 체크 (공동 업무) */

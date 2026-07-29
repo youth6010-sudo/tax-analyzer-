@@ -46,6 +46,7 @@ export async function listCalendarEvents(
       ownerName: item.ownerName,
       createdAt: item.createdAt,
       completed: !!item.completed,
+      repeatSeriesId: item.repeatSeriesId ?? null,
     });
   }
 

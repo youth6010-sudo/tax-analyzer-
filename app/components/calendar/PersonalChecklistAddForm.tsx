@@ -15,6 +15,7 @@ import {
   isRoutedRequestTaxType,
   isSuppliesOrderTaxType,
   isImprovementRequestTaxType,
+  SUPPLIES_ORDER_ASSIGNEE,
 } from '@/app/types/calendar';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
 import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
@@ -26,9 +27,12 @@ import {
   WEEKDAY_OPTIONS,
   INTERVAL_OPTIONS,
   MONTH_DAY_OPTIONS,
+  MAX_REPEAT_DATES,
   TAX_DEADLINE_REPEAT_HINTS,
   previewRepeatCount,
   isTaxDeadlineRepeatType,
+  openEndedRepeatTo,
+  todayIsoLocal,
   type RepeatMode,
   type RepeatIntervalKind,
 } from '@/lib/calendarRepeat';
@@ -117,6 +121,7 @@ export default function PersonalChecklistAddForm({
   const [clientId, setClientId] = useState(defaultClientId || '');
   const [dueDate, setDueDate] = useState(defaultDueDate || '');
   const [repeatOn, setRepeatOn] = useState(false);
+  const [periodOn, setPeriodOn] = useState(true);
   const [repeatFrom, setRepeatFrom] = useState('');
   const [repeatTo, setRepeatTo] = useState('');
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('weekdays');
@@ -189,6 +194,7 @@ export default function PersonalChecklistAddForm({
     setClientId(defaultClientId || '');
     setDueDate(defaultDueDate || '');
     setRepeatOn(false);
+    setPeriodOn(true);
     setRepeatFrom('');
     setRepeatTo('');
     setRepeatMode('weekdays');
@@ -310,27 +316,39 @@ export default function PersonalChecklistAddForm({
     );
   };
 
-  useEffect(() => {
-    if (!repeatFrom || interval !== 'monthly') return;
-    const day = Number(repeatFrom.slice(8, 10));
-    if (day >= 1 && day <= 31) setMonthDay(day);
-  }, [repeatFrom, interval]);
+  const repeatExpandInput = useMemo(() => {
+    if (isEdit || !repeatOn) return null;
+    const from = periodOn ? repeatFrom : todayIsoLocal();
+    const to = periodOn ? repeatTo : openEndedRepeatTo(from);
+    if (!from || !to) return null;
+    return {
+      from,
+      to,
+      mode: repeatMode,
+      weekdays,
+      interval,
+      everyDays,
+      monthDay,
+      taxType: isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
+      stopAtMax: !periodOn,
+    };
+  }, [
+    isEdit,
+    repeatOn,
+    periodOn,
+    repeatFrom,
+    repeatTo,
+    repeatMode,
+    weekdays,
+    interval,
+    everyDays,
+    monthDay,
+    taxType,
+  ]);
 
   const previewCount = useMemo(
-    () =>
-      !isEdit && repeatOn
-        ? previewRepeatCount({
-            from: repeatFrom,
-            to: repeatTo,
-            mode: repeatMode,
-            weekdays,
-            interval,
-            everyDays,
-            monthDay,
-            taxType: isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
-          })
-        : null,
-    [isEdit, repeatOn, repeatFrom, repeatTo, repeatMode, weekdays, interval, everyDays, monthDay, taxType],
+    () => (repeatExpandInput ? previewRepeatCount(repeatExpandInput) : null),
+    [repeatExpandInput],
   );
 
   const canUseTaxDeadline = isTaxDeadlineRepeatType(taxType);
@@ -357,9 +375,11 @@ export default function PersonalChecklistAddForm({
       ? editItem.participants
       : isImprovement
         ? [...forcedAssigneesForTaxType('improvement')]
-        : isRouted
-          ? (editItem?.assigneeNames ?? [])
-          : [];
+        : isSupplies
+          ? [...forcedAssigneesForTaxType('supplies')]
+          : isRouted
+            ? (editItem?.assigneeNames ?? [])
+            : [];
   const userAliases = currentUser ? getManagerMatchNames(currentUser) : [];
   const canCheckoff =
     isEdit &&
@@ -420,11 +440,26 @@ export default function PersonalChecklistAddForm({
 
   const handleDelete = async () => {
     if (!editItem) return;
-    if (!confirm(`"${editItem.title}" 항목을 삭제할까요?`)) return;
+    let series = false;
+    if (editItem.repeatSeriesId) {
+      const all = confirm(
+        `"${editItem.title}"\n\n같은 반복 일정 전체를 삭제할까요?\n\n확인 = 전체 삭제\n취소 = 이 일정만 삭제할지 이어서 묻습니다.`,
+      );
+      if (all) {
+        series = true;
+      } else if (!confirm(`"${editItem.title}" 이 일정만 삭제할까요?`)) {
+        return;
+      }
+    } else if (!confirm(`"${editItem.title}" 항목을 삭제할까요?`)) {
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}`, { method: 'DELETE' });
+      const qs = series ? '?scope=series' : '';
+      const res = await fetch(`/api/calendar/personal-checklist/${editItem.id}${qs}`, {
+        method: 'DELETE',
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '삭제 실패');
       onDeleted?.();
@@ -447,7 +482,7 @@ export default function PersonalChecklistAddForm({
       }
       if (!isRoutedRequestTaxType(taxType)) {
         if (!isEdit && repeatOn) {
-          if (!repeatFrom.trim() || !repeatTo.trim()) {
+          if (periodOn && (!repeatFrom.trim() || !repeatTo.trim())) {
             window.alert('반복 기간(시작·종료)을 입력해주세요.');
             return;
           }
@@ -508,17 +543,22 @@ export default function PersonalChecklistAddForm({
             ...(memoDraft.trim() || memoAttachments.length > 0
               ? { memo: { body: memoDraft.trim(), attachments: memoAttachments } }
               : {}),
-            repeat: {
-              from: repeatFrom,
-              to: repeatTo,
-              mode: repeatMode,
-              weekdays: repeatMode === 'weekdays' ? weekdays : undefined,
-              interval: repeatMode === 'interval' ? interval : undefined,
-              everyDays: repeatMode === 'interval' && interval === 'custom' ? everyDays : undefined,
-              monthDay: repeatMode === 'interval' && interval === 'monthly' ? monthDay : undefined,
-              taxType:
-                repeatMode === 'taxDeadline' && isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
-            },
+            repeat: (() => {
+              const from = periodOn ? repeatFrom : todayIsoLocal();
+              const to = periodOn ? repeatTo : openEndedRepeatTo(from);
+              return {
+                from,
+                to,
+                mode: repeatMode,
+                weekdays: repeatMode === 'weekdays' ? weekdays : undefined,
+                interval: repeatMode === 'interval' ? interval : undefined,
+                everyDays: repeatMode === 'interval' && interval === 'custom' ? everyDays : undefined,
+                monthDay: repeatMode === 'interval' && interval === 'monthly' ? monthDay : undefined,
+                taxType:
+                  repeatMode === 'taxDeadline' && isTaxDeadlineRepeatType(taxType) ? taxType : undefined,
+                stopAtMax: !periodOn,
+              };
+            })(),
           }
         : {
             title,
@@ -556,6 +596,7 @@ export default function PersonalChecklistAddForm({
         setTitle('');
         setDueDate('');
         setRepeatOn(false);
+        setPeriodOn(true);
         setRepeatFrom('');
         setRepeatTo('');
         setRepeatMode('weekdays');
@@ -627,31 +668,46 @@ export default function PersonalChecklistAddForm({
                 onChange={e => setRepeatOn(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-slate-300"
               />
-              기간 · 반복 등록
+              반복 등록
             </label>
           )}
           {!isEdit && repeatOn && isOwner ? (
             <div className="space-y-2.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2.5">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-slate-600">시작일</label>
-                  <input
-                    type="date"
-                    value={repeatFrom}
-                    onChange={e => setRepeatFrom(e.target.value)}
-                    className={portalInput + ' w-full text-xs py-1.5'}
-                  />
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={periodOn}
+                  onChange={e => setPeriodOn(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300"
+                />
+                시작일·종료일 지정
+              </label>
+              {periodOn ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-600">시작일</label>
+                    <input
+                      type="date"
+                      value={repeatFrom}
+                      onChange={e => setRepeatFrom(e.target.value)}
+                      className={portalInput + ' w-full text-xs py-1.5'}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-600">종료일</label>
+                    <input
+                      type="date"
+                      value={repeatTo}
+                      onChange={e => setRepeatTo(e.target.value)}
+                      className={portalInput + ' w-full text-xs py-1.5'}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-slate-600">종료일</label>
-                  <input
-                    type="date"
-                    value={repeatTo}
-                    onChange={e => setRepeatTo(e.target.value)}
-                    className={portalInput + ' w-full text-xs py-1.5'}
-                  />
-                </div>
-              </div>
+              ) : (
+                <p className="text-[10px] text-slate-500">
+                  오늘부터 선택한 주기로 최대 {MAX_REPEAT_DATES}건까지 등록합니다.
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-3">
                 <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
@@ -779,8 +835,9 @@ export default function PersonalChecklistAddForm({
 
               {previewCount != null && (
                 <p className="text-[11px] text-slate-500">
-                  선택한 기간·조건으로{' '}
-                  <span className="font-bold text-slate-700">{previewCount}건</span> 등록됩니다.
+                  {periodOn ? '선택한 기간·조건으로' : '오늘부터 선택한 조건으로'}{' '}
+                  <span className="font-bold text-slate-700">{previewCount}건</span> 등록됩니다
+                  {!periodOn ? ` (최대 ${MAX_REPEAT_DATES}건)` : ''}.
                 </p>
               )}
             </div>
@@ -900,7 +957,11 @@ export default function PersonalChecklistAddForm({
               </label>
             ) : (
               <p className="pt-1.5 text-xs text-slate-500">
-                {isOwner
+                {isOwner &&
+                !(
+                  isSupplies &&
+                  userAliases.some(a => managerNamesMatch(a, SUPPLIES_ORDER_ASSIGNEE))
+                )
                   ? '요청자는 완료 체크할 수 없습니다. 담당 협업자가 처리합니다.'
                   : '이 요청의 처리 담당자가 아닙니다.'}
               </p>

@@ -1,0 +1,379 @@
+
+<!doctype html>
+<html lang="ko">
+<head>
+<title>팝업</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta http-equiv="Content-Script-Type" content="text/javascript">
+	<meta http-equiv="Content-Style-Type" content="text/css">
+	<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
+	<link rel="shortcut icon" href="/favicon.ico">
+	<meta name="viewport" content="width=device-width,initial-scale=1, maximum-scale=1, user-scalable=no">
+		
+<meta property="og:type" content="website"/>
+<meta property="og:locale" content="ko"/>
+<meta property="og:image" content="http://www.nhis.or.kr/_res/nhis/_share/img/logo.png"/>
+<meta property="og:site_name" content="국민건강보험"/>
+<meta property="og:updated_time" content="2024-12-10T14:58:33Z"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:image" content="http://www.nhis.or.kr/_res/nhis/_share/img/logo.png"/>
+<meta itemprop="image" content="http://www.nhis.or.kr/_res/nhis/_share/img/logo.png"/>
+<link rel="canonical" href="http://www.nhis.or.kr/nhis/about/retrieveBranchInfo.do" />
+
+
+
+<link href="/_res/nhis/_share/css/fonts-idc.min.css?1739928829000" defer rel="stylesheet" type="text/css" />	
+
+	
+<link defer rel="stylesheet" type="text/css" href="/_res/_common/css/cms.min.css" />
+	
+<link defer rel="stylesheet" type="text/css" href="/_res/_common/ableu/css/jquery-ui-1.12.1.min.css" />
+<link defer rel="stylesheet" type="text/css" href="/_res/_common/ableu/css/jquery.modal.css" />
+<link defer rel="stylesheet" type="text/css" href="/_res/_common/ableu/css/swiper.css" />
+<link defer rel="stylesheet" type="text/css" href="/_res/_common/ableu/css/tooltipster.bundle.css" />
+
+<!--<link defer rel="stylesheet" type="text/css" href="/_res/nhis/_share/css/cms-common.min.css" />-->
+
+<link href="/_res/nhis/nhis/css/krds.min.css?1774330120000" defer rel="stylesheet" type="text/css" />
+<link href="/_res/nhis/nhis/css/cms-common-renewal.min.css?1783404425000" defer rel="stylesheet" type="text/css" />
+<link href="/_res/nhis/nhis/css/component.min.css?1774026903000" defer rel="stylesheet" type="text/css" />
+<link href="/_res/nhis/nhis/css/contents-renewal.min.css?1782900429000" defer rel="stylesheet" type="text/css" />
+<link href="/_res/_common/css/life-log.css" defer rel="stylesheet" type="text/css" />
+
+
+<!--
+<link defer rel="stylesheet" type="text/css" href="/_res/nhis/nhis/css/chatbot-icon.css" />	
+-->
+
+<link defer rel="stylesheet" type="text/css" href="/_res/nhis/nhis/css/index-main-content.content.min.css" />
+
+
+
+
+<script type="text/javascript" src="/_res/_common/js/jquery/jquery-2.2.4.min.js"></script>
+<!-- script defer type="text/javascript" src="/_res/_common/js/jquery/jquery-ui-1.12.1.min.js"></script -->
+<script defer type="text/javascript" src="/_res/_common/ableu/js/jquery-ui.1.12.1.min.js"></script>
+<script src="/_res/_common/ableu/js/jquery.easing.1.3.min.js"></script>
+<script src="/_res/_common/ableu/js/jquery.modal.min.js"></script>
+<script src="/_res/_common/ableu/js/swiper.min.js"></script>
+<script src="/_res/_common/ableu/js/tooltipster.bundle.min.js"></script>
+<script src="/_res/_common/ableu/js/printThis.min.js"></script>
+<script src="/_res/nhis/_share/js/rwdimagemaps.min.js"></script>	
+
+
+	<script src="/3rdparty/eswebgen/dist/js/webgen.min.js"></script>
+
+	
+<script type="text/javascript">
+//<![CDATA[
+	var CMS = {"contentEditAuth":false,"isDevelopAllContent":false,"isCallAdm":false,"editActive":true,"resourcePath":"\/_res\/nhis\/nhis\/","excludePrintSelector":".survey-area,.utiltity,.krds-drop-wrap.h-tit-drop,div.helper-area","locale":"ko","smoothScroll":"N","mainContentId":"cms-content","appKey":"","contentEditOnlyMain":false,"servicePort":"","devContentKey":null,"subContentKeyMap":{},"boardNo":"","menuCd":"-1","ctx":"","sslPort":"","isMobileSite":false,"editorVendor":"froala","localeScriptPath":"\/_custom\/nhis\/resource\/js\/","mainContentKey":"\/_share\/_content\/ext-app","printClass":"cms-print","pageKind":"STATIC","editClass":"cms-edit","cherryPath":"\/_sys","siteId":"nhis","isDevelop":false,"device":"pc","isSSL":false}, ctx = '', locale = 'ko';
+
+//]]>
+</script>
+<script defer type="text/javascript" src="/_res/_common/js/cms.min.js"></script>
+<!--<script defer type="text/javascript" src="/_res/nhis/_share/js/cms-common.min.js"></script>-->
+	<script src="/_res/nhis/nhis/js/moment.min.js?1736565252000" defer type="text/javascript" ></script>
+<script src="/_res/nhis/nhis/js/cms-common.min.js?1782970702000" defer type="text/javascript" ></script>
+<script src="/_res/nhis/nhis/js/common-modal.min.js?1745489375000" defer type="text/javascript" ></script>
+<script src="/_res/nhis/nhis/js/chatbot-common.min.js?1724744226000" defer type="text/javascript" ></script>	
+<script src="/_res/nhis/nhis/js/krds.min.js?1782888834000" defer type="text/javascript" ></script>
+<script src="/_res/nhis/nhis/js/popup.min.js?1777368659000" defer type="text/javascript" ></script>
+<script>
+	let loginYn = false ? "Y" : "N";
+</script>
+
+
+<script defer type="text/javascript" src="/3rdparty/xtractor/xtractor_cookie.min.js"></script>
+
+
+</head>
+<body class="pc nhis-site">
+
+
+
+
+
+<div class="window-popup cms-print">
+	<div id="cms-content">
+	
+		
+			
+		
+
+
+
+
+
+
+
+
+
+
+
+<!-- API 사용을 위한 기본 라이브러리  -->
+
+
+
+<script type="text/javascript">
+//Daum ì£¼ì->ì¢í apiì ì¬ì©í  ì£¼ì
+function setAddr(addr){
+	var data = addr.split(" ");
+
+	var newaddr = "";
+	for(var i=0; i<data.length; i++){
+		var str = data[i].substr(data[i].length-1,data[i].length)
+		if(str == ")"){
+			data[i] = data[i].substr(0,data[i].indexOf("("));
+			str = data[i].substr(data[i].length-1,data[i].length);
+		}
+		if(str == "]"){
+			data[i] = data[i].substr(0,data[i].indexOf("["));
+			str = data[i].substr(data[i].length-1,data[i].length);
+		}
+		if(i == 0 && str != "ì" && str != "ë"){
+			newaddr += data[0]+" ";
+		}
+		if(str == "ì" || str == "ë" || str == "êµ¬" || str == "êµ°" || str == "ì" 
+		|| str == "ë©´" || str == "ë¦¬" || str == "ë¡" || str == "ê°" || str == "ê¸¸"){					
+			newaddr += data[i]+" ";
+		}else if(!isNaN(str)){
+			if(data[i].indexOf("-") != -1){
+				newaddr += data[i]+" ";
+				break;
+			}else{
+				newaddr += data[i]+" ";
+			}
+		}else if(str == "í¸"){					
+			newaddr += data[i]+" ";
+			break;
+		}else if(str == "ë"){
+			var a_dong = [];
+			var s_dong = "";
+			for(var j=1; j<=data[i].length; j++){
+				if(data[i].substring(j-1,j) != " "){
+					a_dong.push(data[i].substring(j-1,j));
+				}
+			}			
+			for(var k=1; k<=a_dong.length; k++){
+				if(!(a_dong[k-1] == "ì " && !isNaN(a_dong[k]))){
+					s_dong += a_dong[k-1];
+				}
+			}
+			newaddr += s_dong+" ";
+		}else if(str == "ì§"){
+			if(data[i].indexOf("-") != -1){
+				newaddr += data[i]+" ";
+				break;
+			}else{
+				newaddr += data[i]+" ";
+			}
+		}
+	}
+
+	return newaddr;
+}
+</script> <!--DaumMap APIKEY--> 
+<!-- <script type="text/javascript" src="http://apis.daum.net/maps/maps3.js?apikey=60d5981edd6da8b9c21b4e5d5e1f15b3"></script> -->
+<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=60d5981edd6da8b9c21b4e5d5e1f15b3"></script>
+
+<script src="/_res/_common/js/biz/policy/nhis_common.js"></script>
+
+<script type="text/javascript">
+	var DaumMap;
+	
+	async function gfn_showMessage() {
+		var msg = "";
+
+		if (msg != "")
+			await modalService.alert(msg);
+	}
+
+	$(document).ready(function() {
+		(async function () {
+			await gfn_showMessage();
+			init(); 
+		})();
+	});
+		
+	
+	function init() {
+						
+		var position = new kakao.maps.LatLng(35.5039515802272, 128.744095434902); // 기본 위치 WGS84 좌표
+		DaumMap = new kakao.maps.Map(document.getElementById('DaumMap'), {
+			center: position, // 좌표로 지정한 곳이 지도의 중심
+			level: 4, // 확대 수준(0~14)
+			mapTypeId: kakao.maps.MapTypeId.ROADMAP // 지도 종류(MapTypeId.HYBRID: 스카이뷰 사진에 다양한 기호, MapTypeId.ROADMAP: 일반지도)
+		});
+
+		var zoomControl = new kakao.maps.ZoomControl(); // 지도 확대/축소 컨트롤바
+		DaumMap.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+		var mapTypeControl = new kakao.maps.MapTypeControl(); // 지도 종류 변경 컨트롤바
+		DaumMap.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+		
+		var markerpostion = new kakao.maps.LatLng(35.5039515802272, 128.744095434902); // 기본 위치 WGS84 좌표
+		var icon = new kakao.maps.MarkerImage("/daumMap/nhic_marker.png",
+											new kakao.maps.Size(25, 33),
+											new kakao.maps.Point(13, 33));
+		
+		var marker = new kakao.maps.Marker({ // 현재 위치 표시 마커 생성
+			position: markerpostion,
+			image: icon
+		});
+		marker.setMap(DaumMap);
+
+		// 마커에 말풍선 추가 시작
+		var infowindow = new kakao.maps.InfoWindow({ 
+		content:  '<p style="text-align:center; width:150px; padding:5px 5px 5px 5px;  font-size:9pt;">밀양창녕지사</p>',
+		removable : false
+		}); 
+		infowindow.open(DaumMap, marker); 
+		// 마커에 말풍선 추가 끝
+		
+	}
+
+	
+	function fn_sendSMS(brchCd, pstnType){
+
+		window.open("", "sendSMS","width=650,height=750,scrollbars=no,status=1,left=0,top=0");
+		$("#brchCd").val(brchCd);
+		$("#pstnType").val(pstnType);
+		
+		var frm = $("#tbzztd10VO");
+		frm.attr("action", '/nhis/about/retrieveSendSMSView.do');
+		frm.attr("target", 'sendSMS');
+		frm.submit();
+
+	}
+	
+	function fn_showDaummap(pstnNm) {   		
+		
+//	 	window.open("","mapView","left=0, top=0, width="+screen.availWidth+", height="+screen.availHeight+",toolbar=yes, location=yes, status=yes ,menubar=yes,scrollbars=auto,resizable=yes");
+//	 	$("#pstn_nm").val(pstnNm);
+//	 	var frm = $("#daummapForm");
+//	 	frm.attr("action", '/search_new/popmap.jsp');
+//	 	frm.attr("target", 'mapView');
+//	 	frm.submit();
+		
+		var url = "/nhis/about/retrieveDaumMap.do?pstn_nm=" + encodeURI(pstnNm);
+		window.open(url,"mapView","left=0, top=0, width="+screen.availWidth+", height="+screen.availHeight+",toolbar=yes, location=yes, status=yes ,menubar=yes,scrollbars=yes,resizable=yes");
+	}
+
+</script>
+
+<form id="tbzztd10VO" method="post" action="">
+	<input type="hidden" id="brchCd"  name="brchCd"/>
+	<input type="hidden" id="pstnType" name="pstnType"/>
+</form>
+
+<form id="tbnsaa01VO" action="/nhis/about/retrieveBranchInfo.do" method="post">
+	<input id="pstnCd2" name="pstnCd2" type="hidden" value=""/>
+	
+    <div class="section row-gap-40">
+        <div class="section row-gap-24">
+            <h3 class="font title xlg">위치안내</h3>
+            <div class="border line-bottom-1 solid grayscale-30">
+                <div class="section row-gap-24 inside-32 inside-right-0 inside-left-0 border line-top-1 solid grayscale-50">
+                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 mapview-pin"></i>주소</span></dt>
+                        <dd>
+                        	
+								[우.50419] 
+							 
+                        	경상남도 밀양시 시청서1길 17
+                        </dd>
+                    </dl>
+                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 clip"></i>지사관할 행정동</span></dt>
+                        <dd>
+                        	밀양시, 창녕군	
+								
+                        </dd>
+                    </dl>
+                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 disabledperson-convenience"></i>장애인 편의시설</span></dt>
+                        <dd>
+                        	
+								
+								
+								
+								
+								
+								
+								
+								
+								점자블럭, 핸드레일 및 경사로, 장애인 주차장, 장애인 화장실
+					   		
+					   		
+                        </dd>
+                    </dl>
+                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 park"></i>주차시설</span></dt>
+                        <dd>
+                        	
+							-
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="section row-gap-24">
+            <div class="section border radius-12">
+                <div class="map-area" id="DaumMap">
+					<!-- 지도 api 영역 -->
+				</div>
+            </div>
+            <div class="col-gap-8 page-btn-wrap muliple">
+                <button type="button" class="btn md navy" onclick="fn_showDaummap('밀양창녕지사');" title="지도보기 새창으로 열기">상세지도 보기</button>
+                <button type="button" class="btn md navy" onclick="fn_sendSMS('0771','0');" title="문자로 받기 새창으로 열기">문자로 받기</button>
+            </div>
+        </div>
+        <div class="section row-gap-24">
+            <h3 class="font title xlg">교통정보</h3>
+            <div class="border line-bottom-1 solid grayscale-30">
+                <div class="section row-gap-24 inside-32 inside-right-0 inside-left-0 border line-top-1 solid grayscale-50">
+                    
+	                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+	                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 bus"></i>버스</span></dt>
+	                        <dd>
+	                        	1번, 1-2번, 2번, 4-1번, 7번, 7-1번<br />
+	                        </dd>
+	                    </dl>
+                    
+                    
+                </div>
+            </div>
+        </div>
+        <div class="section row-gap-24">
+            <h3 class="font title xlg">기타</h3>
+            <div class="border line-bottom-1 solid grayscale-30">
+                <div class="section row-gap-24 inside-32 inside-right-0 inside-left-0 border line-top-1 solid grayscale-50">
+                    <dl class="section row-gap-12 flex-col mobile col-gap-16 half column-3-7">
+                        <dt class="font bold title md"><span class="section flex-col col-gap-8 items-center"><i class="ico x24 etc"></i>기타</span></dt>
+                        <dd>
+                        	밀양시청 서문에서 도보로 3분 거리<br />
+							
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <!--  page-btn-wrap -->
+        <div class="page-btn-wrap ">
+            <button type="button" class="btn xlg tertiary" onclick="window.close();">닫기</button>
+        </div>
+        <!--// page-btn-wrap -->
+    </div>
+
+</form>
+
+	
+	
+	
+	
+</div>
+</div>
+
+
+</body>
+</html>

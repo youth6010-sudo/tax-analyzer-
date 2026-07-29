@@ -21,13 +21,16 @@ export function canDeleteCalendarEvent(
   return false;
 }
 
-export async function deleteCalendarEvent(event: CalendarEventDto): Promise<void> {
+export async function deleteCalendarEvent(
+  event: CalendarEventDto,
+  opts?: { series?: boolean },
+): Promise<void> {
   const id = calendarEventRecordId(event);
   if (!id) throw new Error('삭제할 수 없는 일정입니다.');
 
   const url =
     event.kind === 'personal'
-      ? `/api/calendar/personal-checklist/${id}`
+      ? `/api/calendar/personal-checklist/${id}${opts?.series ? '?scope=series' : ''}`
       : `/api/calendar/company-events?id=${encodeURIComponent(id)}`;
 
   const res = await fetch(url, { method: 'DELETE' });

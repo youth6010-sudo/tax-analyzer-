@@ -75,6 +75,7 @@ const expectedColumns = [
   ['clients', 'nts_checked_at'],
   ['bluehole_sync_log', 'action'],
   ['personal_checklist_items', 'tax_type'],
+  ['personal_checklist_items', 'repeat_series_id'],
   ['company_events', 'schedule_kind'],
   ['tax_filing_checks', 'excluded_reason'],
   ['tax_filing_checks', 'income_type_flags'],

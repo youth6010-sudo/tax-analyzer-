@@ -338,10 +338,22 @@ export default function CalendarPageClient() {
   const handleDeleteSelected = async () => {
     if (!selectedEvent) return;
     const title = eventDisplayTitle(selectedEvent, currentUser);
-    if (!confirm(`"${title}" 일정을 삭제할까요?`)) return;
+    let series = false;
+    if (selectedEvent.kind === 'personal' && selectedEvent.repeatSeriesId) {
+      const all = confirm(
+        `"${title}"\n\n같은 반복 일정 전체를 삭제할까요?\n\n확인 = 전체 삭제\n취소 = 이 일정만 삭제할지 이어서 묻습니다.`,
+      );
+      if (all) {
+        series = true;
+      } else if (!confirm(`"${title}" 이 일정만 삭제할까요?`)) {
+        return;
+      }
+    } else if (!confirm(`"${title}" 일정을 삭제할까요?`)) {
+      return;
+    }
     setDeleting(true);
     try {
-      await deleteCalendarEvent(selectedEvent);
+      await deleteCalendarEvent(selectedEvent, { series });
       setSelectedEvent(null);
       void loadEvents();
     } catch (e) {

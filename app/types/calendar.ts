@@ -76,6 +76,8 @@ export type PersonalChecklistDto = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** 반복 일괄 등록 시리즈 ID (있으면 전체 삭제 가능) */
+  repeatSeriesId?: string | null;
   /** 협업자 지정된 공동 업무 */
   collaborative?: boolean;
   /** 참여자 (작성자 + 협업자) */
@@ -180,6 +182,8 @@ export type CalendarEventDto = {
   companyDescription?: string;
   /** 개인 완료 또는 회사·세무신고 일정 본인 체크 완료 */
   completed?: boolean;
+  /** 개인 체크리스트 반복 시리즈 ID */
+  repeatSeriesId?: string | null;
   checkoffDone?: number;
   checkoffTotal?: number;
   checkoffDetails?: Record<string, CheckoffDetail>;

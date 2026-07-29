@@ -55,14 +55,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireUser();
     const { id } = await params;
-    await deletePersonalChecklistItem(id, user.name);
-    return NextResponse.json({ ok: true });
+    const series = new URL(req.url).searchParams.get('scope') === 'series';
+    const result = await deletePersonalChecklistItem(id, user.name, { series });
+    return NextResponse.json({ ok: true, deleted: result.deleted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : '삭제 실패';
     if (msg === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -72,7 +72,8 @@ function participantsOf(ownerName: string, assigneeNames: string[]): string[] {
   return [ownerName, ...assigneeNames];
 }
 
-/** 비품·업무개선: 협업자만 완료 체크. 시스템개선은 리아·찰리 항상(요청자가 리아여도 포함) */
+/** 비품·업무개선: 협업자만 완료 체크. 시스템개선은 리아·찰리 항상(요청자가 리아여도 포함).
+ *  비품은 요청자가 다야여도 다야가 항상 처리 담당 */
 function checkoffParticipants(
   taxType: ChecklistTaxType,
   ownerName: string,
@@ -80,6 +81,9 @@ function checkoffParticipants(
 ): string[] {
   if (isImprovementRequestTaxType(taxType)) {
     return [...IMPROVEMENT_REQUEST_ASSIGNEES];
+  }
+  if (isSuppliesOrderTaxType(taxType)) {
+    return [SUPPLIES_ORDER_ASSIGNEE];
   }
   if (isRoutedRequestTaxType(taxType)) return assigneeNames;
   return participantsOf(ownerName, assigneeNames);
@@ -128,7 +132,11 @@ function toBaseDto(
   const assigneeNames = isImprovementRequestTaxType(taxType)
     ? assigneesForTaxType(taxType, rawAssignees, row.ownerName)
     : normalizeAssignees(rawAssignees, row.ownerName);
-  const collaborative = assigneeNames.length > 0;
+  const participants = checkoffParticipants(taxType, row.ownerName, assigneeNames);
+  // 비품·시스템개선: 처리 담당(참여자) 기준으로 협업 취급 — 요청자가 담당자여도 완료 가능
+  const collaborative = isRoutedRequestTaxType(taxType)
+    ? participants.length > 0
+    : assigneeNames.length > 0;
   return {
     id: row.id,
     ownerName: row.ownerName,
@@ -145,10 +153,9 @@ function toBaseDto(
     sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    repeatSeriesId: row.repeatSeriesId ?? null,
     collaborative,
-    participants: collaborative
-      ? checkoffParticipants(taxType, row.ownerName, assigneeNames)
-      : undefined,
+    participants: collaborative ? participants : undefined,
   };
 }
 
@@ -753,6 +760,9 @@ export async function createPersonalChecklistItems(
     });
   }
 
+  const repeatSeriesId =
+    uniqueDates.filter(Boolean).length > 1 ? crypto.randomUUID() : null;
+
   const rows = await db
     .insert(personalChecklistItems)
     .values(
@@ -766,6 +776,7 @@ export async function createPersonalChecklistItems(
         reflectInNotes: Boolean(input.reflectInNotes),
         assigneeNames,
         memos,
+        repeatSeriesId,
       })),
     )
     .returning();
@@ -1053,13 +1064,20 @@ export async function updatePersonalChecklistItem(
     existing.ownerName,
   );
 
-  // 협업 여부는 저장 후 협업자 기준 (전부 제거 시 단독으로 전환)
-  const collaborative = nextAssignees.length > 0;
+  // 협업 여부: 비품·시스템개선은 처리 담당(참여자) 기준
+  const participantsForCheckoff = checkoffParticipants(
+    nextTaxType,
+    existing.ownerName,
+    nextAssignees,
+  );
+  const collaborative = isRoutedRequestTaxType(nextTaxType)
+    ? participantsForCheckoff.length > 0
+    : nextAssignees.length > 0;
 
   // 협업: 완료는 본인 checkoff. 항목 completed는 전원 완료 시 true.
   let patchCompleted = patch.completed;
   if (collaborative && patch.completed !== undefined) {
-    const participants = checkoffParticipants(nextTaxType, existing.ownerName, nextAssignees);
+    const participants = participantsForCheckoff;
     if (!participants.some(p => managerNamesMatch(p, actorName))) {
       throw new Error('협업자만 완료 처리할 수 있습니다.');
     }
@@ -1153,7 +1171,11 @@ export async function updatePersonalChecklistItem(
   return enriched;
 }
 
-export async function deletePersonalChecklistItem(id: string, actorName: string): Promise<void> {
+export async function deletePersonalChecklistItem(
+  id: string,
+  actorName: string,
+  opts?: { series?: boolean },
+): Promise<{ deleted: number }> {
   const db = getDb();
   const [existing] = await db
     .select()
@@ -1164,12 +1186,39 @@ export async function deletePersonalChecklistItem(id: string, actorName: string)
   if (!existing) throw new Error('NOT_FOUND');
   if (existing.ownerName !== actorName) throw new Error('작성자만 삭제할 수 있습니다.');
 
-  if (existing.reflectInNotes && existing.clientId) {
-    const client = await getClientById(existing.clientId);
-    if (client) await unsyncChecklistFromClientNotes(client, existing);
+  const seriesId = existing.repeatSeriesId;
+  const targets =
+    opts?.series && seriesId
+      ? await db
+          .select()
+          .from(personalChecklistItems)
+          .where(
+            and(
+              eq(personalChecklistItems.repeatSeriesId, seriesId),
+              eq(personalChecklistItems.ownerName, actorName),
+            ),
+          )
+      : [existing];
+
+  if (opts?.series && !seriesId) {
+    throw new Error('이 항목은 반복 시리즈가 없어 전체 삭제할 수 없습니다.');
   }
 
-  await db.delete(personalChecklistItems).where(eq(personalChecklistItems.id, id));
+  for (const row of targets) {
+    if (row.reflectInNotes && row.clientId) {
+      const client = await getClientById(row.clientId);
+      if (client) await unsyncChecklistFromClientNotes(client, row);
+    }
+  }
+
+  const ids = targets.map(t => t.id);
+  if (ids.length === 1) {
+    await db.delete(personalChecklistItems).where(eq(personalChecklistItems.id, ids[0]));
+  } else {
+    await db.delete(personalChecklistItems).where(inArray(personalChecklistItems.id, ids));
+  }
+
+  return { deleted: ids.length };
 }
 
 export async function getPersonalChecklistById(
