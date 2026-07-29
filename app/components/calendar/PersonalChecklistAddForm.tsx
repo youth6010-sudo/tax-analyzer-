@@ -42,6 +42,8 @@ type Props = {
   /** 처리완료 토글 후 목록·모달 갱신 */
   onCheckoffChange?: (item?: PersonalChecklistDto) => void;
   defaultClientId?: string;
+  /** 신규 등록 시 기한 초기값 (YYYY-MM-DD) */
+  defaultDueDate?: string;
   editItem?: PersonalChecklistDto | null;
   inModal?: boolean;
 };
@@ -103,6 +105,7 @@ export default function PersonalChecklistAddForm({
   onCancel,
   onCheckoffChange,
   defaultClientId,
+  defaultDueDate,
   editItem = null,
   inModal,
 }: Props) {
@@ -112,7 +115,7 @@ export default function PersonalChecklistAddForm({
   const [taxType, setTaxType] = useState<ChecklistTaxType | ''>('');
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(defaultClientId || '');
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState(defaultDueDate || '');
   const [repeatOn, setRepeatOn] = useState(false);
   const [repeatFrom, setRepeatFrom] = useState('');
   const [repeatTo, setRepeatTo] = useState('');
@@ -184,7 +187,7 @@ export default function PersonalChecklistAddForm({
     setTaxType('');
     setTitle('');
     setClientId(defaultClientId || '');
-    setDueDate('');
+    setDueDate(defaultDueDate || '');
     setRepeatOn(false);
     setRepeatFrom('');
     setRepeatTo('');
@@ -201,7 +204,7 @@ export default function PersonalChecklistAddForm({
     setEditingMemoBody('');
     setMemoDraft('');
     setMemoAttachments([]);
-  }, [editItem, defaultClientId]);
+  }, [editItem, defaultClientId, defaultDueDate]);
 
   const isOwner = !editItem || !currentUser || managerNamesMatch(editItem.ownerName, currentUser);
   const staffOptions = useMemo(() => {

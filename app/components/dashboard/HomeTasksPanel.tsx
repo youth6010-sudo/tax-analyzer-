@@ -267,6 +267,15 @@ export default function HomeTasksPanel() {
 
   useEffect(() => {
     setShowCompleted(readShowCompleted());
+    try {
+      const pendingAdd = sessionStorage.getItem('portalTodoOpenAdd.v1');
+      if (pendingAdd === 'personal' || pendingAdd === 'company') {
+        sessionStorage.removeItem('portalTodoOpenAdd.v1');
+        setAddModal(pendingAdd);
+      }
+    } catch {
+      /* ignore */
+    }
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {

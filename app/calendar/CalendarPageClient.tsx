@@ -32,6 +32,7 @@ import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import SuppliesOrderList from '@/app/components/calendar/SuppliesOrderList';
 import ImprovementRequestList from '@/app/components/calendar/ImprovementRequestList';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
+import { canCreateCompanyEvent } from '@/lib/calendarAccess';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
@@ -140,8 +141,10 @@ export default function CalendarPageClient() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
+  const [addModal, setAddModal] = useState<'personal' | 'company' | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canAddCompany, setCanAddCompany] = useState(false);
   const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pageTab, setPageTab] = useState<'calendar' | 'supplies' | 'improvement'>(
@@ -183,8 +186,19 @@ export default function CalendarPageClient() {
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        setIsAdmin(!!(d as { isDeveloper?: boolean })?.isDeveloper);
-        setCanViewCheckoffDetails(!!(d as { isMaster?: boolean })?.isMaster);
+        const payload = d as {
+          isDeveloper?: boolean;
+          isMaster?: boolean;
+          user?: {
+            name?: string;
+            loginId?: string;
+            role?: string | null;
+            adminMode?: boolean | null;
+          };
+        };
+        setIsAdmin(!!payload?.isDeveloper);
+        setCanViewCheckoffDetails(!!payload?.isMaster);
+        setCanAddCompany(!!payload?.isMaster || canCreateCompanyEvent(payload?.user));
       })
       .catch(() => { /* ignore */ });
   }, []);
@@ -496,7 +510,30 @@ export default function CalendarPageClient() {
         )}
 
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
-          <h2 className="text-base font-bold text-slate-900 mb-3">{scheduleTitle}</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-bold text-slate-900">{scheduleTitle}</h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAddModal('personal')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#4b6cb7] text-lg font-bold leading-none text-white shadow-sm hover:bg-[#3d5a9a]"
+                title="체크리스트 추가"
+                aria-label="체크리스트 추가"
+              >
+                +
+              </button>
+              {canAddCompany && (
+                <button
+                  type="button"
+                  onClick={() => setAddModal('company')}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#4b6cb7]/40 bg-white px-2.5 text-xs font-bold text-[#4b6cb7] hover:bg-blue-50"
+                  title="회사 일정 추가"
+                >
+                  회사 +
+                </button>
+              )}
+            </div>
+          </div>
           {loading ? (
             <p className="text-sm text-slate-500">불러오는 중…</p>
           ) : (
@@ -624,6 +661,40 @@ export default function CalendarPageClient() {
         </>
         )}
       </div>
+
+      <CenterModal
+        open={addModal === 'personal'}
+        title="개인 체크리스트 추가"
+        description="구분 선택 후 체크리스트를 등록합니다. 선택한 날짜가 기한으로 들어갑니다."
+        onClose={() => setAddModal(null)}
+      >
+        <PersonalChecklistAddForm
+          inModal
+          defaultDueDate={selectedDate}
+          onCreated={() => {
+            setAddModal(null);
+            void loadEvents();
+          }}
+          onCancel={() => setAddModal(null)}
+        />
+      </CenterModal>
+
+      <CenterModal
+        open={addModal === 'company'}
+        title="회사 일정 추가"
+        description="사내 일정을 등록합니다."
+        onClose={() => setAddModal(null)}
+      >
+        <CompanyEventAddForm
+          inModal
+          defaultDate={selectedDate}
+          onCreated={() => {
+            setAddModal(null);
+            void loadEvents();
+          }}
+          onCancel={() => setAddModal(null)}
+        />
+      </CenterModal>
 
       <CenterModal
         open={editItem !== null}

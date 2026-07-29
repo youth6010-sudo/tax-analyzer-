@@ -19,6 +19,7 @@ const MAX_LEFT = 420;
 const MIN_RIGHT = 200;
 const MAX_RIGHT = 480;
 const COLLAPSED_RIGHT = 40;
+const TODO_OPEN_ADD_KEY = 'portalTodoOpenAdd.v1';
 
 type RightMode = 'open' | 'collapsed';
 
@@ -223,6 +224,22 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
                 title="펼치기"
               >
                 ◀
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem(TODO_OPEN_ADD_KEY, 'personal');
+                  } catch {
+                    /* ignore */
+                  }
+                  setRightModePersist('open');
+                }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#4b6cb7] text-base font-bold leading-none text-white shadow-sm hover:bg-[#3d5a9a]"
+                title="체크리스트 추가"
+                aria-label="체크리스트 추가"
+              >
+                +
               </button>
               <span
                 className="text-[10px] font-bold text-[#4b6cb7] [writing-mode:vertical-rl]"
