@@ -19,7 +19,12 @@ export async function GET(req: Request) {
       includeCheckoffDetails: isDataViewer(user),
     });
     return NextResponse.json({ items, canViewCheckoffDetails: isDataViewer(user) });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.error('calendar events error', err);
+    return NextResponse.json({ error: '일정을 불러오지 못했습니다.' }, { status: 500 });
   }
 }

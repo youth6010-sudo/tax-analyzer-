@@ -25,7 +25,11 @@ export async function listCalendarEvents(
     listPersonalChecklistInRange(names, from, to),
     listCompanyEvents({ from, to }),
     listCalendarTeamMembers(),
-    listApprovedLeaveInRange(names, from, to),
+    listApprovedLeaveInRange(names, from, to).catch(err => {
+      // 휴가 테이블 미배포·오류가 개인/회사/세무 일정까지 막지 않게
+      console.error('listApprovedLeaveInRange failed', err);
+      return [] as Awaited<ReturnType<typeof listApprovedLeaveInRange>>;
+    }),
   ]);
 
   const taxEvents = taxDeadlinesToCalendarEvents(listTaxDeadlines(from, to));

@@ -135,9 +135,11 @@ export default function CalendarPageClient() {
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [events, setEvents] = useState<CalendarEventDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [members, setMembers] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState('');
   const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
+  const [teamReady, setTeamReady] = useState(false);
   const [showCompany, setShowCompany] = useState(true);
   const [showTax, setShowTax] = useState(true);
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -170,41 +172,58 @@ export default function CalendarPageClient() {
   );
 
   useEffect(() => {
-    void fetchWithTimeout('/api/calendar/team', {}, 10_000)
-      .then(r => r.json())
-      .then(data => {
-        const team = (data as { members?: string[]; currentUser?: string }).members || [];
-        const me = (data as { currentUser?: string }).currentUser || '';
-        setMembers(team);
-        setCurrentUser(me);
-        setShowCompany(readStoredShowCompany());
-        setShowTax(readStoredShowTax());
-        setHideCompleted(readStoredHideCompleted());
-        const stored = readStoredTeam(me);
-        const valid = (stored || [me]).filter(n => team.includes(n));
-        setSelectedOwners(valid.length > 0 ? valid : [me]);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-    void fetchWithTimeout('/api/auth/me', {}, 10_000)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        const payload = d as {
-          isDeveloper?: boolean;
-          isMaster?: boolean;
-          user?: {
-            name?: string;
-            loginId?: string;
-            role?: string | null;
-            adminMode?: boolean | null;
+    let cancelled = false;
+    void (async () => {
+      let me = '';
+      let team: string[] = [];
+      try {
+        const [teamRes, meRes] = await Promise.all([
+          fetchWithTimeout('/api/calendar/team', {}, 15_000),
+          fetchWithTimeout('/api/auth/me', {}, 10_000),
+        ]);
+        if (teamRes.ok) {
+          const data = await teamRes.json().catch(() => ({}));
+          team = (data as { members?: string[]; currentUser?: string }).members || [];
+          me = (data as { currentUser?: string }).currentUser || '';
+        }
+        if (meRes.ok) {
+          const d = await meRes.json();
+          const payload = d as {
+            isDeveloper?: boolean;
+            isMaster?: boolean;
+            user?: {
+              name?: string;
+              loginId?: string;
+              role?: string | null;
+              adminMode?: boolean | null;
+            };
           };
-        };
-        setIsAdmin(!!payload?.isDeveloper);
-        setCanViewCheckoffDetails(!!payload?.isMaster);
-        setCanAddCompany(!!payload?.isMaster || canCreateCompanyEvent(payload?.user));
-      })
-      .catch(() => { /* ignore */ });
+          if (!me) me = String(payload.user?.name || '').trim();
+          if (!cancelled) {
+            setIsAdmin(!!payload?.isDeveloper);
+            setCanViewCheckoffDetails(!!payload?.isMaster);
+            setCanAddCompany(!!payload?.isMaster || canCreateCompanyEvent(payload?.user));
+          }
+        }
+      } catch {
+        /* ignore — finally 에서 teamReady */
+      }
+      if (cancelled) return;
+      setMembers(team);
+      setCurrentUser(me);
+      setShowCompany(readStoredShowCompany());
+      setShowTax(readStoredShowTax());
+      setHideCompleted(readStoredHideCompleted());
+      const stored = readStoredTeam(me);
+      const valid = (stored || (me ? [me] : [])).filter(n =>
+        team.length > 0 ? team.includes(n) : !!n,
+      );
+      setSelectedOwners(valid.length > 0 ? valid : me ? [me] : []);
+      setTeamReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleShowCompanyChange = (show: boolean) => {
@@ -236,20 +255,23 @@ export default function CalendarPageClient() {
   };
 
   const loadEvents = useCallback(async () => {
+    if (!teamReady) return;
     if (selectedOwners.length === 0) {
       setEvents([]);
       setLoading(false);
+      setLoadError('담당자를 선택해 주세요.');
       return;
     }
     setLoading(true);
+    setLoadError('');
     try {
       const owners = encodeURIComponent(selectedOwners.join(','));
       const res = await fetchWithTimeout(
         `/api/calendar/events?from=${fetchRange.from}&to=${fetchRange.to}&owners=${owners}`,
         {},
-        15_000,
+        25_000,
       );
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         const payload = data as { items: CalendarEventDto[]; canViewCheckoffDetails?: boolean };
         const items = payload.items || [];
@@ -261,10 +283,17 @@ export default function CalendarPageClient() {
           if (!prev) return prev;
           return items.find(e => e.id === prev.id) ?? prev;
         });
+      } else {
+        setLoadError(
+          (data as { error?: string }).error || `일정을 불러오지 못했습니다. (${res.status})`,
+        );
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, [fetchRange.from, fetchRange.to, selectedOwners]);
+    } catch {
+      setLoadError('일정 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchRange.from, fetchRange.to, selectedOwners, teamReady]);
 
   useEffect(() => {
     void loadEvents();
@@ -552,6 +581,18 @@ export default function CalendarPageClient() {
               )}
             </div>
           </div>
+          {loadError && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <span>{loadError}</span>
+              <button
+                type="button"
+                onClick={() => void loadEvents()}
+                className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-100"
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
           {loading ? (
             <p className="text-sm text-slate-500">불러오는 중…</p>
           ) : (
