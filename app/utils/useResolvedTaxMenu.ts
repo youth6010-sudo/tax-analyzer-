@@ -24,7 +24,8 @@ function broadcastMenuPrefs(prefs: UserMenuPrefs) {
 export function useResolvedTaxMenu() {
   const [auth, setAuth] = useState<AuthFlags>({ isAdmin: false, canCharlieFeatures: false });
   const [prefs, setPrefs] = useState<UserMenuPrefs>({});
-  const [loaded, setLoaded] = useState(false);
+  // 기본 메뉴를 즉시 표시 — fetch 끝날 때까지 "메뉴 불러오는 중…"에 고정되지 않게
+  const [loaded, setLoaded] = useState(true);
 
   const reload = useCallback(async () => {
     try {
@@ -61,13 +62,13 @@ export function useResolvedTaxMenu() {
   }, []);
 
   const groups = useMemo(
-    () => (loaded ? resolveMenuGroups(prefs, auth) : []),
-    [loaded, prefs, auth],
+    () => resolveMenuGroups(prefs, auth),
+    [prefs, auth],
   );
 
   const catalog = useMemo(
-    () => (loaded ? catalogMenuForEdit(auth) : []),
-    [loaded, auth],
+    () => catalogMenuForEdit(auth),
+    [auth],
   );
 
   const savePrefs = useCallback(async (next: UserMenuPrefs) => {

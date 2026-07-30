@@ -253,8 +253,9 @@ function SectionCard({
 }
 
 export default function MyClientsBoard() {
-  const [clients, setClients] = useState<ClientWithChurn[]>([]);
-  const [ready, setReady] = useState(false);
+  const cached = typeof window !== 'undefined' ? getPortalClients() : [];
+  const [clients, setClients] = useState<ClientWithChurn[]>(() => cached as ClientWithChurn[]);
+  const [ready, setReady] = useState(() => cached.length > 0);
   const [managerName, setManagerName] = useState<string | null>(null);
   const [orderVersion, setOrderVersion] = useState(0);
   const [sort, setSort] = useLocalStorage<SortKey>(CLIENT_SORT_STORAGE_KEY, 'code');
@@ -297,13 +298,24 @@ export default function MyClientsBoard() {
   }, []);
 
   useEffect(() => {
-    setReady(false);
+    let cancelled = false;
     const url = includeChurned ? '/api/clients?mine=1&includeChurned=1' : '/api/clients?mine=1';
+    // 기존 목록/캐시를 유지한 채 백그라운드 갱신 — setReady(false)로 화면을 비우지 않음
     fetchWithTimeout(url, { cache: 'no-store' }, 20_000)
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setClients((d?.clients as ClientWithChurn[]) ?? getPortalClients()))
-      .catch(() => setClients(getPortalClients()))
-      .finally(() => setReady(true));
+      .then(d => {
+        if (cancelled) return;
+        setClients((d?.clients as ClientWithChurn[]) ?? getPortalClients());
+      })
+      .catch(() => {
+        if (!cancelled) setClients(prev => (prev.length > 0 ? prev : (getPortalClients() as ClientWithChurn[])));
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [includeChurned]);
 
   useEffect(() => {

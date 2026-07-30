@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AppChrome from "./components/dashboard/AppChrome";
 
 export const metadata: Metadata = {
   title: "청년들 B-System",
@@ -19,7 +20,9 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AppChrome>{children}</AppChrome>
+      </body>
     </html>
   );
 }

@@ -174,7 +174,7 @@ export default function HomeTasksPanel() {
   const [editModal, setEditModal] = useState<EditModal>(null);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(true);
   const [currentUser, setCurrentUser] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [canAddCompany, setCanAddCompany] = useState(false);
@@ -242,6 +242,7 @@ export default function HomeTasksPanel() {
   };
 
   const refresh = useCallback(async (includeCompleted = showCompleted) => {
+    setRefreshing(true);
     try {
       const personalUrl = includeCompleted
         ? '/api/calendar/personal-checklist?includeCompleted=1'
@@ -259,7 +260,7 @@ export default function HomeTasksPanel() {
         setRoutedOpen(payload.routedOpen || []);
         setRoutedShared(payload.routedShared || []);
       }
-      setLoading(false);
+      setRefreshing(false);
 
       const cRes = await fetchWithTimeout('/api/calendar/company-events?home=1', {}, 15_000);
       if (cRes.ok) {
@@ -285,7 +286,9 @@ export default function HomeTasksPanel() {
         setCanApproveLeaveUi(false);
       }
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally {
+      setRefreshing(false);
+    }
   }, [showCompleted]);
 
   useEffect(() => {
@@ -500,7 +503,7 @@ export default function HomeTasksPanel() {
           </label>
         </div>
 
-        {loading ? (
+        {refreshing && personal.length === 0 && companyEvents.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-500">불러오는 중…</p>
         ) : (
           <div className="space-y-2 p-2.5">
