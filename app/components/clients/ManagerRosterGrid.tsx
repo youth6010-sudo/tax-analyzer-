@@ -664,31 +664,28 @@ function canPanelScrollInDirection(el: HTMLElement, deltaY: number): boolean {
 function HorizontalRosterStrip({
   managers,
   currentUserName,
-  fitAllColumns = false,
   columnWidth,
   children,
 }: {
   managers: string[];
   currentUserName?: string | null;
-  fitAllColumns?: boolean;
   columnWidth: number;
   children: React.ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const useHorizontalScroll = !fitAllColumns;
   const columnStride = columnWidth + COLUMN_GAP;
 
   const scrollToIndex = useCallback((index: number) => {
     const el = scrollRef.current;
-    if (!el || !useHorizontalScroll) return;
+    if (!el) return;
     const clamped = Math.max(0, Math.min(index, managers.length - 1));
     el.scrollTo({
       left: clamped * columnStride,
       behavior: 'smooth',
     });
     setActiveIndex(clamped);
-  }, [columnStride, managers.length, useHorizontalScroll]);
+  }, [columnStride, managers.length]);
 
   const scrollByColumn = useCallback((direction: -1 | 1) => {
     scrollToIndex(activeIndex + direction);
@@ -696,7 +693,7 @@ function HorizontalRosterStrip({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || !useHorizontalScroll) return;
+    if (!el) return;
 
     const onScroll = () => {
       const idx = Math.round(el.scrollLeft / columnStride);
@@ -738,7 +735,7 @@ function HorizontalRosterStrip({
       el.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [columnStride, managers.length, scrollByColumn, useHorizontalScroll]);
+  }, [columnStride, managers.length, scrollByColumn]);
 
   return (
     <div>
@@ -751,37 +748,27 @@ function HorizontalRosterStrip({
         />
       )}
       <div className="relative">
-        {managers.length > 1 && useHorizontalScroll && (
+        {managers.length > 1 && (
           <>
             <ScrollButton
               direction="left"
               label="이전 담당자"
               onClick={() => scrollByColumn(-1)}
-              className="absolute left-0 top-1/2 z-20 -translate-y-1/2 -translate-x-1/2"
+              className="absolute left-2 top-1/2 z-20 -translate-y-1/2"
             />
             <ScrollButton
               direction="right"
               label="다음 담당자"
               onClick={() => scrollByColumn(1)}
-              className="absolute right-0 top-1/2 z-20 -translate-y-1/2 translate-x-1/2"
+              className="absolute right-2 top-1/2 z-20 -translate-y-1/2"
             />
           </>
         )}
         <div
           ref={scrollRef}
-          className={
-            fitAllColumns
-              ? 'grid grid-cols-1 gap-2.5 min-w-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 overflow-x-auto'
-              : 'roster-h-scroll roster-scroll min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-3 pb-2'
-          }
+          className="roster-h-scroll roster-scroll min-w-0 overflow-x-auto overflow-y-visible snap-x snap-proximity scroll-px-3 pb-2"
         >
-          <div
-            className={
-              fitAllColumns
-                ? 'contents'
-                : 'flex items-start gap-2.5 w-max py-0.5'
-            }
-          >
+          <div className="flex w-max items-start gap-2.5 py-0.5">
             {children}
           </div>
         </div>
@@ -921,27 +908,17 @@ export default function ManagerRosterGrid({
     );
   }
 
-  const fitAllColumns = visibleManagers.length <= 5 && columnWidth <= DEFAULT_ROSTER_COLUMN_WIDTH;
-
   return (
     <HorizontalRosterStrip
       managers={managerGroups.map(g => g.manager)}
       currentUserName={currentUserName}
-      fitAllColumns={fitAllColumns}
       columnWidth={columnWidth}
     >
       {managerGroups.map(mgr => (
         <div
           key={mgr.manager}
-          className={[
-            'relative flex flex-col min-w-0',
-            fitAllColumns ? 'w-full' : 'snap-start shrink-0',
-          ].join(' ')}
-          style={
-            fitAllColumns
-              ? { minWidth: columnWidth }
-              : { width: columnWidth, minWidth: columnWidth }
-          }
+          className="relative flex shrink-0 snap-start flex-col overflow-hidden"
+          style={{ width: columnWidth, minWidth: columnWidth }}
         >
           <ManagerSection
             manager={mgr.manager}
