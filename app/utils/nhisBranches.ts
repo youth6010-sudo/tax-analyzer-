@@ -172,15 +172,24 @@ export function filterInsuranceBranches(
   return tight.slice(0, effectiveLimit).map(s => s.branch);
 }
 
-/** 연속 전화번호를 051-550-7513~7515 형태로 묶음 */
+/** 실제 전화번호만 추출 — 한글 업무문구는 제외, 15xx 고객센터 포함 */
 export function formatContactNumberRanges(value?: string): string[] {
   const text = String(value || '').trim();
   if (!text || text === '-') return [];
-  const matches = text.match(/\d{2,4}-\d{3,4}-\d{4}/g);
-  if (!matches?.length) return [text];
+  if (/[가-힣]/.test(text)) return [];
+
+  const local = text.match(/\d{2,4}-\d{3,4}-\d{4}/g) ?? [];
+  const hotline = text.match(/\b(?:15|16|18)\d{2}-\d{4}\b/g) ?? [];
+  const matches = [...new Set([...local, ...hotline])];
+  if (!matches.length) {
+    const digits = text.replace(/\D/g, '');
+    if (/^(?:15|16|18)\d{6}$/.test(digits)) return [text];
+    if (/^0\d{8,10}$/.test(digits)) return [text];
+    return [];
+  }
 
   type Parsed = { raw: string; prefix: string | null; last: number | null };
-  const parsed: Parsed[] = [...new Set(matches)].map(n => {
+  const parsed: Parsed[] = matches.map(n => {
     const m = n.match(/^(\d{2,4}-\d{3,4})-(\d{4})$/);
     return m ? { raw: n, prefix: m[1], last: Number(m[2]) } : { raw: n, prefix: null, last: null };
   });

@@ -12,8 +12,10 @@ import {
 import nhisData from '@/data/nhis-branches.json';
 import npsData from '@/data/nps-branches.json';
 import comwelData from '@/data/comwel-branches.json';
+import { formatBusinessNo } from '@/app/utils/idFormat';
 import {
   filterInsuranceBranches,
+  formatContactNumberRanges,
   INSURANCE_ORGS,
   type InsuranceBranch,
   type InsuranceBranchDataset,
@@ -48,12 +50,16 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
+function hasVisibleContact(item: { phone?: string; fax?: string }) {
+  return formatContactNumberRanges(item.phone).length > 0 || formatContactNumberRanges(item.fax).length > 0;
+}
+
 function prioritizeContacts(branch: InsuranceBranch) {
-  const contacts = (branch.departmentPhones ?? []).filter(item => item.phone || item.fax);
+  const contacts = (branch.departmentPhones ?? []).filter(hasVisibleContact);
   return [...contacts].sort((a, b) => {
     const score = (item: { label: string; role?: string; phone?: string }) => {
       const hay = `${item.label} ${item.role || ''}`;
-      let value = item.phone ? 4 : 0;
+      let value = formatContactNumberRanges(item.phone).length ? 4 : 0;
       if (/지사장|총괄|행정지원|가입지원|연금지급|대표/.test(hay)) value += 6;
       if (/센터|TF|지원팀/.test(hay)) value -= 1;
       return value;
@@ -62,10 +68,39 @@ function prioritizeContacts(branch: InsuranceBranch) {
   });
 }
 
+function CallContextBanner({
+  businessNo,
+  companyName,
+}: {
+  businessNo?: string;
+  companyName?: string;
+}) {
+  const formatted = businessNo ? formatBusinessNo(businessNo) : '';
+  if (!formatted && !companyName?.trim()) return null;
+  return (
+    <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5">
+      <p className="text-[11px] font-semibold text-emerald-700">통화 시 알려줄 정보</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        {companyName?.trim() ? (
+          <p className="text-sm font-semibold text-slate-900">{companyName.trim()}</p>
+        ) : null}
+        {formatted ? (
+          <>
+            <p className="text-sm font-semibold tabular-nums text-slate-900">{formatted}</p>
+            <CopyButton text={formatted} label="사업자번호 복사" />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ResultCard({ branch }: { branch: InsuranceBranch }) {
   const priorityContacts = prioritizeContacts(branch);
   const topContacts = priorityContacts.slice(0, 2);
   const restContacts = priorityContacts.slice(2);
+  const phoneDisplay = formatContactNumberRanges(branch.phone);
+  const faxDisplay = formatContactNumberRanges(branch.fax);
 
   return (
     <article className={`${portalCard} p-3`}>
@@ -84,11 +119,15 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
         <div className="flex items-start gap-1.5">
           <div className="text-right">
             <p className="text-[10px] font-medium text-slate-400">대표번호</p>
-            <p className="text-base font-semibold tabular-nums text-slate-900">{branch.phone || '—'}</p>
-            {branch.fax ? <p className="text-[11px] tabular-nums text-slate-500">팩스 {branch.fax}</p> : null}
+            <p className="text-base font-semibold tabular-nums text-slate-900">
+              {phoneDisplay[0] || branch.phone || '—'}
+            </p>
+            {faxDisplay.length ? (
+              <p className="text-[11px] tabular-nums text-slate-500">팩스 {faxDisplay.join(', ')}</p>
+            ) : null}
           </div>
-          <CopyButton text={branch.phone} label="전화" />
-          {branch.fax ? <CopyButton text={branch.fax} label="팩스" /> : null}
+          {phoneDisplay.length ? <CopyButton text={phoneDisplay[0]} label="전화" /> : null}
+          {faxDisplay.length ? <CopyButton text={faxDisplay[0]} label="팩스" /> : null}
         </div>
       </div>
 
@@ -108,55 +147,69 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
         <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 p-2">
           <p className="mb-1 text-[11px] font-semibold text-slate-600">핵심 연락처</p>
           <ul className="space-y-1.5 text-[11px] text-slate-700">
-            {topContacts.map((item, idx) => (
-              <li key={`${item.label}-${item.phone}-${idx}`} className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-slate-800">{item.label}</p>
-                  {item.role ? <p className="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{item.role}</p> : null}
-                </div>
-                <div className="shrink-0 text-right">
-                  {item.phone ? <p className="font-semibold tabular-nums text-slate-900">{item.phone}</p> : null}
-                  {item.fax ? <p className="text-[10px] tabular-nums text-slate-500">팩스 {item.fax}</p> : null}
-                </div>
-              </li>
-            ))}
+            {topContacts.map((item, idx) => {
+              const phones = formatContactNumberRanges(item.phone);
+              const faxes = formatContactNumberRanges(item.fax);
+              return (
+                <li key={`${item.label}-${item.phone}-${idx}`} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-800">{item.label}</p>
+                    {item.role ? <p className="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{item.role}</p> : null}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {phones.length ? (
+                      <p className="font-semibold tabular-nums text-slate-900">{phones.join(', ')}</p>
+                    ) : (
+                      <p className="text-[10px] text-slate-400">번호 없음</p>
+                    )}
+                    {faxes.length ? (
+                      <p className="text-[10px] tabular-nums text-slate-500">팩스 {faxes.join(', ')}</p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           {restContacts.length ? (
             <details className="mt-2 text-[11px] text-slate-600">
               <summary className="cursor-pointer font-medium text-slate-500">나머지 연락처 {restContacts.length}건</summary>
               <ul className="mt-2 space-y-1">
-                {restContacts.map((item, idx) => (
-                  <li key={`${item.label}-${item.phone}-rest-${idx}`} className="flex flex-wrap gap-x-2 gap-y-0.5">
-                    <span className="font-medium text-slate-800">{item.label}</span>
-                    {item.role ? <span className="text-slate-500">{item.role}</span> : null}
-                    {item.phone ? <span className="tabular-nums">{item.phone}</span> : null}
-                    {item.fax ? <span className="tabular-nums text-slate-500">팩스 {item.fax}</span> : null}
-                  </li>
-                ))}
+                {restContacts.map((item, idx) => {
+                  const phones = formatContactNumberRanges(item.phone);
+                  const faxes = formatContactNumberRanges(item.fax);
+                  return (
+                    <li key={`${item.label}-${item.phone}-rest-${idx}`} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                      <span className="font-medium text-slate-800">{item.label}</span>
+                      {item.role ? <span className="text-slate-500">{item.role}</span> : null}
+                      {phones.length ? (
+                        <span className="tabular-nums">{phones.join(', ')}</span>
+                      ) : (
+                        <span className="text-slate-400">번호 없음</span>
+                      )}
+                      {faxes.length ? (
+                        <span className="tabular-nums text-slate-500">팩스 {faxes.join(', ')}</span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </details>
           ) : null}
-        </div>
-      ) : branch.departmentPhones?.length ? (
-        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 p-2">
-          <p className="mb-1 text-[11px] font-semibold text-slate-600">업무별 연락처</p>
-          <ul className="space-y-1 text-[11px] text-slate-700">
-            {branch.departmentPhones.slice(0, 2).map((item, idx) => (
-              <li key={`${item.label}-${item.phone}-${idx}`} className="flex flex-wrap gap-x-2 gap-y-0.5">
-                <span className="font-medium text-slate-800">{item.label}</span>
-                {item.role ? <span className="text-slate-500">{item.role}</span> : null}
-                {item.phone ? <span className="tabular-nums">{item.phone}</span> : null}
-                {item.fax ? <span className="tabular-nums text-slate-500">팩스 {item.fax}</span> : null}
-              </li>
-            ))}
-          </ul>
         </div>
       ) : null}
     </article>
   );
 }
 
-export default function ClientInsuranceBranchesPanel({ address }: { address?: string }) {
+export default function ClientInsuranceBranchesPanel({
+  address,
+  businessNo,
+  companyName,
+}: {
+  address?: string;
+  businessNo?: string;
+  companyName?: string;
+}) {
   const addressText = String(address ?? '').trim();
   const [org, setOrg] = useState<InsuranceOrgId>('nhis');
   const [query, setQuery] = useState(addressText);
@@ -170,6 +223,8 @@ export default function ClientInsuranceBranchesPanel({ address }: { address?: st
 
   return (
     <div>
+      <CallContextBanner businessNo={businessNo} companyName={companyName} />
+
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">
           수임처 주소를 검색어로 자동 적용합니다.
@@ -219,7 +274,7 @@ export default function ClientInsuranceBranchesPanel({ address }: { address?: st
       ) : (
         <ul className="space-y-2">
           {results.map(branch => (
-            <li key={`${org}-${branch.id}`}>
+            <li key={branch.id}>
               <ResultCard branch={branch} />
             </li>
           ))}

@@ -86,6 +86,26 @@ function toSafeFilePart(s) {
     .slice(0, 80);
 }
 
+/** 실제 전화번호만 허용 — 업무 설명 한글이 phone 칸에 들어가지 않게 */
+function isLikelyPhone(value) {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return false;
+  if (/[가-힣]/.test(text)) return false;
+  // 0xx-xxx-xxxx / 02-xxx-xxxx / 15xx-xxxx / 1588-xxxx 등
+  if (/\d{2,4}-\d{3,4}-\d{4}/.test(text)) return true;
+  if (/^(15|16|18)\d{2}-\d{4}$/.test(text)) return true;
+  if (/^\d{9,11}$/.test(text.replace(/\D/g, '')) && text.replace(/\D/g, '').length >= 9) return true;
+  return false;
+}
+
+function pickPhone(...candidates) {
+  for (const c of candidates) {
+    const t = String(c || '').trim();
+    if (isLikelyPhone(t)) return t;
+  }
+  return '';
+}
+
 function decodeJsString(raw) {
   return raw.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\\\/g, '\\').trim();
 }
@@ -218,7 +238,9 @@ function uniqueDeptRows(rows, mapper) {
   const seen = new Set();
   for (const row of rows) {
     const item = mapper(row);
-    if (!item || (!item.phone && !item.fax)) continue;
+    if (!item || !item.label) continue;
+    // 전화가 업무 문구로 잘못 들어가지 않도록; 팩스/라벨만 있어도 유지
+    if (item.phone && !isLikelyPhone(item.phone)) item.phone = '';
     const key = `${item.label}|${item.role || ''}|${item.phone}|${item.fax || ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -287,7 +309,7 @@ async function importNps() {
           if (cells.length < 4) return null;
           return {
             label: cells[0],
-            phone: cells[1] || '',
+            phone: pickPhone(cells[1]),
             role: '',
             fax: cells[3] || '',
           };
@@ -397,7 +419,7 @@ async function importComwel() {
           if (parts.length < 4 || parts[0] === '부서') return null;
           return {
             label: parts[0] || deptName,
-            phone: parts[1] || '',
+            phone: pickPhone(parts[1]),
             role: [parts[2], parts[3]].filter(Boolean).join(' · '),
             fax: faxNo,
           };
@@ -519,12 +541,13 @@ async function importNhis() {
       if (cells.length < 4) return null;
       return {
         label: cells[0],
-        role: cells[1] || '',
-        phone: cells[3] || cells[2] || '',
+        role: [cells[1], cells[2]].filter(Boolean).join(' · '),
+        phone: pickPhone(cells[3]),
         fax: cells[4] || '',
       };
     });
-    const phone = departmentPhones[0]?.phone || '1577-1000';
+    const phone =
+      departmentPhones.find(d => isLikelyPhone(d.phone))?.phone || '1577-1000';
     const fax = departmentPhones[0]?.fax || '';
     return {
       id: item.brchCd,
@@ -551,6 +574,9 @@ async function importNhis() {
   });
 }
 
-await importNps();
-await importComwel();
+const onlyNhis = process.argv.includes('--nhis-only');
+if (!onlyNhis) {
+  await importNps();
+  await importComwel();
+}
 await importNhis();

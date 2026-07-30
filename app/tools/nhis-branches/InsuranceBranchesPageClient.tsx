@@ -16,6 +16,7 @@ import {
 import nhisData from '@/data/nhis-branches.json';
 import npsData from '@/data/nps-branches.json';
 import comwelData from '@/data/comwel-branches.json';
+import { formatBusinessNo } from '@/app/utils/idFormat';
 import {
   filterInsuranceBranches,
   formatContactNumberRanges,
@@ -254,16 +255,47 @@ function ResultCard({ branch }: { branch: InsuranceBranch }) {
   );
 }
 
+function CallContextBanner({
+  businessNo,
+  companyName,
+}: {
+  businessNo?: string;
+  companyName?: string;
+}) {
+  const formatted = businessNo ? formatBusinessNo(businessNo) : '';
+  if (!formatted && !companyName?.trim()) return null;
+  return (
+    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-3">
+      <p className="text-[11px] font-semibold text-emerald-700">통화 시 알려줄 정보</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        {companyName?.trim() ? (
+          <p className="text-sm font-semibold text-slate-900">{companyName.trim()}</p>
+        ) : null}
+        {formatted ? (
+          <>
+            <p className="text-sm font-semibold tabular-nums text-slate-900">{formatted}</p>
+            <CopyButton text={formatted} label="사업자번호 복사" />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function InsuranceBranchesPageClient({
   initialQuery = '',
   initialOrg = 'nhis',
   returnTo = '',
   returnLabel = '',
+  businessNo = '',
+  companyName = '',
 }: {
   initialQuery?: string;
   initialOrg?: InsuranceOrgId;
   returnTo?: string;
   returnLabel?: string;
+  businessNo?: string;
+  companyName?: string;
 }) {
   const [org, setOrg] = useState<InsuranceOrgId>(initialOrg);
   const [query, setQuery] = useState(initialQuery);
@@ -291,6 +323,8 @@ export default function InsuranceBranchesPageClient({
           </a>
         </div>
       ) : null}
+
+      <CallContextBanner businessNo={businessNo} companyName={companyName} />
 
       <PortalToolTabs
         className="mb-4"

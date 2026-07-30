@@ -276,7 +276,7 @@ export default function ClientDetailPage({
                 </p>
               </div>
               <a
-                href={`/tools/nhis-branches?returnTo=${encodeURIComponent(`/clients/${client.id}`)}&returnLabel=${encodeURIComponent(client.companyName || '수임처')}${clientAddress ? `&query=${encodeURIComponent(clientAddress)}` : ''}`}
+                href={`/tools/nhis-branches?returnTo=${encodeURIComponent(`/clients/${client.id}`)}&returnLabel=${encodeURIComponent(client.companyName || '수임처')}${clientAddress ? `&query=${encodeURIComponent(clientAddress)}` : ''}${client.businessNo ? `&businessNo=${encodeURIComponent(client.businessNo)}` : ''}${client.companyName ? `&companyName=${encodeURIComponent(client.companyName)}` : ''}`}
                 className={portalBtnSecondary}
               >
                 수임처 주소로 검색하기
