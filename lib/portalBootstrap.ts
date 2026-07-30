@@ -3,8 +3,8 @@ import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 
 const BOOTSTRAP_CACHE_MS = 60_000;
-/** statement_timeout(20s)보다 조금 길게 — 쿼리 취소 후 에러가 올라올 여유 */
-const BOOTSTRAP_BUILD_TIMEOUT_MS = 25_000;
+/** 클라이언트 bootstrap fetch(15s)보다 조금 길게 */
+const BOOTSTRAP_BUILD_TIMEOUT_MS = 20_000;
 const bootstrapCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof buildPortalBootstrap>> }>();
 const bootstrapInflight = new Map<string, Promise<Awaited<ReturnType<typeof buildPortalBootstrap>>>>();
 

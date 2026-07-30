@@ -21,22 +21,20 @@ export async function listCalendarEvents(
   const names = ownerNames.map(n => n.trim()).filter(Boolean);
   const viewer = (opts?.viewerName || '').trim();
 
-  const [personal, company, team, leaves] = await Promise.all([
-    listPersonalChecklistInRange(names, from, to),
-    listCompanyEvents({ from, to }),
-    listCalendarTeamMembers(),
-    listApprovedLeaveInRange(names, from, to).catch(err => {
-      // 휴가 테이블 미배포·오류가 개인/회사/세무 일정까지 막지 않게
-      console.error('listApprovedLeaveInRange failed', err);
-      return [] as Awaited<ReturnType<typeof listApprovedLeaveInRange>>;
-    }),
-  ]);
+  // 커넥션 풀(max 3) 고갈 방지 — 병렬 대신 순차 조회
+  const personal = await listPersonalChecklistInRange(names, from, to);
+  const company = await listCompanyEvents({ from, to });
+  const team = await listCalendarTeamMembers();
+  let leaves: Awaited<ReturnType<typeof listApprovedLeaveInRange>> = [];
+  try {
+    leaves = await listApprovedLeaveInRange(names, from, to);
+  } catch (err) {
+    console.error('listApprovedLeaveInRange failed', err);
+  }
 
   const taxEvents = taxDeadlinesToCalendarEvents(listTaxDeadlines(from, to));
-  const [companyDetails, taxDetails] = await Promise.all([
-    listCheckoffDetailsForEvents(company.map(ev => ev.id)),
-    listCheckoffDetailsForTaxDeadlines(taxEvents.map(ev => ev.id)),
-  ]);
+  const companyDetails = await listCheckoffDetailsForEvents(company.map(ev => ev.id));
+  const taxDetails = await listCheckoffDetailsForTaxDeadlines(taxEvents.map(ev => ev.id));
 
   for (const item of personal) {
     if (!item.dueDate) continue;

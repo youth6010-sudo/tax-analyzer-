@@ -30,26 +30,42 @@ function LoginForm() {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => ac.abort(), 10_000);
-    fetch('/api/auth/login-users', { signal: ac.signal })
-      .then(r => (r.ok ? r.json() : { users: [] }))
-      .then(data => {
+    let cancelled = false;
+    const loadUsers = async (attempt = 0) => {
+      try {
+        const res = await fetch('/api/auth/login-users', {
+          signal: AbortSignal.timeout(attempt === 0 ? 20_000 : 30_000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
         const list = (data.users ?? []) as LoginUser[];
         setUsers(list);
+        setError(null);
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved && list.some(u => u.loginId === saved)) {
           setLoginId(saved);
         }
-      })
-      .catch(() => setUsers([]))
-      .finally(() => {
-        window.clearTimeout(timer);
-        setUsersLoading(false);
-      });
+        if (list.length === 0 && attempt < 1) {
+          // 빈 응답이면 한 번 더 (콜드스타트/일시 오류)
+          await loadUsers(attempt + 1);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+        if (attempt < 1) {
+          await loadUsers(attempt + 1);
+          return;
+        }
+        setUsers([]);
+        setError('사용자 목록을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    void loadUsers();
     return () => {
-      window.clearTimeout(timer);
-      ac.abort();
+      cancelled = true;
     };
   }, []);
 
@@ -133,7 +149,32 @@ function LoginForm() {
           {usersLoading ? (
             <p className="mt-3 text-sm text-violet-200/60 text-center">불러오는 중…</p>
           ) : users.length === 0 ? (
-            <p className="mt-3 text-sm text-red-300 text-center">등록된 사용자가 없습니다.</p>
+            <div className="mt-3 space-y-2 text-center">
+              <p className="text-sm text-red-300">
+                {error || '등록된 사용자가 없습니다.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsersLoading(true);
+                  setError(null);
+                  void fetch('/api/auth/login-users', { signal: AbortSignal.timeout(30_000) })
+                    .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+                    .then(data => {
+                      const list = (data.users ?? []) as LoginUser[];
+                      setUsers(list);
+                      const saved = localStorage.getItem(STORAGE_KEY);
+                      if (saved && list.some(u => u.loginId === saved)) setLoginId(saved);
+                      if (list.length === 0) setError('등록된 사용자가 없습니다.');
+                    })
+                    .catch(() => setError('사용자 목록을 불러오지 못했습니다. 다시 시도해 주세요.'))
+                    .finally(() => setUsersLoading(false));
+                }}
+                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-violet-100 ring-1 ring-white/15 hover:bg-white/15"
+              >
+                다시 시도
+              </button>
+            </div>
           ) : (
             <div className="mt-3 relative">
               <button
