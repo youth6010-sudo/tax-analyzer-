@@ -8,24 +8,35 @@ import {
   type ResolvedMenuGroup,
   type UserMenuPrefs,
 } from '@/lib/menuPrefs';
+import {
+  clearMenuCache,
+  readMenuCache,
+  writeMenuCache,
+  type MenuAuthFlags,
+} from '@/app/utils/menuPrefsCache';
 
 const MENU_PREFS_EVENT = 'portal-menu-prefs-updated';
 
-type AuthFlags = {
-  isAdmin: boolean;
-  canCharlieFeatures: boolean;
-};
+type AuthFlags = MenuAuthFlags;
 
 function broadcastMenuPrefs(prefs: UserMenuPrefs) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(MENU_PREFS_EVENT, { detail: prefs }));
 }
 
+export { clearMenuCache };
+
 export function useResolvedTaxMenu() {
-  const [auth, setAuth] = useState<AuthFlags>({ isAdmin: false, canCharlieFeatures: false });
-  const [prefs, setPrefs] = useState<UserMenuPrefs>({});
-  // 기본 메뉴를 즉시 표시 — fetch 끝날 때까지 "메뉴 불러오는 중…"에 고정되지 않게
-  const [loaded, setLoaded] = useState(true);
+  const [auth, setAuth] = useState<AuthFlags>(() => {
+    const cached = readMenuCache();
+    return cached?.auth ?? { isAdmin: false, canCharlieFeatures: false };
+  });
+  const [prefs, setPrefs] = useState<UserMenuPrefs>(() => {
+    const cached = readMenuCache();
+    return cached?.prefs ?? {};
+  });
+  // 캐시가 있으면 즉시 표시. 없으면 fetch 완료 전까지 로딩(기본 메뉴 깜빡임 방지).
+  const [loaded, setLoaded] = useState(() => readMenuCache() != null);
 
   const reload = useCallback(async () => {
     try {
@@ -35,14 +46,16 @@ export function useResolvedTaxMenu() {
       ]);
       const me = meRes.ok ? await meRes.json() : null;
       const prefsJson = prefsRes.ok ? await prefsRes.json() : null;
-      setAuth({
+      const nextAuth: AuthFlags = {
         isAdmin: !!me?.isDeveloper,
         canCharlieFeatures: !!me?.canUseCharlieFeatures,
-      });
-      setPrefs((prefsJson?.prefs as UserMenuPrefs) ?? {});
+      };
+      const nextPrefs = (prefsJson?.prefs as UserMenuPrefs) ?? {};
+      setAuth(nextAuth);
+      setPrefs(nextPrefs);
+      writeMenuCache(nextPrefs, nextAuth);
     } catch {
-      setAuth({ isAdmin: false, canCharlieFeatures: false });
-      setPrefs({});
+      // 네트워크 오류 시 캐시/현재 메뉴 유지 — 기본 메뉴로 덮어쓰지 않음
     } finally {
       setLoaded(true);
     }
@@ -55,20 +68,26 @@ export function useResolvedTaxMenu() {
   useEffect(() => {
     const onUpdated = (e: Event) => {
       const detail = (e as CustomEvent<UserMenuPrefs>).detail;
-      if (detail && typeof detail === 'object') setPrefs(detail);
+      if (detail && typeof detail === 'object') {
+        setPrefs(detail);
+        setAuth(prev => {
+          writeMenuCache(detail, prev);
+          return prev;
+        });
+      }
     };
     window.addEventListener(MENU_PREFS_EVENT, onUpdated);
     return () => window.removeEventListener(MENU_PREFS_EVENT, onUpdated);
   }, []);
 
   const groups = useMemo(
-    () => resolveMenuGroups(prefs, auth),
-    [prefs, auth],
+    () => (loaded ? resolveMenuGroups(prefs, auth) : []),
+    [loaded, prefs, auth],
   );
 
   const catalog = useMemo(
-    () => catalogMenuForEdit(auth),
-    [auth],
+    () => (loaded ? catalogMenuForEdit(auth) : []),
+    [loaded, auth],
   );
 
   const savePrefs = useCallback(async (next: UserMenuPrefs) => {
@@ -81,6 +100,10 @@ export function useResolvedTaxMenu() {
     const data = await res.json();
     const saved = (data?.prefs as UserMenuPrefs) ?? next;
     setPrefs(saved);
+    setAuth(prev => {
+      writeMenuCache(saved, prev);
+      return prev;
+    });
     broadcastMenuPrefs(saved);
   }, []);
 
@@ -94,6 +117,10 @@ export function useResolvedTaxMenu() {
     const data = await res.json();
     const saved = (data?.prefs as UserMenuPrefs) ?? {};
     setPrefs(saved);
+    setAuth(prev => {
+      writeMenuCache(saved, prev);
+      return prev;
+    });
     broadcastMenuPrefs(saved);
   }, []);
 

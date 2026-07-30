@@ -11,7 +11,7 @@ export default function TaxMenuButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const { groups, catalog, prefs, savePrefs, resetPrefs } = useMenuPrefs();
+  const { loaded, groups, catalog, prefs, savePrefs, resetPrefs } = useMenuPrefs();
   const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
@@ -70,7 +70,10 @@ export default function TaxMenuButton() {
               메뉴 편집…
             </button>
           </div>
-          {groups.map(group => {
+          {!loaded ? (
+            <p className="px-4 py-3 text-xs text-slate-500">메뉴 불러오는 중…</p>
+          ) : (
+            groups.map(group => {
               if ('href' in group) {
                 const groupHref = group.href;
                 const active = pathname === groupHref || pathname.startsWith(`${groupHref}/`);
@@ -126,7 +129,8 @@ export default function TaxMenuButton() {
                   )}
                 </div>
               );
-            })}
+            })
+          )}
         </div>
       )}
 

@@ -5,6 +5,7 @@ import type { DashboardTask } from '@/lib/dashboardTasks';
 import type { ChurnRecordView, ClientRecord, ClientSearchResult } from '@/app/types/client';
 import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { filterClientSearchIndex } from '@/app/utils/searchFilter';
+import { clearMenuCache } from '@/app/utils/menuPrefsCache';
 
 /** 처리된 업체의 국세청 할 일을 목록에서 제거 (폐업=유출, 휴업=확인) */
 export function filterNtsTasksForHandledChurn(
@@ -428,6 +429,7 @@ export function clearPortal(): void {
   bootstrapSyncError = null;
   inflight = null;
   searchInflight = null;
+  clearMenuCache();
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);

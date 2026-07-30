@@ -23,7 +23,7 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function HomeSidebarNav() {
   const pathname = usePathname();
-  const { groups, catalog, prefs, savePrefs, resetPrefs } = useMenuPrefs();
+  const { loaded, groups, catalog, prefs, savePrefs, resetPrefs } = useMenuPrefs();
   const [editOpen, setEditOpen] = useState(false);
 
   return (
@@ -38,7 +38,10 @@ export default function HomeSidebarNav() {
         </button>
       </div>
 
-      {groups.map(group => {
+      {!loaded ? (
+        <p className="px-3 py-2 text-[11px] text-slate-400">메뉴 불러오는 중…</p>
+      ) : (
+        groups.map(group => {
           if ('href' in group) {
             const href = group.href;
             const active = isActive(pathname, href);
@@ -75,7 +78,8 @@ export default function HomeSidebarNav() {
               </ul>
             </div>
           );
-        })}
+        })
+      )}
 
       <MenuEditModal
         open={editOpen}
