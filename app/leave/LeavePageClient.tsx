@@ -9,6 +9,7 @@ import {
   formatLeaveKindLabel,
   leaveStatusLabel,
 } from '@/app/types/leave';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 type Tab = 'balances' | 'mine' | 'pending';
 
@@ -32,7 +33,7 @@ export default function LeavePageClient() {
   const [detail, setDetail] = useState<LeaveRequestDto | null>(null);
 
   const loadBalances = useCallback(async () => {
-    const res = await fetch(`/api/leave/balances?year=${year}`, { cache: 'no-store' });
+    const res = await fetchWithTimeout(`/api/leave/balances?year=${year}`, { cache: 'no-store' }, 15_000);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as { error?: string }).error || '잔고 조회 실패');
     setBalances((data as { items: LeaveBalanceDto[] }).items || []);
@@ -40,7 +41,7 @@ export default function LeavePageClient() {
   }, [year]);
 
   const loadMine = useCallback(async () => {
-    const res = await fetch(`/api/leave/requests?mine=1&year=${year}`, { cache: 'no-store' });
+    const res = await fetchWithTimeout(`/api/leave/requests?mine=1&year=${year}`, { cache: 'no-store' }, 15_000);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as { error?: string }).error || '신청 조회 실패');
     setMine((data as { items: LeaveRequestDto[] }).items || []);
@@ -48,7 +49,7 @@ export default function LeavePageClient() {
   }, [year]);
 
   const loadPending = useCallback(async () => {
-    const res = await fetch(`/api/leave/requests?pending=1&year=${year}`, { cache: 'no-store' });
+    const res = await fetchWithTimeout(`/api/leave/requests?pending=1&year=${year}`, { cache: 'no-store' }, 15_000);
     const data = await res.json().catch(() => ({}));
     if (res.status === 403) {
       setPending([]);

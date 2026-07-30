@@ -21,6 +21,7 @@ import {
   isSuppliesOrderTaxType,
 } from '@/app/types/calendar';
 import { prefetchPortal, usePortalTasks, getPortalChurnRecords, getPortalClients, filterNtsTasksForHandledChurn, refreshPortalBootstrap } from '@/app/utils/portalStore';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
@@ -247,7 +248,7 @@ export default function HomeTasksPanel() {
         : '/api/calendar/personal-checklist';
 
       // 개인·비품 먼저 그린 뒤 회사일정 — 체감 대기 시간 단축
-      const pRes = await fetch(personalUrl);
+      const pRes = await fetchWithTimeout(personalUrl, {}, 15_000);
       if (pRes.ok) {
         const payload = (await pRes.json()) as {
           items: PersonalChecklistDto[];
@@ -260,7 +261,7 @@ export default function HomeTasksPanel() {
       }
       setLoading(false);
 
-      const cRes = await fetch('/api/calendar/company-events?home=1');
+      const cRes = await fetchWithTimeout('/api/calendar/company-events?home=1', {}, 15_000);
       if (cRes.ok) {
         const payload = (await cRes.json()) as {
           items: CompanyEventDto[];
@@ -274,7 +275,7 @@ export default function HomeTasksPanel() {
         setCanViewCheckoffDetails(!!payload.canViewCheckoffDetails);
       }
 
-      const leaveRes = await fetch('/api/leave/requests?pending=1');
+      const leaveRes = await fetchWithTimeout('/api/leave/requests?pending=1', {}, 10_000);
       if (leaveRes.ok) {
         const payload = (await leaveRes.json()) as { items?: LeaveRequestDto[] };
         setLeavePending(payload.items || []);
@@ -298,10 +299,11 @@ export default function HomeTasksPanel() {
     } catch {
       /* ignore */
     }
-    void fetch('/api/auth/me')
+    void fetchWithTimeout('/api/auth/me', {}, 10_000)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        const user = (d as {
+        if (!d) return;
+        const user = d as {
           user?: {
             name?: string;
             loginId?: string;
@@ -310,7 +312,7 @@ export default function HomeTasksPanel() {
           };
           isMaster?: boolean;
           isDeveloper?: boolean;
-        });
+        };
         setCurrentUser(user.user?.name || '');
         setIsAdmin(!!user.isDeveloper);
         // 서버 isMaster(결재권자·개발자)와 동일 기준으로 회사일정 추가 허용
@@ -324,7 +326,11 @@ export default function HomeTasksPanel() {
   useEffect(() => {
     void prefetchPortal();
     void refresh(showCompleted);
+    let lastRefreshAt = Date.now();
     const onFocus = () => {
+      // 탭 전환마다 API 폭주 방지 — 60초 이상 지났을 때만 재조회
+      if (Date.now() - lastRefreshAt < 60_000) return;
+      lastRefreshAt = Date.now();
       void refresh(showCompleted);
     };
     window.addEventListener('focus', onFocus);

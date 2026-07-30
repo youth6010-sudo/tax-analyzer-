@@ -9,6 +9,7 @@ import {
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 function formatDateOnly(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -30,7 +31,7 @@ export default function ImprovementRequestList() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/calendar/improvement-requests', { cache: 'no-store' });
+      const res = await fetchWithTimeout('/api/calendar/improvement-requests', { cache: 'no-store' }, 15_000);
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems(((data as { items?: ImprovementRequestDto[] }).items) ?? []);

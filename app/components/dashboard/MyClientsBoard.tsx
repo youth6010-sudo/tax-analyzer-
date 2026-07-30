@@ -16,6 +16,7 @@ import { useDashboardTaxFilter } from '@/app/utils/dashboardTaxFilter';
 import { filingTargets, isVatSummaryOnlyClient, defaultPeriod, periodKey } from '@/app/utils/filingCheck';
 import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { getPortalChurnRecords, getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import {
   CLIENT_SORT_STORAGE_KEY,
   applyManagerRosterDisplayOrder,
@@ -280,7 +281,7 @@ export default function MyClientsBoard() {
     } catch {
       /* ignore */
     }
-    fetch('/api/auth/me')
+    fetchWithTimeout('/api/auth/me', {}, 10_000)
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.user?.name) setManagerName(String(data.user.name).trim());
@@ -298,7 +299,7 @@ export default function MyClientsBoard() {
   useEffect(() => {
     setReady(false);
     const url = includeChurned ? '/api/clients?mine=1&includeChurned=1' : '/api/clients?mine=1';
-    fetch(url, { cache: 'no-store' })
+    fetchWithTimeout(url, { cache: 'no-store' }, 20_000)
       .then(r => (r.ok ? r.json() : null))
       .then(d => setClients((d?.clients as ClientWithChurn[]) ?? getPortalClients()))
       .catch(() => setClients(getPortalClients()))
@@ -312,7 +313,7 @@ export default function MyClientsBoard() {
     }
     const p = defaultPeriod();
     const pk = periodKey(taxFilter, p);
-    fetch(`/api/filing-check/excluded?taxType=${taxFilter}&periodKey=${pk}`, { cache: 'no-store' })
+    fetchWithTimeout(`/api/filing-check/excluded?taxType=${taxFilter}&periodKey=${pk}`, { cache: 'no-store' }, 15_000)
       .then(r => (r.ok ? r.json() : null))
       .then(d => setFilingExcluded((d?.excluded as Record<string, string>) ?? {}))
       .catch(() => setFilingExcluded({}));

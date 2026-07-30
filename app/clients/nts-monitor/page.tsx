@@ -18,6 +18,7 @@ import {
   hydratePortal,
   subscribePortal,
 } from '@/app/utils/portalStore';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 interface BatchResult {
   status?: string;
@@ -49,8 +50,8 @@ export default function NtsMonitorPage() {
     setReady(false);
     try {
       const [clientsRes, churnRes] = await Promise.all([
-        fetch(`/api/clients${mine ? '?mine=1' : ''}`, { cache: 'no-store' }),
-        fetch('/api/churn', { cache: 'no-store' }),
+        fetchWithTimeout(`/api/clients${mine ? '?mine=1' : ''}`, { cache: 'no-store' }, 20_000),
+        fetchWithTimeout('/api/churn', { cache: 'no-store' }, 15_000),
       ]);
       const clientsData = (await clientsRes.json().catch(() => ({}))) as { clients?: ClientRecord[] };
       const churnData = (await churnRes.json().catch(() => ({}))) as { records?: ChurnRecordView[] };

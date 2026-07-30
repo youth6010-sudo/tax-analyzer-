@@ -29,8 +29,8 @@ export function useResolvedTaxMenu() {
   const reload = useCallback(async () => {
     try {
       const [meRes, prefsRes] = await Promise.all([
-        fetch('/api/auth/me'),
-        fetch('/api/auth/me/menu-prefs'),
+        fetch('/api/auth/me', { signal: AbortSignal.timeout(10_000) }),
+        fetch('/api/auth/me/menu-prefs', { signal: AbortSignal.timeout(10_000) }),
       ]);
       const me = meRes.ok ? await meRes.json() : null;
       const prefsJson = prefsRes.ok ? await prefsRes.json() : null;

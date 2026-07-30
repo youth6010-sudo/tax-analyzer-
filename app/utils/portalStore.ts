@@ -48,9 +48,15 @@ export type PortalBootstrap = {
 
 const STORAGE_KEY = 'portalBootstrap:v11';
 const SEARCH_INDEX_KEY = 'portalSearchIndex:v1';
+const LOCK_KEY = 'portalBootstrap:lock:v1';
 const FRESH_MS = 90_000;
 const SEARCH_FRESH_MS = 300_000;
 const FETCH_TIMEOUT_MS = 15_000;
+const LOCK_TTL_MS = 20_000;
+const TAB_ID =
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `tab-${Math.random().toString(36).slice(2)}`;
 
 function emptyBootstrap(): PortalBootstrap {
   return {
@@ -138,9 +144,111 @@ function notify() {
   for (const fn of listeners) fn();
 }
 
+function applyBootstrapFromStorage(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as PortalBootstrap;
+    memory = {
+      ...parsed,
+      churnRecords: parsed.churnRecords ?? [],
+      churnMissingClients: parsed.churnMissingClients ?? [],
+    };
+    notify();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryAcquireBootstrapLock(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const now = Date.now();
+    const raw = localStorage.getItem(LOCK_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { at?: number; id?: string };
+      if (
+        parsed.id &&
+        parsed.id !== TAB_ID &&
+        typeof parsed.at === 'number' &&
+        now - parsed.at < LOCK_TTL_MS
+      ) {
+        return false;
+      }
+    }
+    localStorage.setItem(LOCK_KEY, JSON.stringify({ at: now, id: TAB_ID }));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function releaseBootstrapLock(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(LOCK_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { id?: string };
+    if (parsed.id === TAB_ID) localStorage.removeItem(LOCK_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 다른 탭이 bootstrap을 쓰는 동안 캐시가 갱신될 때까지 대기 */
+function waitForPeerBootstrap(timeoutMs: number): Promise<PortalBootstrap | null> {
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') {
+      resolve(memory);
+      return;
+    }
+    const started = Date.now();
+    const finish = (value: PortalBootstrap | null) => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(poll);
+      resolve(value);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY || !e.newValue) return;
+      if (applyBootstrapFromStorage(e.newValue)) finish(memory);
+    };
+    const poll = window.setInterval(() => {
+      const cached = readStorage();
+      if (cached && Date.now() - cached.fetchedAt < FRESH_MS) {
+        memory = cached;
+        notify();
+        finish(memory);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        finish(memory ?? readStorage());
+      }
+    }, 250);
+    window.addEventListener('storage', onStorage);
+  });
+}
+
 if (typeof window !== 'undefined') {
   memory = readStorage();
   searchIndexMemory = readSearchIndexStorage();
+  window.addEventListener('storage', e => {
+    if (e.key === STORAGE_KEY && e.newValue) {
+      applyBootstrapFromStorage(e.newValue);
+    }
+    if (e.key === SEARCH_INDEX_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue) as {
+          fetchedAt: number;
+          searchIndex: ClientSearchResult[];
+        };
+        searchIndexMemory = parsed.searchIndex ?? [];
+        searchIndexFetchedAt = parsed.fetchedAt ?? 0;
+        notify();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
 }
 
 export function getPortalSyncError(): string | null {
@@ -325,6 +433,7 @@ export function clearPortal(): void {
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(SEARCH_INDEX_KEY);
+      localStorage.removeItem(LOCK_KEY);
     } catch {
       /* ignore */
     }
@@ -347,13 +456,29 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
   if (!force && memory && Date.now() - memory.fetchedAt < FRESH_MS) {
     return Promise.resolve(memory);
   }
+  if (!memory) memory = readStorage();
+  if (!force && memory && Date.now() - memory.fetchedAt < FRESH_MS) {
+    return Promise.resolve(memory);
+  }
   if (inflight) return inflight;
 
-  inflight = fetch('/api/portal/bootstrap', {
-    credentials: 'same-origin',
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  })
-    .then(async res => {
+  inflight = (async () => {
+    if (!force && !tryAcquireBootstrapLock()) {
+      const peer = await waitForPeerBootstrap(FETCH_TIMEOUT_MS);
+      if (peer && Date.now() - peer.fetchedAt < FRESH_MS) return peer;
+      // peer 실패·만료 → 이 탭이 락을 강제 점유하고 직접 요청
+      try {
+        localStorage.setItem(LOCK_KEY, JSON.stringify({ at: Date.now(), id: TAB_ID }));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    try {
+      const res = await fetch('/api/portal/bootstrap', {
+        credentials: 'same-origin',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) {
         if (res.status === 401) {
           clearPortal();
@@ -388,17 +513,18 @@ export function prefetchPortal(force = false): Promise<PortalBootstrap | null> {
       writeStorage(memory);
       notify();
       return memory;
-    })
-    .catch(() => {
+    } catch {
       bootstrapSyncError = '서버에 연결할 수 없습니다. 네트워크 또는 DB 설정을 확인해 주세요.';
       if (!memory) memory = readStorage();
       if (!memory) memory = emptyBootstrap();
       notify();
       return memory;
-    })
-    .finally(() => {
-      inflight = null;
-    });
+    } finally {
+      releaseBootstrapLock();
+    }
+  })().finally(() => {
+    inflight = null;
+  });
 
   return inflight;
 }

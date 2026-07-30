@@ -8,6 +8,7 @@ import {
 } from '@/app/types/calendar';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 function formatDateOnly(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -29,7 +30,7 @@ export default function SuppliesOrderList() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/calendar/supplies-orders', { cache: 'no-store' });
+      const res = await fetchWithTimeout('/api/calendar/supplies-orders', { cache: 'no-store' }, 15_000);
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems(((data as { items?: SuppliesOrderDto[] }).items) ?? []);

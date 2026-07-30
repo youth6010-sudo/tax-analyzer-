@@ -5,6 +5,7 @@ import {
   hydratePortal,
   reconcilePortalUser,
 } from '@/app/utils/portalStore';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 /** 모든 페이지에서 포털 데이터 선로딩 (UI 없음) */
 export default function PortalPrefetch() {
@@ -13,7 +14,7 @@ export default function PortalPrefetch() {
 
     const syncUser = async () => {
       try {
-        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        const res = await fetchWithTimeout('/api/auth/me', { credentials: 'same-origin' }, 10_000);
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as { user?: { id?: string } };
         if (cancelled) return;
@@ -23,9 +24,9 @@ export default function PortalPrefetch() {
       }
     };
 
-    void syncUser().finally(() => {
-      if (!cancelled) hydratePortal();
-    });
+    // auth/me가 느려도 bootstrap은 바로 시작 (병렬)
+    hydratePortal();
+    void syncUser();
 
     const onFocus = () => {
       void syncUser();

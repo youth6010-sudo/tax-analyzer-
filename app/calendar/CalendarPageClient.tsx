@@ -33,6 +33,7 @@ import SuppliesOrderList from '@/app/components/calendar/SuppliesOrderList';
 import ImprovementRequestList from '@/app/components/calendar/ImprovementRequestList';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
 const SHOW_COMPANY_KEY = 'calendarShowCompany.v1';
@@ -169,7 +170,7 @@ export default function CalendarPageClient() {
   );
 
   useEffect(() => {
-    void fetch('/api/calendar/team')
+    void fetchWithTimeout('/api/calendar/team', {}, 10_000)
       .then(r => r.json())
       .then(data => {
         const team = (data as { members?: string[]; currentUser?: string }).members || [];
@@ -183,8 +184,10 @@ export default function CalendarPageClient() {
         const valid = (stored || [me]).filter(n => team.includes(n));
         setSelectedOwners(valid.length > 0 ? valid : [me]);
       })
-      .catch(() => { /* ignore */ });
-    void fetch('/api/auth/me')
+      .catch(() => {
+        setLoading(false);
+      });
+    void fetchWithTimeout('/api/auth/me', {}, 10_000)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         const payload = d as {
@@ -241,8 +244,10 @@ export default function CalendarPageClient() {
     setLoading(true);
     try {
       const owners = encodeURIComponent(selectedOwners.join(','));
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `/api/calendar/events?from=${fetchRange.from}&to=${fetchRange.to}&owners=${owners}`,
+        {},
+        15_000,
       );
       const data = await res.json();
       if (res.ok) {

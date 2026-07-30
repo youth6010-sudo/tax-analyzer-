@@ -3,6 +3,8 @@ import { listChurnRecords, listChurnedClientsWithoutRecord, listClients } from '
 import { listDashboardTasks } from '@/lib/dashboardTasks';
 
 const BOOTSTRAP_CACHE_MS = 60_000;
+/** statement_timeout(20s)보다 조금 길게 — 쿼리 취소 후 에러가 올라올 여유 */
+const BOOTSTRAP_BUILD_TIMEOUT_MS = 25_000;
 const bootstrapCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof buildPortalBootstrap>> }>();
 const bootstrapInflight = new Map<string, Promise<Awaited<ReturnType<typeof buildPortalBootstrap>>>>();
 
@@ -24,6 +26,24 @@ function statsFromClients(clients: { businessEntityType?: string | null }[]): Po
   };
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      err => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 export async function getPortalBootstrap() {
   const user = await requireUser();
   const now = Date.now();
@@ -35,14 +55,24 @@ export async function getPortalBootstrap() {
   const inflight = bootstrapInflight.get(user.id);
   if (inflight) return inflight;
 
-  const promise = buildPortalBootstrap(user).then(data => {
-    bootstrapCache.set(user.id, { at: Date.now(), data });
-    bootstrapInflight.delete(user.id);
-    return data;
-  }).catch(err => {
-    bootstrapInflight.delete(user.id);
-    throw err;
-  });
+  const build = buildPortalBootstrap(user);
+  // 타임아웃 후에도 성공하면 캐시에 넣어 다음 요청이 재사용
+  build
+    .then(data => {
+      bootstrapCache.set(user.id, { at: Date.now(), data });
+    })
+    .catch(() => {
+      /* 실패는 withTimeout 경로에서 처리 */
+    });
+
+  const promise = withTimeout(build, BOOTSTRAP_BUILD_TIMEOUT_MS, 'portal bootstrap')
+    .then(data => {
+      bootstrapCache.set(user.id, { at: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      bootstrapInflight.delete(user.id);
+    });
   bootstrapInflight.set(user.id, promise);
   return promise;
 }

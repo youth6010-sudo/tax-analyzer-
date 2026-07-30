@@ -20,6 +20,7 @@ import {
 } from '@/app/utils/clientDirectoryExport';
 import { formatBusinessNo } from '@/app/utils/idFormat';
 import { buildClientDetailUrl } from '@/app/utils/clientsListState';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 const MANAGER_NONE = '__none__';
 const TAX_UNKNOWN = '__unknown__';
@@ -70,7 +71,7 @@ function ClientsDirectoryContent() {
     try {
       const params = new URLSearchParams({ mine: '0' });
       if (includeChurned) params.set('includeChurned', '1');
-      const res = await fetch(`/api/clients?${params}`, { cache: 'no-store' });
+      const res = await fetchWithTimeout(`/api/clients?${params}`, { cache: 'no-store' }, 20_000);
       const data = await res.json();
       setClients((data.clients as ClientRecord[]) ?? []);
     } catch {

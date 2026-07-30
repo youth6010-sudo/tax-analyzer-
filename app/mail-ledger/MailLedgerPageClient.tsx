@@ -21,6 +21,7 @@ import {
   prefetchSearchIndex,
   searchPortalClients,
 } from '@/app/utils/portalStore';
+import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 import type { MailReceiptImage, MailReceiptView } from '@/lib/mailReceipts';
 
@@ -408,7 +409,7 @@ export default function MailLedgerPageClient() {
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
-      const res = await fetch(`/api/mail-receipts?${params.toString()}`);
+      const res = await fetchWithTimeout(`/api/mail-receipts?${params.toString()}`, {}, 15_000);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '목록을 불러오지 못했습니다.');
       setItems((data.items ?? []) as MailReceiptView[]);
