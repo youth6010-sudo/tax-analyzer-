@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import PortalShellLayout from '@/app/components/dashboard/PortalShellLayout';
 import {
   portalH1,
   portalMain,
@@ -17,9 +18,9 @@ type Props = {
   narrow?: boolean;
   /** 좌·우 패딩 없이 본문만 (3열 셸은 유지) */
   bare?: boolean;
-  /** 3열 셸 없이 전체 화면 (로그인 등) — AppChrome도 /login 은 셸을 건너뜀 */
+  /** 3열 셸 없이 전체 화면 (로그인 등) */
   noChrome?: boolean;
-  /** @deprecated shellLayout — 셸은 AppChrome이 담당 */
+  /** @deprecated shellLayout — 기본이 3열 셸 */
   shellLayout?: boolean;
   /** false면 상단 메뉴·검색이 스크롤 시 함께 올라감 — 레거시 */
   staticHeader?: boolean;
@@ -34,17 +35,21 @@ export default function PortalPageShell({
 }: Props) {
   const mainClass = narrow ? portalMainNarrow : portalMain;
 
-  // 셸(좌메뉴·우 To Do)은 root AppChrome → PortalShellLayout이 담당.
-  // 여기서 다시 감싸면 페이지 이동마다 remount → "불러오는 중…" 반복.
   if (noChrome) {
     return <div className={portalPage}>{children}</div>;
   }
 
-  if (bare) {
-    return <div className={`flex min-h-0 flex-1 flex-col ${className}`.trim()}>{children}</div>;
-  }
-
-  return <main className={`${mainClass} ${className}`.trim()}>{children}</main>;
+  return (
+    <div className={`${portalPage} flex min-h-[100dvh] flex-col`}>
+      <PortalShellLayout>
+        {bare ? (
+          <div className={`flex min-h-0 flex-1 flex-col ${className}`.trim()}>{children}</div>
+        ) : (
+          <main className={`${mainClass} ${className}`.trim()}>{children}</main>
+        )}
+      </PortalShellLayout>
+    </div>
+  );
 }
 
 export function PortalPageHeader({

@@ -30,7 +30,9 @@ function LoginForm() {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch('/api/auth/login-users')
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), 10_000);
+    fetch('/api/auth/login-users', { signal: ac.signal })
       .then(r => (r.ok ? r.json() : { users: [] }))
       .then(data => {
         const list = (data.users ?? []) as LoginUser[];
@@ -41,7 +43,14 @@ function LoginForm() {
         }
       })
       .catch(() => setUsers([]))
-      .finally(() => setUsersLoading(false));
+      .finally(() => {
+        window.clearTimeout(timer);
+        setUsersLoading(false);
+      });
+    return () => {
+      window.clearTimeout(timer);
+      ac.abort();
+    };
   }, []);
 
   useEffect(() => {
