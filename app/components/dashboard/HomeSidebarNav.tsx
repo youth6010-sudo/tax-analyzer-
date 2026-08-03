@@ -39,7 +39,7 @@ export default function HomeSidebarNav() {
       </div>
 
       {!loaded ? (
-        <p className="px-3 py-2 text-[11px] text-slate-400">메뉴 불러오는 중…</p>
+        <div className="px-3 py-2 text-[11px] text-slate-400">메뉴 불러오는 중…</div>
       ) : (
         groups.map(group => {
           if ('href' in group) {

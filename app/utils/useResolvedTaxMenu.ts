@@ -27,16 +27,13 @@ function broadcastMenuPrefs(prefs: UserMenuPrefs) {
 export { clearMenuCache };
 
 export function useResolvedTaxMenu() {
-  const [auth, setAuth] = useState<AuthFlags>(() => {
-    const cached = readMenuCache();
-    return cached?.auth ?? { isAdmin: false, canCharlieFeatures: false };
+  // SSR과 맞추기 위해 localStorage는 mount 후에만 반영 (hydration mismatch 방지)
+  const [auth, setAuth] = useState<AuthFlags>({
+    isAdmin: false,
+    canCharlieFeatures: false,
   });
-  const [prefs, setPrefs] = useState<UserMenuPrefs>(() => {
-    const cached = readMenuCache();
-    return cached?.prefs ?? {};
-  });
-  // 캐시가 있으면 즉시 표시. 없으면 fetch 완료 전까지 로딩(기본 메뉴 깜빡임 방지).
-  const [loaded, setLoaded] = useState(() => readMenuCache() != null);
+  const [prefs, setPrefs] = useState<UserMenuPrefs>({});
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -62,6 +59,12 @@ export function useResolvedTaxMenu() {
   }, []);
 
   useEffect(() => {
+    const cached = readMenuCache();
+    if (cached) {
+      setAuth(cached.auth);
+      setPrefs(cached.prefs);
+      setLoaded(true);
+    }
     void reload();
   }, [reload]);
 

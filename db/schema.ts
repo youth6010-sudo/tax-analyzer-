@@ -599,6 +599,38 @@ export const dutyWeeks = pgTable('duty_weeks', {
   index('duty_weeks_range_idx').on(t.weekStart, t.weekEnd),
 ]);
 
+/** 미수 잔액 — 세무사랑 거래처원장 기준 (담당·분류·메모는 원장 재가져오기 시 유지) */
+export const arrearsEntries = pgTable('arrears_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  externalCode: text('external_code').notNull().default(''),
+  companyName: text('company_name').notNull().default(''),
+  businessNo: text('business_no').notNull().default(''),
+  representative: text('representative').notNull().default(''),
+  balance: integer('balance').notNull().default(0),
+  carryIn: integer('carry_in').notNull().default(0),
+  debit: integer('debit').notNull().default(0),
+  credit: integer('credit').notNull().default(0),
+  managerName: text('manager_name').notNull().default(''),
+  /** recovery | bad | long | temp | cms | '' */
+  mgmtCategory: text('mgmt_category').notNull().default(''),
+  cmsNote: text('cms_note').notNull().default(''),
+  memo: text('memo').notNull().default(''),
+  asOfDate: text('as_of_date').notNull().default(''),
+  /** ledger | manual | status_seed */
+  source: text('source').notNull().default('ledger'),
+  updatedBy: text('updated_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex('arrears_entries_external_code_uidx').on(t.externalCode),
+  index('arrears_entries_manager_idx').on(t.managerName),
+  index('arrears_entries_category_idx').on(t.mgmtCategory),
+  index('arrears_entries_balance_idx').on(t.balance),
+  index('arrears_entries_client_id_idx').on(t.clientId),
+  index('arrears_entries_business_no_idx').on(t.businessNo),
+]);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -621,6 +653,7 @@ export type LeaveBalance = typeof leaveBalances.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type LeaveNotification = typeof leaveNotifications.$inferSelect;
 export type DutyWeek = typeof dutyWeeks.$inferSelect;
+export type ArrearsEntry = typeof arrearsEntries.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;
