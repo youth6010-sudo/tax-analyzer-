@@ -10,6 +10,7 @@ import { listTaxDeadlines, taxDeadlinesToCalendarEvents } from '@/lib/taxDeadlin
 import { listCheckoffDetailsForTaxDeadlines } from '@/lib/taxDeadlineCheckoffs';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 import { listApprovedLeaveInRange } from '@/lib/leaveDb';
+import { listDutyWeeksInRange } from '@/lib/dutyWeeks';
 
 export async function listCalendarEvents(
   ownerNames: string[],
@@ -30,6 +31,12 @@ export async function listCalendarEvents(
     leaves = await listApprovedLeaveInRange(names, from, to);
   } catch (err) {
     console.error('listApprovedLeaveInRange failed', err);
+  }
+  let duties: Awaited<ReturnType<typeof listDutyWeeksInRange>> = [];
+  try {
+    duties = await listDutyWeeksInRange(from, to, names.length > 0 ? names : undefined);
+  } catch (err) {
+    console.error('listDutyWeeksInRange failed', err);
   }
 
   const taxEvents = taxDeadlinesToCalendarEvents(listTaxDeadlines(from, to));
@@ -106,6 +113,19 @@ export async function listCalendarEvents(
       ownerName: leave.applicantName,
       createdAt: leave.createdAt,
       leaveHalfSlot: leave.halfSlot || '',
+    });
+  }
+
+  for (const duty of duties) {
+    events.push({
+      id: `duty-${duty.id}`,
+      kind: 'duty',
+      title: '당번',
+      startDate: duty.weekStart,
+      endDate: duty.weekEnd,
+      allDay: true,
+      ownerName: duty.memberName,
+      createdAt: duty.createdAt,
     });
   }
 

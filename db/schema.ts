@@ -585,6 +585,20 @@ export const leaveNotifications = pgTable('leave_notifications', {
   index('leave_notifications_recipient_idx').on(t.recipientName, t.readAt, t.createdAt),
 ]);
 
+/** 주간 당번 (월~금) */
+export const dutyWeeks = pgTable('duty_weeks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  memberName: text('member_name').notNull(),
+  weekStart: text('week_start').notNull(),
+  weekEnd: text('week_end').notNull(),
+  createdBy: text('created_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex('duty_weeks_week_start_uidx').on(t.weekStart),
+  index('duty_weeks_range_idx').on(t.weekStart, t.weekEnd),
+]);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -606,6 +620,7 @@ export type TaxDeadlineCheckoff = typeof taxDeadlineCheckoffs.$inferSelect;
 export type LeaveBalance = typeof leaveBalances.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type LeaveNotification = typeof leaveNotifications.$inferSelect;
+export type DutyWeek = typeof dutyWeeks.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;

@@ -10,6 +10,12 @@ import {
 } from '@/lib/calendarManagerColors';
 
 function displayTitle(event: CalendarEventDto, currentUser?: string): string {
+  if (event.kind === 'duty' && event.ownerName) {
+    if (currentUser && event.ownerName !== currentUser) {
+      return `[${event.ownerName}] 당번`;
+    }
+    return `${event.ownerName} 당번`;
+  }
   if (
     (event.kind === 'personal' || event.kind === 'leave') &&
     event.ownerName &&
@@ -47,7 +53,8 @@ export default function CalendarEventChip({
   const isLeave = event.kind === 'leave' || isLeaveChipColor(color);
   const outlined = isTax || isLeave;
   const lightText = !outlined && isLightManagerChipColor(color);
-  const canEdit = event.kind === 'personal' && Boolean(onDoubleClick);
+  const canEdit =
+    (event.kind === 'personal' || event.kind === 'duty') && Boolean(onDoubleClick);
   const done = !!event.completed;
 
   const handleDoubleClick = (e: MouseEvent) => {

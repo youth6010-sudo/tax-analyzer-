@@ -29,10 +29,11 @@ import {
 import CenterModal from '@/app/components/portal/CenterModal';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
+import DutyMonthForm from '@/app/components/calendar/DutyMonthForm';
 import SuppliesOrderList from '@/app/components/calendar/SuppliesOrderList';
 import ImprovementRequestList from '@/app/components/calendar/ImprovementRequestList';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
-import { canCreateCompanyEvent } from '@/lib/calendarAccess';
+import { canCreateCompanyEvent, canManageDuty } from '@/lib/calendarAccess';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 const TEAM_FILTER_KEY = 'calendarTeamFilter.v1';
@@ -45,6 +46,7 @@ function kindBadgeLabel(kind: CalendarEventDto['kind']): string {
   if (kind === 'tax_deadline') return '세무신고';
   if (kind === 'client_task') return '수임처';
   if (kind === 'leave') return '휴가';
+  if (kind === 'duty') return '당번';
   return '개인';
 }
 
@@ -145,10 +147,11 @@ export default function CalendarPageClient() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [editItem, setEditItem] = useState<PersonalChecklistDto | null>(null);
   const [editCompany, setEditCompany] = useState<CompanyEventDto | null>(null);
-  const [addModal, setAddModal] = useState<'personal' | 'company' | null>(null);
+  const [addModal, setAddModal] = useState<'personal' | 'company' | 'duty' | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canAddCompany, setCanAddCompany] = useState(false);
+  const [canEditDuty, setCanEditDuty] = useState(false);
   const [canViewCheckoffDetails, setCanViewCheckoffDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pageTab, setPageTab] = useState<'calendar' | 'supplies' | 'improvement'>(
@@ -203,6 +206,7 @@ export default function CalendarPageClient() {
             setIsAdmin(!!payload?.isDeveloper);
             setCanViewCheckoffDetails(!!payload?.isMaster);
             setCanAddCompany(!!payload?.isMaster || canCreateCompanyEvent(payload?.user));
+            setCanEditDuty(canManageDuty(payload?.user));
           }
         }
       } catch {
@@ -370,6 +374,20 @@ export default function CalendarPageClient() {
     if (item) setEditCompany(item);
   }, []);
 
+  const openDutyEdit = useCallback(() => {
+    if (!canEditDuty) return;
+    setAddModal('duty');
+  }, [canEditDuty]);
+
+  const handleEventDoubleClick = useCallback(
+    (ev: CalendarEventDto) => {
+      if (ev.kind === 'personal') void openChecklistEdit(ev);
+      else if (ev.kind === 'company') openCompanyEdit(ev);
+      else if (ev.kind === 'duty') openDutyEdit();
+    },
+    [openChecklistEdit, openCompanyEdit, openDutyEdit],
+  );
+
   const handleDeleteSelected = async () => {
     if (!selectedEvent) return;
     const title = eventDisplayTitle(selectedEvent, currentUser);
@@ -435,8 +453,7 @@ export default function CalendarPageClient() {
               onClick={() => setSelectedEvent(ev)}
               onDoubleClick={e => {
                 e.stopPropagation();
-                if (ev.kind === 'personal') void openChecklistEdit(ev);
-                else if (ev.kind === 'company') openCompanyEdit(ev);
+                handleEventDoubleClick(ev);
               }}
               className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
                 isSelected
@@ -579,6 +596,16 @@ export default function CalendarPageClient() {
                   회사 +
                 </button>
               )}
+              {canEditDuty && (
+                <button
+                  type="button"
+                  onClick={() => setAddModal('duty')}
+                  className="inline-flex h-8 items-center rounded-lg border border-emerald-600/40 bg-white px-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+                  title="주간 당번 지정"
+                >
+                  당번
+                </button>
+              )}
             </div>
           </div>
           {loadError && (
@@ -613,7 +640,7 @@ export default function CalendarPageClient() {
             events={visibleEvents}
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
-            onEventDoubleClick={ev => void openChecklistEdit(ev)}
+            onEventDoubleClick={handleEventDoubleClick}
             currentUser={currentUser}
             members={members}
           />
@@ -632,7 +659,11 @@ export default function CalendarPageClient() {
                     ? '사내 일정'
                     : selectedEvent.kind === 'tax_deadline'
                       ? '세무신고일정'
-                      : '개인 체크리스트'}
+                      : selectedEvent.kind === 'leave'
+                        ? '휴가'
+                        : selectedEvent.kind === 'duty'
+                          ? '주간 당번 (월~금)'
+                          : '개인 체크리스트'}
                   {selectedEvent.subtitle ? ` · ${selectedEvent.subtitle}` : ''}
                 </p>
                 {selectedEvent.createdAt && (
@@ -696,6 +727,15 @@ export default function CalendarPageClient() {
                     수정
                   </button>
                 )}
+                {selectedEvent.kind === 'duty' && canEditDuty && (
+                  <button
+                    type="button"
+                    onClick={() => setAddModal('duty')}
+                    className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                  >
+                    당번 수정
+                  </button>
+                )}
                 {canDeleteCalendarEvent(selectedEvent, currentUser, isAdmin) && (
                   <button
                     type="button"
@@ -749,6 +789,22 @@ export default function CalendarPageClient() {
           defaultDate={selectedDate}
           onCreated={() => {
             setAddModal(null);
+            void loadEvents();
+          }}
+          onCancel={() => setAddModal(null)}
+        />
+      </CenterModal>
+
+      <CenterModal
+        open={addModal === 'duty'}
+        title="주간 당번"
+        description="해당 월의 주차별로 당번 한 명을 지정합니다. 캘린더에 담당자 색으로 표시됩니다."
+        onClose={() => setAddModal(null)}
+      >
+        <DutyMonthForm
+          defaultYear={year}
+          defaultMonth={month}
+          onSaved={() => {
             void loadEvents();
           }}
           onCancel={() => setAddModal(null)}

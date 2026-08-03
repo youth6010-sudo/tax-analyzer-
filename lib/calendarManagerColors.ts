@@ -75,6 +75,7 @@ const KIND_CHIP_COLORS: Record<CalendarEventDto['kind'], string> = {
   tax_deadline: TAX_DEADLINE_CHIP_COLOR,
   client_task: 'bg-rose-600',
   leave: LEAVE_CHIP_COLOR,
+  duty: MANAGER_COLOR_BY_NAME.다야,
 };
 
 export function isTaxDeadlineChipColor(color: string): boolean {
@@ -102,7 +103,7 @@ export function resolveEventChipColor(
   if (event.kind === 'company') return COMPANY_CHIP_COLOR;
   if (event.kind === 'leave') return LEAVE_CHIP_COLOR;
   if (event.kind === 'tax_deadline') return TAX_DEADLINE_CHIP_COLOR;
-  if (event.kind === 'personal' && event.ownerName) {
+  if ((event.kind === 'personal' || event.kind === 'duty') && event.ownerName) {
     return managerChipColor(event.ownerName, members);
   }
   return KIND_CHIP_COLORS[event.kind];

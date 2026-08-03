@@ -165,7 +165,13 @@ export function formatCompanyEventSchedule(
   return `${ev.startDate} ~ ${ev.endDate}`;
 }
 
-export type CalendarEventKind = 'personal' | 'company' | 'tax_deadline' | 'client_task' | 'leave';
+export type CalendarEventKind =
+  | 'personal'
+  | 'company'
+  | 'tax_deadline'
+  | 'client_task'
+  | 'leave'
+  | 'duty';
 
 export type CalendarEventDto = {
   id: string;

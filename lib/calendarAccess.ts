@@ -19,3 +19,13 @@ export function canCreateCompanyEvent(
     adminMode: user.adminMode ?? undefined,
   });
 }
+
+/** 주간 당번 지정·수정 — 찰리만 */
+export function canManageDuty(
+  user: {
+    loginId?: string | null;
+  } | null | undefined,
+): boolean {
+  if (!user) return false;
+  return (user.loginId ?? '').trim().toLowerCase() === 'charlie';
+}
