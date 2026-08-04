@@ -24,8 +24,8 @@ export type MailReceiptView = {
 };
 
 const MAX_IMAGES = 5;
-/** ~1.5MB base64 data URL */
-const MAX_IMAGE_CHARS = 2_100_000;
+/** 압축 후 data URL ~3MB 바이너리 */
+const MAX_IMAGE_CHARS = 4_200_000;
 
 function normalizeTags(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -54,7 +54,7 @@ function normalizeImages(raw: unknown, opts?: { strict?: boolean }): MailReceipt
     if (!dataUrl.startsWith('data:image/')) continue;
     if (dataUrl.length > MAX_IMAGE_CHARS) {
       if (opts?.strict) {
-        throw new Error('이미지 용량이 너무 큽니다. 장당 약 1.5MB 이하로 올려 주세요.');
+        throw new Error('이미지 용량이 너무 큽니다. 장당 약 3MB(압축 후) 이하로 올려 주세요.');
       }
       continue;
     }

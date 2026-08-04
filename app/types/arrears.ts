@@ -36,10 +36,62 @@ export type ArrearsEntryDto = {
   cmsNote: string;
   memo: string;
   asOfDate: string;
+  /** 공문 작성일 표시 (예: 2026.07.27). 비어 있으면 asOfDate 사용 */
+  letterDate: string;
   source: string;
   updatedBy: string;
   updatedAt: string;
 };
+
+export type ArrearsLetterLineSource = 'letter' | 'ledger' | 'manual';
+
+export type ArrearsLetterLineDto = {
+  id: string;
+  arrearsEntryId: string;
+  sortOrder: number;
+  description: string;
+  amount: number;
+  paidAmount: number;
+  paidDate: string;
+  source: ArrearsLetterLineSource;
+};
+
+export type ArrearsLetterLineInput = {
+  id?: string;
+  description: string;
+  amount: number;
+  paidAmount?: number;
+  paidDate?: string;
+  source?: ArrearsLetterLineSource;
+};
+
+/** 공문 내역 누적 잔액 (= sum(amount - paidAmount)) */
+export function letterBalanceFromLines(
+  lines: Array<{ amount: number; paidAmount: number }>,
+): number {
+  return lines.reduce((sum, l) => sum + Math.round(l.amount) - Math.round(l.paidAmount || 0), 0);
+}
+
+/** 공문 표용 누적 잔액 배열 */
+export function letterRunningBalances(
+  lines: Array<{ amount: number; paidAmount: number }>,
+): number[] {
+  let run = 0;
+  return lines.map(l => {
+    run += Math.round(l.amount) - Math.round(l.paidAmount || 0);
+    return run;
+  });
+}
+
+/** asOfDate(YYYY-MM-DD) → 공문 일자 표기 2026.07.27 */
+export function formatArrearsLetterDate(asOfOrLetter: string): string {
+  const s = (asOfOrLetter || '').trim();
+  if (!s) return '';
+  if (/^\d{4}\.\d{2}\.\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}.${m[2]}.${m[3]}`;
+  return s;
+}
 
 export type ArrearsManagerTotal = {
   managerName: string;

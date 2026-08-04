@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { canManageArrears, canViewArrearsRow } from '@/lib/arrearsAccess';
 import { getArrearsEntryById, patchArrearsEntry } from '@/lib/arrearsDb';
+import { getArrearsLetterDetail } from '@/lib/arrearsLetterDb';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -10,10 +11,33 @@ const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
+    const url = new URL(req.url);
+    const withLetter = url.searchParams.get('letter') !== '0';
+
+    if (withLetter) {
+      const detail = await getArrearsLetterDetail(id);
+      if (!detail) {
+        return NextResponse.json({ error: '미수 항목을 찾을 수 없습니다.' }, { status: 404 });
+      }
+      if (!canViewArrearsRow(user, detail.item.managerName)) {
+        return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+      }
+      return NextResponse.json(
+        {
+          item: detail.item,
+          lines: detail.lines,
+          letterBalance: detail.letterBalance,
+          balanceDiff: detail.balanceDiff,
+          canManage: canManageArrears(user),
+        },
+        NO_STORE,
+      );
+    }
+
     const item = await getArrearsEntryById(id);
     if (!item) {
       return NextResponse.json({ error: '미수 항목을 찾을 수 없습니다.' }, { status: 404 });
@@ -21,7 +45,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     if (!canViewArrearsRow(user, item.managerName)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
     }
-    return NextResponse.json({ item }, NO_STORE);
+    return NextResponse.json({ item, canManage: canManageArrears(user) }, NO_STORE);
   } catch (e) {
     return handleApiError(e);
   }
@@ -45,6 +69,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       balance?: number;
       balanceAction?: 'pay' | 'charge';
       amount?: number;
+      letterDate?: string;
     };
 
     try {
@@ -56,6 +81,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         balance: body.balance,
         balanceAction: body.balanceAction,
         amount: body.amount,
+        letterDate: body.letterDate,
       });
       return NextResponse.json({ item }, NO_STORE);
     } catch (e) {

@@ -22,6 +22,7 @@ function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     cmsNote: row.cmsNote,
     memo: row.memo,
     asOfDate: row.asOfDate,
+    letterDate: row.letterDate || '',
     source: row.source,
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt ?? ''),
@@ -181,6 +182,7 @@ export async function patchArrearsEntry(
     mgmtCategory?: string;
     memo?: string;
     cmsNote?: string;
+    letterDate?: string;
     /** 잔액 절대값 설정 */
     balance?: number;
     /** pay=입금(잔액↓) / charge=미수추가(잔액↑) */
@@ -210,6 +212,9 @@ export async function patchArrearsEntry(
   }
   if (patch.cmsNote !== undefined) {
     updates.cmsNote = patch.cmsNote;
+  }
+  if (patch.letterDate !== undefined) {
+    updates.letterDate = patch.letterDate.trim();
   }
 
   if (patch.balanceAction === 'pay' || patch.balanceAction === 'charge') {

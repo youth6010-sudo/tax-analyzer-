@@ -33,6 +33,14 @@ type ImportPreview = {
   newCount: number;
   /** 원장에 없어 삭제·변경되지 않는 기존 DB 행 */
   preserved?: number;
+  letterDiffCount?: number;
+  letterDiffSample?: Array<{
+    externalCode: string;
+    companyName: string;
+    ledgerBalance: number;
+    letterBalance: number;
+    diff: number;
+  }>;
   sample: Array<{
     externalCode: string;
     companyName: string;
@@ -41,6 +49,47 @@ type ImportPreview = {
     matchedCompanyName: string | null;
     managerName: string;
     isNew: boolean;
+  }>;
+};
+
+type LetterImportPreview = {
+  preview: true;
+  filename: string;
+  managerName: string;
+  sheetCount: number;
+  matched: number;
+  unmatched: number;
+  totalLines: number;
+  sample: Array<{
+    companyName: string;
+    letterDate: string;
+    lineCount: number;
+    letterBalance: number;
+    matched: boolean;
+    entryId: string | null;
+    matchedCompanyName: string | null;
+    externalCode: string | null;
+    currentBalance: number | null;
+  }>;
+};
+
+type EventsImportPreview = {
+  preview: true;
+  filename: string;
+  detected: string;
+  total: number;
+  matched: number;
+  unmatched: number;
+  sample: Array<{
+    companyName: string;
+    businessNo: string;
+    kind: string;
+    description: string;
+    amount: number;
+    eventDate: string;
+    isPayment: boolean;
+    matched: boolean;
+    matchedCompanyName: string | null;
   }>;
 };
 
@@ -70,9 +119,15 @@ export default function ArrearsPageClient() {
   const [qDebounced, setQDebounced] = useState('');
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const letterFileRef = useRef<HTMLInputElement>(null);
+  const eventsFileRef = useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [letterPreview, setLetterPreview] = useState<LetterImportPreview | null>(null);
+  const [pendingLetterFiles, setPendingLetterFiles] = useState<File[]>([]);
+  const [eventsPreview, setEventsPreview] = useState<EventsImportPreview | null>(null);
+  const [pendingEventsFile, setPendingEventsFile] = useState<File | null>(null);
   const [balanceEdit, setBalanceEdit] = useState<BalanceEditState | null>(null);
   const [balanceSaving, setBalanceSaving] = useState(false);
 
@@ -221,6 +276,94 @@ export default function ArrearsPageClient() {
     }
   };
 
+  const onPickLetterFile = async (list: FileList | null) => {
+    const files = list ? Array.from(list) : [];
+    if (!files.length) return;
+    setImportBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      for (const f of files) form.append('files', f);
+      const res = await fetch('/api/arrears/import-letter', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '미리보기 실패');
+      setPendingLetterFiles(files);
+      setLetterPreview(data as LetterImportPreview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '가져오기 실패');
+    } finally {
+      setImportBusy(false);
+      if (letterFileRef.current) letterFileRef.current.value = '';
+    }
+  };
+
+  const confirmLetterImport = async () => {
+    if (!pendingLetterFiles.length) return;
+    setImportBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      for (const f of pendingLetterFiles) form.append('files', f);
+      form.set('confirm', '1');
+      // 다중 파일은 파일명에서 담당을 읽으므로 managerName 강제하지 않음
+      if (pendingLetterFiles.length === 1 && letterPreview?.managerName) {
+        const only = letterPreview.managerName.split(',')[0]?.trim();
+        if (only && !only.includes(',')) form.set('managerName', only);
+      }
+      const res = await fetch('/api/arrears/import-letter', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '반영 실패');
+      setLetterPreview(null);
+      setPendingLetterFiles([]);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '반영 실패');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const onPickEventsFile = async (file: File | null) => {
+    if (!file) return;
+    setImportBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.set('file', file);
+      const res = await fetch('/api/arrears/import-events', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '미리보기 실패');
+      setPendingEventsFile(file);
+      setEventsPreview(data as EventsImportPreview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '가져오기 실패');
+    } finally {
+      setImportBusy(false);
+      if (eventsFileRef.current) eventsFileRef.current.value = '';
+    }
+  };
+
+  const confirmEventsImport = async () => {
+    if (!pendingEventsFile) return;
+    setImportBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.set('file', pendingEventsFile);
+      form.set('confirm', '1');
+      const res = await fetch('/api/arrears/import-events', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '반영 실패');
+      setEventsPreview(null);
+      setPendingEventsFile(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '반영 실패');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const managerFilterOptions = useMemo(() => {
     const set = new Set<string>([...ARREARS_MANAGER_NAMES]);
     for (const t of totals) {
@@ -236,9 +379,9 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              거래처원장에 있는 업체는 원장 잔액으로 맞추고, 원장에 없는 업체는 현황·공문 내용을
-              유지합니다. 수정·원장 가져오기는 인디·찰리만 가능하며, 담당자는 본인 분만 볼 수
-              있습니다.
+              상호를 누르면 업체별 미수 공문을 볼 수 있습니다. 원장 가져오기 시 공문 잔액과 차이가
+              있으면 자동 반영됩니다. 수정·가져오기는 인디·찰리만 가능하며, 담당자는 본인 분만 볼
+              수 있습니다.
             </p>
           </div>
           {canManage ? (
@@ -250,6 +393,37 @@ export default function ArrearsPageClient() {
                 className="hidden"
                 onChange={e => void onPickFile(e.target.files?.[0] ?? null)}
               />
+              <input
+                ref={letterFileRef}
+                type="file"
+                multiple
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={e => void onPickLetterFile(e.target.files)}
+              />
+              <input
+                ref={eventsFileRef}
+                type="file"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={e => void onPickEventsFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                disabled={importBusy}
+                onClick={() => letterFileRef.current?.click()}
+              >
+                공문 내역 가져오기
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                disabled={importBusy}
+                onClick={() => eventsFileRef.current?.click()}
+              >
+                세금계산서·CMS
+              </button>
               <button
                 type="button"
                 className={portalBtnPrimary}
@@ -413,16 +587,23 @@ export default function ArrearsPageClient() {
                       {row.externalCode}
                     </td>
                     <td className="px-3 py-2 font-medium text-slate-900">
-                      {row.clientId ? (
+                      <div className="flex flex-col gap-0.5">
                         <Link
-                          href={`/clients/${row.clientId}`}
+                          href={`/arrears/${row.id}`}
                           className="text-blue-800 underline-offset-2 hover:underline"
+                          title="미수 공문 보기"
                         >
                           {row.companyName}
                         </Link>
-                      ) : (
-                        row.companyName
-                      )}
+                        {row.clientId ? (
+                          <Link
+                            href={`/clients/${row.clientId}`}
+                            className="text-[11px] font-normal text-slate-500 underline-offset-2 hover:underline"
+                          >
+                            수임처
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">
                       {row.businessNo || '—'}
@@ -568,6 +749,12 @@ export default function ArrearsPageClient() {
               원장에 없는 기존(현황·공문) 행은 삭제하거나 잔액을 바꾸지 않습니다. 신규 행은 매칭된
               수임처 담당으로 채웁니다.
             </p>
+            {typeof preview.letterDiffCount === 'number' && preview.letterDiffCount > 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                공문 잔액과 차이 {preview.letterDiffCount}건 — 확정 시 「원장 추가미수/입금 반영」
+                라인으로 자동 반영됩니다.
+              </p>
+            ) : null}
             <div className="max-h-56 overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-50 sticky top-0">
@@ -616,6 +803,159 @@ export default function ArrearsPageClient() {
                 className={portalBtnPrimary}
                 disabled={importBusy}
                 onClick={() => void confirmImport()}
+              >
+                {importBusy ? '반영 중…' : '확정 반영'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </CenterModal>
+
+      <CenterModal
+        open={!!letterPreview}
+        onClose={() => {
+          if (importBusy) return;
+          setLetterPreview(null);
+          setPendingLetterFiles([]);
+        }}
+        title="공문 내역 가져오기 미리보기"
+      >
+        {letterPreview ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold text-slate-800">{letterPreview.filename}</span>
+              <br />
+              담당 {letterPreview.managerName || '—'} · 시트 {letterPreview.sheetCount} · 매칭{' '}
+              {letterPreview.matched} / 미매칭 {letterPreview.unmatched} · 라인{' '}
+              {letterPreview.totalLines}
+            </p>
+            <p className="text-xs text-slate-500">
+              매칭된 업체의 공문 내역을 통째로 교체합니다. 확정 후 잔액은 공문 내역 합계로
+              맞춰집니다. 미매칭 시트는 건너뜁니다(먼저 현황·원장으로 행을 만들어 두세요).
+            </p>
+            <div className="max-h-56 overflow-auto rounded border border-slate-200">
+              <table className="min-w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">시트(상호)</th>
+                    <th className="px-2 py-1.5 text-right">라인</th>
+                    <th className="px-2 py-1.5 text-right">공문잔액</th>
+                    <th className="px-2 py-1.5 text-left">매칭</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {letterPreview.sample.map(r => (
+                    <tr key={`${r.companyName}-${r.externalCode || 'x'}`}>
+                      <td className="px-2 py-1">{r.companyName}</td>
+                      <td className="px-2 py-1 text-right tabular-nums">{r.lineCount}</td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {formatArrearsWon(r.letterBalance)}
+                      </td>
+                      <td className="px-2 py-1 text-slate-600">
+                        {r.matched ? r.matchedCompanyName || '✓' : (
+                          <span className="text-amber-700">미매칭</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                disabled={importBusy}
+                onClick={() => {
+                  setLetterPreview(null);
+                  setPendingLetterFiles([]);
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className={portalBtnPrimary}
+                disabled={importBusy || letterPreview.matched === 0}
+                onClick={() => void confirmLetterImport()}
+              >
+                {importBusy ? '반영 중…' : '확정 반영'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </CenterModal>
+
+      <CenterModal
+        open={!!eventsPreview}
+        onClose={() => {
+          if (importBusy) return;
+          setEventsPreview(null);
+          setPendingEventsFile(null);
+        }}
+        title="세금계산서·CMS 가져오기 미리보기"
+      >
+        {eventsPreview ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold text-slate-800">{eventsPreview.filename}</span>
+              <br />
+              형식 {eventsPreview.detected === 'cms' ? 'CMS 출금' : eventsPreview.detected === 'tax' ? '세금계산서' : '일반'} · 총{' '}
+              {eventsPreview.total}건 · 매칭 {eventsPreview.matched} / 미매칭{' '}
+              {eventsPreview.unmatched}
+            </p>
+            <p className="text-xs text-slate-500">
+              CMS·입금은 공문 「지급내역」에, 세금계산서·미수는 「금액」에 행을 추가합니다.
+              상호·사업자번호·코드로 매칭합니다. (홈택스 보안메일 HTML은 지원하지 않으며, 엑셀
+              내보내기 파일을 올려 주세요. 공급자 사업자 7988501836)
+            </p>
+            <div className="max-h-56 overflow-auto rounded border border-slate-200">
+              <table className="min-w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">상호</th>
+                    <th className="px-2 py-1.5 text-left">구분</th>
+                    <th className="px-2 py-1.5 text-right">금액</th>
+                    <th className="px-2 py-1.5 text-left">매칭</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {eventsPreview.sample.map((r, i) => (
+                    <tr key={`${r.companyName}-${r.amount}-${i}`}>
+                      <td className="px-2 py-1">{r.companyName || r.businessNo || '—'}</td>
+                      <td className="px-2 py-1">
+                        {r.isPayment ? '입금/CMS' : r.kind === 'tax_invoice' ? '세금계산서' : '미수'}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {formatArrearsWon(r.amount)}
+                      </td>
+                      <td className="px-2 py-1 text-slate-600">
+                        {r.matched ? r.matchedCompanyName || '✓' : (
+                          <span className="text-amber-700">미매칭</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                disabled={importBusy}
+                onClick={() => {
+                  setEventsPreview(null);
+                  setPendingEventsFile(null);
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className={portalBtnPrimary}
+                disabled={importBusy || eventsPreview.matched === 0}
+                onClick={() => void confirmEventsImport()}
               >
                 {importBusy ? '반영 중…' : '확정 반영'}
               </button>

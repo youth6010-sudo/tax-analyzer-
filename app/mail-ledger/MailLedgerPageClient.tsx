@@ -22,6 +22,7 @@ import {
   searchPortalClients,
 } from '@/app/utils/portalStore';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
+import { compressMailImageFile } from '@/app/utils/mailImage';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 import type { MailReceiptImage, MailReceiptView } from '@/lib/mailReceipts';
 
@@ -232,27 +233,16 @@ function ReceiptFormModal({
       return;
     }
     try {
-      const next = await Promise.all(
-        picked.map(
-          file =>
-            new Promise<MailReceiptImage>((resolve, reject) => {
-              if (file.size > 1.5 * 1024 * 1024) {
-                reject(new Error(`${file.name}: 장당 1.5MB 이하로 올려 주세요.`));
-                return;
-              }
-              const reader = new FileReader();
-              reader.onload = () =>
-                resolve({
-                  id: crypto.randomUUID(),
-                  name: file.name,
-                  contentType: file.type || 'image/*',
-                  dataUrl: String(reader.result ?? ''),
-                });
-              reader.onerror = () => reject(new Error(`${file.name} 이미지를 읽지 못했습니다.`));
-              reader.readAsDataURL(file);
-            }),
-        ),
-      );
+      const next: MailReceiptImage[] = [];
+      for (const file of picked) {
+        const compressed = await compressMailImageFile(file);
+        next.push({
+          id: crypto.randomUUID(),
+          name: compressed.name,
+          contentType: compressed.contentType,
+          dataUrl: compressed.dataUrl,
+        });
+      }
       setError('');
       setImages(prev => [...prev, ...next]);
     } catch (err) {
@@ -353,7 +343,7 @@ function ReceiptFormModal({
                 }}
               />
               <span className="rounded-md bg-[#4b6cb7]/10 px-2 py-1">이미지 추가</span>
-              <span className="font-normal text-slate-400">카톡 사진·영수증</span>
+              <span className="font-normal text-slate-400">원본 최대 20MB · 자동 압축</span>
             </label>
             {images.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-2">

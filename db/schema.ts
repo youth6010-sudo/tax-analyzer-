@@ -54,6 +54,8 @@ export const users = pgTable('users', {
   blueholePasswordEnc: text('bluehole_password_enc').notNull().default(''),
   blueholeSessionCookie: text('bluehole_session_cookie').notNull().default(''),
   blueholeSessionAt: timestamp('bluehole_session_at', { withTimezone: true }),
+  /** 포털 접속 heartbeat — 최근 시각으로 온라인 여부 판별 */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -617,6 +619,8 @@ export const arrearsEntries = pgTable('arrears_entries', {
   cmsNote: text('cms_note').notNull().default(''),
   memo: text('memo').notNull().default(''),
   asOfDate: text('as_of_date').notNull().default(''),
+  /** 공문 작성일 표시용 (예: 2026.07.27). 없으면 asOfDate 사용 */
+  letterDate: text('letter_date').notNull().default(''),
   /** ledger | manual | status_seed | status | letter */
   source: text('source').notNull().default('ledger'),
   updatedBy: text('updated_by').notNull().default(''),
@@ -629,6 +633,26 @@ export const arrearsEntries = pgTable('arrears_entries', {
   index('arrears_entries_balance_idx').on(t.balance),
   index('arrears_entries_client_id_idx').on(t.clientId),
   index('arrears_entries_business_no_idx').on(t.businessNo),
+]);
+
+/** 업체별 미수 공문 내역 행 */
+export const arrearsLetterLines = pgTable('arrears_letter_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  arrearsEntryId: uuid('arrears_entry_id')
+    .notNull()
+    .references(() => arrearsEntries.id, { onDelete: 'cascade' }),
+  sortOrder: integer('sort_order').notNull().default(0),
+  description: text('description').notNull().default(''),
+  amount: integer('amount').notNull().default(0),
+  paidAmount: integer('paid_amount').notNull().default(0),
+  paidDate: text('paid_date').notNull().default(''),
+  /** letter | ledger | manual */
+  source: text('source').notNull().default('manual'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('arrears_letter_lines_entry_idx').on(t.arrearsEntryId),
+  index('arrears_letter_lines_entry_sort_idx').on(t.arrearsEntryId, t.sortOrder),
 ]);
 
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
@@ -654,6 +678,7 @@ export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type LeaveNotification = typeof leaveNotifications.$inferSelect;
 export type DutyWeek = typeof dutyWeeks.$inferSelect;
 export type ArrearsEntry = typeof arrearsEntries.$inferSelect;
+export type ArrearsLetterLine = typeof arrearsLetterLines.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;

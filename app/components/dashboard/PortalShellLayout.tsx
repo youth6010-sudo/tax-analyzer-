@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import HomeTasksPanel from './HomeTasksPanel';
 import HomeSidebarNav from './HomeSidebarNav';
+import PresenceHeartbeat from './PresenceHeartbeat';
+import StaffPresencePanel from './StaffPresencePanel';
 import { MenuPrefsProvider } from './MenuPrefsProvider';
 import ContactHeaderSearch from '@/app/components/ContactHeaderSearch';
 import AppHeaderUser from '@/app/components/AppHeaderUser';
@@ -163,6 +165,8 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
           <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1">
             <HomeSidebarNav />
           </div>
+          <StaffPresencePanel />
+          <PresenceHeartbeat />
         </div>
         <div
           role="separator"

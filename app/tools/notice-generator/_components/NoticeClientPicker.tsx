@@ -56,6 +56,7 @@ export default function NoticeClientPicker({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [open, setOpen] = useState(false);
   const [reviewHint, setReviewHint] = useState<ReviewKeyHint | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -112,31 +113,65 @@ export default function NoticeClientPicker({
 
   useEffect(() => {
     const q = query.trim();
-    if (!q || isMaster === null) return;
+    if (!q) {
+      setResults([]);
+      setLoading(false);
+      setSearchError('');
+      return;
+    }
+    // 권한 확인 전이면 잠시 대기 (타임아웃 후 useIsMasterUser가 false로 확정됨)
+    if (isMaster === null) {
+      setLoading(true);
+      setSearchError('');
+      return;
+    }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const local: ClientRecord[] = [];
-      setResults(local);
+      setResults([]);
       setLoading(true);
+      setSearchError('');
 
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
+      let timedOut = false;
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        ac.abort();
+      }, 20_000);
 
       const params = new URLSearchParams({ q, scope: 'notice' });
       if (!isMaster) params.set('mineOnly', '1');
 
       fetch(`/api/clients/search?${params.toString()}`, { signal: ac.signal })
-        .then(r => (r.ok ? r.json() : { clients: [] }))
+        .then(async r => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || `검색 실패 (${r.status})`);
+          }
+          return r.json();
+        })
         .then(data => {
+          if (abortRef.current !== ac) return;
           const api = (data.clients ?? []) as ClientSearchResult[];
-          setResults(mergeClientSearchResults(local, api));
+          setResults(mergeClientSearchResults([], api));
+          setSearchError('');
         })
         .catch(err => {
-          if (err?.name !== 'AbortError') setResults(local);
+          if (abortRef.current !== ac) return;
+          if (err?.name === 'AbortError') {
+            setResults([]);
+            if (timedOut) setSearchError('검색이 지연됩니다. 다시 입력해 주세요.');
+            return;
+          }
+          setResults([]);
+          setSearchError(err instanceof Error ? err.message : '검색에 실패했습니다.');
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          window.clearTimeout(timeout);
+          if (abortRef.current === ac) setLoading(false);
+        });
     }, 150);
 
     return () => {
@@ -253,6 +288,7 @@ export default function NoticeClientPicker({
             const next = e.target.value;
             setQuery(next);
             setOpen(true);
+            setSearchError('');
             if (!next.trim()) {
               setResults([]);
               setLoading(false);
@@ -265,8 +301,10 @@ export default function NoticeClientPicker({
 
         {open && query.trim() && (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-            {isMaster === null || (loading && results.length === 0) ? (
+            {isMaster === null || (loading && results.length === 0 && !searchError) ? (
               <p className="px-3 py-3 text-center text-sm text-slate-400">검색 중…</p>
+            ) : searchError ? (
+              <p className="px-3 py-3 text-center text-sm text-rose-600">{searchError}</p>
             ) : results.length === 0 ? (
               <p className="px-3 py-3 text-center text-sm text-slate-500">검색 결과 없음</p>
             ) : (

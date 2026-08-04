@@ -1,15 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
-import {
-  asOfDateFromLedgerFilename,
-  parseLedgerArrearsWorkbook,
-} from '@/lib/arrearsLedgerParse';
-import { previewLedgerImport, upsertLedgerImport } from '@/lib/arrearsDb';
-import {
-  applyLedgerLetterDiffsForCodes,
-  previewLedgerLetterDiffs,
-} from '@/lib/arrearsLetterDb';
+import { parseArrearsFeeEventsWorkbook } from '@/lib/arrearsFeeEventParse';
+import { applyFeeEvents, previewFeeEvents } from '@/lib/arrearsLetterDb';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -21,7 +14,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '원장 가져오기는 인디·찰리만 할 수 있습니다.' },
+        { error: '세금계산서·CMS 가져오기는 인디·찰리만 할 수 있습니다.' },
         { status: 403 },
       );
     }
@@ -38,64 +31,55 @@ export async function POST(req: Request) {
       String(form.get('confirm') ?? '').toLowerCase() === 'yes';
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    let ledgerRows;
+    let parsed;
     try {
-      ledgerRows = parseLedgerArrearsWorkbook(buffer);
+      parsed = parseArrearsFeeEventsWorkbook(buffer, file.name || '');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '파싱 실패';
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    if (!ledgerRows.length) {
-      return NextResponse.json({ error: '가져올 행이 없습니다.' }, { status: 400 });
+    if (!parsed.events.length) {
+      return NextResponse.json({ error: '반영할 행이 없습니다.' }, { status: 400 });
     }
 
-    const asOfDate =
-      String(form.get('asOfDate') || '').trim() ||
-      asOfDateFromLedgerFilename(file.name || '');
-
     if (!confirm) {
-      const preview = await previewLedgerImport(ledgerRows);
-      const letterDiffs = await previewLedgerLetterDiffs(ledgerRows);
+      const preview = await previewFeeEvents(parsed.events);
       return NextResponse.json(
         {
           preview: true,
-          asOfDate,
           filename: file.name,
-          total: ledgerRows.length,
+          detected: parsed.detected,
+          total: parsed.events.length,
           matched: preview.matched,
           unmatched: preview.unmatched,
-          newCount: preview.newCount,
-          /** 원장에 없어 유지되는 기존(현황·공문) 행 */
-          preserved: preview.preserved,
-          letterDiffCount: letterDiffs.letterDiffCount,
-          letterDiffSample: letterDiffs.sample,
-          sample: preview.rows.slice(0, 30).map(r => ({
-            externalCode: r.externalCode,
+          sample: preview.rows.slice(0, 40).map(r => ({
             companyName: r.companyName,
             businessNo: r.businessNo,
-            balance: r.balance,
-            clientId: r.clientId,
+            kind: r.kind,
+            description: r.description,
+            amount: r.amount,
+            eventDate: r.eventDate,
+            isPayment: r.isPayment,
+            matched: r.matched,
             matchedCompanyName: r.matchedCompanyName,
-            managerName: r.managerName,
-            isNew: r.isNew,
           })),
         },
         NO_STORE,
       );
     }
 
-    const actor = user.name || user.loginId || '';
-    const result = await upsertLedgerImport(ledgerRows, asOfDate, actor);
-    const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
+    const result = await applyFeeEvents(
+      parsed.events,
+      user.name || user.loginId || '',
+    );
 
     return NextResponse.json(
       {
         preview: false,
-        asOfDate,
         filename: file.name,
-        total: ledgerRows.length,
-        letterDiffApplied: letterSync.applied,
+        detected: parsed.detected,
+        total: parsed.events.length,
         ...result,
       },
       NO_STORE,

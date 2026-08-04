@@ -235,6 +235,110 @@ export function formatContactNumberRanges(value?: string): string[] {
   return [...out, ...others];
 }
 
+export type InsuranceDeptContact = NonNullable<InsuranceBranch['departmentPhones']>[number];
+
+/** 연락처 필터 모드: 세무 추천 / 업무별 / 전체 */
+export type ContactPurposeId = 'recommend' | 'qualification' | 'premium' | 'main' | 'all';
+
+export const CONTACT_PURPOSE_CHIPS: {
+  id: ContactPurposeId;
+  label: string;
+}[] = [
+  { id: 'recommend', label: '추천' },
+  { id: 'qualification', label: '자격·가입' },
+  { id: 'premium', label: '보험료·징수' },
+  { id: 'all', label: '전체' },
+];
+
+const PURPOSE_KEYWORDS: Record<
+  Exclude<ContactPurposeId, 'recommend' | 'all'>,
+  Record<InsuranceOrgId, string[]>
+> = {
+  qualification: {
+    nhis: ['자격', '취득', '상실', '피부양', '사업장', '자격징수', '가입'],
+    nps: ['가입지원', '자격', '가입'],
+    comwel: ['가입지원', '자격', '사업장', '가입'],
+  },
+  premium: {
+    nhis: ['보험료', '징수', '부과', '고지', '자격징수'],
+    nps: ['징수', '보험료', '부과'],
+    comwel: ['보험료', '징수', '부과'],
+  },
+  main: {
+    nhis: ['지사장', '대표', '고객센터', '총괄'],
+    nps: ['지사장', '대표', '고객센터', '총괄'],
+    comwel: ['지사장', '대표', '고객센터', '총괄'],
+  },
+};
+
+const DEMOTE_PATTERN =
+  /행정지원|시설|총무|재물|구매|기록물|사회공헌|재활보상|행복노후|장애인|노후준비|산재의학|복지사업|부정수급|송무|\bTF\b|특고/;
+
+const BOOST_QUAL = /자격|취득|상실|피부양|사업장|자격징수|가입지원/;
+const BOOST_PREMIUM = /보험료|징수|부과|고지/;
+const BOOST_MAIN = /지사장|대표|고객센터/;
+
+function contactHay(item: InsuranceDeptContact): string {
+  return `${item.label || ''} ${item.role || ''}`;
+}
+
+export function hasVisibleContact(item: { phone?: string; fax?: string }): boolean {
+  return formatContactNumberRanges(item.phone).length > 0 || formatContactNumberRanges(item.fax).length > 0;
+}
+
+function matchesKeywords(hay: string, keywords: string[]): boolean {
+  return keywords.some(k => hay.includes(k));
+}
+
+/** 업무 칩에 맞는 부서 연락처만 필터 */
+export function filterContactsByPurpose(
+  contacts: InsuranceDeptContact[],
+  org: InsuranceOrgId,
+  purposeId: ContactPurposeId,
+): InsuranceDeptContact[] {
+  const visible = contacts.filter(hasVisibleContact);
+  if (purposeId === 'all' || purposeId === 'recommend') return visible;
+  const keywords = PURPOSE_KEYWORDS[purposeId][org];
+  return visible.filter(item => matchesKeywords(contactHay(item), keywords));
+}
+
+/** 세무 실무 추천용 점수 — 자격·가입·보험료 가산, 행정/재활 등 감점 */
+export function scoreContactForOffice(item: InsuranceDeptContact, _org: InsuranceOrgId): number {
+  const hay = contactHay(item);
+  let score = formatContactNumberRanges(item.phone).length ? 4 : 0;
+  if (BOOST_QUAL.test(hay)) score += 10;
+  if (BOOST_PREMIUM.test(hay)) score += 8;
+  if (/가입지원/.test(hay)) score += 6;
+  if (BOOST_MAIN.test(hay)) score += 2;
+  if (DEMOTE_PATTERN.test(hay)) score -= 12;
+  if (/센터/.test(hay) && !/가입지원|자격징수/.test(hay)) score -= 3;
+  // 팀장·부장 등 총괄 라인 약간 가산 (실무 창구)
+  if (/부장|팀장|총괄/.test(hay) && (BOOST_QUAL.test(hay) || BOOST_PREMIUM.test(hay))) score += 2;
+  return score;
+}
+
+/** 추천 태그(자격 / 보험료 / 안내) */
+export function contactPurposeTags(item: InsuranceDeptContact): string[] {
+  const hay = contactHay(item);
+  const tags: string[] = [];
+  if (BOOST_QUAL.test(hay) || /가입지원/.test(hay)) tags.push('자격');
+  if (BOOST_PREMIUM.test(hay)) tags.push('보험료');
+  if (BOOST_MAIN.test(hay) && tags.length === 0) tags.push('안내');
+  return tags;
+}
+
+/** 세무 업무 추천 순으로 정렬 (기본 상위 노출용) */
+export function rankContactsForOffice(
+  contacts: InsuranceDeptContact[],
+  org: InsuranceOrgId,
+): InsuranceDeptContact[] {
+  return [...contacts.filter(hasVisibleContact)].sort((a, b) => {
+    const diff = scoreContactForOffice(b, org) - scoreContactForOffice(a, org);
+    if (diff !== 0) return diff;
+    return contactHay(a).localeCompare(contactHay(b), 'ko');
+  });
+}
+
 /** @deprecated use filterInsuranceBranches */
 export const filterNhisBranches = filterInsuranceBranches;
 export type NhisBranch = InsuranceBranch;

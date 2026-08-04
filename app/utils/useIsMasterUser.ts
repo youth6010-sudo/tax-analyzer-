@@ -7,10 +7,17 @@ export function useIsMasterUser(): boolean | null {
   const [isMaster, setIsMaster] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), 12_000);
+    fetch('/api/auth/me', { signal: ac.signal })
       .then(r => (r.ok ? r.json() : null))
       .then(d => setIsMaster(!!d?.isMaster))
-      .catch(() => setIsMaster(false));
+      .catch(() => setIsMaster(false))
+      .finally(() => window.clearTimeout(timer));
+    return () => {
+      ac.abort();
+      window.clearTimeout(timer);
+    };
   }, []);
 
   return isMaster;
@@ -21,10 +28,17 @@ export function useIsDeveloperAdmin(): boolean | null {
   const [isDeveloper, setIsDeveloper] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), 12_000);
+    fetch('/api/auth/me', { signal: ac.signal })
       .then(r => (r.ok ? r.json() : null))
       .then(d => setIsDeveloper(!!d?.isDeveloper))
-      .catch(() => setIsDeveloper(false));
+      .catch(() => setIsDeveloper(false))
+      .finally(() => window.clearTimeout(timer));
+    return () => {
+      ac.abort();
+      window.clearTimeout(timer);
+    };
   }, []);
 
   return isDeveloper;

@@ -319,6 +319,8 @@ export async function searchClients(
     userId?: string;
     userName?: string;
     forChurn?: boolean;
+    /** 연락처 조인 생략 — 안내문 등 업체명 검색 속도용 */
+    skipContacts?: boolean;
   },
 ) {
   const q = query.trim();
@@ -353,36 +355,38 @@ export async function searchClients(
   const matchedContactByClient = new Map<string, string>();
   const contactClientIdSet = new Set<string>();
 
-  const contactTextConds = [
-    ilike(clientContacts.name, pattern),
-    ilike(clientContacts.role, pattern),
-    ilike(clientContacts.phone, pattern),
-    ilike(clientContacts.mobilePhone, pattern),
-    ilike(clientContacts.contactKind, pattern),
-  ];
+  if (!options?.skipContacts) {
+    const contactTextConds = [
+      ilike(clientContacts.name, pattern),
+      ilike(clientContacts.role, pattern),
+      ilike(clientContacts.phone, pattern),
+      ilike(clientContacts.mobilePhone, pattern),
+      ilike(clientContacts.contactKind, pattern),
+    ];
 
-  if (digits.length >= 2) {
-    contactTextConds.push(
-      sql`replace(replace(${clientContacts.phone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-      sql`replace(replace(${clientContacts.mobilePhone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
-    );
-  }
+    if (digits.length >= 2) {
+      contactTextConds.push(
+        sql`replace(replace(${clientContacts.phone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+        sql`replace(replace(${clientContacts.mobilePhone}, '-', ''), ' ', '') like ${'%' + digits + '%'}`,
+      );
+    }
 
-  const contactHits = await db
-    .select({ clientId: clientContacts.clientId, name: clientContacts.name })
-    .from(clientContacts)
-    .innerJoin(clients, eq(clients.id, clientContacts.clientId))
-    .where(and(accessCond, or(...contactTextConds)))
-    .limit(60);
+    const contactHits = await db
+      .select({ clientId: clientContacts.clientId, name: clientContacts.name })
+      .from(clientContacts)
+      .innerJoin(clients, eq(clients.id, clientContacts.clientId))
+      .where(and(accessCond, or(...contactTextConds)))
+      .limit(60);
 
-  for (const hit of contactHits) {
-    contactClientIdSet.add(hit.clientId);
-    const name = hit.name.trim();
-    if (!name) continue;
-    const prev = matchedContactByClient.get(hit.clientId);
-    const nameMatches = name.toLowerCase().includes(qLower);
-    if (!prev || (nameMatches && !prev.toLowerCase().includes(qLower))) {
-      matchedContactByClient.set(hit.clientId, name);
+    for (const hit of contactHits) {
+      contactClientIdSet.add(hit.clientId);
+      const name = hit.name.trim();
+      if (!name) continue;
+      const prev = matchedContactByClient.get(hit.clientId);
+      const nameMatches = name.toLowerCase().includes(qLower);
+      if (!prev || (nameMatches && !prev.toLowerCase().includes(qLower))) {
+        matchedContactByClient.set(hit.clientId, name);
+      }
     }
   }
 

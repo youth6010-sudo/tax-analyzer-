@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       userName: user.name,
       forChurn,
+      // 안내문·신고확인은 업체명·사업자번호 위주 — 연락처 조인 생략으로 응답 지연 완화
+      skipContacts: scope === 'notice' || scope === 'filing',
     });
     return NextResponse.json({ clients });
   } catch (e) {
