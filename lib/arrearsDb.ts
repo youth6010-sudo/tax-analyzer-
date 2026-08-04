@@ -247,9 +247,20 @@ export type LedgerImportPreviewRow = LedgerArrearsRow & {
   isNew: boolean;
 };
 
+/**
+ * 원장 가져오기 — 원장에 있는 코드만 upsert.
+ * DB에만 있는 행(현황/공문 시드 등)은 삭제·영점화하지 않고 그대로 유지한다.
+ */
 export async function previewLedgerImport(
   ledgerRows: LedgerArrearsRow[],
-): Promise<{ rows: LedgerImportPreviewRow[]; matched: number; unmatched: number; newCount: number }> {
+): Promise<{
+  rows: LedgerImportPreviewRow[];
+  matched: number;
+  unmatched: number;
+  newCount: number;
+  /** 원장에 없어 이번 가져오기에서 건드리지 않을 기존 DB 행 수 */
+  preserved: number;
+}> {
   const db = getDb();
   const index = await buildClientMatchIndex();
   const existing = await db
@@ -259,6 +270,7 @@ export async function previewLedgerImport(
     })
     .from(arrearsEntries);
   const existingByCode = new Map(existing.map(e => [e.externalCode, e]));
+  const ledgerCodes = new Set(ledgerRows.map(r => r.externalCode));
 
   let matched = 0;
   let unmatched = 0;
@@ -284,14 +296,29 @@ export async function previewLedgerImport(
     });
   }
 
-  return { rows, matched, unmatched, newCount };
+  let preserved = 0;
+  for (const code of existingByCode.keys()) {
+    if (!ledgerCodes.has(code)) preserved += 1;
+  }
+
+  return { rows, matched, unmatched, newCount, preserved };
 }
 
+/**
+ * 원장에 있는 external_code만 잔액·상호 등을 갱신/추가한다.
+ * 원장에 없는 기존 행(현황·공문 등)은 삭제하지 않으며 담당·분류·메모·잔액도 유지한다.
+ */
 export async function upsertLedgerImport(
   ledgerRows: LedgerArrearsRow[],
   asOfDate: string,
   actorName: string,
-): Promise<{ inserted: number; updated: number; matched: number; unmatched: number }> {
+): Promise<{
+  inserted: number;
+  updated: number;
+  matched: number;
+  unmatched: number;
+  preserved: number;
+}> {
   const db = getDb();
   const index = await buildClientMatchIndex();
   const existing = await db
@@ -305,6 +332,11 @@ export async function upsertLedgerImport(
     })
     .from(arrearsEntries);
   const existingByCode = new Map(existing.map(e => [e.externalCode, e]));
+  const ledgerCodes = new Set(ledgerRows.map(r => r.externalCode));
+  let preserved = 0;
+  for (const code of existingByCode.keys()) {
+    if (!ledgerCodes.has(code)) preserved += 1;
+  }
 
   let inserted = 0;
   let updated = 0;
@@ -335,6 +367,7 @@ export async function upsertLedgerImport(
           source: 'ledger',
           updatedBy: actor,
           updatedAt: now,
+          // managerName / mgmtCategory / cmsNote / memo — 원장에 없으므로 유지
         })
         .where(eq(arrearsEntries.id, prev.id));
       updated += 1;
@@ -371,7 +404,7 @@ export async function upsertLedgerImport(
     }
   }
 
-  return { inserted, updated, matched, unmatched };
+  return { inserted, updated, matched, unmatched, preserved };
 }
 
 /** 현황표 메타(담당·분류·메모)만 보강 — 잔액은 건드리지 않음 */

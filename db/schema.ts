@@ -617,7 +617,7 @@ export const arrearsEntries = pgTable('arrears_entries', {
   cmsNote: text('cms_note').notNull().default(''),
   memo: text('memo').notNull().default(''),
   asOfDate: text('as_of_date').notNull().default(''),
-  /** ledger | manual | status_seed */
+  /** ledger | manual | status_seed | status | letter */
   source: text('source').notNull().default('ledger'),
   updatedBy: text('updated_by').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

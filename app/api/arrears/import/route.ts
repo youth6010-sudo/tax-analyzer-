@@ -61,6 +61,8 @@ export async function POST(req: Request) {
           matched: preview.matched,
           unmatched: preview.unmatched,
           newCount: preview.newCount,
+          /** 원장에 없어 유지되는 기존(현황·공문) 행 */
+          preserved: preview.preserved,
           sample: preview.rows.slice(0, 30).map(r => ({
             externalCode: r.externalCode,
             companyName: r.companyName,

@@ -1,6 +1,7 @@
 /**
  * 세무사랑 거래처원장.xls → arrears_entries 잔액·사업자번호 upsert
- * (담당·관리분류·메모는 유지)
+ * - 원장에 있는 코드만 갱신/추가 (담당·관리분류·메모는 유지)
+ * - 원장에 없는 DB 행(현황·공문 등)은 삭제·변경하지 않음
  *
  * Usage: node scripts/import-arrears-ledger.mjs [xls경로]
  */
@@ -112,6 +113,10 @@ const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
 let updated = 0;
 let inserted = 0;
 try {
+  const beforeCodes = await sql`select external_code from arrears_entries`;
+  const ledgerCodeSet = new Set(parsed.map(r => r.code));
+  const preserved = beforeCodes.filter(r => !ledgerCodeSet.has(r.external_code)).length;
+
   const CHUNK = 40;
   for (let i = 0; i < parsed.length; i += CHUNK) {
     const chunk = parsed.slice(i, i + CHUNK);
@@ -162,13 +167,16 @@ try {
       count(*) filter (where balance <> 0)::int as nonzero,
       count(*) filter (where balance > 0)::int as pos,
       count(*) filter (where balance < 0)::int as neg,
-      coalesce(sum(balance), 0)::bigint as sum_bal
+      coalesce(sum(balance), 0)::bigint as sum_bal,
+      count(*) filter (where source not in ('ledger', 'manual'))::int as non_ledger
     from arrears_entries
   `;
   console.log(`파일: ${path.basename(file)} / 기준일 ${asOf}`);
-  console.log(`파싱 ${parsed.length} · 갱신 ${updated} · 신규 ${inserted}`);
   console.log(
-    `db total=${stats[0].total} nonzero=${stats[0].nonzero} (+${stats[0].pos}/-${stats[0].neg}) sum=${stats[0].sum_bal}`,
+    `파싱 ${parsed.length} · 갱신 ${updated} · 신규 ${inserted} · 원장 밖 유지 ${preserved}`,
+  );
+  console.log(
+    `db total=${stats[0].total} nonzero=${stats[0].nonzero} (+${stats[0].pos}/-${stats[0].neg}) sum=${stats[0].sum_bal} non_ledger_source=${stats[0].non_ledger}`,
   );
 } finally {
   await sql.end({ timeout: 5 });

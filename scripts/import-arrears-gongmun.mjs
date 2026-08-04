@@ -2,9 +2,15 @@
  * 미수금 공문 폴더 현황표 + 담당자별 미수수수료.xls → arrears_entries 반영
  * (거래처원장 아님 — 잔액·담당·관리분류 기준)
  *
+ * 기본(merge): 원장/수동(source=ledger|manual) 행의 잔액·전기·차대변·기준일은 유지하고
+ * 담당·분류·메모만 보강. 원장에 없던 행·현황/공문 시드 행은 현황·공문 내용으로 복원.
+ * --force: 원장/수동 잔액까지 현황·공문으로 덮어씀.
+ *
  * Usage:
  *   node scripts/import-arrears-gongmun.mjs
  *   node scripts/import-arrears-gongmun.mjs "z:/10_미수관리/미수금 공문 - 26년"
+ *   node scripts/import-arrears-gongmun.mjs --force
+ *   node scripts/import-arrears-gongmun.mjs "z:/..." --force
  */
 import fs from 'fs';
 import path from 'path';
@@ -157,8 +163,10 @@ function managerFromFilename(name) {
   return '';
 }
 
-const dir =
-  process.argv[2] || path.join('z:', '10_미수관리', '미수금 공문 - 26년');
+const argv = process.argv.slice(2).filter(a => a !== '--');
+const forceOverwrite = argv.includes('--force');
+const dirArg = argv.find(a => a !== '--force');
+const dir = dirArg || path.join('z:', '10_미수관리', '미수금 공문 - 26년');
 
 if (!fs.existsSync(dir)) {
   console.error('폴더 없음:', dir);
@@ -183,6 +191,11 @@ if (!statusFile) {
 
 console.log('현황:', statusFile);
 console.log('공문:', letterFiles.join(', '));
+console.log(
+  forceOverwrite
+    ? '모드: --force (원장/수동 잔액까지 덮어씀)'
+    : '모드: merge (원장/수동 잔액 유지 · 원장 밖 행은 현황·공문으로 복원)',
+);
 
 // ---- 현황 파싱 ----
 const statusPath = path.join(dir, statusFile);
@@ -300,11 +313,23 @@ const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
 try {
   let inserted = 0;
   let updated = 0;
+  let balanceRestored = 0;
+  let ledgerProtected = 0;
   const CHUNK = 40;
   for (let i = 0; i < list.length; i += CHUNK) {
     const chunk = list.slice(i, i + CHUNK);
     await sql.begin(async tx => {
       for (const row of chunk) {
+        const [prev] = await tx`
+          select source, balance from arrears_entries
+          where external_code = ${row.code}
+          limit 1
+        `;
+        const protectBalance =
+          !forceOverwrite &&
+          prev &&
+          (prev.source === 'ledger' || prev.source === 'manual');
+
         const result = await tx`
           INSERT INTO arrears_entries (
             external_code, company_name, business_no, representative,
@@ -318,16 +343,34 @@ try {
             ${asOfDate}, ${row.source}, ${'gongmun-import'}
           )
           ON CONFLICT (external_code) DO UPDATE SET
-            company_name = EXCLUDED.company_name,
-            balance = EXCLUDED.balance,
-            carry_in = EXCLUDED.carry_in,
-            debit = EXCLUDED.debit,
-            credit = EXCLUDED.credit,
+            company_name = CASE
+              WHEN EXCLUDED.company_name <> '' THEN EXCLUDED.company_name
+              ELSE arrears_entries.company_name
+            END,
+            balance = CASE
+              WHEN ${protectBalance} THEN arrears_entries.balance
+              ELSE EXCLUDED.balance
+            END,
+            carry_in = CASE
+              WHEN ${protectBalance} THEN arrears_entries.carry_in
+              ELSE EXCLUDED.carry_in
+            END,
+            debit = CASE
+              WHEN ${protectBalance} THEN arrears_entries.debit
+              ELSE EXCLUDED.debit
+            END,
+            credit = CASE
+              WHEN ${protectBalance} THEN arrears_entries.credit
+              ELSE EXCLUDED.credit
+            END,
             manager_name = CASE
               WHEN EXCLUDED.manager_name <> '' THEN EXCLUDED.manager_name
               ELSE arrears_entries.manager_name
             END,
-            mgmt_category = EXCLUDED.mgmt_category,
+            mgmt_category = CASE
+              WHEN EXCLUDED.mgmt_category <> '' THEN EXCLUDED.mgmt_category
+              ELSE arrears_entries.mgmt_category
+            END,
             cms_note = CASE
               WHEN EXCLUDED.cms_note <> '' THEN EXCLUDED.cms_note
               ELSE arrears_entries.cms_note
@@ -336,14 +379,25 @@ try {
               WHEN EXCLUDED.memo <> '' THEN EXCLUDED.memo
               ELSE arrears_entries.memo
             END,
-            as_of_date = EXCLUDED.as_of_date,
-            source = EXCLUDED.source,
+            as_of_date = CASE
+              WHEN ${protectBalance} THEN arrears_entries.as_of_date
+              ELSE EXCLUDED.as_of_date
+            END,
+            source = CASE
+              WHEN ${protectBalance} THEN arrears_entries.source
+              ELSE EXCLUDED.source
+            END,
             updated_by = ${'gongmun-import'},
             updated_at = now()
           RETURNING (xmax = 0) AS is_insert
         `;
-        if (result[0]?.is_insert) inserted += 1;
-        else updated += 1;
+        if (result[0]?.is_insert) {
+          inserted += 1;
+        } else {
+          updated += 1;
+          if (protectBalance) ledgerProtected += 1;
+          else if (!prev || Number(prev.balance) !== row.balance) balanceRestored += 1;
+        }
       }
     });
     process.stdout.write(`\r  progress ${Math.min(i + CHUNK, list.length)}/${list.length}`);
@@ -354,12 +408,27 @@ try {
     select
       count(*)::int as total,
       count(*) filter (where balance <> 0)::int as nonzero,
-      coalesce(sum(balance),0)::bigint as sum_bal
+      coalesce(sum(balance),0)::bigint as sum_bal,
+      count(*) filter (where source in ('ledger', 'manual'))::int as ledger_like,
+      count(*) filter (where source not in ('ledger', 'manual'))::int as status_like
     from arrears_entries
   `;
   console.log(
-    `✓ inserted=${inserted} updated=${updated} db total=${stats[0].total} nonzero=${stats[0].nonzero} sum=${stats[0].sum_bal}`,
+    `✓ inserted=${inserted} updated=${updated} balanceRestored~=${balanceRestored} ledgerProtected=${ledgerProtected}`,
   );
+  console.log(
+    `db total=${stats[0].total} nonzero=${stats[0].nonzero} sum=${stats[0].sum_bal} ledger_like=${stats[0].ledger_like} status_like=${stats[0].status_like}`,
+  );
+  if (!forceOverwrite && inserted + balanceRestored > 0) {
+    console.log(
+      '힌트: 원장에 없던 업체는 현황·공문 값으로 복원/유지됐습니다. 원장 잔액은 건드리지 않았습니다.',
+    );
+  }
+  if (forceOverwrite) {
+    console.log(
+      '힌트: --force 후 원장 잔액을 다시 맞추려면 npm run db:import-arrears-ledger 를 실행하세요.',
+    );
+  }
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

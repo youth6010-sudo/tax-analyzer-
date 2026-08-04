@@ -31,6 +31,8 @@ type ImportPreview = {
   matched: number;
   unmatched: number;
   newCount: number;
+  /** 원장에 없어 삭제·변경되지 않는 기존 DB 행 */
+  preserved?: number;
   sample: Array<{
     externalCode: string;
     companyName: string;
@@ -234,8 +236,9 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              세무사랑 거래처원장 기준으로 미수 잔액을 조회합니다. 수정·원장 가져오기는 인디·찰리만
-              가능하며, 담당자는 본인 분만 볼 수 있습니다.
+              거래처원장에 있는 업체는 원장 잔액으로 맞추고, 원장에 없는 업체는 현황·공문 내용을
+              유지합니다. 수정·원장 가져오기는 인디·찰리만 가능하며, 담당자는 본인 분만 볼 수
+              있습니다.
             </p>
           </div>
           {canManage ? (
@@ -556,10 +559,14 @@ export default function ArrearsPageClient() {
               <br />
               기준일 {preview.asOfDate} · 총 {preview.total}건 · 수임처 매칭 {preview.matched} /
               미매칭 {preview.unmatched} · 신규 행 {preview.newCount}
+              {typeof preview.preserved === 'number' ? (
+                <> · 원장 밖 유지 {preview.preserved}</>
+              ) : null}
             </p>
             <p className="text-xs text-slate-500">
-              반영 시 잔액·상호·사업자번호만 갱신하고, 담당·관리분류·메모는 유지합니다. 신규 행은
-              매칭된 수임처 담당으로 채웁니다.
+              원장에 있는 업체만 잔액·상호·사업자번호를 갱신합니다. 담당·관리분류·메모는 유지하고,
+              원장에 없는 기존(현황·공문) 행은 삭제하거나 잔액을 바꾸지 않습니다. 신규 행은 매칭된
+              수임처 담당으로 채웁니다.
             </p>
             <div className="max-h-56 overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-xs">
