@@ -496,6 +496,32 @@ function BalanceEditForm({
   );
 }
 
+/** 휴가 종류·기간으로 신청 내용 초안 생성 */
+function buildLeaveBodyDraft(
+  leaveKind: LeaveKind,
+  halfSlot: LeaveHalfSlot,
+  startDate: string,
+  endDate: string,
+): string {
+  if (leaveKind === 'half') {
+    const slot = halfSlot === 'pm' ? '오후 반차' : '오전 반차';
+    return `${slot} 휴가 신청합니다. (${startDate}, 0.5일)`;
+  }
+  const end = endDate || startDate;
+  if (!startDate) return '연차 휴가 신청합니다.';
+  if (startDate === end) {
+    return `연차 휴가 신청합니다. (${startDate}, 1일)`;
+  }
+  const a = new Date(`${startDate}T00:00:00`);
+  const b = new Date(`${end}T00:00:00`);
+  const days =
+    Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a
+      ? 0
+      : Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+  if (days < 1) return `연차 휴가 신청합니다. (${startDate} ~ ${end})`;
+  return `연차 휴가 신청합니다. (${startDate} ~ ${end}, ${days}일)`;
+}
+
 function LeaveApplyForm({
   onCancel,
   onCreated,
@@ -509,7 +535,8 @@ function LeaveApplyForm({
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [title, setTitle] = useState('연차 승인 계획서');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(() => buildLeaveBodyDraft('full', 'am', today, today));
+  const [bodyDirty, setBodyDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -520,7 +547,17 @@ function LeaveApplyForm({
     } else {
       setTitle('연차 승인 계획서');
     }
-  }, [leaveKind, halfSlot, startDate]);
+    if (!bodyDirty) {
+      setBody(
+        buildLeaveBodyDraft(
+          leaveKind,
+          halfSlot,
+          startDate,
+          leaveKind === 'half' ? startDate : endDate,
+        ),
+      );
+    }
+  }, [leaveKind, halfSlot, startDate, endDate, bodyDirty]);
 
   const submit = async () => {
     setSaving(true);
@@ -624,9 +661,13 @@ function LeaveApplyForm({
         <span className="mb-1 block font-semibold text-slate-600">내용</span>
         <textarea
           value={body}
-          onChange={e => setBody(e.target.value)}
+          onChange={e => {
+            setBodyDirty(true);
+            setBody(e.target.value);
+          }}
           rows={4}
           className={portalInput + ' w-full text-xs'}
+          placeholder="종류·기간에 맞춰 자동 작성됩니다. 필요 시 수정하세요."
         />
       </label>
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -653,7 +694,7 @@ function LeaveDetailPanel({
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const [note, setNote] = useState(item.reviewNote || '네');
+  const [note, setNote] = useState(item.reviewNote || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [me, setMe] = useState('');
