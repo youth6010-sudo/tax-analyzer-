@@ -14,6 +14,66 @@ export const CLIENT_SORT_STORAGE_KEY = 'clients.sort.v1';
 export const MANAGER_ORDER_STORAGE_KEY = 'clients.managerOrder.v1';
 export const MANAGER_CLIENT_ORDER_STORAGE_KEY = 'clients.managerClientOrder.v1';
 export const ROSTER_COLUMN_WIDTH_STORAGE_KEY = 'clients.rosterColumnWidth.v1';
+export const ROSTER_ENTITY_HEIGHTS_STORAGE_KEY = 'clients.rosterEntityHeights.v1';
+
+export type RosterEntityHeightKey = 'corporate' | 'personal' | 'other';
+
+export const DEFAULT_ROSTER_ENTITY_HEIGHTS: Record<RosterEntityHeightKey, number> = {
+  corporate: 220,
+  personal: 220,
+  other: 160,
+};
+
+export const MIN_ROSTER_ENTITY_HEIGHT = 110;
+/** 고정 상한 — 화면이 더 크면 getMaxRosterEntityHeight() 사용 */
+export const MAX_ROSTER_ENTITY_HEIGHT = 2400;
+
+export function getMaxRosterEntityHeight(): number {
+  if (typeof window === 'undefined') return MAX_ROSTER_ENTITY_HEIGHT;
+  return Math.max(MAX_ROSTER_ENTITY_HEIGHT, Math.round(window.innerHeight * 0.92));
+}
+
+export function readRosterEntityHeights(): Record<RosterEntityHeightKey, number> {
+  if (typeof window === 'undefined') return { ...DEFAULT_ROSTER_ENTITY_HEIGHTS };
+  try {
+    const raw = localStorage.getItem(ROSTER_ENTITY_HEIGHTS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_ROSTER_ENTITY_HEIGHTS };
+    const parsed = JSON.parse(raw) as Partial<Record<RosterEntityHeightKey, number>>;
+    const clamp = (n: unknown, fallback: number) => {
+      const v = typeof n === 'number' ? n : Number(n);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.min(getMaxRosterEntityHeight(), Math.max(MIN_ROSTER_ENTITY_HEIGHT, Math.round(v)));
+    };
+    return {
+      corporate: clamp(parsed.corporate, DEFAULT_ROSTER_ENTITY_HEIGHTS.corporate),
+      personal: clamp(parsed.personal, DEFAULT_ROSTER_ENTITY_HEIGHTS.personal),
+      other: clamp(parsed.other, DEFAULT_ROSTER_ENTITY_HEIGHTS.other),
+    };
+  } catch {
+    return { ...DEFAULT_ROSTER_ENTITY_HEIGHTS };
+  }
+}
+
+export function writeRosterEntityHeights(
+  next: Partial<Record<RosterEntityHeightKey, number>>,
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload = readRosterEntityHeights();
+    for (const key of ['corporate', 'personal', 'other'] as const) {
+      if (next[key] != null) {
+        payload[key] = Math.min(
+          getMaxRosterEntityHeight(),
+          Math.max(MIN_ROSTER_ENTITY_HEIGHT, Math.round(next[key]!)),
+        );
+      }
+    }
+    localStorage.setItem(ROSTER_ENTITY_HEIGHTS_STORAGE_KEY, JSON.stringify(payload));
+    window.dispatchEvent(new Event(`local-storage:${ROSTER_ENTITY_HEIGHTS_STORAGE_KEY}`));
+  } catch {
+    /* ignore */
+  }
+}
 
 /** 수임처 담당자 칸 기본·최소 너비 (이보다 줄일 수 없음) */
 export const DEFAULT_ROSTER_COLUMN_WIDTH = 300;

@@ -36,6 +36,7 @@ export const DETAIL_SKIP_KEYS = new Set([
   'withholdingSettings',
   'incomeTypes',
   'yearEndTypes',
+  'fiscalYearEndMonth',
   ...MAIN_META_INTAKE_KEYS,
 ]);
 

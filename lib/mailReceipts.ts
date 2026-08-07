@@ -13,6 +13,8 @@ export type MailReceiptView = {
   id: string;
   clientId: string | null;
   clientName: string;
+  /** 수임처 담당자 (clients.manager) */
+  clientManager: string;
   receivedAt: string;
   title: string;
   tags: string[];
@@ -72,11 +74,13 @@ function normalizeImages(raw: unknown, opts?: { strict?: boolean }): MailReceipt
 function toView(
   row: typeof mailReceipts.$inferSelect,
   clientName = '',
+  clientManager = '',
 ): MailReceiptView {
   return {
     id: row.id,
     clientId: row.clientId,
     clientName,
+    clientManager: (clientManager || '').trim(),
     receivedAt: row.receivedAt || '',
     title: row.title || '',
     tags: normalizeTags(row.tags),
@@ -125,13 +129,14 @@ export async function listMailReceipts(opts?: {
     .select({
       receipt: mailReceipts,
       clientName: clients.companyName,
+      clientManager: clients.manager,
     })
     .from(mailReceipts)
     .leftJoin(clients, eq(mailReceipts.clientId, clients.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(mailReceipts.receivedAt), desc(mailReceipts.createdAt));
 
-  return rows.map(r => toView(r.receipt, r.clientName ?? ''));
+  return rows.map(r => toView(r.receipt, r.clientName ?? '', r.clientManager ?? ''));
 }
 
 export async function getMailReceipt(id: string): Promise<MailReceiptView | null> {
@@ -140,13 +145,14 @@ export async function getMailReceipt(id: string): Promise<MailReceiptView | null
     .select({
       receipt: mailReceipts,
       clientName: clients.companyName,
+      clientManager: clients.manager,
     })
     .from(mailReceipts)
     .leftJoin(clients, eq(mailReceipts.clientId, clients.id))
     .where(eq(mailReceipts.id, id))
     .limit(1);
   if (!row) return null;
-  return toView(row.receipt, row.clientName ?? '');
+  return toView(row.receipt, row.clientName ?? '', row.clientManager ?? '');
 }
 
 export async function createMailReceipt(input: {
@@ -163,7 +169,7 @@ export async function createMailReceipt(input: {
 
   const db = getDb();
   const [client] = await db
-    .select({ id: clients.id, companyName: clients.companyName })
+    .select({ id: clients.id, companyName: clients.companyName, manager: clients.manager })
     .from(clients)
     .where(eq(clients.id, clientId))
     .limit(1);
@@ -186,7 +192,7 @@ export async function createMailReceipt(input: {
     })
     .returning();
 
-  return toView(row, client.companyName);
+  return toView(row, client.companyName, client.manager ?? '');
 }
 
 export async function updateMailReceipt(
@@ -206,17 +212,19 @@ export async function updateMailReceipt(
 
   let nextClientId = existing.clientId;
   let nextClientName = existing.clientName;
+  let nextClientManager = existing.clientManager;
   if (input.clientId !== undefined) {
     const clientId = input.clientId.trim();
     if (!clientId) throw new Error('수임처를 선택해 주세요.');
     const [client] = await db
-      .select({ id: clients.id, companyName: clients.companyName })
+      .select({ id: clients.id, companyName: clients.companyName, manager: clients.manager })
       .from(clients)
       .where(eq(clients.id, clientId))
       .limit(1);
     if (!client) throw new Error('선택한 수임처를 찾을 수 없습니다.');
     nextClientId = client.id;
     nextClientName = client.companyName;
+    nextClientManager = client.manager ?? '';
   }
 
   const patch: Partial<typeof mailReceipts.$inferInsert> = {
@@ -235,7 +243,7 @@ export async function updateMailReceipt(
     .where(eq(mailReceipts.id, id))
     .returning();
 
-  return toView(row, nextClientName);
+  return toView(row, nextClientName, nextClientManager);
 }
 
 export async function deleteMailReceipt(id: string): Promise<boolean> {

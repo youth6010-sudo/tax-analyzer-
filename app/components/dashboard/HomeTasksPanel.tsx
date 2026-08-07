@@ -25,11 +25,12 @@ import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import PersonalChecklistAddForm from '@/app/components/calendar/PersonalChecklistAddForm';
 import CompanyEventAddForm from '@/app/components/calendar/CompanyEventAddForm';
 import CenterModal from '@/app/components/portal/CenterModal';
+import { portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgress';
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
-import type { LeaveRequestDto } from '@/app/types/leave';
-import { formatLeaveKindLabel } from '@/app/types/leave';
+import type { LeaveNotificationDto, LeaveRequestDto } from '@/app/types/leave';
+import { formatLeaveKindLabel, leaveStatusLabel } from '@/app/types/leave';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -182,7 +183,12 @@ export default function HomeTasksPanel() {
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [leavePending, setLeavePending] = useState<LeaveRequestDto[]>([]);
+  const [leaveNotifs, setLeaveNotifs] = useState<LeaveNotificationDto[]>([]);
   const [canApproveLeaveUi, setCanApproveLeaveUi] = useState(false);
+  const [leaveReview, setLeaveReview] = useState<LeaveRequestDto | null>(null);
+  const [leaveReviewNote, setLeaveReviewNote] = useState('');
+  const [leaveReviewBusy, setLeaveReviewBusy] = useState(false);
+  const [leaveReviewError, setLeaveReviewError] = useState('');
 
   /** 미완료 배지·필터용 — 비품·시스템개선은 전용 섹션 */
   const isPersonalDone = (p: PersonalChecklistDto) => {
@@ -224,7 +230,11 @@ export default function HomeTasksPanel() {
     [companyEvents],
   );
   const totalPending =
-    personalPending + companyPending + clientTasks.length + leavePending.length;
+    personalPending +
+    companyPending +
+    clientTasks.length +
+    leavePending.length +
+    leaveNotifs.length;
 
   const handleShowCompletedChange = (show: boolean) => {
     setShowCompleted(show);
@@ -284,6 +294,21 @@ export default function HomeTasksPanel() {
       } else {
         setLeavePending([]);
         setCanApproveLeaveUi(false);
+      }
+
+      const leaveNotifRes = await fetchWithTimeout('/api/leave/notifications', {}, 10_000);
+      if (leaveNotifRes.ok) {
+        const payload = (await leaveNotifRes.json()) as { items?: LeaveNotificationDto[] };
+        // 신청자 완료/반려 알림만 홈에 노출 (결재 요청 알림은 결재 대기 목록으로 충분)
+        const items = (payload.items || []).filter(
+          n =>
+            n.title.includes('휴가 승인') ||
+            n.title.includes('휴가 반려') ||
+            n.title.includes('휴가 취소'),
+        );
+        setLeaveNotifs(items);
+      } else {
+        setLeaveNotifs([]);
       }
     } catch { /* ignore */ }
     finally {
@@ -434,6 +459,40 @@ export default function HomeTasksPanel() {
     setEditModal(null);
     setEditItem(null);
     setEditCompany(null);
+  };
+
+  const openLeaveReview = (item: LeaveRequestDto) => {
+    setLeaveReview(item);
+    setLeaveReviewNote('');
+    setLeaveReviewError('');
+  };
+
+  const closeLeaveReview = () => {
+    setLeaveReview(null);
+    setLeaveReviewNote('');
+    setLeaveReviewError('');
+    setLeaveReviewBusy(false);
+  };
+
+  const submitLeaveReview = async (action: 'approve' | 'reject') => {
+    if (!leaveReview) return;
+    setLeaveReviewBusy(true);
+    setLeaveReviewError('');
+    try {
+      const res = await fetch(`/api/leave/requests/${leaveReview.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reviewNote: leaveReviewNote }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '처리 실패');
+      closeLeaveReview();
+      void refresh();
+    } catch (e) {
+      setLeaveReviewError(e instanceof Error ? e.message : '처리 실패');
+    } finally {
+      setLeaveReviewBusy(false);
+    }
   };
 
   const openPersonalEdit = (item: PersonalChecklistDto) => {
@@ -844,26 +903,73 @@ export default function HomeTasksPanel() {
               )}
             </SectionCard>
 
-            {canApproveLeaveUi && (
+            {(canApproveLeaveUi || leaveNotifs.length > 0) && (
               <SectionCard
                 title="휴가 결재"
-                count={leavePending.length}
+                count={leavePending.length + leaveNotifs.length}
                 open={sections.leave}
                 onToggle={() => toggleSection('leave')}
               >
-                {leavePending.length === 0 ? (
+                {leavePending.length === 0 && leaveNotifs.length === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
                 ) : (
                   <ul className="space-y-1.5">
+                    {leaveNotifs.map(n => (
+                      <li
+                        key={n.id}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-sm shadow-sm"
+                      >
+                        <p className="font-semibold text-slate-800">{n.title}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {n.actorName} · 처리 완료
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void (async () => {
+                                await fetch('/api/leave/notifications', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: n.id }),
+                                });
+                                setLeaveNotifs(prev => prev.filter(x => x.id !== n.id));
+                              })();
+                            }}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                          >
+                            확인
+                          </button>
+                          <Link
+                            href="/leave"
+                            className="text-[11px] font-semibold text-emerald-700 underline-offset-2 hover:underline"
+                          >
+                            휴가관리
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
                     {leavePending.map(item => (
                       <li
                         key={item.id}
-                        className="rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openLeaveReview(item)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openLeaveReview(item);
+                          }
+                        }}
+                        className="cursor-pointer rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm hover:border-teal-300"
                       >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <p className="font-semibold text-slate-800">{item.applicantName}</p>
                           <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
                             {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
+                          </span>
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                            {leaveStatusLabel(item.status, item.approvalStep)}
                           </span>
                           <span className="text-[11px] font-semibold text-teal-800">{item.days}일</span>
                         </div>
@@ -872,12 +978,18 @@ export default function HomeTasksPanel() {
                           {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
                           {item.title ? ` · ${item.title}` : ''}
                         </p>
-                        <Link
-                          href="/leave"
-                          className="mt-2 inline-block text-[11px] font-semibold text-teal-700 underline-offset-2 hover:underline"
-                        >
-                          휴가관리에서 결재
-                        </Link>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              openLeaveReview(item);
+                            }}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                          >
+                            {item.status === 'cancel_requested' ? '취소 승인 / 반려' : '승인 / 반려'}
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -1120,6 +1232,102 @@ export default function HomeTasksPanel() {
           onCreated={() => { closeModal(); void refresh(); }}
           onCancel={closeModal}
         />
+      </CenterModal>
+
+      <CenterModal
+        open={!!leaveReview}
+        title={leaveReview?.status === 'cancel_requested' ? '휴가 취소 결재' : '휴가 결재'}
+        description={
+          leaveReview?.status === 'cancel_requested'
+            ? '취소 승인 시 휴가가 취소되고 연차·캘린더에서 빠집니다. 반려하면 이전 상태로 돌아갑니다.'
+            : leaveReview?.approvalStep === 'team_lead'
+              ? '팀장 승인 시 인디 최종 결재로 넘어갑니다.'
+              : '최종 승인 시 연차가 반영되고 캘린더에 표시됩니다.'
+        }
+        onClose={closeLeaveReview}
+      >
+        {leaveReview && (
+          <div className="space-y-3 text-sm">
+            <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1.5 text-xs">
+              <dt className="font-semibold text-slate-500">신청자</dt>
+              <dd className="font-semibold text-slate-900">{leaveReview.applicantName}</dd>
+              <dt className="font-semibold text-slate-500">구분</dt>
+              <dd>{formatLeaveKindLabel(leaveReview.leaveKind, leaveReview.halfSlot)}</dd>
+              <dt className="font-semibold text-slate-500">제목</dt>
+              <dd>{leaveReview.title}</dd>
+              <dt className="font-semibold text-slate-500">기간</dt>
+              <dd className="tabular-nums">
+                {leaveReview.startDate === leaveReview.endDate
+                  ? leaveReview.startDate
+                  : `${leaveReview.startDate} ~ ${leaveReview.endDate}`}
+                {' · '}
+                {leaveReview.days}일
+              </dd>
+              <dt className="font-semibold text-slate-500">상태</dt>
+              <dd>{leaveStatusLabel(leaveReview.status, leaveReview.approvalStep)}</dd>
+            </dl>
+            {leaveReview.body ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold text-slate-500">내용</p>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                  {leaveReview.body}
+                </p>
+              </div>
+            ) : null}
+            {leaveReview.teamLeadReviewedBy ? (
+              <p className="text-xs text-slate-600">
+                팀장 의견: {leaveReview.teamLeadReviewedBy}
+                {leaveReview.teamLeadReviewNote ? ` · ${leaveReview.teamLeadReviewNote}` : ''}
+              </p>
+            ) : null}
+            {leaveReview.status === 'cancel_requested' ? (
+              <p className="text-xs text-slate-600">
+                취소 요청 사유: {leaveReview.cancelRequestNote || '—'}
+              </p>
+            ) : null}
+            <label className="block text-xs">
+              <span className="mb-1 block font-semibold text-slate-600">검토 의견 (선택)</span>
+              <input
+                value={leaveReviewNote}
+                onChange={e => setLeaveReviewNote(e.target.value)}
+                className={portalInput + ' w-full text-xs'}
+                placeholder="필요 시 의견을 남겨 주세요"
+              />
+            </label>
+            {leaveReviewError ? <p className="text-xs text-red-600">{leaveReviewError}</p> : null}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={leaveReviewBusy}
+                onClick={() => void submitLeaveReview('approve')}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {leaveReviewBusy
+                  ? '처리 중…'
+                  : leaveReview.status === 'cancel_requested'
+                    ? '취소 승인'
+                    : leaveReview.approvalStep === 'team_lead'
+                      ? '팀장 승인'
+                      : '승인'}
+              </button>
+              <button
+                type="button"
+                disabled={leaveReviewBusy}
+                onClick={() => void submitLeaveReview('reject')}
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {leaveReview.status === 'cancel_requested' ? '취소 반려' : '반려'}
+              </button>
+              <button
+                type="button"
+                onClick={closeLeaveReview}
+                className={portalBtnSecondary + ' text-xs py-1.5'}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
       </CenterModal>
     </>
   );

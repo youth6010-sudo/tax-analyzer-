@@ -31,6 +31,8 @@ export const LIST_INTAKE_KEYS = [
   /** 부가세 자료 플래그·신고분 수수료 (진행도 맵은 제외) */
   'vatMaterialFlags',
   'vatFilingFees',
+  /** 법인 결산월 (수임처 목록 6월말 등 배지) */
+  'fiscalYearEndMonth',
 ] as const;
 
 /** 부가세 검토표(진행도·연간) API 전용 — 목록 slim에 넣지 않음 */

@@ -559,20 +559,31 @@ export const leaveRequests = pgTable('leave_requests', {
   endDate: text('end_date').notNull(),
   /** 사용 일수 문자열 (0.5, 1, 2 …) */
   days: text('days').notNull().default('1'),
-  /** pending | approved | rejected | cancelled */
+  /** pending | approved | rejected | cancelled | cancel_requested */
   status: text('status').notNull().default('pending'),
+  /** team_lead | final — 현재 결재 단계 */
+  approvalStep: text('approval_step').notNull().default('final'),
+  teamLeadReviewedBy: text('team_lead_reviewed_by').notNull().default(''),
+  teamLeadReviewedAt: timestamp('team_lead_reviewed_at', { withTimezone: true }),
+  teamLeadReviewNote: text('team_lead_review_note').notNull().default(''),
   reviewNote: text('review_note').notNull().default(''),
   reviewedBy: text('reviewed_by').notNull().default(''),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  /** 승인 후 취소 요청 */
+  cancelRequestNote: text('cancel_request_note').notNull().default(''),
+  cancelRequestedAt: timestamp('cancel_requested_at', { withTimezone: true }),
+  /** approved | pending — 취소 요청 전 상태 (반려 시 복원) */
+  cancelRequestFromStatus: text('cancel_request_from_status').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   index('leave_requests_applicant_idx').on(t.applicantName, t.status),
   index('leave_requests_status_idx').on(t.status),
   index('leave_requests_dates_idx').on(t.startDate, t.endDate),
+  index('leave_requests_approval_step_idx').on(t.status, t.approvalStep),
 ]);
 
-/** 휴가 신청 알림 (결재자 인디) */
+/** 휴가 신청 알림 (결재자·신청자) */
 export const leaveNotifications = pgTable('leave_notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
   leaveRequestId: uuid('leave_request_id')

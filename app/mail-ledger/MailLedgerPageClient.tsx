@@ -415,7 +415,10 @@ export default function MailLedgerPageClient() {
   }, []);
 
   const groups = useMemo(() => {
-    const map = new Map<string, { clientId: string; clientName: string; items: MailReceiptView[] }>();
+    const map = new Map<
+      string,
+      { clientId: string; clientName: string; clientManager: string; items: MailReceiptView[] }
+    >();
     for (const item of items) {
       const key = item.clientId || item.clientName || 'unknown';
       const existing = map.get(key);
@@ -424,6 +427,7 @@ export default function MailLedgerPageClient() {
         map.set(key, {
           clientId: item.clientId || '',
           clientName: item.clientName || '수임처 미연결',
+          clientManager: item.clientManager || '',
           items: [item],
         });
       }
@@ -510,7 +514,14 @@ export default function MailLedgerPageClient() {
           {groups.map(group => (
             <li key={group.clientId || group.clientName} className={`${portalCard} p-4`}>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-base font-bold text-slate-900">{group.clientName}</h2>
+                <h2 className="text-base font-bold text-slate-900">
+                  {group.clientName}
+                  {group.clientManager ? (
+                    <span className="ml-2 text-sm font-semibold text-slate-500">
+                      · {group.clientManager}
+                    </span>
+                  ) : null}
+                </h2>
                 <p className="text-xs text-slate-500">{group.items.length}건</p>
               </div>
               <ul className="space-y-3">

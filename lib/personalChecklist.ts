@@ -53,6 +53,10 @@ function assigneesForTaxType(
   names: string[] | undefined | null,
   ownerName: string,
 ): string[] {
+  if (isSuppliesOrderTaxType(taxType)) {
+    if (managerNamesMatch(ownerName, SUPPLIES_ORDER_ASSIGNEE)) return [];
+    return [SUPPLIES_ORDER_ASSIGNEE];
+  }
   let base = normalizeAssignees(names, ownerName);
   // 시스템 개선: 다야는 협업자에서 제외 (비품 담당과 혼동 방지)
   if (isImprovementRequestTaxType(taxType)) {
@@ -64,6 +68,12 @@ function assigneesForTaxType(
   for (const name of forced) {
     if (name === ownerName) continue;
     if (!out.includes(name)) out.push(name);
+  }
+  // 시스템개선: 고정 외 인원 제거
+  if (isImprovementRequestTaxType(taxType)) {
+    return out.filter(n =>
+      IMPROVEMENT_REQUEST_ASSIGNEES.some(a => managerNamesMatch(n, a)),
+    );
   }
   return out;
 }
@@ -128,8 +138,8 @@ function toBaseDto(
 ): PersonalChecklistDto {
   const taxType = checklistTaxTypeFromRow(row);
   const rawAssignees = (row.assigneeNames as string[] | null | undefined) ?? [];
-  // 시스템 개선은 저장·표시 모두 다야 제외 + 고정 협업자 반영
-  const assigneeNames = isImprovementRequestTaxType(taxType)
+  // 비품·시스템개선: 고정 협업자만 표시·저장 기준
+  const assigneeNames = isRoutedRequestTaxType(taxType)
     ? assigneesForTaxType(taxType, rawAssignees, row.ownerName)
     : normalizeAssignees(rawAssignees, row.ownerName);
   const participants = checkoffParticipants(taxType, row.ownerName, assigneeNames);

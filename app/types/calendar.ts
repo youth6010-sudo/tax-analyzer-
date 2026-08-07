@@ -7,9 +7,10 @@ export type ChecklistTaxType =
   | 'corporate'
   | 'other'
   | 'supplies'
-  | 'improvement';
+  | 'improvement'
+  | 'leave';
 
-export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other'> | '';
+export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other' | 'leave'> | '';
 
 /** 비품주문요청 — 기본 협업자 */
 export const SUPPLIES_ORDER_ASSIGNEE = '다야';
@@ -260,6 +261,7 @@ export const CHECKLIST_TAX_OPTIONS: { id: ChecklistTaxType; label: string }[] = 
   { id: 'other', label: '기타' },
   { id: 'supplies', label: '비품 주문 요청' },
   { id: 'improvement', label: '시스템 개선 요청' },
+  { id: 'leave', label: '휴가신청' },
 ];
 
 export function isSuppliesOrderTaxType(taxType: ChecklistTaxType | string | null | undefined): boolean {
@@ -270,6 +272,12 @@ export function isImprovementRequestTaxType(
   taxType: ChecklistTaxType | string | null | undefined,
 ): boolean {
   return taxType === 'improvement';
+}
+
+export function isLeaveRequestTaxType(
+  taxType: ChecklistTaxType | string | null | undefined,
+): boolean {
+  return taxType === 'leave';
 }
 
 export function checklistTaxTypeFromRow(row: {
@@ -290,7 +298,7 @@ export function normalizeChecklistTaxType(taxType: ChecklistTaxType): {
   category: ChecklistCategory;
   taxType: StoredChecklistTaxType;
 } {
-  if (taxType === 'other') return { category: 'other', taxType: '' };
+  if (taxType === 'other' || taxType === 'leave') return { category: 'other', taxType: '' };
   if (taxType === 'supplies') return { category: 'other', taxType: 'supplies' };
   if (taxType === 'improvement') return { category: 'other', taxType: 'improvement' };
   return { category: 'tax', taxType };

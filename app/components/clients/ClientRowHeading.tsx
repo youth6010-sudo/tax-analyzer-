@@ -1,6 +1,6 @@
 'use client';
 
-type BadgeTone = 'amber' | 'sky' | 'violet';
+type BadgeTone = 'amber' | 'sky' | 'violet' | 'rose';
 
 export type ClientRowBadge = {
   label: string;
@@ -11,6 +11,7 @@ const BADGE_TONE: Record<BadgeTone, string> = {
   amber: 'text-amber-800 bg-amber-100 ring-1 ring-amber-200/80',
   sky: 'text-sky-800 bg-sky-100 ring-1 ring-sky-200/80',
   violet: 'text-violet-800 bg-violet-100 ring-1 ring-violet-200/80',
+  rose: 'text-rose-800 bg-rose-100 ring-1 ring-rose-200/80',
 };
 
 type Props = {

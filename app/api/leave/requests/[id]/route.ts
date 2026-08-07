@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { canApproveLeave } from '@/lib/leaveAccess';
+import {
+  canApproveLeaveFinal,
+  canReviewLeaveRequest,
+  canViewLeavePendingQueue,
+} from '@/lib/leaveAccess';
 import {
   cancelLeaveRequest,
+  deleteCancelledLeaveRequest,
   getLeaveRequest,
+  requestLeaveCancel,
+  reviewLeaveCancelRequest,
   reviewLeaveRequest,
+  withdrawLeaveCancelRequest,
 } from '@/lib/leaveDb';
 
 export async function GET(
@@ -16,10 +24,17 @@ export async function GET(
     const { id } = await params;
     const item = await getLeaveRequest(id);
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (item.applicantName !== user.name && !canApproveLeave(user)) {
+    if (
+      item.applicantName !== user.name &&
+      !canViewLeavePendingQueue(user) &&
+      !canApproveLeaveFinal(user)
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    return NextResponse.json({ item });
+    return NextResponse.json({
+      item,
+      canApprove: canReviewLeaveRequest(user, item),
+    });
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -33,8 +48,15 @@ export async function PATCH(
     const user = await requireUser();
     const { id } = await params;
     const body = (await req.json()) as {
-      action?: 'approve' | 'reject' | 'cancel';
+      action?:
+        | 'approve'
+        | 'reject'
+        | 'cancel'
+        | 'delete'
+        | 'request_cancel'
+        | 'withdraw_cancel';
       reviewNote?: string;
+      cancelNote?: string;
     };
 
     if (body.action === 'cancel') {
@@ -42,9 +64,39 @@ export async function PATCH(
       return NextResponse.json({ item });
     }
 
+    if (body.action === 'request_cancel') {
+      const item = await requestLeaveCancel(
+        id,
+        user.name,
+        body.cancelNote ?? body.reviewNote,
+      );
+      return NextResponse.json({ item });
+    }
+
+    if (body.action === 'withdraw_cancel') {
+      const item = await withdrawLeaveCancelRequest(id, user.name);
+      return NextResponse.json({ item });
+    }
+
+    if (body.action === 'delete') {
+      await deleteCancelledLeaveRequest(id, user.name);
+      return NextResponse.json({ ok: true });
+    }
+
     if (body.action === 'approve' || body.action === 'reject') {
-      if (!canApproveLeave(user)) {
-        return NextResponse.json({ error: '연차 승인은 인디만 할 수 있습니다.' }, { status: 403 });
+      const existing = await getLeaveRequest(id);
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (!canReviewLeaveRequest(user, existing)) {
+        return NextResponse.json({ error: '이 단계의 결재 권한이 없습니다.' }, { status: 403 });
+      }
+      if (existing.status === 'cancel_requested') {
+        const item = await reviewLeaveCancelRequest(
+          id,
+          user.name,
+          body.action === 'approve' ? 'approved' : 'rejected',
+          body.reviewNote,
+        );
+        return NextResponse.json({ item });
       }
       const item = await reviewLeaveRequest(
         id,

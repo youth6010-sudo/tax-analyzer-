@@ -1,24 +1,54 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { canApproveLeave } from '@/lib/leaveAccess';
-import { createLeaveRequest, listLeaveRequests } from '@/lib/leaveDb';
-import type { LeaveKind, LeaveHalfSlot, LeaveRequestStatus } from '@/app/types/leave';
+import {
+  canViewAllLeaveRequests,
+  canViewLeavePendingQueue,
+} from '@/lib/leaveAccess';
+import {
+  createLeaveRequest,
+  listLeaveRequests,
+  listPendingLeaveForApprover,
+} from '@/lib/leaveDb';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
+import type { LeaveKind, LeaveHalfSlot } from '@/app/types/leave';
 
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
     const url = new URL(req.url);
     const mine = url.searchParams.get('mine') === '1';
+    const all = url.searchParams.get('all') === '1';
     const pending = url.searchParams.get('pending') === '1';
+    const applicant = (url.searchParams.get('applicant') || '').trim();
     const yearParam = url.searchParams.get('year');
     const year = yearParam ? Number(yearParam) : undefined;
+    const canApprove = canViewLeavePendingQueue(user);
+    const canViewAll = canViewAllLeaveRequests(user);
 
     if (pending) {
-      if (!canApproveLeave(user)) {
-        return NextResponse.json({ error: '결재 목록은 인디만 볼 수 있습니다.' }, { status: 403 });
+      if (!canApprove) {
+        return NextResponse.json({ error: '결재 목록 권한이 없습니다.' }, { status: 403 });
       }
-      const items = await listLeaveRequests({ status: 'pending', year });
-      return NextResponse.json({ items, canApprove: true });
+      const items = await listPendingLeaveForApprover(user, year);
+      return NextResponse.json({ items, canApprove: true, canViewAll });
+    }
+
+    // 인디: 전체 현황 (담당자 필터 선택 가능)
+    if (all || (mine && canViewAll)) {
+      if (!canViewAll) {
+        return NextResponse.json({ error: '전체 현황 권한이 없습니다.' }, { status: 403 });
+      }
+      const items = await listLeaveRequests({
+        applicantName: applicant || undefined,
+        year,
+      });
+      const members = await listCalendarTeamMembers();
+      return NextResponse.json({
+        items,
+        canApprove,
+        canViewAll: true,
+        members,
+      });
     }
 
     const items = await listLeaveRequests({
@@ -26,8 +56,13 @@ export async function GET(req: Request) {
       year,
     });
     return NextResponse.json({
-      items: mine ? items : canApproveLeave(user) ? items : items.filter(i => i.applicantName === user.name),
-      canApprove: canApproveLeave(user),
+      items: mine
+        ? items
+        : canApprove
+          ? items
+          : items.filter(i => i.applicantName === user.name),
+      canApprove,
+      canViewAll,
     });
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -50,7 +85,7 @@ export async function POST(req: Request) {
     }
     const leaveKind: LeaveKind = body.leaveKind === 'half' ? 'half' : 'full';
     const item = await createLeaveRequest(user.name, {
-      title: body.title || (leaveKind === 'half' ? '반차 승인 계획서' : '연차 승인 계획서'),
+      title: body.title || (leaveKind === 'half' ? '반차 승인 요청' : '연차 승인 요청'),
       body: body.body,
       leaveKind,
       halfSlot: body.halfSlot,

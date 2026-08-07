@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import { portalBtnPrimary, portalBtnSecondary, portalInput, portalMain } from '@/app/components/portal/uiClasses';
 import CenterModal from '@/app/components/portal/CenterModal';
-import type { LeaveBalanceDto, LeaveHalfSlot, LeaveKind, LeaveRequestDto } from '@/app/types/leave';
+import LeaveApplyForm from '@/app/components/leave/LeaveApplyForm';
+import type { LeaveBalanceDto, LeaveRequestDto } from '@/app/types/leave';
 import {
   formatLeaveKindLabel,
   leaveStatusLabel,
 } from '@/app/types/leave';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
-
+import { canReviewLeaveRequest } from '@/lib/leaveAccess';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 type Tab = 'balances' | 'mine' | 'pending';
 
 function formatNum(n: number): string {
@@ -24,7 +26,10 @@ export default function LeavePageClient() {
   const [balances, setBalances] = useState<LeaveBalanceDto[]>([]);
   const [canManage, setCanManage] = useState(false);
   const [canApprove, setCanApprove] = useState(false);
+  const [canViewAll, setCanViewAll] = useState(false);
   const [mine, setMine] = useState<LeaveRequestDto[]>([]);
+  const [statusMembers, setStatusMembers] = useState<string[]>([]);
+  const [memberFilter, setMemberFilter] = useState('');
   const [pending, setPending] = useState<LeaveRequestDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,12 +46,29 @@ export default function LeavePageClient() {
   }, [year]);
 
   const loadMine = useCallback(async () => {
-    const res = await fetchWithTimeout(`/api/leave/requests?mine=1&year=${year}`, { cache: 'no-store' }, 15_000);
+    const qs = new URLSearchParams({ year: String(year) });
+    if (memberFilter) qs.set('applicant', memberFilter);
+    // 인디: all=1 (전체). 실패하면 본인만.
+    let res = await fetchWithTimeout(
+      `/api/leave/requests?all=1&${qs}`,
+      { cache: 'no-store' },
+      15_000,
+    );
+    if (res.status === 403) {
+      res = await fetchWithTimeout(
+        `/api/leave/requests?mine=1&year=${year}`,
+        { cache: 'no-store' },
+        15_000,
+      );
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as { error?: string }).error || '신청 조회 실패');
     setMine((data as { items: LeaveRequestDto[] }).items || []);
     setCanApprove(!!(data as { canApprove?: boolean }).canApprove);
-  }, [year]);
+    setCanViewAll(!!(data as { canViewAll?: boolean }).canViewAll);
+    const members = (data as { members?: string[] }).members;
+    if (members?.length) setStatusMembers(members);
+  }, [year, memberFilter]);
 
   const loadPending = useCallback(async () => {
     const res = await fetchWithTimeout(`/api/leave/requests?pending=1&year=${year}`, { cache: 'no-store' }, 15_000);
@@ -121,7 +143,7 @@ export default function LeavePageClient() {
   const tabs = useMemo(() => {
     const list: { id: Tab; label: string }[] = [
       { id: 'balances', label: '연차 잔고' },
-      { id: 'mine', label: '내 신청' },
+      { id: 'mine', label: '휴가현황' },
     ];
     if (canApprove) list.push({ id: 'pending', label: `결재 대기 (${pending.length})` });
     return list;
@@ -134,8 +156,10 @@ export default function LeavePageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              신청 후 인디 세무사 승인 시 연차가 사용됩니다. 잔고는 본인만 보이며, 전체 조회·수정은
-              인디·페리만 가능합니다.
+              팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
+              결재됩니다. 최종 승인 시 연차 사용·캘린더 반영. 결재 대기 중에는 바로 취소할 수
+              있고, 이미 승인된 휴가는 취소 요청 후 인디가 승인해야 취소됩니다(팀장 단계 없음).
+              잔고 전체 조회·수정은 인디·페리만 가능합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -189,11 +213,36 @@ export default function LeavePageClient() {
             onEdit={row => setEditBalance({ ...row })}
           />
         ) : tab === 'mine' ? (
-          <RequestTable
-            items={mine}
-            onOpen={setDetail}
-            empty="신청 내역이 없습니다."
-          />
+          <div className="space-y-3">
+            {canViewAll && (
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600">
+                  담당자
+                  <select
+                    value={memberFilter}
+                    onChange={e => setMemberFilter(e.target.value)}
+                    className={portalInput + ' ml-1.5 text-xs py-1'}
+                  >
+                    <option value="">전체</option>
+                    {(statusMembers.length
+                      ? statusMembers
+                      : [...new Set(mine.map(i => i.applicantName))]
+                    ).map(name => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="text-[11px] text-slate-500">총 {mine.length}건</span>
+              </div>
+            )}
+            <RequestTable
+              items={mine}
+              onOpen={setDetail}
+              empty="신청 내역이 없습니다."
+            />
+          </div>
         ) : (
           <RequestTable
             items={pending}
@@ -224,7 +273,7 @@ export default function LeavePageClient() {
       <CenterModal
         open={applyOpen}
         title="휴가 신청"
-        description="연차 또는 오전/오후 반차를 신청합니다. 인디 승인 후 반영됩니다."
+        description="연차 또는 오전/오후 반차를 신청합니다."
         onClose={() => setApplyOpen(false)}
       >
         <LeaveApplyForm
@@ -280,7 +329,8 @@ function BalancesTable({
             <th className="px-3 py-2.5 font-semibold">증가</th>
             <th className="px-3 py-2.5 font-semibold">감소</th>
             <th className="px-3 py-2.5 font-semibold">휴가 일수</th>
-            <th className="px-3 py-2.5 font-semibold">사용</th>
+            <th className="px-3 py-2.5 font-semibold">사용일</th>
+            <th className="px-3 py-2.5 font-semibold">신청일</th>
             <th className="px-3 py-2.5 font-semibold">잔여</th>
             {canManage && <th className="px-3 py-2.5 font-semibold" />}
           </tr>
@@ -297,6 +347,9 @@ function BalancesTable({
               <td className="px-3 py-2.5 tabular-nums">{formatNum(row.decrease)}</td>
               <td className="px-3 py-2.5 tabular-nums font-semibold">{formatNum(row.totalDays)}</td>
               <td className="px-3 py-2.5 tabular-nums">{formatNum(row.usedDays)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-amber-800">
+                {formatNum(row.pendingDays ?? 0)}
+              </td>
               <td className="px-3 py-2.5 tabular-nums font-bold text-[#1e3a8a]">
                 {formatNum(row.remainingDays)}
               </td>
@@ -336,7 +389,8 @@ function RequestTable({
       <table className="w-full min-w-[40rem] text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-            <th className="px-3 py-2.5 font-semibold">일자</th>
+            <th className="px-3 py-2.5 font-semibold">신청일</th>
+            <th className="px-3 py-2.5 font-semibold">휴가일</th>
             <th className="px-3 py-2.5 font-semibold">상태</th>
             <th className="px-3 py-2.5 font-semibold">구분</th>
             <th className="px-3 py-2.5 font-semibold">제목</th>
@@ -352,12 +406,15 @@ function RequestTable({
               onClick={() => onOpen(item)}
             >
               <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
+                {formatRequestDate(item.createdAt)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
                 {item.startDate === item.endDate
                   ? item.startDate
                   : `${item.startDate} ~ ${item.endDate}`}
               </td>
               <td className="px-3 py-2.5">
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.status} approvalStep={item.approvalStep} />
               </td>
               <td className="px-3 py-2.5 text-slate-600">
                 {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
@@ -375,8 +432,24 @@ function RequestTable({
   );
 }
 
-function StatusBadge({ status }: { status: LeaveRequestDto['status'] }) {
-  const label = leaveStatusLabel(status);
+function formatRequestDate(iso: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function StatusBadge({
+  status,
+  approvalStep,
+}: {
+  status: LeaveRequestDto['status'];
+  approvalStep?: LeaveRequestDto['approvalStep'];
+}) {
+  const label = leaveStatusLabel(status, approvalStep);
   const cls =
     status === 'approved'
       ? 'bg-emerald-50 text-emerald-700'
@@ -384,7 +457,11 @@ function StatusBadge({ status }: { status: LeaveRequestDto['status'] }) {
         ? 'bg-red-50 text-red-700'
         : status === 'cancelled'
           ? 'bg-slate-100 text-slate-500'
-          : 'bg-amber-50 text-amber-800';
+          : status === 'cancel_requested'
+            ? 'bg-orange-50 text-orange-800'
+            : approvalStep === 'team_lead'
+              ? 'bg-sky-50 text-sky-800'
+              : 'bg-amber-50 text-amber-800';
   return (
     <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>
   );
@@ -496,196 +573,9 @@ function BalanceEditForm({
   );
 }
 
-/** 휴가 종류·기간으로 신청 내용 초안 생성 */
-function buildLeaveBodyDraft(
-  leaveKind: LeaveKind,
-  halfSlot: LeaveHalfSlot,
-  startDate: string,
-  endDate: string,
-): string {
-  if (leaveKind === 'half') {
-    const slot = halfSlot === 'pm' ? '오후 반차' : '오전 반차';
-    return `${slot} 휴가 신청합니다. (${startDate}, 0.5일)`;
-  }
-  const end = endDate || startDate;
-  if (!startDate) return '연차 휴가 신청합니다.';
-  if (startDate === end) {
-    return `연차 휴가 신청합니다. (${startDate}, 1일)`;
-  }
-  const a = new Date(`${startDate}T00:00:00`);
-  const b = new Date(`${end}T00:00:00`);
-  const days =
-    Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a
-      ? 0
-      : Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
-  if (days < 1) return `연차 휴가 신청합니다. (${startDate} ~ ${end})`;
-  return `연차 휴가 신청합니다. (${startDate} ~ ${end}, ${days}일)`;
-}
-
-function LeaveApplyForm({
-  onCancel,
-  onCreated,
-}: {
-  onCancel: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [leaveKind, setLeaveKind] = useState<LeaveKind>('full');
-  const [halfSlot, setHalfSlot] = useState<LeaveHalfSlot>('am');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-  const [title, setTitle] = useState('연차 승인 계획서');
-  const [body, setBody] = useState(() => buildLeaveBodyDraft('full', 'am', today, today));
-  const [bodyDirty, setBodyDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (leaveKind === 'half') {
-      setEndDate(startDate);
-      setTitle(halfSlot === 'am' ? '오전 반차 승인 계획서' : '오후 반차 승인 계획서');
-    } else {
-      setTitle('연차 승인 계획서');
-    }
-    if (!bodyDirty) {
-      setBody(
-        buildLeaveBodyDraft(
-          leaveKind,
-          halfSlot,
-          startDate,
-          leaveKind === 'half' ? startDate : endDate,
-        ),
-      );
-    }
-  }, [leaveKind, halfSlot, startDate, endDate, bodyDirty]);
-
-  const submit = async () => {
-    setSaving(true);
-    setError('');
-    try {
-      const res = await fetch('/api/leave/requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          body,
-          leaveKind,
-          halfSlot: leaveKind === 'half' ? halfSlot : '',
-          startDate,
-          endDate: leaveKind === 'half' ? startDate : endDate,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || '신청 실패');
-      await onCreated();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '신청 실패');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-3 text-xs font-semibold text-slate-700">
-        <label className="inline-flex items-center gap-1.5">
-          <input
-            type="radio"
-            checked={leaveKind === 'full'}
-            onChange={() => setLeaveKind('full')}
-          />
-          연차
-        </label>
-        <label className="inline-flex items-center gap-1.5">
-          <input
-            type="radio"
-            checked={leaveKind === 'half'}
-            onChange={() => setLeaveKind('half')}
-          />
-          반차
-        </label>
-      </div>
-      {leaveKind === 'half' && (
-        <div className="flex flex-wrap gap-3 text-xs font-semibold text-slate-700">
-          <label className="inline-flex items-center gap-1.5">
-            <input
-              type="radio"
-              checked={halfSlot === 'am'}
-              onChange={() => setHalfSlot('am')}
-            />
-            오전 반차
-          </label>
-          <label className="inline-flex items-center gap-1.5">
-            <input
-              type="radio"
-              checked={halfSlot === 'pm'}
-              onChange={() => setHalfSlot('pm')}
-            />
-            오후 반차
-          </label>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block text-xs">
-          <span className="mb-1 block font-semibold text-slate-600">시작일</span>
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => {
-              setStartDate(e.target.value);
-              if (leaveKind === 'half') setEndDate(e.target.value);
-            }}
-            className={portalInput + ' w-full text-xs'}
-          />
-        </label>
-        <label className="block text-xs">
-          <span className="mb-1 block font-semibold text-slate-600">종료일</span>
-          <input
-            type="date"
-            value={endDate}
-            disabled={leaveKind === 'half'}
-            onChange={e => setEndDate(e.target.value)}
-            className={portalInput + ' w-full text-xs disabled:bg-slate-100'}
-          />
-        </label>
-      </div>
-      <label className="block text-xs">
-        <span className="mb-1 block font-semibold text-slate-600">제목</span>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          className={portalInput + ' w-full text-xs'}
-        />
-      </label>
-      <label className="block text-xs">
-        <span className="mb-1 block font-semibold text-slate-600">내용</span>
-        <textarea
-          value={body}
-          onChange={e => {
-            setBodyDirty(true);
-            setBody(e.target.value);
-          }}
-          rows={4}
-          className={portalInput + ' w-full text-xs'}
-          placeholder="종류·기간에 맞춰 자동 작성됩니다. 필요 시 수정하세요."
-        />
-      </label>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button type="button" onClick={() => void submit()} disabled={saving} className={portalBtnPrimary + ' text-xs py-1.5'}>
-          {saving ? '신청 중…' : '신청'}
-        </button>
-        <button type="button" onClick={onCancel} className={portalBtnSecondary + ' text-xs py-1.5'}>
-          취소
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function LeaveDetailPanel({
   item,
-  canApprove,
+  canApprove: canApproveProp,
   onClose,
   onChanged,
 }: {
@@ -694,28 +584,61 @@ function LeaveDetailPanel({
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const [note, setNote] = useState(item.reviewNote || '');
+  const [note, setNote] = useState(
+    item.approvalStep === 'team_lead'
+      ? item.teamLeadReviewNote || ''
+      : item.reviewNote || '',
+  );
+  const [cancelNote, setCancelNote] = useState(item.cancelRequestNote || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [me, setMe] = useState('');
+  const [me, setMe] = useState<{ name: string; loginId: string }>({ name: '', loginId: '' });
 
   useEffect(() => {
     void fetch('/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setMe((d as { user?: { name?: string } })?.user?.name || ''))
+      .then(d => {
+        const user = (d as { user?: { name?: string; loginId?: string } })?.user;
+        setMe({ name: user?.name || '', loginId: user?.loginId || '' });
+      })
       .catch(() => { /* ignore */ });
   }, []);
 
-  const isApplicant = !!me && me === item.applicantName;
+  const isApplicant = !!me.name && managerNamesMatch(me.name, item.applicantName);
+  const canApproveThis =
+    canApproveProp &&
+    canReviewLeaveRequest(
+      { name: me.name, loginId: me.loginId },
+      item,
+    );
+  const isCancelReview = item.status === 'cancel_requested';
 
-  const act = async (action: 'approve' | 'reject' | 'cancel') => {
+  const act = async (
+    action:
+      | 'approve'
+      | 'reject'
+      | 'cancel'
+      | 'delete'
+      | 'request_cancel'
+      | 'withdraw_cancel',
+  ) => {
+    if (action === 'delete') {
+      if (!window.confirm('취소된 신청을 삭제할까요? 삭제 후에는 복구할 수 없습니다.')) return;
+    }
+    if (action === 'request_cancel') {
+      if (!window.confirm('취소 요청을 보낼까요? 인디 승인 후 휴가가 취소됩니다.')) return;
+    }
     setBusy(true);
     setError('');
     try {
       const res = await fetch(`/api/leave/requests/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, reviewNote: note }),
+        body: JSON.stringify({
+          action,
+          reviewNote: note,
+          cancelNote,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '처리 실패');
@@ -726,6 +649,13 @@ function LeaveDetailPanel({
       setBusy(false);
     }
   };
+
+  const approveLabel = isCancelReview
+    ? '취소 승인'
+    : item.approvalStep === 'team_lead'
+      ? '팀장 승인 (인디로 전달)'
+      : '최종 승인';
+  const rejectLabel = isCancelReview ? '취소 반려' : '반려';
 
   return (
     <div className="space-y-3 text-sm">
@@ -746,7 +676,7 @@ function LeaveDetailPanel({
         <dd className="tabular-nums">{formatNum(item.days)}</dd>
         <dt className="font-semibold text-slate-500">상태</dt>
         <dd>
-          <StatusBadge status={item.status} />
+          <StatusBadge status={item.status} approvalStep={item.approvalStep} />
         </dd>
       </dl>
       <div>
@@ -755,10 +685,28 @@ function LeaveDetailPanel({
           {item.body || '—'}
         </p>
       </div>
-      {(item.status !== 'pending' || canApprove) && (
+      {item.teamLeadReviewedBy ? (
         <div>
-          <p className="mb-1 text-xs font-semibold text-slate-500">검토 의견</p>
-          {item.status === 'pending' && canApprove ? (
+          <p className="mb-1 text-xs font-semibold text-slate-500">팀장 의견</p>
+          <p className="text-xs text-slate-700">
+            {item.teamLeadReviewedBy}: {item.teamLeadReviewNote || '—'}
+          </p>
+        </div>
+      ) : null}
+      {(item.cancelRequestNote || isCancelReview) && (
+        <div>
+          <p className="mb-1 text-xs font-semibold text-slate-500">취소 요청 사유</p>
+          <p className="text-xs text-slate-700">{item.cancelRequestNote || '—'}</p>
+        </div>
+      )}
+      {(item.status !== 'pending' || canApproveThis) && !isCancelReview && (
+        <div>
+          <p className="mb-1 text-xs font-semibold text-slate-500">
+            {item.approvalStep === 'team_lead' && item.status === 'pending'
+              ? '팀장 검토 의견'
+              : '최종 검토 의견'}
+          </p>
+          {item.status === 'pending' && canApproveThis ? (
             <input
               value={note}
               onChange={e => setNote(e.target.value)}
@@ -772,9 +720,31 @@ function LeaveDetailPanel({
           )}
         </div>
       )}
+      {isCancelReview && canApproveThis && (
+        <div>
+          <p className="mb-1 text-xs font-semibold text-slate-500">취소 검토 의견</p>
+          <input
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            className={portalInput + ' w-full text-xs'}
+            placeholder="필요 시 의견"
+          />
+        </div>
+      )}
+      {item.status === 'approved' && isApplicant && (
+        <div>
+          <p className="mb-1 text-xs font-semibold text-slate-500">취소 요청 사유 (선택)</p>
+          <input
+            value={cancelNote}
+            onChange={e => setCancelNote(e.target.value)}
+            className={portalInput + ' w-full text-xs'}
+            placeholder="사유를 남기면 인디 검토에 도움이 됩니다"
+          />
+        </div>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex flex-wrap gap-2">
-        {canApprove && item.status === 'pending' && (
+        {canApproveThis && (item.status === 'pending' || isCancelReview) && (
           <>
             <button
               type="button"
@@ -782,7 +752,7 @@ function LeaveDetailPanel({
               onClick={() => void act('approve')}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              승인
+              {approveLabel}
             </button>
             <button
               type="button"
@@ -790,7 +760,7 @@ function LeaveDetailPanel({
               onClick={() => void act('reject')}
               className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
-              반려
+              {rejectLabel}
             </button>
           </>
         )}
@@ -802,6 +772,36 @@ function LeaveDetailPanel({
             className={portalBtnSecondary + ' text-xs py-1.5'}
           >
             신청 취소
+          </button>
+        )}
+        {item.status === 'approved' && isApplicant && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act('request_cancel')}
+            className="rounded-lg border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+          >
+            취소 요청 (인디)
+          </button>
+        )}
+        {isCancelReview && isApplicant && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act('withdraw_cancel')}
+            className={portalBtnSecondary + ' text-xs py-1.5'}
+          >
+            취소 요청 철회
+          </button>
+        )}
+        {item.status === 'cancelled' && isApplicant && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act('delete')}
+            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            삭제
           </button>
         )}
         <button type="button" onClick={onClose} className={portalBtnSecondary + ' text-xs py-1.5'}>

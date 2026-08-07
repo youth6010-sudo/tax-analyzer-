@@ -15,8 +15,11 @@ import {
   isRoutedRequestTaxType,
   isSuppliesOrderTaxType,
   isImprovementRequestTaxType,
+  isLeaveRequestTaxType,
   SUPPLIES_ORDER_ASSIGNEE,
+  IMPROVEMENT_REQUEST_ASSIGNEES,
 } from '@/app/types/calendar';
+import LeaveApplyForm from '@/app/components/leave/LeaveApplyForm';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
 import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
@@ -52,7 +55,10 @@ type Props = {
   inModal?: boolean;
 };
 
-type FilingChecklistTax = Exclude<ChecklistTaxType, 'other' | 'supplies' | 'improvement'>;
+type FilingChecklistTax = Exclude<
+  ChecklistTaxType,
+  'other' | 'supplies' | 'improvement' | 'leave'
+>;
 
 function checklistTaxToFilingTax(taxType: FilingChecklistTax): FilingTaxId {
   return taxType;
@@ -69,11 +75,17 @@ function ensureForcedAssignees(
   names: string[],
   owner: string,
 ): string[] {
+  if (isSuppliesOrderTaxType(taxType)) {
+    // 비품은 다야만 — 이전 구분(시스템개선 등)에서 남은 협업자 이어받지 않음
+    if (managerNamesMatch(owner, SUPPLIES_ORDER_ASSIGNEE)) return [];
+    return [SUPPLIES_ORDER_ASSIGNEE];
+  }
+  if (isImprovementRequestTaxType(taxType)) {
+    // 시스템개선은 리아·찰리만 고정 (이전 선택값 무시)
+    return IMPROVEMENT_REQUEST_ASSIGNEES.filter(n => !managerNamesMatch(n, owner));
+  }
   const forced = forcedAssigneesForTaxType(taxType);
   let out = names.filter(n => n !== owner);
-  if (isImprovementRequestTaxType(taxType)) {
-    out = out.filter(n => !managerNamesMatch(n, '다야'));
-  }
   if (forced.length === 0) return out;
   for (const name of forced) {
     if (name === owner) continue;
@@ -370,6 +382,7 @@ export default function PersonalChecklistAddForm({
   const isRouted = isRoutedRequestTaxType(taxType);
   const isSupplies = isSuppliesOrderTaxType(taxType);
   const isImprovement = isImprovementRequestTaxType(taxType);
+  const isLeave = isLeaveRequestTaxType(taxType);
   const checkoffNames =
     editItem?.participants?.length
       ? editItem.participants
@@ -427,11 +440,15 @@ export default function PersonalChecklistAddForm({
   const handleTaxTypeChange = (next: ChecklistTaxType | '') => {
     setTaxType(next);
     if (!isEdit) setClientId('');
+    const owner = editItem?.ownerName || currentUser;
     if (isRoutedRequestTaxType(next)) {
       setRepeatOn(false);
       setDueDate('');
-      const owner = editItem?.ownerName || currentUser;
-      setAssigneeNames(prev => ensureForcedAssignees(next, prev, owner));
+      // 구분별 고정 협업자만 적용 (이전 구분 선택값 이어받지 않음)
+      setAssigneeNames(ensureForcedAssignees(next, [], owner));
+    } else if (isRoutedRequestTaxType(taxType) || isLeaveRequestTaxType(next) || !next) {
+      // 비품·시스템개선 → 일반 구분으로 바꿀 때 고정 협업자 잔존 제거
+      setAssigneeNames([]);
     }
     if (!isTaxDeadlineRepeatType(next) && repeatMode === 'taxDeadline') {
       setRepeatMode('weekdays');
@@ -471,6 +488,9 @@ export default function PersonalChecklistAddForm({
   };
 
   const submit = async () => {
+    if (isLeaveRequestTaxType(taxType)) {
+      return;
+    }
     if (isOwner) {
       if (!taxType) {
         window.alert('구분을 선택해주세요.');
@@ -644,6 +664,18 @@ export default function PersonalChecklistAddForm({
         </select>
       </FormRow>
 
+      {isLeave && !isEdit ? (
+        <LeaveApplyForm
+          onCancel={() => setTaxType('')}
+          onCreated={async () => {
+            setTaxType('');
+            onCreated?.();
+          }}
+        />
+      ) : null}
+
+      {!isLeave ? (
+      <>
       <FormRow label={isRouted ? '요청 내용' : '체크리스트 내용'} required={isOwner}>
         <input
           value={title}
@@ -886,20 +918,27 @@ export default function PersonalChecklistAddForm({
 
           <FormRow label="협업자">
             <div className="flex flex-wrap gap-1.5">
-              {staffOptions.map(name => {
-                const forced = forcedAssigneesForTaxType(taxType).includes(name);
-                const on = forced || assigneeNames.includes(name);
+              {(isSupplies || isImprovement
+                ? staffOptions.filter(name =>
+                    forcedAssigneesForTaxType(taxType).some(f => managerNamesMatch(name, f)),
+                  )
+                : staffOptions
+              ).map(name => {
+                const forced = forcedAssigneesForTaxType(taxType).some(f =>
+                  managerNamesMatch(name, f),
+                );
+                const on = forced || assigneeNames.some(a => managerNamesMatch(a, name));
                 return (
                   <button
                     key={name}
                     type="button"
                     onClick={() => toggleAssignee(name)}
-                    disabled={forced}
+                    disabled={forced || isSupplies || isImprovement}
                     className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
                       on
                         ? 'border-blue-500 bg-blue-50 text-blue-800'
                         : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    } ${forced ? 'cursor-default opacity-90' : ''}`}
+                    } ${forced || isSupplies || isImprovement ? 'cursor-default opacity-90' : ''}`}
                   >
                     {name}
                     {forced ? ' (고정)' : ''}
@@ -909,7 +948,7 @@ export default function PersonalChecklistAddForm({
             </div>
             <p className="mt-1 text-[10px] text-slate-400">
               {isSupplies
-                ? '비품 주문 요청은 다야가 협업자로 고정됩니다.'
+                ? '비품 주문 요청은 다야만 협업자로 고정됩니다.'
                 : isImprovement
                   ? '시스템 개선 요청은 리아·찰리만 고정 협업자이며, 다야는 제외됩니다. 한 명이 처리하면 완료됩니다.'
                   : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}
@@ -1212,6 +1251,8 @@ export default function PersonalChecklistAddForm({
           <span className="text-red-500">*</span> 필수입력
         </span>
       </div>
+      </>
+      ) : null}
 
       {imagePreview && (
         <div

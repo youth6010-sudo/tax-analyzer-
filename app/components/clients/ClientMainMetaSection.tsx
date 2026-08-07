@@ -9,6 +9,7 @@ import { markPortalClientsFresh, patchPortalClient } from '@/app/utils/portalSto
 import { portalBtnPrimary, portalBtnSecondary } from '@/app/components/portal/uiClasses';
 import { MAIN_META_INTAKE_KEYS, MAIN_META_LABELS, TAX_FLAG_KEYS } from '@/lib/clientDouzoneLayout';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
+import { readFiscalYearEndMonth } from '@/app/utils/fiscalYearEnd';
 
 const inputCls =
   'rounded border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-800 outline-none focus:border-blue-400 min-w-0';
@@ -84,6 +85,9 @@ export default function ClientMainMetaSection({
     }
 
     const category = form.meta.category?.trim() ?? '';
+    const fy = form.fiscalYearEndMonth;
+    if (fy >= 1 && fy <= 12) intakePatch.fiscalYearEndMonth = fy;
+    else intakePatch.fiscalYearEndMonth = null;
     return { intakeData: intakePatch, category };
   }, [form]);
 
@@ -235,6 +239,26 @@ export default function ClientMainMetaSection({
               매월
             </label>
           </div>
+          <label className="flex min-w-[10rem] items-center gap-1.5 text-[10px]">
+            <span className="shrink-0 font-semibold text-slate-500">결산월(법인)</span>
+            <select
+              value={form.fiscalYearEndMonth || ''}
+              onChange={e =>
+                setForm(f => ({
+                  ...f,
+                  fiscalYearEndMonth: e.target.value ? Number(e.target.value) : 0,
+                }))
+              }
+              className={`${inputCls} flex-1`}
+            >
+              <option value="">12월(일반)</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={m}>
+                  {m}월말
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       ) : (
         <div className="space-y-1 text-xs text-slate-800">
@@ -251,6 +275,16 @@ export default function ClientMainMetaSection({
                   </span>
                 );
               })}
+              {(() => {
+                const m = readFiscalYearEndMonth(intake);
+                if (!m || m === 12) return null;
+                return (
+                  <span>
+                    <span className="text-slate-500">결산월</span>{' '}
+                    <span className="font-medium text-rose-700">{m}월말</span>
+                  </span>
+                );
+              })()}
             </p>
           )}
           {(flagsVisible || canEdit) && (
@@ -288,5 +322,6 @@ function buildForm(intakeData: Record<string, unknown>) {
     flags: flagState,
     semiAnnualTarget: wh.semiAnnualTarget,
     semiAnnualMonthlyDisplay: wh.semiAnnualMonthlyDisplay,
+    fiscalYearEndMonth: readFiscalYearEndMonth(intakeData) ?? 0,
   };
 }

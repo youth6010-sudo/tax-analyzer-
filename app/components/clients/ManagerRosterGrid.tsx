@@ -17,10 +17,16 @@ import {
   DEFAULT_ROSTER_COLUMN_WIDTH,
   MAX_ROSTER_COLUMN_WIDTH,
   MIN_ROSTER_COLUMN_WIDTH,
+  MIN_ROSTER_ENTITY_HEIGHT,
+  getMaxRosterEntityHeight,
   readManagerClientOrder,
   readRosterColumnWidth,
+  readRosterEntityHeights,
   ROSTER_COLUMN_WIDTH_STORAGE_KEY,
+  ROSTER_ENTITY_HEIGHTS_STORAGE_KEY,
   writeRosterColumnWidth,
+  writeRosterEntityHeights,
+  type RosterEntityHeightKey,
 } from '@/app/utils/clientListPrefs';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
 import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore';
@@ -30,6 +36,7 @@ import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/a
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
 import { isSimplifiedVatClient, isTaxExemptClient } from '@/app/utils/filingCheck';
+import { fiscalYearEndBadgeLabel } from '@/app/utils/fiscalYearEnd';
 import { useClientRowExpand } from '@/app/components/clients/useClientRowExpand';
 import ClientRowHeading, { type ClientRowBadge } from '@/app/components/clients/ClientRowHeading';
 import ClientFeeCell from '@/app/components/clients/ClientFeeCell';
@@ -210,6 +217,10 @@ function ClientRosterRow({
   } else if (isTaxExemptClient(c)) {
     badges.push({ label: '면세', tone: 'violet' });
   }
+  const fyBadge = fiscalYearEndBadgeLabel(c);
+  if (fyBadge) {
+    badges.push({ label: fyBadge, tone: 'rose' });
+  }
   const ntsClosed = showNtsClosed ?? false;
   const ntsClosedLabel = c.nts?.statusCode === '02' ? '휴업' : c.nts?.statusCode === '03' ? '폐업' : '폐업/휴업';
   const rowGrid = showFee ? ROW_GRID_FEE : ROW_GRID_NO_FEE;
@@ -299,6 +310,9 @@ function EntityPanel({
   allManagerClients,
   sort,
   onClientOrderChange,
+  panelHeightPx,
+  heightKey,
+  onPanelHeightChange,
 }: {
   title: string;
   variant: 'personal' | 'corporate' | 'other';
@@ -315,6 +329,9 @@ function EntityPanel({
   allManagerClients: ClientRecord[];
   sort: 'name' | 'code';
   onClientOrderChange?: () => void;
+  panelHeightPx: number;
+  heightKey: RosterEntityHeightKey;
+  onPanelHeightChange: (key: RosterEntityHeightKey, height: number) => void;
 }) {
   const feeSum = sumClientFees(clients);
   const s = variant === 'other' && title === SINGO_DAERI ? PANEL.singo : PANEL[variant];
@@ -338,32 +355,87 @@ function EntityPanel({
     .map(id => byId.get(id))
     .filter((c): c is ClientRecord => !!c);
 
-  const panelHeight =
-    variant === 'other'
-      ? 'h-[min(180px,22vh)] min-h-[110px]'
-      : 'h-[min(220px,26vh)] min-h-[130px]';
+  const heightStart = useRef(panelHeightPx);
+  const heightLive = useRef(panelHeightPx);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    heightLive.current = panelHeightPx;
+  }, [panelHeightPx]);
+
+  const clampHeight = (n: number) =>
+    Math.min(getMaxRosterEntityHeight(), Math.max(MIN_ROSTER_ENTITY_HEIGHT, Math.round(n)));
+
+  const expandToFit = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // 헤더·하단 리사이즈 핸들 여유
+    const chrome = 44;
+    const next = clampHeight(el.scrollHeight + chrome);
+    heightLive.current = next;
+    onPanelHeightChange(heightKey, next);
+    writeRosterEntityHeights({ [heightKey]: next });
+  };
+
+  const onHeightPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    const startY = e.clientY;
+    heightStart.current = heightLive.current;
+    target.setPointerCapture(e.pointerId);
+    const onMove = (ev: PointerEvent) => {
+      const next = clampHeight(heightStart.current + (ev.clientY - startY));
+      heightLive.current = next;
+      onPanelHeightChange(heightKey, next);
+    };
+    const onUp = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* ignore */
+      }
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onUp);
+      target.removeEventListener('pointercancel', onUp);
+      writeRosterEntityHeights({ [heightKey]: heightLive.current });
+    };
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onUp);
+    target.addEventListener('pointercancel', onUp);
+  };
 
   return (
     <div
       className={[
-        'flex flex-col min-h-0 min-w-0',
-        panelHeight,
+        'relative flex flex-col min-h-0 min-w-0',
         'rounded-xl border border-slate-200 bg-white overflow-hidden',
         'shadow-sm border-l-[3px]',
         s.accent,
       ].join(' ')}
+      style={{ height: panelHeightPx, minHeight: MIN_ROSTER_ENTITY_HEIGHT }}
     >
       <div className={`shrink-0 flex items-center justify-between gap-1.5 px-2 py-1.5 border-b border-gray-100 ${s.headerBg}`}>
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`h-2 w-2 rounded-full shrink-0 ${s.dot}`} aria-hidden />
           <h3 className={`text-xs font-bold truncate ${s.headerText}`}>{title}</h3>
         </div>
-        <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold tabular-nums ${s.badge}`}>
-          {clients.length}건
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={expandToFit}
+            className="rounded px-1.5 py-px text-[10px] font-semibold text-slate-600 hover:bg-white/80 hover:text-slate-900"
+            title="목록이 모두 보이도록 펼치기"
+          >
+            전체
+          </button>
+          <span className={`rounded px-1.5 py-px text-[10px] font-bold tabular-nums ${s.badge}`}>
+            {clients.length}건
+          </span>
+        </div>
       </div>
 
       <div
+        ref={scrollRef}
         className="roster-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain"
         data-roster-panel-scroll
       >
@@ -407,6 +479,15 @@ function EntityPanel({
           </span>
         </div>
       )}
+
+      <button
+        type="button"
+        aria-label={`${title} 패널 높이 조절`}
+        title="드래그하여 높이 조절 · 더블클릭으로 전체 펼치기"
+        onPointerDown={onHeightPointerDown}
+        onDoubleClick={expandToFit}
+        className="absolute bottom-0 left-0 z-10 h-1.5 w-full cursor-row-resize border-0 bg-transparent p-0 hover:bg-blue-400/30 active:bg-blue-500/40"
+      />
     </div>
   );
 }
@@ -463,6 +544,8 @@ function ManagerSection({
   corpRevenueByClientId,
   sort,
   onClientOrderChange,
+  entityHeights,
+  onEntityHeightChange,
 }: {
   manager: string;
   clients: ClientRecord[];
@@ -477,6 +560,8 @@ function ManagerSection({
   corpRevenueByClientId?: Record<string, number | null>;
   sort: 'name' | 'code';
   onClientOrderChange?: () => void;
+  entityHeights: Record<RosterEntityHeightKey, number>;
+  onEntityHeightChange: (key: RosterEntityHeightKey, height: number) => void;
 }) {
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
@@ -540,6 +625,9 @@ function ManagerSection({
           allManagerClients={clients}
           sort={sort}
           onClientOrderChange={onClientOrderChange}
+          panelHeightPx={entityHeights.corporate}
+          heightKey="corporate"
+          onPanelHeightChange={onEntityHeightChange}
         />
         <EntityPanel
           title="개인"
@@ -556,6 +644,9 @@ function ManagerSection({
           allManagerClients={clients}
           sort={sort}
           onClientOrderChange={onClientOrderChange}
+          panelHeightPx={entityHeights.personal}
+          heightKey="personal"
+          onPanelHeightChange={onEntityHeightChange}
         />
         <MainCategorySummary personal={personal} corporate={corporate} feeVisible={feeVisible} />
         {visibleOptional.map(({ category, clients: catClients }) => (
@@ -575,6 +666,9 @@ function ManagerSection({
             allManagerClients={clients}
             sort={sort}
             onClientOrderChange={onClientOrderChange}
+            panelHeightPx={entityHeights.other}
+            heightKey="other"
+            onPanelHeightChange={onEntityHeightChange}
           />
         ))}
       </div>
@@ -866,6 +960,7 @@ export default function ManagerRosterGrid({
   onClientOrderChange?: () => void;
 }) {
   const [columnWidth, setColumnWidth] = useState(DEFAULT_ROSTER_COLUMN_WIDTH);
+  const [entityHeights, setEntityHeights] = useState(() => readRosterEntityHeights());
 
   useEffect(() => {
     setColumnWidth(readRosterColumnWidth());
@@ -876,6 +971,21 @@ export default function ManagerRosterGrid({
       window.removeEventListener(`local-storage:${ROSTER_COLUMN_WIDTH_STORAGE_KEY}`, sync);
       window.removeEventListener('storage', sync);
     };
+  }, []);
+
+  useEffect(() => {
+    setEntityHeights(readRosterEntityHeights());
+    const sync = () => setEntityHeights(readRosterEntityHeights());
+    window.addEventListener(`local-storage:${ROSTER_ENTITY_HEIGHTS_STORAGE_KEY}`, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(`local-storage:${ROSTER_ENTITY_HEIGHTS_STORAGE_KEY}`, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const onEntityHeightChange = useCallback((key: RosterEntityHeightKey, height: number) => {
+    setEntityHeights(prev => ({ ...prev, [key]: height }));
   }, []);
 
   // visibleManagers는 호출부에서 사용자가 지정한 순서대로 전달된다 → 그 순서를 그대로 유지
@@ -934,6 +1044,8 @@ export default function ManagerRosterGrid({
             corpRevenueByClientId={corpRevenueByClientId}
             sort={sort}
             onClientOrderChange={onClientOrderChange}
+            entityHeights={entityHeights}
+            onEntityHeightChange={onEntityHeightChange}
           />
           <RosterColumnResizeHandle columnWidth={columnWidth} onResize={setColumnWidth} />
         </div>

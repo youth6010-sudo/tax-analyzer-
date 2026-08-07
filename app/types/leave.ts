@@ -2,7 +2,14 @@
 
 export type LeaveKind = 'full' | 'half';
 export type LeaveHalfSlot = 'am' | 'pm';
-export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type LeaveRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'cancel_requested';
+/** team_lead = 팀장 선승인 대기, final = 인디 최종 결재 대기 */
+export type LeaveApprovalStep = 'team_lead' | 'final';
 
 export type LeaveBalanceDto = {
   id: string | null;
@@ -19,6 +26,8 @@ export type LeaveBalanceDto = {
   totalDays: number;
   /** 승인된 휴가 합 */
   usedDays: number;
+  /** 신청 중(pending) 휴가 합 */
+  pendingDays: number;
   remainingDays: number;
   updatedBy: string;
   updatedAt: string | null;
@@ -35,9 +44,17 @@ export type LeaveRequestDto = {
   endDate: string;
   days: number;
   status: LeaveRequestStatus;
+  approvalStep: LeaveApprovalStep;
+  teamLeadReviewedBy: string;
+  teamLeadReviewedAt: string | null;
+  teamLeadReviewNote: string;
   reviewNote: string;
   reviewedBy: string;
   reviewedAt: string | null;
+  cancelRequestNote: string;
+  cancelRequestedAt: string | null;
+  /** approved | pending */
+  cancelRequestFromStatus: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -66,10 +83,17 @@ export function formatLeaveKindLabel(
   return '연차';
 }
 
-export function leaveStatusLabel(status: LeaveRequestStatus): string {
-  if (status === 'pending') return '대기';
+export function leaveStatusLabel(
+  status: LeaveRequestStatus,
+  approvalStep?: LeaveApprovalStep | null,
+): string {
   if (status === 'approved') return '승인';
   if (status === 'rejected') return '반려';
   if (status === 'cancelled') return '취소';
+  if (status === 'cancel_requested') return '취소 요청';
+  if (status === 'pending') {
+    if (approvalStep === 'team_lead') return '팀장 승인 중';
+    return '결재 대기';
+  }
   return status;
 }

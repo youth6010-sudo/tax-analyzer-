@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { leaveBalances, leaveNotifications, leaveRequests, users } from '@/db/schema';
 import type {
+  LeaveApprovalStep,
   LeaveBalanceDto,
   LeaveHalfSlot,
   LeaveKind,
@@ -11,6 +12,13 @@ import type {
 } from '@/app/types/leave';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 import { DATA_VIEWER_LOGIN_IDS } from '@/lib/masterAccess';
+import {
+  initialLeaveApprovalStep,
+  resolveLeaveTeamLeadForApplicant,
+  LEAVE_TEAM_MEMBER_TO_LEAD,
+  canApproveLeaveFinal,
+  isLeaveTeamLead,
+} from '@/lib/leaveAccess';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 
 function parseDays(raw: string | number | null | undefined): number {
@@ -62,9 +70,17 @@ function toRequestDto(row: typeof leaveRequests.$inferSelect): LeaveRequestDto {
   const kind = row.leaveKind === 'half' ? 'half' : 'full';
   const half =
     row.halfSlot === 'am' || row.halfSlot === 'pm' ? row.halfSlot : ('' as const);
-  const status = (['pending', 'approved', 'rejected', 'cancelled'].includes(row.status)
+  const status = ([
+    'pending',
+    'approved',
+    'rejected',
+    'cancelled',
+    'cancel_requested',
+  ].includes(row.status)
     ? row.status
     : 'pending') as LeaveRequestStatus;
+  const approvalStep: LeaveApprovalStep =
+    row.approvalStep === 'team_lead' ? 'team_lead' : 'final';
   return {
     id: row.id,
     applicantName: row.applicantName,
@@ -76,9 +92,16 @@ function toRequestDto(row: typeof leaveRequests.$inferSelect): LeaveRequestDto {
     endDate: row.endDate,
     days: parseDays(row.days),
     status,
+    approvalStep,
+    teamLeadReviewedBy: row.teamLeadReviewedBy || '',
+    teamLeadReviewedAt: row.teamLeadReviewedAt?.toISOString() ?? null,
+    teamLeadReviewNote: row.teamLeadReviewNote || '',
     reviewNote: row.reviewNote,
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    cancelRequestNote: row.cancelRequestNote || '',
+    cancelRequestedAt: row.cancelRequestedAt?.toISOString() ?? null,
+    cancelRequestFromStatus: row.cancelRequestFromStatus || '',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -87,6 +110,22 @@ function toRequestDto(row: typeof leaveRequests.$inferSelect): LeaveRequestDto {
 async function usedDaysByMember(
   year: number,
   memberNames: string[],
+): Promise<Map<string, number>> {
+  // 승인 건 + 취소 요청 중 — 인디 승인 전까지 사용일로 유지
+  return daysByMemberForStatuses(year, memberNames, ['approved', 'cancel_requested']);
+}
+
+async function pendingDaysByMember(
+  year: number,
+  memberNames: string[],
+): Promise<Map<string, number>> {
+  return daysByMemberForStatuses(year, memberNames, ['pending']);
+}
+
+async function daysByMemberForStatuses(
+  year: number,
+  memberNames: string[],
+  statuses: LeaveRequestStatus[],
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (memberNames.length === 0) return map;
@@ -101,7 +140,7 @@ async function usedDaysByMember(
     .from(leaveRequests)
     .where(
       and(
-        eq(leaveRequests.status, 'approved'),
+        inArray(leaveRequests.status, statuses),
         inArray(leaveRequests.applicantName, memberNames),
         lte(leaveRequests.startDate, to),
         gte(leaveRequests.endDate, from),
@@ -128,6 +167,7 @@ function emptyBalance(memberName: string, year: number): LeaveBalanceDto {
     decrease: 0,
     totalDays: 0,
     usedDays: 0,
+    pendingDays: 0,
     remainingDays: 0,
     updatedBy: '',
     updatedAt: null,
@@ -137,6 +177,7 @@ function emptyBalance(memberName: string, year: number): LeaveBalanceDto {
 function withTotals(
   base: Omit<LeaveBalanceDto, 'totalDays' | 'usedDays' | 'remainingDays'> & {
     usedDays: number;
+    pendingDays: number;
   },
 ): LeaveBalanceDto {
   const totalDays =
@@ -159,12 +200,14 @@ export async function listLeaveBalances(year: number): Promise<LeaveBalanceDto[]
     .where(eq(leaveBalances.year, year));
   const byName = new Map(rows.map(r => [r.memberName, r]));
   const usedMap = await usedDaysByMember(year, members);
+  const pendingMap = await pendingDaysByMember(year, members);
 
   return members.map(name => {
     const row = byName.get(name);
     const usedDays = usedMap.get(name) ?? 0;
+    const pendingDays = pendingMap.get(name) ?? 0;
     if (!row) {
-      return withTotals({ ...emptyBalance(name, year), usedDays });
+      return withTotals({ ...emptyBalance(name, year), usedDays, pendingDays });
     }
     return withTotals({
       id: row.id,
@@ -178,39 +221,67 @@ export async function listLeaveBalances(year: number): Promise<LeaveBalanceDto[]
       increase: parseDays(row.increase),
       decrease: parseDays(row.decrease),
       usedDays,
+      pendingDays,
       updatedBy: row.updatedBy,
       updatedAt: row.updatedAt.toISOString(),
     });
   });
 }
 
-async function resolveLeaveApproverNames(): Promise<string[]> {
+async function resolveUserNamesByLoginIds(loginIds: string[]): Promise<string[]> {
+  const wanted = new Set(loginIds.map(id => id.trim().toLowerCase()).filter(Boolean));
+  if (wanted.size === 0) return [];
   const db = getDb();
-  const rows = await db
-    .select({ name: users.name, loginId: users.loginId })
-    .from(users);
+  const rows = await db.select({ name: users.name, loginId: users.loginId }).from(users);
   const names = new Set<string>();
   for (const r of rows) {
     const login = r.loginId.trim().toLowerCase();
-    if (login === 'indie' || (DATA_VIEWER_LOGIN_IDS as readonly string[]).includes(login)) {
-      const n = r.name.trim();
-      if (n) names.add(n);
-    }
+    if (!wanted.has(login)) continue;
+    const n = r.name.trim();
+    if (n) names.add(n);
   }
-  if (names.size === 0) names.add('인디');
   return [...names];
 }
 
-async function notifyLeaveApprovers(leaveRequestId: string, actorName: string, title: string) {
-  const recipients = await resolveLeaveApproverNames();
-  if (recipients.length === 0) return;
+async function resolveLeaveFinalApproverNames(): Promise<string[]> {
+  const names = await resolveUserNamesByLoginIds([
+    'indie',
+    ...(DATA_VIEWER_LOGIN_IDS as readonly string[]),
+  ]);
+  if (names.length === 0) return ['인디'];
+  return names;
+}
+
+async function resolveDisplayNameForNick(nick: string): Promise<string> {
+  const mapping = LEAVE_TEAM_MEMBER_TO_LEAD.find(
+    t => managerNamesMatch(t.lead, nick) || managerNamesMatch(t.member, nick),
+  );
+  if (mapping && managerNamesMatch(mapping.lead, nick)) {
+    const names = await resolveUserNamesByLoginIds([mapping.leadLoginId]);
+    if (names[0]) return names[0];
+  }
+  if (mapping && managerNamesMatch(mapping.member, nick)) {
+    const names = await resolveUserNamesByLoginIds([mapping.memberLoginId]);
+    if (names[0]) return names[0];
+  }
+  return nick;
+}
+
+async function notifyLeaveRecipients(
+  leaveRequestId: string,
+  actorName: string,
+  title: string,
+  recipientNames: string[],
+) {
+  const unique = [...new Set(recipientNames.map(n => n.trim()).filter(Boolean))];
+  if (unique.length === 0) return;
   const db = getDb();
   await db.insert(leaveNotifications).values(
-    recipients.map(recipientName => ({
+    unique.map(recipientName => ({
       leaveRequestId,
       recipientName,
       actorName,
-      title: title.trim() || '휴가 결재 요청',
+      title: title.trim() || '휴가 알림',
     })),
   );
 }
@@ -254,6 +325,8 @@ export async function markLeaveNotificationRead(
   id: string,
   recipientName: string,
 ): Promise<void> {
+  const aliases = getManagerMatchNames(recipientName);
+  if (aliases.length === 0) return;
   const db = getDb();
   await db
     .update(leaveNotifications)
@@ -261,7 +334,7 @@ export async function markLeaveNotificationRead(
     .where(
       and(
         eq(leaveNotifications.id, id),
-        eq(leaveNotifications.recipientName, recipientName),
+        inArray(leaveNotifications.recipientName, aliases),
         isNull(leaveNotifications.readAt),
       ),
     );
@@ -336,6 +409,7 @@ export async function upsertLeaveBalance(
   }
 
   const usedMap = await usedDaysByMember(year, [memberName]);
+  const pendingMap = await pendingDaysByMember(year, [memberName]);
   return withTotals({
     id: row.id,
     memberName: row.memberName,
@@ -348,6 +422,7 @@ export async function upsertLeaveBalance(
     increase: parseDays(row.increase),
     decrease: parseDays(row.decrease),
     usedDays: usedMap.get(memberName) ?? 0,
+    pendingDays: pendingMap.get(memberName) ?? 0,
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt.toISOString(),
   });
@@ -426,6 +501,7 @@ export async function createLeaveRequest(
     );
   }
 
+  const approvalStep = initialLeaveApprovalStep(applicantName);
   const db = getDb();
   const [row] = await db
     .insert(leaveRequests)
@@ -439,14 +515,26 @@ export async function createLeaveRequest(
       endDate: input.endDate,
       days: daysToText(days),
       status: 'pending',
+      approvalStep,
     })
     .returning();
   const dto = toRequestDto(row);
-  await notifyLeaveApprovers(
-    dto.id,
-    applicantName,
-    `${applicantName} · ${title} (${dto.startDate}~${dto.endDate}, ${dto.days}일)`,
-  );
+  const summary = `${applicantName} · ${title} (${dto.startDate}~${dto.endDate}, ${dto.days}일)`;
+
+  if (approvalStep === 'team_lead') {
+    const leadNick = resolveLeaveTeamLeadForApplicant(applicantName);
+    const leadName = leadNick ? await resolveDisplayNameForNick(leadNick) : '';
+    await notifyLeaveRecipients(dto.id, applicantName, `팀장 승인 요청 · ${summary}`, [
+      leadName || leadNick || '리아',
+    ]);
+  } else {
+    await notifyLeaveRecipients(
+      dto.id,
+      applicantName,
+      `휴가 결재 요청 · ${summary}`,
+      await resolveLeaveFinalApproverNames(),
+    );
+  }
   return dto;
 }
 
@@ -458,7 +546,7 @@ export async function cancelLeaveRequest(
   const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
   if (!existing) throw new Error('NOT_FOUND');
   if (existing.applicantName !== actorName) throw new Error('본인 신청만 취소할 수 있습니다.');
-  if (existing.status !== 'pending') throw new Error('대기 중인 신청만 취소할 수 있습니다.');
+  if (existing.status !== 'pending') throw new Error('대기 중인 신청만 바로 취소할 수 있습니다.');
   const [row] = await db
     .update(leaveRequests)
     .set({ status: 'cancelled', updatedAt: new Date() })
@@ -466,6 +554,153 @@ export async function cancelLeaveRequest(
     .returning();
   await markLeaveNotificationsReadForRequest(id);
   return toRequestDto(row);
+}
+
+/** 승인·대기 건 취소 요청 → 인디 결재 */
+export async function requestLeaveCancel(
+  id: string,
+  actorName: string,
+  note?: string,
+): Promise<LeaveRequestDto> {
+  const db = getDb();
+  const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+  if (existing.applicantName !== actorName) {
+    throw new Error('본인 신청만 취소 요청할 수 있습니다.');
+  }
+  if (existing.status !== 'approved') {
+    throw new Error('승인된 신청만 취소 요청할 수 있습니다. 대기 중인 신청은 바로 취소하세요.');
+  }
+  const fromStatus = 'approved' as const;
+  const cancelNote = (note || '').trim();
+  const [row] = await db
+    .update(leaveRequests)
+    .set({
+      status: 'cancel_requested',
+      cancelRequestNote: cancelNote,
+      cancelRequestedAt: new Date(),
+      cancelRequestFromStatus: fromStatus,
+      updatedAt: new Date(),
+    })
+    .where(eq(leaveRequests.id, id))
+    .returning();
+  const summary = `${existing.applicantName} · ${existing.title} (${existing.startDate}~${existing.endDate})`;
+  await notifyLeaveRecipients(
+    id,
+    actorName,
+    `휴가 취소 요청 · ${summary}`,
+    await resolveLeaveFinalApproverNames(),
+  );
+  return toRequestDto(row);
+}
+
+/** 신청자 본인이 취소 요청 철회 */
+export async function withdrawLeaveCancelRequest(
+  id: string,
+  actorName: string,
+): Promise<LeaveRequestDto> {
+  const db = getDb();
+  const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+  if (existing.applicantName !== actorName) {
+    throw new Error('본인 신청만 철회할 수 있습니다.');
+  }
+  if (existing.status !== 'cancel_requested') {
+    throw new Error('취소 요청 중인 건만 철회할 수 있습니다.');
+  }
+  const restore = 'approved';
+  const [row] = await db
+    .update(leaveRequests)
+    .set({
+      status: restore,
+      cancelRequestNote: '',
+      cancelRequestedAt: null,
+      cancelRequestFromStatus: '',
+      updatedAt: new Date(),
+    })
+    .where(eq(leaveRequests.id, id))
+    .returning();
+  await markLeaveNotificationsReadForRequest(id);
+  return toRequestDto(row);
+}
+
+/** 인디: 취소 요청 승인(취소) / 반려(승인 상태 복원) */
+export async function reviewLeaveCancelRequest(
+  id: string,
+  reviewerName: string,
+  decision: 'approved' | 'rejected',
+  reviewNote?: string,
+): Promise<LeaveRequestDto> {
+  const db = getDb();
+  const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+  if (existing.status !== 'cancel_requested') {
+    throw new Error('취소 요청 중인 건만 처리할 수 있습니다.');
+  }
+  const note = (reviewNote || '').trim();
+  const summary = `${existing.applicantName} · ${existing.title} (${existing.startDate}~${existing.endDate})`;
+
+  if (decision === 'approved') {
+    const [row] = await db
+      .update(leaveRequests)
+      .set({
+        status: 'cancelled',
+        reviewNote: note || existing.reviewNote || '',
+        reviewedBy: reviewerName,
+        reviewedAt: new Date(),
+        cancelRequestNote: existing.cancelRequestNote || '',
+        cancelRequestedAt: existing.cancelRequestedAt,
+        cancelRequestFromStatus: existing.cancelRequestFromStatus || 'approved',
+        updatedAt: new Date(),
+      })
+      .where(eq(leaveRequests.id, id))
+      .returning();
+    await markLeaveNotificationsReadForRequest(id);
+    await notifyLeaveRecipients(
+      id,
+      reviewerName,
+      `휴가 취소 승인 · ${summary}`,
+      [existing.applicantName],
+    );
+    return toRequestDto(row);
+  }
+
+  const [row] = await db
+    .update(leaveRequests)
+    .set({
+      status: 'approved',
+      cancelRequestNote: '',
+      cancelRequestedAt: null,
+      cancelRequestFromStatus: '',
+      updatedAt: new Date(),
+    })
+    .where(eq(leaveRequests.id, id))
+    .returning();
+  await markLeaveNotificationsReadForRequest(id);
+  await notifyLeaveRecipients(
+    id,
+    reviewerName,
+    `휴가 취소 반려 · ${summary}${note ? ` (${note})` : ''}`,
+    [existing.applicantName],
+  );
+  return toRequestDto(row);
+}
+
+/** 취소된 신청만 본인이 완전 삭제 */
+export async function deleteCancelledLeaveRequest(
+  id: string,
+  actorName: string,
+): Promise<void> {
+  const db = getDb();
+  const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+  if (!existing) throw new Error('NOT_FOUND');
+  if (existing.applicantName !== actorName) {
+    throw new Error('본인 신청만 삭제할 수 있습니다.');
+  }
+  if (existing.status !== 'cancelled') {
+    throw new Error('취소된 신청만 삭제할 수 있습니다.');
+  }
+  await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
 }
 
 export async function reviewLeaveRequest(
@@ -479,6 +714,60 @@ export async function reviewLeaveRequest(
   if (!existing) throw new Error('NOT_FOUND');
   if (existing.status !== 'pending') throw new Error('이미 처리된 신청입니다.');
 
+  const step: LeaveApprovalStep =
+    existing.approvalStep === 'team_lead' ? 'team_lead' : 'final';
+  const note = (reviewNote || '').trim();
+  const summary = `${existing.applicantName} · ${existing.title} (${existing.startDate}~${existing.endDate})`;
+
+  // 팀장 단계: 승인 시 인디로 넘김 / 반려 시 종료
+  if (step === 'team_lead') {
+    if (decision === 'rejected') {
+      const [row] = await db
+        .update(leaveRequests)
+        .set({
+          status: 'rejected',
+          teamLeadReviewedBy: reviewerName,
+          teamLeadReviewedAt: new Date(),
+          teamLeadReviewNote: note,
+          reviewNote: note,
+          reviewedBy: reviewerName,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(leaveRequests.id, id))
+        .returning();
+      await markLeaveNotificationsReadForRequest(id);
+      await notifyLeaveRecipients(
+        id,
+        reviewerName,
+        `휴가 반려 · ${summary}`,
+        [existing.applicantName],
+      );
+      return toRequestDto(row);
+    }
+
+    const [row] = await db
+      .update(leaveRequests)
+      .set({
+        approvalStep: 'final',
+        teamLeadReviewedBy: reviewerName,
+        teamLeadReviewedAt: new Date(),
+        teamLeadReviewNote: note,
+        updatedAt: new Date(),
+      })
+      .where(eq(leaveRequests.id, id))
+      .returning();
+    await markLeaveNotificationsReadForRequest(id);
+    await notifyLeaveRecipients(
+      id,
+      reviewerName,
+      `최종 결재 요청 · ${summary}`,
+      await resolveLeaveFinalApproverNames(),
+    );
+    return toRequestDto(row);
+  }
+
+  // 최종(인디) 결재
   if (decision === 'approved') {
     const year = Number(existing.startDate.slice(0, 4));
     const days = parseDays(existing.days);
@@ -495,7 +784,7 @@ export async function reviewLeaveRequest(
     .update(leaveRequests)
     .set({
       status: decision,
-      reviewNote: (reviewNote || '').trim(),
+      reviewNote: note,
       reviewedBy: reviewerName,
       reviewedAt: new Date(),
       updatedAt: new Date(),
@@ -503,10 +792,45 @@ export async function reviewLeaveRequest(
     .where(eq(leaveRequests.id, id))
     .returning();
   await markLeaveNotificationsReadForRequest(id);
+  await notifyLeaveRecipients(
+    id,
+    reviewerName,
+    decision === 'approved' ? `휴가 승인 · ${summary}` : `휴가 반려 · ${summary}`,
+    [existing.applicantName],
+  );
   return toRequestDto(row);
 }
 
-/** 캘린더용 — 승인된 휴가 (담당자 필터) */
+/** 결재자별로 대기 중인 건만 */
+export async function listPendingLeaveForApprover(
+  user: { loginId?: string | null; name?: string | null },
+  year?: number,
+): Promise<LeaveRequestDto[]> {
+  const pending = await listLeaveRequests({ status: 'pending', year });
+  const cancelRequested = await listLeaveRequests({ status: 'cancel_requested', year });
+  const login = (user.loginId ?? '').trim().toLowerCase();
+  const name = (user.name ?? '').trim();
+  const asUser = { loginId: login, name };
+
+  if (canApproveLeaveFinal(asUser)) {
+    const finalPending = pending.filter(i => (i.approvalStep || 'final') === 'final');
+    return [...cancelRequested, ...finalPending];
+  }
+  if (isLeaveTeamLead(asUser)) {
+    // 취소 요청은 인디만 — 팀장 대기열에 넣지 않음
+    return pending.filter(i => {
+      if ((i.approvalStep || 'final') !== 'team_lead') return false;
+      const lead = resolveLeaveTeamLeadForApplicant(i.applicantName);
+      if (!lead) return false;
+      const mapping = LEAVE_TEAM_MEMBER_TO_LEAD.find(t => managerNamesMatch(t.lead, lead));
+      if (mapping && mapping.leadLoginId === login) return true;
+      return managerNamesMatch(name, lead);
+    });
+  }
+  return [];
+}
+
+/** 캘린더용 — 승인된 휴가 (담당자 필터). 취소 요청 중도 포함(인디 승인 전) */
 export async function listApprovedLeaveInRange(
   ownerNames: string[],
   from: string,
@@ -520,7 +844,7 @@ export async function listApprovedLeaveInRange(
     .from(leaveRequests)
     .where(
       and(
-        eq(leaveRequests.status, 'approved'),
+        inArray(leaveRequests.status, ['approved', 'cancel_requested']),
         inArray(leaveRequests.applicantName, names),
         lte(leaveRequests.startDate, to),
         gte(leaveRequests.endDate, from),
