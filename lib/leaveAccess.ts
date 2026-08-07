@@ -94,6 +94,11 @@ export function canRequestLeaveCancel(item: LeaveRequestDto): boolean {
   return item.status === 'approved';
 }
 
+/** 승인 전 신청 취소 건만 본인이 삭제 가능 (승인 후 취소 이력은 삭제 불가) */
+export function canDeleteCancelledLeave(item: LeaveRequestDto): boolean {
+  return item.status === 'cancelled' && item.cancelRequestFromStatus !== 'approved';
+}
+
 /**
  * 연차 잔고 전체 조회·수정 — 인디·페리만
  * (다른 담당자는 본인 잔고만 조회, 수정 불가)

@@ -64,8 +64,13 @@ export async function GET(req: Request) {
       canApprove,
       canViewAll,
     });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '조회 실패';
+    if (msg === 'UNAUTHORIZED' || msg === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.error('[leave/requests GET]', e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 

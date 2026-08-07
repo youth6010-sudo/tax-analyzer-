@@ -11,7 +11,7 @@ import {
   leaveStatusLabel,
 } from '@/app/types/leave';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
-import { canReviewLeaveRequest } from '@/lib/leaveAccess';
+import { canReviewLeaveRequest, canDeleteCancelledLeave } from '@/lib/leaveAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 type Tab = 'balances' | 'mine' | 'pending';
 
@@ -48,13 +48,13 @@ export default function LeavePageClient() {
   const loadMine = useCallback(async () => {
     const qs = new URLSearchParams({ year: String(year) });
     if (memberFilter) qs.set('applicant', memberFilter);
-    // 인디: all=1 (전체). 실패하면 본인만.
+    // 인디: all=1 (전체). 권한/오류 시 본인만.
     let res = await fetchWithTimeout(
       `/api/leave/requests?all=1&${qs}`,
       { cache: 'no-store' },
       15_000,
     );
-    if (res.status === 403) {
+    if (!res.ok) {
       res = await fetchWithTimeout(
         `/api/leave/requests?mine=1&year=${year}`,
         { cache: 'no-store' },
@@ -794,7 +794,7 @@ function LeaveDetailPanel({
             취소 요청 철회
           </button>
         )}
-        {item.status === 'cancelled' && isApplicant && (
+        {item.status === 'cancelled' && isApplicant && canDeleteCancelledLeave(item) && (
           <button
             type="button"
             disabled={busy}
@@ -804,6 +804,13 @@ function LeaveDetailPanel({
             삭제
           </button>
         )}
+        {item.status === 'cancelled' &&
+          isApplicant &&
+          !canDeleteCancelledLeave(item) && (
+            <p className="w-full text-[11px] text-slate-500">
+              승인 후 취소된 휴가는 삭제할 수 없습니다.
+            </p>
+          )}
         <button type="button" onClick={onClose} className={portalBtnSecondary + ' text-xs py-1.5'}>
           닫기
         </button>

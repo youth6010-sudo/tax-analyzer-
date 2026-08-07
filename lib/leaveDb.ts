@@ -686,7 +686,7 @@ export async function reviewLeaveCancelRequest(
   return toRequestDto(row);
 }
 
-/** 취소된 신청만 본인이 완전 삭제 */
+/** 취소된 신청만 본인이 완전 삭제 — 승인 후 취소된 건은 삭제 불가 */
 export async function deleteCancelledLeaveRequest(
   id: string,
   actorName: string,
@@ -699,6 +699,10 @@ export async function deleteCancelledLeaveRequest(
   }
   if (existing.status !== 'cancelled') {
     throw new Error('취소된 신청만 삭제할 수 있습니다.');
+  }
+  // 승인되었다가 인디 취소 승인된 건 — 이력 유지, 삭제 불가
+  if (existing.cancelRequestFromStatus === 'approved') {
+    throw new Error('승인 후 취소된 휴가는 삭제할 수 없습니다.');
   }
   await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
 }

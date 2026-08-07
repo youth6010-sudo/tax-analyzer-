@@ -23,8 +23,13 @@ export async function GET(req: Request) {
       canManage: canManageLeaveBalance(user),
       canViewAll: canViewAllLeaveBalances(user),
     });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '조회 실패';
+    if (msg === 'UNAUTHORIZED' || msg === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.error('[leave/balances GET]', e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
