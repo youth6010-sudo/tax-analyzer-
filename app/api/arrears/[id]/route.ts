@@ -56,7 +56,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '미수 수정은 인디·찰리만 할 수 있습니다.' },
+        { error: '미수 수정은 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }

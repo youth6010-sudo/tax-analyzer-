@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canCreateCompanyEvent(user)) {
       return NextResponse.json(
-        { error: '회사 일정은 결재권자·개발자·관리자만 등록할 수 있습니다.' },
+        { error: '회사 일정은 인디·찰리·리아(관리자)·페리만 등록할 수 있습니다.' },
         { status: 403 },
       );
     }

@@ -1,5 +1,5 @@
 import type { SessionUser } from '@/lib/session';
-import { DATA_VIEWER_LOGIN_IDS } from '@/lib/masterAccess';
+import { isDataViewer } from '@/lib/masterAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 type UserLike =
@@ -12,17 +12,14 @@ type UserLike =
   | null
   | undefined;
 
-function loginIdOf(user: UserLike): string {
-  return user?.loginId?.trim().toLowerCase() ?? '';
-}
-
-/** 미수 원장 가져오기·담당/분류/메모 수정 — 인디·찰리만 */
+/** 미수 원장 가져오기·담당/분류/메모 수정 — 인디·찰리·리아(관리자)·role=admin */
 export function canManageArrears(user: UserLike): boolean {
   if (!user) return false;
-  const login = loginIdOf(user);
-  if (login === 'charlie') return true;
-  if (login === 'indie') return true;
-  return (DATA_VIEWER_LOGIN_IDS as readonly string[]).includes(login);
+  return isDataViewer({
+    loginId: user.loginId,
+    role: user.role === 'admin' || user.role === 'staff' ? user.role : undefined,
+    adminMode: user.adminMode,
+  });
 }
 
 /** 행 조회 — 관리자이거나 본인 담당 행 */

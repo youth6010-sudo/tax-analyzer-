@@ -1,5 +1,4 @@
 import type { SessionUser } from '@/lib/session';
-import { DATA_VIEWER_LOGIN_IDS } from '@/lib/masterAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import type { LeaveApprovalStep, LeaveRequestDto } from '@/app/types/leave';
 
@@ -28,11 +27,13 @@ export const LEAVE_TEAM_MEMBER_TO_LEAD: ReadonlyArray<{
   leadLoginId: string;
 }> = [{ member: '찰리', lead: '리아', memberLoginId: 'charlie', leadLoginId: 'ria' }];
 
-/** 연차 최종 결재(승인·반려) — 인디 */
+/**
+ * 연차 최종 결재(승인·반려)·취소 요청 승인 — 인디만
+ * (리아 관리자·찰리는 포함하지 않음)
+ */
 export function canApproveLeaveFinal(user: UserLike): boolean {
   if (!user) return false;
-  const login = loginIdOf(user);
-  return login === 'indie' || (DATA_VIEWER_LOGIN_IDS as readonly string[]).includes(login);
+  return loginIdOf(user) === 'indie';
 }
 
 /** @deprecated — canApproveLeaveFinal 사용. 하위 호환 */
@@ -101,22 +102,22 @@ export function canDeleteCancelledLeave(item: LeaveRequestDto): boolean {
 
 /**
  * 연차 잔고 전체 조회·수정 — 인디·페리만
- * (다른 담당자는 본인 잔고만 조회, 수정 불가)
+ * (찰리·리아 관리자 제외, 최종 결재와 별개)
  */
 export function canManageLeaveBalance(user: UserLike): boolean {
   if (!user) return false;
-  if (canApproveLeaveFinal(user)) return true;
+  if (loginIdOf(user) === 'indie') return true;
   const login = loginIdOf(user);
   if (login === 'perry' || login === 'peri') return true;
   return managerNamesMatch(user.name?.trim() || '', '페리');
 }
 
-/** 연차 잔고 전체 목록 조회 — 인디·페리만 (그 외는 본인만) */
+/** 연차 잔고 전체 목록 조회 — 잔고 관리 권한과 동일 */
 export function canViewAllLeaveBalances(user: UserLike): boolean {
   return canManageLeaveBalance(user);
 }
 
-/** 전체 휴가 신청 현황 조회 — 인디(최종 결재자)만 */
+/** 전체 휴가 신청 현황 조회 — 인디·페리만 (찰리·리아 관리자 제외) */
 export function canViewAllLeaveRequests(user: UserLike): boolean {
-  return canApproveLeaveFinal(user);
+  return canManageLeaveBalance(user);
 }

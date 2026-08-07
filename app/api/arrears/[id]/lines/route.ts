@@ -44,7 +44,7 @@ export async function PUT(req: Request, ctx: Ctx) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '공문 내역 수정은 인디·찰리만 할 수 있습니다.' },
+        { error: '공문 내역 수정은 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }
@@ -91,7 +91,7 @@ export async function POST(req: Request, ctx: Ctx) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '공문 내역 수정은 인디·찰리만 할 수 있습니다.' },
+        { error: '공문 내역 수정은 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }

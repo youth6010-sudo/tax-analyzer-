@@ -380,7 +380,7 @@ export default function ArrearsPageClient() {
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               상호를 누르면 업체별 미수 공문을 볼 수 있습니다. 원장 가져오기 시 공문 잔액과 차이가
-              있으면 자동 반영됩니다. 수정·가져오기는 인디·찰리만 가능하며, 담당자는 본인 분만 볼
+              있으면 자동 반영됩니다. 수정·가져오기는 인디·찰리·리아(관리자)만 가능하며, 담당자는 본인 분만 볼
               수 있습니다.
             </p>
           </div>

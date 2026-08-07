@@ -2,8 +2,9 @@ import type { SessionUser } from '@/lib/session';
 
 /**
  * 권한 모델
- * - 개발자(찰리, 리아 관리자모드, DB role=admin): 모든 메뉴·기능
- * - 결재권자(인디): 전 수임처 자료 조회·수정, 일반 담당과 동일한 메뉴만 (관리·블루홀 등 비공개)
+ * - 개발자(찰리, 리아 관리자모드, DB role=admin): 찰리 기능 + 인디의 입력·수정·조회 기능
+ *   (휴가 최종 결재·취소 승인만 인디 전용으로 제외)
+ * - 결재권자(인디): 전 수임처 자료 조회·수정, 휴가 최종 결재, 일반 담당과 동일한 메뉴만 (관리·블루홀 등 비공개)
  * - 일반 담당: 본인 담당 범위
  */
 
@@ -81,8 +82,9 @@ export function canUseCharlieFeatures(user: AccessUser): boolean {
 }
 
 /**
- * 검토표 제목행·열 구성 등 고급 편집
- * — 개발자 전원 + 결재권자(인디)
+ * 검토표 제목행·열 구성 등 — 인디가 입력·수정하는 기능
+ * — 개발자(찰리·리아 관리자) + 결재권자(인디)
+ * — 휴가 최종 결재는 leaveAccess.canApproveLeaveFinal (인디만)
  */
 export function canUseIndieFeatures(user: AccessUser): boolean {
   return isDeveloperAdmin(user) || normalizeLoginId(user) === 'indie';

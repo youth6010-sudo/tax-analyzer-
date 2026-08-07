@@ -36,7 +36,7 @@ export async function PUT(req: Request) {
   try {
     const user = await requireUser();
     if (!canManageDuty(user)) {
-      return NextResponse.json({ error: '당번 지정은 찰리만 가능합니다.' }, { status: 403 });
+      return NextResponse.json({ error: '당번 지정은 찰리·리아(관리자)만 가능합니다.' }, { status: 403 });
     }
     const body = (await req.json()) as {
       year?: number;

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '세금계산서·CMS 가져오기는 인디·찰리만 할 수 있습니다.' },
+        { error: '?�금계산?�·CMS 가?�오기는 ?�디·찰리�??????�습?�다.' },
         { status: 403 },
       );
     }
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: '엑셀 파일을 선택해 주세요.' }, { status: 400 });
+      return NextResponse.json({ error: '?��? ?�일???�택??주세??' }, { status: 400 });
     }
 
     const confirm =
@@ -35,12 +35,12 @@ export async function POST(req: Request) {
     try {
       parsed = parseArrearsFeeEventsWorkbook(buffer, file.name || '');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '파싱 실패';
+      const msg = e instanceof Error ? e.message : '?�싱 ?�패';
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     if (!parsed.events.length) {
-      return NextResponse.json({ error: '반영할 행이 없습니다.' }, { status: 400 });
+      return NextResponse.json({ error: '반영???�이 ?�습?�다.' }, { status: 400 });
     }
 
     if (!confirm) {

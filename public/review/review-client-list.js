@@ -738,7 +738,7 @@
     if (!canManageClientLinks()) {
       const hint = document.createElement("span");
       hint.className = "review-detail-portal-hint-inline";
-      hint.textContent = "연결은 인디·찰리만 가능";
+      hint.textContent = "연결은 인디·찰리·리아(관리자)만 가능";
       row.appendChild(hint);
       host.appendChild(row);
       return;
@@ -1589,7 +1589,7 @@
       if (!th) return;
       label.contentEditable = "true";
       label.classList.add("cell-editable", "cell-editable-header");
-      label.title = "제목 수정 (인디) · Enter로 확정";
+      label.title = "제목 수정 (인디·찰리·리아 관리자) · Enter로 확정";
       label.addEventListener("keydown", function (e) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -1696,7 +1696,7 @@
 
         const handle = document.createElement("span");
         handle.className = "th-resize-handle";
-        handle.title = "너비 조절 (인디)";
+        handle.title = "너비 조절 (인디·찰리·리아 관리자)";
         handle.addEventListener("mousedown", function (e) {
           e.preventDefault();
           e.stopPropagation();
@@ -1777,7 +1777,7 @@
       layoutBar.className = "client-list-layout-bar";
       const hint = document.createElement("span");
       hint.className = "client-list-layout-hint";
-      hint.textContent = "제목·순서·너비·항목 추가/삭제 (인디)";
+      hint.textContent = "제목·순서·너비·항목 추가/삭제 (인디·찰리·리아 관리자)";
       layoutBar.appendChild(hint);
 
       const hidden = ReviewReadable.getHiddenListCols(listKind);
