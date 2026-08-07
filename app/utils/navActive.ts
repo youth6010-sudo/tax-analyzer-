@@ -9,6 +9,24 @@ function allTaxMenuHrefs(): string[] {
   return hrefs;
 }
 
+/**
+ * 검토표 허브 — 메뉴는 /clients/review-sheet 하나지만
+ * 부가가치세·연간진행표 탭은 별도 경로.
+ */
+export const REVIEW_HUB_PATHS = [
+  '/clients/review-sheet',
+  '/clients/vat-progress',
+  '/clients/annual-progress',
+] as const;
+
+function pathMatches(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+function isReviewHubPath(pathname: string): boolean {
+  return REVIEW_HUB_PATHS.some(p => pathMatches(pathname, p));
+}
+
 /** 사이드바·메뉴 — 더 구체적인 메뉴 href가 있으면 짧은 prefix는 비활성 (예: /clients vs /clients/intake) */
 export function isNavHrefActive(
   pathname: string,
@@ -16,6 +34,12 @@ export function isNavHrefActive(
   _siblingHrefs?: readonly string[],
 ): boolean {
   const [path] = href.split('?');
+
+  // 검토표 메뉴: 허브 탭 전부 활성
+  if (path === '/clients/review-sheet') {
+    return isReviewHubPath(pathname);
+  }
+
   if (pathname === path) return true;
   if (!pathname.startsWith(`${path}/`)) return false;
 
@@ -23,6 +47,12 @@ export function isNavHrefActive(
   const moreSpecific = peers.some(sibling => {
     if (sibling === href) return false;
     const [siblingPath] = sibling.split('?');
+
+    // 검토표 허브 하위(/vat-progress 등)는 /clients보다 구체적
+    if (siblingPath === '/clients/review-sheet' && isReviewHubPath(pathname)) {
+      return true;
+    }
+
     if (!siblingPath.startsWith(`${path}/`)) return false;
     return pathname === siblingPath || pathname.startsWith(`${siblingPath}/`);
   });

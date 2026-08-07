@@ -36,6 +36,7 @@ export async function PATCH(
       taxType?: ChecklistTaxType;
       clientId?: string | null;
       dueDate?: string;
+      dueTime?: string;
       completed?: boolean;
       reflectInNotes?: boolean;
       assigneeNames?: string[];

@@ -11,10 +11,36 @@ import { VAT_PHASES, type VatPhase } from '@/app/utils/filingCheck';
 /** 연간진행표 — 가결산·보고서·원천분개·통장 분기 체크 */
 export type VatAnnualYearState = {
   preliminaryReport?: boolean;
+  /** 가결산 완료 체크한 날 */
   preliminaryReportDate?: string;
+  /** 가결산 완료예정일 */
+  preliminaryReportDueDate?: string;
+  /** 가결산 미팅일정 (날짜 YYYY-MM-DD) */
+  preliminaryMeetingDate?: string;
+  /** 가결산 미팅 시각 HH:mm */
+  preliminaryMeetingTime?: string;
+  /** face=대면(캘린더 등록) | call=통화 */
+  preliminaryMeetingMode?: 'face' | 'call' | '';
+  /** 대면 미팅 연동 개인 체크리스트 ID */
+  preliminaryMeetingEventId?: string;
+  /** 가결산 완료예정일 경과 상기 할일 ID */
+  preliminaryReportDueEventId?: string;
   /** 보고서 완료 */
   report?: boolean;
+  /** 보고서 완료 체크한 날 */
   reportDate?: string;
+  /** 보고서 완료예정일 */
+  reportDueDate?: string;
+  /** 보고서 미팅일정 (날짜) */
+  reportMeetingDate?: string;
+  /** 보고서 미팅 시각 HH:mm */
+  reportMeetingTime?: string;
+  /** face=대면(캘린더 등록) | call=통화 */
+  reportMeetingMode?: 'face' | 'call' | '';
+  /** 대면 미팅 연동 개인 체크리스트 ID */
+  reportMeetingEventId?: string;
+  /** 보고서 완료예정일 경과 상기 할일 ID */
+  reportDueEventId?: string;
   /** 원천 항목별 분개 (employed, daily, insurance4 …) */
   laborJournal?: Partial<Record<string, boolean>>;
   /** @deprecated → laborJournal */
@@ -174,8 +200,16 @@ export type VatAnnualProgressSummary = {
   tracks: VatAnnualTrackStatus[];
   preliminaryReport: boolean;
   preliminaryReportDate: string;
+  preliminaryReportDueDate: string;
+  preliminaryMeetingDate: string;
+  preliminaryMeetingTime: string;
+  preliminaryMeetingMode: 'face' | 'call' | '';
   report: boolean;
   reportDate: string;
+  reportDueDate: string;
+  reportMeetingDate: string;
+  reportMeetingTime: string;
+  reportMeetingMode: 'face' | 'call' | '';
 };
 
 function todayYmd(d = new Date()): string {
@@ -268,8 +302,26 @@ export function readVatAnnualYearState(
     ),
     preliminaryReport: entry.preliminaryReport === true,
     preliminaryReportDate: String(entry.preliminaryReportDate ?? '').trim(),
+    preliminaryReportDueDate: String(entry.preliminaryReportDueDate ?? '').trim(),
+    preliminaryMeetingDate: String(entry.preliminaryMeetingDate ?? '').trim(),
+    preliminaryMeetingTime: String(entry.preliminaryMeetingTime ?? '').trim(),
+    preliminaryMeetingMode:
+      entry.preliminaryMeetingMode === 'face' || entry.preliminaryMeetingMode === 'call'
+        ? entry.preliminaryMeetingMode
+        : '',
+    preliminaryMeetingEventId: String(entry.preliminaryMeetingEventId ?? '').trim(),
+    preliminaryReportDueEventId: String(entry.preliminaryReportDueEventId ?? '').trim(),
     report: entry.report === true,
     reportDate: String(entry.reportDate ?? '').trim(),
+    reportDueDate: String(entry.reportDueDate ?? '').trim(),
+    reportMeetingDate: String(entry.reportMeetingDate ?? '').trim(),
+    reportMeetingTime: String(entry.reportMeetingTime ?? '').trim(),
+    reportMeetingMode:
+      entry.reportMeetingMode === 'face' || entry.reportMeetingMode === 'call'
+        ? entry.reportMeetingMode
+        : '',
+    reportMeetingEventId: String(entry.reportMeetingEventId ?? '').trim(),
+    reportDueEventId: String(entry.reportDueEventId ?? '').trim(),
   };
 }
 
@@ -314,6 +366,59 @@ export function mergeVatAnnualYearStatePatch(
     reportDate = '';
   }
 
+  const preliminaryReportDueDate =
+    patch.preliminaryReportDueDate !== undefined
+      ? String(patch.preliminaryReportDueDate ?? '').trim()
+      : prev.preliminaryReportDueDate || '';
+  const preliminaryMeetingDate =
+    patch.preliminaryMeetingDate !== undefined
+      ? String(patch.preliminaryMeetingDate ?? '').trim()
+      : prev.preliminaryMeetingDate || '';
+  const preliminaryMeetingTime =
+    patch.preliminaryMeetingTime !== undefined
+      ? String(patch.preliminaryMeetingTime ?? '').trim()
+      : prev.preliminaryMeetingTime || '';
+  const preliminaryMeetingMode =
+    patch.preliminaryMeetingMode !== undefined
+      ? patch.preliminaryMeetingMode === 'face' || patch.preliminaryMeetingMode === 'call'
+        ? patch.preliminaryMeetingMode
+        : ''
+      : prev.preliminaryMeetingMode || '';
+  const preliminaryMeetingEventId =
+    patch.preliminaryMeetingEventId !== undefined
+      ? String(patch.preliminaryMeetingEventId ?? '').trim()
+      : prev.preliminaryMeetingEventId || '';
+  const preliminaryReportDueEventId =
+    patch.preliminaryReportDueEventId !== undefined
+      ? String(patch.preliminaryReportDueEventId ?? '').trim()
+      : prev.preliminaryReportDueEventId || '';
+  const reportDueDate =
+    patch.reportDueDate !== undefined
+      ? String(patch.reportDueDate ?? '').trim()
+      : prev.reportDueDate || '';
+  const reportMeetingDate =
+    patch.reportMeetingDate !== undefined
+      ? String(patch.reportMeetingDate ?? '').trim()
+      : prev.reportMeetingDate || '';
+  const reportMeetingTime =
+    patch.reportMeetingTime !== undefined
+      ? String(patch.reportMeetingTime ?? '').trim()
+      : prev.reportMeetingTime || '';
+  const reportMeetingMode =
+    patch.reportMeetingMode !== undefined
+      ? patch.reportMeetingMode === 'face' || patch.reportMeetingMode === 'call'
+        ? patch.reportMeetingMode
+        : ''
+      : prev.reportMeetingMode || '';
+  const reportMeetingEventId =
+    patch.reportMeetingEventId !== undefined
+      ? String(patch.reportMeetingEventId ?? '').trim()
+      : prev.reportMeetingEventId || '';
+  const reportDueEventId =
+    patch.reportDueEventId !== undefined
+      ? String(patch.reportDueEventId ?? '').trim()
+      : prev.reportDueEventId || '';
+
   const laborJournal = { ...(prev.laborJournal || {}) };
   const laborPatch = patch.laborJournal || patch.journalDone;
   if (laborPatch && typeof laborPatch === 'object') {
@@ -347,8 +452,20 @@ export function mergeVatAnnualYearStatePatch(
     bankEntryQuarters,
     preliminaryReport,
     preliminaryReportDate: preliminaryReport ? preliminaryReportDate : '',
+    preliminaryReportDueDate,
+    preliminaryMeetingDate,
+    preliminaryMeetingTime,
+    preliminaryMeetingMode,
+    preliminaryMeetingEventId,
+    preliminaryReportDueEventId,
     report,
     reportDate: report ? reportDate : '',
+    reportDueDate,
+    reportMeetingDate,
+    reportMeetingTime,
+    reportMeetingMode,
+    reportMeetingEventId,
+    reportDueEventId,
   };
   return { ...intakeData, vatAnnualProgress: prevMap };
 }
@@ -1099,8 +1216,16 @@ export function summarizeVatAnnualProgress(
     tracks,
     preliminaryReport: !!annual.preliminaryReport,
     preliminaryReportDate: annual.preliminaryReportDate || '',
+    preliminaryReportDueDate: annual.preliminaryReportDueDate || '',
+    preliminaryMeetingDate: annual.preliminaryMeetingDate || '',
+    preliminaryMeetingTime: annual.preliminaryMeetingTime || '',
+    preliminaryMeetingMode: annual.preliminaryMeetingMode || '',
     report: !!annual.report,
     reportDate: annual.reportDate || '',
+    reportDueDate: annual.reportDueDate || '',
+    reportMeetingDate: annual.reportMeetingDate || '',
+    reportMeetingTime: annual.reportMeetingTime || '',
+    reportMeetingMode: annual.reportMeetingMode || '',
   };
 }
 

@@ -68,6 +68,8 @@ export type PersonalChecklistDto = {
   category: ChecklistCategory;
   taxType: ChecklistTaxType;
   dueDate: string;
+  /** HH:mm — 비우면 종일 */
+  dueTime: string;
   /** 본인 기준 완료 (협업은 myCheckoff, 단독은 completed 플래그) */
   completed: boolean;
   reflectInNotes: boolean;
@@ -214,11 +216,13 @@ export function formatCalendarCreatedAt(iso: string | undefined): string {
 }
 
 /** 체크리스트 마감일 (YYYY-MM-DD) */
-export function formatChecklistDueDate(dueDate: string | undefined): string {
+export function formatChecklistDueDate(dueDate: string | undefined, dueTime?: string): string {
   if (!dueDate?.trim()) return '';
   const [y, m, d] = dueDate.split('-').map(Number);
   if (!y || !m || !d) return dueDate;
-  return `${y}. ${m}. ${d}.`;
+  const base = `${y}. ${m}. ${d}.`;
+  const t = (dueTime || '').trim();
+  return t ? `${base} ${t}` : base;
 }
 
 /** 완료 체크 일시 표시 */

@@ -8,6 +8,7 @@ import {
   listPersonalChecklistForOwner,
   listRoutedRequestsForHome,
 } from '@/lib/personalChecklist';
+import { syncAnnualDueRemindersForManager } from '@/lib/vatAnnualDueReminder';
 import type { ChecklistTaxType, PersonalChecklistAttachment } from '@/app/types/calendar';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
 
@@ -25,6 +26,17 @@ export async function GET(req: Request) {
         : leadRaw != null && leadRaw !== ''
           ? Math.max(0, Math.floor(Number(leadRaw)) || HOME_CHECKLIST_LEAD_DAYS)
           : HOME_CHECKLIST_LEAD_DAYS;
+
+    // 가결산·보고서 완료예정일 경과 상기 (담당 수임처)
+    try {
+      await syncAnnualDueRemindersForManager({
+        userId: user.id,
+        userName: user.name,
+      });
+    } catch (e) {
+      console.error('[personal-checklist] annual due reminder sync failed', e);
+    }
+
     const [items, routed] = await Promise.all([
       listPersonalChecklistForOwner(user.name, { includeCompleted, leadDays }),
       listRoutedRequestsForHome(user.name),
@@ -48,6 +60,7 @@ export async function POST(req: Request) {
       taxType?: ChecklistTaxType;
       clientId?: string | null;
       dueDate?: string;
+      dueTime?: string;
       reflectInNotes?: boolean;
       assigneeNames?: string[];
       memo?: string | { body: string; attachments?: PersonalChecklistAttachment[] };
@@ -65,13 +78,18 @@ export async function POST(req: Request) {
 
     if (body.repeat) {
       const dates = expandRepeatDates(body.repeat);
-      const items = await createPersonalChecklistItems(user.name, { ...base, dueDate: dates[0] }, dates);
+      const items = await createPersonalChecklistItems(
+        user.name,
+        { ...base, dueDate: dates[0], dueTime: body.dueTime },
+        dates,
+      );
       return NextResponse.json({ items, count: items.length });
     }
 
     const item = await createPersonalChecklistItem(user.name, {
       ...base,
       dueDate: body.dueDate,
+      dueTime: body.dueTime,
     });
 
     return NextResponse.json({ item });

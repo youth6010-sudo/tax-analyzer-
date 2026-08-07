@@ -38,6 +38,8 @@ import {
   type VatAnnualMarkStatus,
   type VatAnnualYearState,
 } from '@/lib/vatAnnualProgress';
+import { syncAnnualMeetingCalendar } from '@/lib/vatAnnualMeetingCalendar';
+import { syncAnnualDueReminders } from '@/lib/vatAnnualDueReminder';
 import { getVatProgressLayout, saveVatProgressLayout } from '@/lib/vatProgressLayoutDb';
 import type { ClientRecord } from '@/app/types/client';
 
@@ -503,7 +505,33 @@ export async function PATCH(request: NextRequest) {
           st.bankEntryQuarters ?? [],
         );
       }
-      const updated = await updateClientDetail(clientId, { intakeData });
+      let updated = await updateClientDetail(clientId, { intakeData });
+      const annualAfter = readVatAnnualYearState(updated.intakeData, year);
+      const companyName = updated.companyName || client.companyName || '';
+      const managerName = (updated.manager || client.manager || '').trim();
+      const [meetingPatch, duePatch] = await Promise.all([
+        syncAnnualMeetingCalendar({
+          clientId,
+          companyName,
+          annual: annualAfter,
+        }),
+        syncAnnualDueReminders({
+          managerName,
+          clientId,
+          companyName,
+          year,
+          annual: annualAfter,
+        }),
+      ]);
+      const combinedPatch = { ...meetingPatch, ...duePatch };
+      if (Object.keys(combinedPatch).length > 0) {
+        intakeData = mergeVatAnnualYearStatePatch(
+          { ...(updated.intakeData ?? {}) },
+          year,
+          combinedPatch,
+        );
+        updated = await updateClientDetail(clientId, { intakeData });
+      }
       const annualPayload = await buildAnnualResponse(updated);
       return NextResponse.json({ ok: true, ...annualPayload });
     }

@@ -47,6 +47,8 @@ import {
 import { CLIENT_MAIN_CATEGORIES, type ClientMainCategory } from '@/app/utils/clientsGrouping';
 import { DEFAULT_CATEGORY_FILTERS } from '@/app/utils/clientsListState';
 
+const ANNUAL_DETAIL_STORAGE_KEY = 'vatAnnualProgress.showDetail.v1';
+
 type AnnualRow = {
   id: string;
   companyName: string;
@@ -75,6 +77,97 @@ function OverallUnderName({ summary }: { summary: VatAnnualProgressSummary }) {
           style={{ width: `${Math.min(100, Math.max(0, summary.pct))}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+function ScheduleDateInput({
+  value,
+  title,
+  onChange,
+}: {
+  value: string;
+  title: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <input
+      type="date"
+      title={title}
+      value={value || ''}
+      onChange={e => onChange(e.target.value)}
+      className="w-full min-w-[7.5rem] rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] text-slate-700 outline-none focus:border-sky-400"
+    />
+  );
+}
+
+function MeetingModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'face' | 'call' | '';
+  onChange: (next: 'face' | 'call' | '') => void;
+}) {
+  return (
+    <div className="mt-1 flex w-full max-w-[4.5rem] flex-col gap-0.5">
+      {(
+        [
+          ['face', '대면'],
+          ['call', '통화'],
+        ] as const
+      ).map(([id, label]) => {
+        const on = mode === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(on ? '' : id)}
+            className={[
+              'w-full rounded px-1 py-0.5 text-[9px] font-bold leading-tight',
+              on
+                ? id === 'face'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-sky-600 text-white'
+                : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+            ].join(' ')}
+            title={id === 'face' ? '대면 — 캘린더 등록' : '통화 — 캘린더 미등록'}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 미팅 날짜 + 시:분만 */
+function MeetingScheduleCell({
+  date,
+  time,
+  onPatch,
+}: {
+  date: string;
+  time: string;
+  onPatch: (patch: { date?: string; time?: string }) => void;
+}) {
+  const timeHm = (time || '').slice(0, 5);
+  return (
+    <div className="flex flex-col items-stretch gap-1.5">
+      <input
+        type="date"
+        title="미팅 날짜"
+        value={date || ''}
+        onChange={e => onPatch({ date: e.target.value })}
+        className="w-full min-w-[7.5rem] rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] text-slate-700 outline-none focus:border-sky-400"
+      />
+      <input
+        type="time"
+        step={60}
+        title="미팅 시각 (시:분)"
+        value={timeHm}
+        onChange={e => onPatch({ time: (e.target.value || '').slice(0, 5) })}
+        className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] text-slate-700 outline-none focus:border-sky-400"
+      />
     </div>
   );
 }
@@ -395,11 +488,20 @@ export default function VatAnnualProgressBoard() {
   const [error, setError] = useState('');
   const [detailRow, setDetailRow] = useState<AnnualRow | null>(null);
   const [canViewAll, setCanViewAll] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const [managerFilter, setManagerFilter] = useState('');
   const [categoryFilters, setCategoryFilters] = useState<string[]>([...DEFAULT_CATEGORY_FILTERS]);
   const [orderTick, setOrderTick] = useState(0);
 
   const years = useMemo(() => Array.from({ length: 8 }, (_, i) => 2024 + i), []);
+
+  useEffect(() => {
+    try {
+      setShowDetail(localStorage.getItem(ANNUAL_DETAIL_STORAGE_KEY) === '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     const bump = () => setOrderTick(v => v + 1);
@@ -508,6 +610,26 @@ export default function VatAnnualProgressBoard() {
             : patch.preliminaryReport === true && !prev.preliminaryReportDate
               ? new Date().toISOString().slice(0, 10)
               : prev.preliminaryReportDate || '',
+      preliminaryReportDueDate:
+        patch.preliminaryReportDueDate !== undefined
+          ? patch.preliminaryReportDueDate
+          : prev.preliminaryReportDueDate || '',
+      preliminaryMeetingDate:
+        patch.preliminaryMeetingDate !== undefined
+          ? patch.preliminaryMeetingDate
+          : prev.preliminaryMeetingDate || '',
+      preliminaryMeetingTime:
+        patch.preliminaryMeetingTime !== undefined
+          ? patch.preliminaryMeetingTime
+          : prev.preliminaryMeetingTime || '',
+      preliminaryMeetingMode:
+        patch.preliminaryMeetingMode !== undefined
+          ? patch.preliminaryMeetingMode
+          : prev.preliminaryMeetingMode || '',
+      preliminaryMeetingEventId:
+        patch.preliminaryMeetingEventId !== undefined
+          ? patch.preliminaryMeetingEventId
+          : prev.preliminaryMeetingEventId || '',
       report: patch.report !== undefined ? patch.report : !!prev.report,
       reportDate:
         patch.report === false
@@ -517,6 +639,24 @@ export default function VatAnnualProgressBoard() {
             : patch.report === true && !prev.reportDate
               ? new Date().toISOString().slice(0, 10)
               : prev.reportDate || '',
+      reportDueDate:
+        patch.reportDueDate !== undefined ? patch.reportDueDate : prev.reportDueDate || '',
+      reportMeetingDate:
+        patch.reportMeetingDate !== undefined
+          ? patch.reportMeetingDate
+          : prev.reportMeetingDate || '',
+      reportMeetingTime:
+        patch.reportMeetingTime !== undefined
+          ? patch.reportMeetingTime
+          : prev.reportMeetingTime || '',
+      reportMeetingMode:
+        patch.reportMeetingMode !== undefined
+          ? patch.reportMeetingMode
+          : prev.reportMeetingMode || '',
+      reportMeetingEventId:
+        patch.reportMeetingEventId !== undefined
+          ? patch.reportMeetingEventId
+          : prev.reportMeetingEventId || '',
     };
     if (patch.laborJournal) {
       for (const [k, v] of Object.entries(patch.laborJournal)) {
@@ -746,8 +886,8 @@ export default function VatAnnualProgressBoard() {
   const compactChipCount = (active: boolean) =>
     `tabular-nums text-[10px] ${active ? 'text-slate-200' : 'text-slate-400'}`;
 
-  const dataTracks = VAT_ANNUAL_TRACKS;
-  const colSpan = 3 + dataTracks.length + 2;
+  const dataTracks = showDetail ? VAT_ANNUAL_TRACKS : [];
+  const colSpan = 3 + dataTracks.length + 6;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -804,6 +944,24 @@ export default function VatAnnualProgressBoard() {
         <button type="button" className={portalBtnSecondary} onClick={() => void load()}>
           새로고침
         </button>
+        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 rounded border-slate-300"
+            checked={showDetail}
+            onChange={e => {
+              const next = e.target.checked;
+              setShowDetail(next);
+              try {
+                localStorage.setItem(ANNUAL_DETAIL_STORAGE_KEY, next ? '1' : '0');
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
+          상세
+          <span className="font-normal text-slate-400">(세금계산서~원천)</span>
+        </label>
       </div>
 
       <div className={`${portalCard} shrink-0 px-3 py-2`}>
@@ -851,8 +1009,12 @@ export default function VatAnnualProgressBoard() {
       ) : null}
 
       <p className="text-[11px] text-slate-500">
-        신고대상확인(부가세)에서 제외하지 않은 업체. 열 순서: 세금계산서/계산서 → 홈택스(카드/현금) → 통장 → 기타증빙 →
-        원천. 확정 체크 시 예정이 비면 예정까지 같이 저장(예정에 값이 있으면 유지).
+        신고대상확인(부가세)에서 제외하지 않은 업체.
+        {showDetail
+          ? ' 상세 ON: 세금계산서/계산서 → 홈택스 → 통장 → 기타증빙 → 원천.'
+          : ' 「상세」를 켜면 세금계산서~원천 열이 표시됩니다.'}{' '}
+        가결산·보고서: 완료예정일 → 완료(완료일·대면/통화) → 미팅(날짜·시:분).
+        대면+날짜+시각이면 캘린더(할일)에 자동 등록되고, 통화는 등록하지 않습니다.
       </p>
 
       <div className={`${portalCard} max-h-[calc(100dvh-12rem)] overflow-auto`}>
@@ -875,35 +1037,75 @@ export default function VatAnnualProgressBoard() {
                 }
               />
             ))}
-            <col className="w-20" />
-            <col className="w-20" />
+            <col className="w-[8.75rem]" />
+            <col className="w-[5rem]" />
+            <col className="w-[9.25rem]" />
+            <col className="w-[8.75rem]" />
+            <col className="w-[5rem]" />
+            <col className="w-[9.25rem]" />
           </colgroup>
           <thead className="sticky top-0 z-20">
-            <tr className="border-b border-slate-300 bg-slate-100 text-[11px] text-slate-700 shadow-[0_1px_0_0_rgb(203,213,225)]">
-              <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center font-semibold">
+            <tr className="border-b border-slate-200 bg-slate-100 text-[10px] text-slate-600 shadow-[0_1px_0_0_rgb(203,213,225)]">
+              <th
+                rowSpan={2}
+                className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center text-[11px] font-semibold text-slate-700"
+              >
                 순번
               </th>
-              <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center font-semibold">
+              <th
+                rowSpan={2}
+                className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center text-[11px] font-semibold text-slate-700"
+              >
                 코드
               </th>
-              <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1.5 py-2 text-center font-semibold">
+              <th
+                rowSpan={2}
+                className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1.5 py-2 text-center text-[11px] font-semibold text-slate-700"
+              >
                 거래처
               </th>
               {dataTracks.map((t, i) => (
                 <th
                   key={t.key}
-                  className={`sticky top-0 z-20 border-r border-slate-200 px-0.5 py-2 text-center font-semibold leading-tight ${
+                  rowSpan={2}
+                  className={`sticky top-0 z-20 border-r border-slate-200 px-0.5 py-2 text-center text-[11px] font-semibold leading-tight text-slate-700 ${
                     i % 2 === 0 ? 'bg-slate-100' : 'bg-slate-50'
                   }`}
                 >
                   {t.label}
                 </th>
               ))}
-              <th className="sticky top-0 z-20 border-r border-slate-200 bg-slate-100 px-1 py-2 text-center font-semibold">
+              <th
+                colSpan={3}
+                className="sticky top-0 z-20 border-r border-emerald-200 bg-emerald-50 px-1 py-1.5 text-center text-[11px] font-semibold text-emerald-900"
+              >
                 가결산
               </th>
-              <th className="sticky top-0 z-20 bg-slate-100 px-1 py-2 text-center font-semibold">
+              <th
+                colSpan={3}
+                className="sticky top-0 z-20 bg-sky-50 px-1 py-1.5 text-center text-[11px] font-semibold text-sky-900"
+              >
                 보고서
+              </th>
+            </tr>
+            <tr className="border-b border-slate-300 bg-slate-50 text-[10px] text-slate-600 shadow-[0_1px_0_0_rgb(203,213,225)]">
+              <th className="sticky top-[2rem] z-20 border-r border-emerald-100 bg-emerald-50/80 px-1 py-1 text-center font-semibold">
+                완료예정일
+              </th>
+              <th className="sticky top-[2rem] z-20 border-r border-emerald-100 bg-emerald-50/80 px-1 py-1 text-center font-semibold">
+                완료
+              </th>
+              <th className="sticky top-[2rem] z-20 border-r border-slate-200 bg-emerald-50/80 px-1 py-1 text-center font-semibold">
+                미팅일정
+              </th>
+              <th className="sticky top-[2rem] z-20 border-r border-sky-100 bg-sky-50/80 px-1 py-1 text-center font-semibold">
+                완료예정일
+              </th>
+              <th className="sticky top-[2rem] z-20 border-r border-sky-100 bg-sky-50/80 px-1 py-1 text-center font-semibold">
+                완료
+              </th>
+              <th className="sticky top-[2rem] z-20 bg-sky-50/80 px-1 py-1 text-center font-semibold">
+                미팅일정
               </th>
             </tr>
           </thead>
@@ -993,9 +1195,16 @@ export default function VatAnnualProgressBoard() {
                         </td>
                       );
                     })}
-                    <td className="border-r border-slate-100 px-1 py-1.5 text-center align-middle">
-                      <label className="inline-flex cursor-pointer flex-col items-center justify-center gap-0 text-[10px] font-medium leading-tight text-slate-600">
-                        <span className="inline-flex items-center gap-1">
+                    <td className="border-r border-emerald-50 bg-emerald-50/20 px-2.5 py-2.5 text-center align-middle">
+                      <ScheduleDateInput
+                        value={row.annual.preliminaryReportDueDate || ''}
+                        title="가결산 완료예정일"
+                        onChange={v => void patchAnnual(row, { preliminaryReportDueDate: v })}
+                      />
+                    </td>
+                    <td className="border-r border-emerald-50 bg-emerald-50/20 px-1 py-1.5 text-center align-middle">
+                      <div className="inline-flex flex-col items-center">
+                        <label className="inline-flex cursor-pointer flex-col items-center justify-center gap-0 text-[9px] font-medium leading-tight text-slate-600">
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300"
@@ -1005,20 +1214,45 @@ export default function VatAnnualProgressBoard() {
                                 preliminaryReport: e.target.checked,
                               })
                             }
+                            title="가결산 완료"
                           />
-                          완료
-                        </span>
-                        {row.annualSummary.preliminaryReport &&
-                        row.annualSummary.preliminaryReportDate ? (
-                          <span className="mt-0.5 block tabular-nums text-emerald-700">
-                            {row.annualSummary.preliminaryReportDate}
-                          </span>
-                        ) : null}
-                      </label>
+                          {row.annualSummary.preliminaryReport &&
+                          row.annualSummary.preliminaryReportDate ? (
+                            <span className="mt-0.5 block max-w-[2.8rem] truncate tabular-nums text-[9px] text-emerald-700">
+                              {row.annualSummary.preliminaryReportDate.slice(5)}
+                            </span>
+                          ) : null}
+                        </label>
+                        <MeetingModeToggle
+                          mode={row.annual.preliminaryMeetingMode || ''}
+                          onChange={mode =>
+                            void patchAnnual(row, { preliminaryMeetingMode: mode })
+                          }
+                        />
+                      </div>
                     </td>
-                    <td className="px-1 py-1.5 text-center align-middle">
-                      <label className="inline-flex cursor-pointer flex-col items-center justify-center gap-0 text-[10px] font-medium leading-tight text-slate-600">
-                        <span className="inline-flex items-center gap-1">
+                    <td className="border-r border-slate-100 bg-emerald-50/20 px-2.5 py-2.5 text-center align-middle">
+                      <MeetingScheduleCell
+                        date={row.annual.preliminaryMeetingDate || ''}
+                        time={row.annual.preliminaryMeetingTime || ''}
+                        onPatch={p =>
+                          void patchAnnual(row, {
+                            ...(p.date !== undefined ? { preliminaryMeetingDate: p.date } : {}),
+                            ...(p.time !== undefined ? { preliminaryMeetingTime: p.time } : {}),
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="border-r border-sky-50 bg-sky-50/20 px-2.5 py-2.5 text-center align-middle">
+                      <ScheduleDateInput
+                        value={row.annual.reportDueDate || ''}
+                        title="보고서 완료예정일"
+                        onChange={v => void patchAnnual(row, { reportDueDate: v })}
+                      />
+                    </td>
+                    <td className="border-r border-sky-50 bg-sky-50/20 px-1 py-1.5 text-center align-middle">
+                      <div className="inline-flex flex-col items-center">
+                        <label className="inline-flex cursor-pointer flex-col items-center justify-center gap-0 text-[9px] font-medium leading-tight text-slate-600">
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300"
@@ -1028,15 +1262,31 @@ export default function VatAnnualProgressBoard() {
                                 report: e.target.checked,
                               })
                             }
+                            title="보고서 완료"
                           />
-                          완료
-                        </span>
-                        {row.annualSummary.report && row.annualSummary.reportDate ? (
-                          <span className="mt-0.5 block tabular-nums text-emerald-700">
-                            {row.annualSummary.reportDate}
-                          </span>
-                        ) : null}
-                      </label>
+                          {row.annualSummary.report && row.annualSummary.reportDate ? (
+                            <span className="mt-0.5 block max-w-[2.8rem] truncate tabular-nums text-[9px] text-sky-700">
+                              {row.annualSummary.reportDate.slice(5)}
+                            </span>
+                          ) : null}
+                        </label>
+                        <MeetingModeToggle
+                          mode={row.annual.reportMeetingMode || ''}
+                          onChange={mode => void patchAnnual(row, { reportMeetingMode: mode })}
+                        />
+                      </div>
+                    </td>
+                    <td className="bg-sky-50/20 px-2.5 py-2.5 text-center align-middle">
+                      <MeetingScheduleCell
+                        date={row.annual.reportMeetingDate || ''}
+                        time={row.annual.reportMeetingTime || ''}
+                        onPatch={p =>
+                          void patchAnnual(row, {
+                            ...(p.date !== undefined ? { reportMeetingDate: p.date } : {}),
+                            ...(p.time !== undefined ? { reportMeetingTime: p.time } : {}),
+                          })
+                        }
+                      />
                     </td>
                   </tr>
                 );

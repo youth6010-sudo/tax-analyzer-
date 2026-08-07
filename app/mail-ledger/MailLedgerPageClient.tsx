@@ -16,6 +16,7 @@ import {
   portalInput,
 } from '@/app/components/portal/uiClasses';
 import type { ClientSearchResult } from '@/app/types/client';
+import { formatCalendarCreatedAt } from '@/app/types/calendar';
 import {
   hydratePortal,
   prefetchSearchIndex,
@@ -24,6 +25,7 @@ import {
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { compressMailImageFile } from '@/app/utils/mailImage';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 import type { MailReceiptImage, MailReceiptView } from '@/lib/mailReceipts';
 
 type PickedClient = { id: string; companyName: string };
@@ -46,9 +48,11 @@ function parseTags(raw: string): string[] {
 function MailClientPicker({
   value,
   onSelect,
+  readOnly,
 }: {
   value: PickedClient | null;
   onSelect: (client: PickedClient | null) => void;
+  readOnly?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ClientSearchResult[]>([]);
@@ -82,7 +86,7 @@ function MailClientPicker({
 
   useEffect(() => {
     const q = query.trim();
-    if (!q || value) {
+    if (!q || value || readOnly) {
       setResults([]);
       setLoading(false);
       return;
@@ -118,7 +122,7 @@ function MailClientPicker({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, value]);
+  }, [query, value, readOnly]);
 
   if (value) {
     return (
@@ -126,9 +130,11 @@ function MailClientPicker({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{value.companyName}</p>
         </div>
-        <button type="button" className={`${portalBtnSecondary} !px-2 !py-1 text-xs`} onClick={() => onSelect(null)}>
-          변경
-        </button>
+        {!readOnly ? (
+          <button type="button" className={`${portalBtnSecondary} !px-2 !py-1 text-xs`} onClick={() => onSelect(null)}>
+            변경
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -145,6 +151,7 @@ function MailClientPicker({
         onFocus={() => setOpen(true)}
         placeholder="업체명·사업자번호로 검색"
         className={`${portalInput} w-full`}
+        disabled={readOnly}
       />
       {open && query.trim() ? (
         <ul className="absolute z-[70] mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
@@ -182,20 +189,31 @@ function MailClientPicker({
 function ReceiptFormModal({
   open,
   initial,
+  currentUser,
   onClose,
   onSaved,
 }: {
   open: boolean;
   initial: MailReceiptView | null;
+  currentUser: string;
   onClose: () => void;
   onSaved: (item: MailReceiptView) => void;
 }) {
+  const isEdit = !!initial;
+  const isCreator = !!initial && managerNamesMatch(initial.createdByName, currentUser);
+  const canEditCore = !isEdit || isCreator;
+
   const [client, setClient] = useState<PickedClient | null>(null);
   const [receivedAt, setReceivedAt] = useState(todayYmd());
   const [title, setTitle] = useState('');
   const [tagsText, setTagsText] = useState('');
   const [memo, setMemo] = useState('');
   const [images, setImages] = useState<MailReceiptImage[]>([]);
+  const [item, setItem] = useState<MailReceiptView | null>(null);
+  const [newTag, setNewTag] = useState('');
+  const [newMemo, setNewMemo] = useState('');
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingMemoBody, setEditingMemoBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
@@ -206,9 +224,10 @@ function ReceiptFormModal({
       setClient(initial.clientId ? { id: initial.clientId, companyName: initial.clientName || '수임처' } : null);
       setReceivedAt(initial.receivedAt || todayYmd());
       setTitle(initial.title);
-      setTagsText(initial.tags.join(', '));
-      setMemo(initial.memo);
       setImages(initial.images);
+      setItem(initial);
+      setTagsText('');
+      setMemo('');
     } else {
       setClient(null);
       setReceivedAt(todayYmd());
@@ -216,13 +235,18 @@ function ReceiptFormModal({
       setTagsText('');
       setMemo('');
       setImages([]);
+      setItem(null);
     }
+    setNewTag('');
+    setNewMemo('');
+    setEditingMemoId(null);
+    setEditingMemoBody('');
     setError('');
     setPreview(null);
   }, [open, initial]);
 
   const onPickImages = async (files: FileList | null) => {
-    if (!files?.length) return;
+    if (!files?.length || !canEditCore) return;
     const picked = Array.from(files).filter(f => f.type.startsWith('image/'));
     if (!picked.length) {
       setError('이미지 파일만 올릴 수 있습니다.');
@@ -250,7 +274,31 @@ function ReceiptFormModal({
     }
   };
 
-  const save = async () => {
+  const patchItem = async (body: Record<string, unknown>) => {
+    if (!initial) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/mail-receipts/${initial.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '저장에 실패했습니다.');
+      const next = data.item as MailReceiptView;
+      setItem(next);
+      onSaved(next);
+      return next;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '저장 실패');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCreateOrCore = async () => {
     if (!client?.id) {
       setError('수임처를 선택해 주세요.');
       return;
@@ -258,18 +306,39 @@ function ReceiptFormModal({
     setSaving(true);
     setError('');
     try {
-      const payload = {
-        clientId: client.id,
-        receivedAt,
-        title: title.trim() || '우편물',
-        tags: parseTags(tagsText),
-        memo: memo.trim(),
-        images,
-      };
-      const res = await fetch(initial ? `/api/mail-receipts/${initial.id}` : '/api/mail-receipts', {
-        method: initial ? 'PATCH' : 'POST',
+      if (!isEdit) {
+        const payload = {
+          clientId: client.id,
+          receivedAt,
+          title: title.trim() || '우편물',
+          tags: parseTags(tagsText),
+          memo: memo.trim(),
+          images,
+        };
+        const res = await fetch('/api/mail-receipts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || '저장에 실패했습니다.');
+        onSaved(data.item as MailReceiptView);
+        onClose();
+        return;
+      }
+      if (!canEditCore) {
+        onClose();
+        return;
+      }
+      const res = await fetch(`/api/mail-receipts/${initial!.id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          clientId: client.id,
+          receivedAt,
+          title: title.trim() || '우편물',
+          images,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '저장에 실패했습니다.');
@@ -282,23 +351,36 @@ function ReceiptFormModal({
     }
   };
 
+  const tags = item?.tags ?? [];
+  const memos = item?.memos ?? [];
+
   return (
     <>
       <CenterModal
         open={open}
-        title={initial ? '우편물 수정' : '우편물 등록'}
-        description="수임처에 연결하고 영수증·우편 사진을 첨부합니다."
+        title={isEdit ? '우편물 상세' : '우편물 등록'}
+        description={
+          isEdit
+            ? '기본 정보는 등록자만 수정할 수 있고, 태그·메모는 누구나 추가할 수 있습니다.'
+            : '수임처에 연결하고 영수증·우편 사진을 첨부합니다.'
+        }
         onClose={onClose}
       >
         <div className="space-y-3">
           <div>
             <p className={portalFieldLabel}>수임처 *</p>
-            <MailClientPicker value={client} onSelect={setClient} />
+            <MailClientPicker value={client} onSelect={setClient} readOnly={!canEditCore} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className={portalFieldLabel}>수령일</p>
-              <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={`${portalInput} w-full`} />
+              <p className={portalFieldLabel}>발송일</p>
+              <input
+                type="date"
+                value={receivedAt}
+                onChange={e => setReceivedAt(e.target.value)}
+                className={`${portalInput} w-full`}
+                readOnly={!canEditCore}
+              />
             </div>
             <div>
               <p className={portalFieldLabel}>제목</p>
@@ -307,44 +389,243 @@ function ReceiptFormModal({
                 onChange={e => setTitle(e.target.value)}
                 placeholder="예: 세금계산서, 등기 우편"
                 className={`${portalInput} w-full`}
+                readOnly={!canEditCore}
               />
             </div>
           </div>
-          <div>
-            <p className={portalFieldLabel}>태그</p>
-            <input
-              value={tagsText}
-              onChange={e => setTagsText(e.target.value)}
-              placeholder="예: 영수증, 4대보험, 등기 (쉼표 구분)"
-              className={`${portalInput} w-full`}
-            />
-          </div>
-          <div>
-            <p className={portalFieldLabel}>메모</p>
-            <textarea
-              value={memo}
-              onChange={e => setMemo(e.target.value)}
-              rows={3}
-              placeholder="용도·비고"
-              className={`${portalInput} w-full resize-y`}
-            />
-          </div>
+
+          {!isEdit ? (
+            <>
+              <div>
+                <p className={portalFieldLabel}>태그</p>
+                <input
+                  value={tagsText}
+                  onChange={e => setTagsText(e.target.value)}
+                  placeholder="예: 영수증, 4대보험, 등기 (쉼표 구분)"
+                  className={`${portalInput} w-full`}
+                />
+              </div>
+              <div>
+                <p className={portalFieldLabel}>메모</p>
+                <textarea
+                  value={memo}
+                  onChange={e => setMemo(e.target.value)}
+                  rows={3}
+                  placeholder="용도·비고"
+                  className={`${portalInput} w-full resize-y`}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className={portalFieldLabel}>태그</p>
+                {tags.length ? (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {tags.map(tag => {
+                      const mine = managerNamesMatch(tag.authorName, currentUser);
+                      const showAuthor =
+                        !!tag.authorName
+                        && !managerNamesMatch(tag.authorName, item?.createdByName || '');
+                      return (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200"
+                          title={
+                            showAuthor
+                              ? `${tag.authorName} · ${formatCalendarCreatedAt(tag.createdAt)}`
+                              : formatCalendarCreatedAt(tag.createdAt)
+                          }
+                        >
+                          #{tag.label}
+                          {showAuthor ? (
+                            <span className="text-[10px] font-normal text-slate-400">{tag.authorName}</span>
+                          ) : null}
+                          {mine ? (
+                            <button
+                              type="button"
+                              className="text-slate-400 hover:text-rose-600"
+                              disabled={saving}
+                              onClick={() => void patchItem({ deleteTag: tag.id })}
+                              title="태그 삭제"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-400">등록된 태그 없음</p>
+                )}
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={newTag}
+                    onChange={e => setNewTag(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!newTag.trim()) return;
+                        void patchItem({ addTag: newTag }).then(ok => {
+                          if (ok) setNewTag('');
+                        });
+                      }
+                    }}
+                    placeholder="태그 추가"
+                    className={`${portalInput} min-w-0 flex-1`}
+                  />
+                  <button
+                    type="button"
+                    className={`${portalBtnSecondary} !px-3`}
+                    disabled={saving || !newTag.trim()}
+                    onClick={() =>
+                      void patchItem({ addTag: newTag }).then(ok => {
+                        if (ok) setNewTag('');
+                      })
+                    }
+                  >
+                    추가
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className={portalFieldLabel}>메모</p>
+                <ul className="mt-1 space-y-2">
+                  {memos.length === 0 ? (
+                    <li className="text-[11px] text-slate-400">등록된 메모 없음</li>
+                  ) : (
+                    memos.map(m => {
+                      const mine = managerNamesMatch(m.authorName, currentUser);
+                      const showAuthor =
+                        !!m.authorName
+                        && !managerNamesMatch(m.authorName, item?.createdByName || '');
+                      const editing = editingMemoId === m.id;
+                      return (
+                        <li key={m.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-500">
+                            {showAuthor ? (
+                              <>
+                                <span className="font-semibold text-slate-700">{m.authorName}</span>
+                                {' · '}
+                              </>
+                            ) : null}
+                            {formatCalendarCreatedAt(m.createdAt)}
+                          </p>
+                          {editing ? (
+                            <div className="mt-1 space-y-1.5">
+                              <textarea
+                                value={editingMemoBody}
+                                onChange={e => setEditingMemoBody(e.target.value)}
+                                rows={2}
+                                className={`${portalInput} w-full resize-y text-xs`}
+                              />
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  className={`${portalBtnPrimary} !px-2 !py-1 text-[11px]`}
+                                  disabled={saving}
+                                  onClick={() =>
+                                    void patchItem({
+                                      updateMemo: { id: m.id, body: editingMemoBody },
+                                    }).then(ok => {
+                                      if (ok) {
+                                        setEditingMemoId(null);
+                                        setEditingMemoBody('');
+                                      }
+                                    })
+                                  }
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${portalBtnSecondary} !px-2 !py-1 text-[11px]`}
+                                  onClick={() => {
+                                    setEditingMemoId(null);
+                                    setEditingMemoBody('');
+                                  }}
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{m.body}</p>
+                              {mine ? (
+                                <div className="mt-1 flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline"
+                                    onClick={() => {
+                                      setEditingMemoId(m.id);
+                                      setEditingMemoBody(m.body);
+                                    }}
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="text-[11px] font-semibold text-rose-600 underline-offset-2 hover:underline"
+                                    disabled={saving}
+                                    onClick={() => void patchItem({ deleteMemo: m.id })}
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+                <div className="mt-2 space-y-1.5">
+                  <textarea
+                    value={newMemo}
+                    onChange={e => setNewMemo(e.target.value)}
+                    rows={2}
+                    placeholder="메모 추가"
+                    className={`${portalInput} w-full resize-y text-xs`}
+                  />
+                  <button
+                    type="button"
+                    className={`${portalBtnSecondary} !px-3 !py-1.5 text-xs`}
+                    disabled={saving || !newMemo.trim()}
+                    onClick={() =>
+                      void patchItem({ addMemo: newMemo }).then(ok => {
+                        if (ok) setNewMemo('');
+                      })
+                    }
+                  >
+                    메모 등록
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
           <div>
             <p className={portalFieldLabel}>이미지 (최대 {MAX_IMAGES}장)</p>
-            <label className="mt-1 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={e => {
-                  void onPickImages(e.target.files);
-                  e.currentTarget.value = '';
-                }}
-              />
-              <span className="rounded-md bg-[#4b6cb7]/10 px-2 py-1">이미지 추가</span>
-              <span className="font-normal text-slate-400">원본 최대 20MB · 자동 압축</span>
-            </label>
+            {canEditCore ? (
+              <label className="mt-1 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    void onPickImages(e.target.files);
+                    e.currentTarget.value = '';
+                  }}
+                />
+                <span className="rounded-md bg-[#4b6cb7]/10 px-2 py-1">이미지 추가</span>
+                <span className="font-normal text-slate-400">원본 최대 20MB · 자동 압축</span>
+              </label>
+            ) : null}
             {images.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 {images.map(att => (
@@ -352,26 +633,32 @@ function ReceiptFormModal({
                     <button type="button" className="block" onClick={() => setPreview({ url: att.dataUrl, name: att.name })}>
                       <img src={att.dataUrl} alt={att.name} className="h-16 w-16 rounded-md border border-slate-200 object-cover" />
                     </button>
-                    <button
-                      type="button"
-                      className="absolute -right-1 -top-1 rounded-full bg-slate-800 px-1.5 text-[10px] text-white"
-                      onClick={() => setImages(prev => prev.filter(x => x.id !== att.id))}
-                    >
-                      ×
-                    </button>
+                    {canEditCore ? (
+                      <button
+                        type="button"
+                        className="absolute -right-1 -top-1 rounded-full bg-slate-800 px-1.5 text-[10px] text-white"
+                        onClick={() => setImages(prev => prev.filter(x => x.id !== att.id))}
+                      >
+                        ×
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
-            ) : null}
+            ) : (
+              <p className="mt-1 text-[11px] text-slate-400">첨부 이미지 없음</p>
+            )}
           </div>
           {error ? <p className={portalAlertError}>{error}</p> : null}
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             <button type="button" className={portalBtnSecondary} onClick={onClose} disabled={saving}>
-              취소
+              {isEdit && !canEditCore ? '닫기' : '취소'}
             </button>
-            <button type="button" className={portalBtnPrimary} onClick={() => void save()} disabled={saving}>
-              {saving ? '저장 중…' : '저장'}
-            </button>
+            {canEditCore ? (
+              <button type="button" className={portalBtnPrimary} onClick={() => void saveCreateOrCore()} disabled={saving}>
+                {saving ? '저장 중…' : isEdit ? '기본 정보 저장' : '저장'}
+              </button>
+            ) : null}
           </div>
         </div>
       </CenterModal>
@@ -392,6 +679,14 @@ export default function MailLedgerPageClient() {
   const [editing, setEditing] = useState<MailReceiptView | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState('');
+
+  useEffect(() => {
+    void fetch('/api/auth/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setCurrentUser(d?.user?.name || ''))
+      .catch(() => setCurrentUser(''));
+  }, []);
 
   const load = useCallback(async (q = query) => {
     setLoading(true);
@@ -445,6 +740,7 @@ export default function MailLedgerPageClient() {
       }
       return [item, ...prev];
     });
+    setEditing(item);
   };
 
   const onDelete = async (id: string) => {
@@ -452,10 +748,8 @@ export default function MailLedgerPageClient() {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/mail-receipts/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || '삭제 실패');
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '삭제 실패');
       setItems(prev => prev.filter(x => x.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : '삭제 실패');
@@ -525,81 +819,114 @@ export default function MailLedgerPageClient() {
                 <p className="text-xs text-slate-500">{group.items.length}건</p>
               </div>
               <ul className="space-y-3">
-                {group.items.map(item => (
-                  <li key={item.id} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          {item.receivedAt || '—'}
-                          {item.createdByName ? ` · ${item.createdByName}` : ''}
-                        </p>
-                        {item.tags.length ? (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {item.tags.map(tag => (
-                              <span key={tag} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                        {item.memo ? <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{item.memo}</p> : null}
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          className={`${portalBtnSecondary} !px-2 !py-1 text-[11px]`}
-                          onClick={() => {
-                            setEditing(item);
-                            setModalOpen(true);
-                          }}
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          className={`${portalBtnDangerFill} !px-2 !py-1 text-[11px]`}
-                          disabled={deletingId === item.id}
-                          onClick={() => void onDelete(item.id)}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-                    {item.images.length ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {item.images.map(img => (
+                {group.items.map(item => {
+                  const mine = managerNamesMatch(item.createdByName, currentUser);
+                  return (
+                    <li key={item.id} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            {item.receivedAt || '—'}
+                            {item.createdByName ? ` · 등록 ${item.createdByName}` : ''}
+                          </p>
+                          {item.tags.length ? (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {item.tags.map(tag => {
+                                const showAuthor =
+                                  !!tag.authorName
+                                  && !managerNamesMatch(tag.authorName, item.createdByName);
+                                return (
+                                  <span
+                                    key={tag.id}
+                                    className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200"
+                                  >
+                                    #{tag.label}
+                                    {showAuthor ? (
+                                      <span className="ml-1 font-normal text-slate-400">{tag.authorName}</span>
+                                    ) : null}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          {item.memos.length ? (
+                            <ul className="mt-1.5 space-y-1">
+                              {item.memos.map(m => {
+                                const showAuthor =
+                                  !!m.authorName
+                                  && !managerNamesMatch(m.authorName, item.createdByName);
+                                return (
+                                  <li key={m.id} className="text-xs leading-relaxed text-slate-600">
+                                    {showAuthor ? (
+                                      <span className="font-semibold text-slate-700">{m.authorName} </span>
+                                    ) : null}
+                                    <span className="whitespace-pre-wrap">{m.body}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 gap-1">
                           <button
-                            key={img.id}
                             type="button"
-                            onClick={() => setPreview({ url: img.dataUrl, name: img.name })}
-                            className="block"
-                            title="미리보기"
+                            className={`${portalBtnSecondary} !px-2 !py-1 text-[11px]`}
+                            onClick={() => {
+                              setEditing(item);
+                              setModalOpen(true);
+                            }}
                           >
-                            <img
-                              src={img.dataUrl}
-                              alt={img.name}
-                              className="h-20 w-20 rounded-md border border-slate-200 object-cover"
-                            />
+                            {mine ? '수정' : '상세'}
                           </button>
-                        ))}
+                          {mine ? (
+                            <button
+                              type="button"
+                              className={`${portalBtnDangerFill} !px-2 !py-1 text-[11px]`}
+                              disabled={deletingId === item.id}
+                              onClick={() => void onDelete(item.id)}
+                            >
+                              삭제
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    ) : (
-                      <p className="mt-2 text-[11px] text-slate-400">첨부 이미지 없음</p>
-                    )}
-                  </li>
-                ))}
+                      {item.images.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {item.images.map(img => (
+                            <button
+                              key={img.id}
+                              type="button"
+                              onClick={() => setPreview({ url: img.dataUrl, name: img.name })}
+                              className="block"
+                              title="미리보기"
+                            >
+                              <img
+                                src={img.dataUrl}
+                                alt={img.name}
+                                className="h-20 w-20 rounded-md border border-slate-200 object-cover"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[11px] text-slate-400">첨부 이미지 없음</p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </li>
           ))}
         </ul>
       )}
 
-      <p className={portalFooterMeta}>수임처별로 모아 보며 태그·메모로 검색합니다.</p>
+      <p className={portalFooterMeta}>태그·메모에 등록자가 표시되며, 본인이 쓴 것만 수정·삭제할 수 있습니다.</p>
 
       <ReceiptFormModal
         open={modalOpen}
         initial={editing}
+        currentUser={currentUser}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);

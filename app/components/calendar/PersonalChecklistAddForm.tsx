@@ -132,6 +132,7 @@ export default function PersonalChecklistAddForm({
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(defaultClientId || '');
   const [dueDate, setDueDate] = useState(defaultDueDate || '');
+  const [dueTime, setDueTime] = useState('');
   const [repeatOn, setRepeatOn] = useState(false);
   const [periodOn, setPeriodOn] = useState(true);
   const [repeatFrom, setRepeatFrom] = useState('');
@@ -186,6 +187,7 @@ export default function PersonalChecklistAddForm({
       setTitle(editItem.title);
       setClientId(editItem.clientId || '');
       setDueDate(editItem.dueDate || '');
+      setDueTime(editItem.dueTime || '');
       setRepeatOn(false);
       setReflectInNotes(editItem.reflectInNotes);
       setAssigneeNames(
@@ -205,6 +207,7 @@ export default function PersonalChecklistAddForm({
     setTitle('');
     setClientId(defaultClientId || '');
     setDueDate(defaultDueDate || '');
+    setDueTime('');
     setRepeatOn(false);
     setPeriodOn(true);
     setRepeatFrom('');
@@ -545,6 +548,7 @@ export default function PersonalChecklistAddForm({
                 taxType,
                 clientId: isRoutedRequestTaxType(taxType) ? null : (clientId || null),
                 dueDate: isRoutedRequestTaxType(taxType) ? '' : dueDate,
+                dueTime: isRoutedRequestTaxType(taxType) ? '' : dueTime,
                 reflectInNotes: isRoutedRequestTaxType(taxType) ? false : reflectInNotes,
                 assigneeNames: finalAssignees,
               }
@@ -558,6 +562,7 @@ export default function PersonalChecklistAddForm({
             title,
             taxType,
             clientId: clientId || null,
+            dueTime: dueTime || '',
             reflectInNotes,
             assigneeNames: finalAssignees,
             ...(memoDraft.trim() || memoAttachments.length > 0
@@ -585,6 +590,7 @@ export default function PersonalChecklistAddForm({
             taxType,
             clientId: isRoutedRequestTaxType(taxType) ? null : (clientId || null),
             dueDate: isRoutedRequestTaxType(taxType) ? '' : dueDate,
+            dueTime: isRoutedRequestTaxType(taxType) ? '' : dueTime,
             reflectInNotes: isRoutedRequestTaxType(taxType) ? false : reflectInNotes,
             assigneeNames: finalAssignees,
             ...(memoDraft.trim() || memoAttachments.length > 0
@@ -872,16 +878,62 @@ export default function PersonalChecklistAddForm({
                   {!periodOn ? ` (최대 ${MAX_REPEAT_DATES}건)` : ''}.
                 </p>
               )}
+
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+                <span className="text-[11px] font-semibold text-slate-600">시각</span>
+                <input
+                  type="time"
+                  step={60}
+                  value={dueTime}
+                  onChange={e => setDueTime((e.target.value || '').slice(0, 5))}
+                  className={portalInput + ' w-[7.5rem] text-xs py-1.5'}
+                  title="모든 반복일에 동일 적용 (비우면 종일)"
+                  readOnly={!isOwner}
+                />
+                {dueTime ? (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline"
+                    onClick={() => setDueTime('')}
+                    disabled={!isOwner}
+                  >
+                    종일
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-slate-400">비우면 종일</span>
+                )}
+              </div>
             </div>
           ) : (
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className={portalInput + ' w-full text-xs py-1.5'}
-              aria-required={isOwner}
-              readOnly={!isOwner}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className={portalInput + ' min-w-[10rem] flex-1 text-xs py-1.5'}
+                aria-required={isOwner}
+                readOnly={!isOwner}
+              />
+              <input
+                type="time"
+                step={60}
+                value={dueTime}
+                onChange={e => setDueTime((e.target.value || '').slice(0, 5))}
+                className={portalInput + ' w-[7.5rem] text-xs py-1.5'}
+                title="시각 (선택 — 비우면 종일)"
+                readOnly={!isOwner}
+              />
+              {dueTime ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline"
+                  onClick={() => setDueTime('')}
+                  disabled={!isOwner}
+                >
+                  종일
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
       </FormRow>

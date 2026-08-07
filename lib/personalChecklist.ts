@@ -156,6 +156,7 @@ function toBaseDto(
     category: row.category as PersonalChecklistDto['category'],
     taxType,
     dueDate: row.dueDate,
+    dueTime: (row as { dueTime?: string }).dueTime || '',
     completed: row.completed,
     reflectInNotes: row.reflectInNotes,
     assigneeNames,
@@ -720,6 +721,7 @@ export type CreateChecklistInput = {
   taxType: ChecklistTaxType;
   clientId?: string | null;
   dueDate?: string;
+  dueTime?: string;
   reflectInNotes?: boolean;
   assigneeNames?: string[];
   /** 생성 시 첫 메모 (작성자 = owner) */
@@ -773,6 +775,8 @@ export async function createPersonalChecklistItems(
   const repeatSeriesId =
     uniqueDates.filter(Boolean).length > 1 ? crypto.randomUUID() : null;
 
+  const dueTime = (input.dueTime || '').trim();
+
   const rows = await db
     .insert(personalChecklistItems)
     .values(
@@ -783,6 +787,7 @@ export async function createPersonalChecklistItems(
         taxType: normalized.taxType,
         clientId: input.clientId || null,
         dueDate,
+        dueTime: dueDate ? dueTime : '',
         reflectInNotes: Boolean(input.reflectInNotes),
         assigneeNames,
         memos,
@@ -815,6 +820,7 @@ export type UpdateChecklistInput = Partial<{
   taxType: ChecklistTaxType;
   clientId: string | null;
   dueDate: string;
+  dueTime: string;
   completed: boolean;
   reflectInNotes: boolean;
   assigneeNames: string[];
@@ -1141,6 +1147,7 @@ export async function updatePersonalChecklistItem(
       ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
       ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
       ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate.trim() } : {}),
+      ...(patch.dueTime !== undefined ? { dueTime: patch.dueTime.trim() } : {}),
       ...(patchCompleted !== undefined ? { completed: patchCompleted } : {}),
       ...(patch.reflectInNotes !== undefined ? { reflectInNotes: patch.reflectInNotes } : {}),
       ...(patch.assigneeNames !== undefined || isRouted

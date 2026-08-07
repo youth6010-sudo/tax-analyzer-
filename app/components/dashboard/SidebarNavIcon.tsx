@@ -190,6 +190,8 @@ const HREF_ICON: Record<string, string> = {
   '/clients': 'clients',
   '/clients/directory': 'clients-directory',
   '/clients/review-sheet': 'filing-check',
+  '/clients/vat-progress': 'filing-check',
+  '/clients/annual-progress': 'filing-check',
   '/clients/intake': 'intake',
   '/clients/churn': 'churn',
   '/clients/nts-monitor': 'nts-monitor',

@@ -244,10 +244,8 @@ async function resolveUserNamesByLoginIds(loginIds: string[]): Promise<string[]>
 }
 
 async function resolveLeaveFinalApproverNames(): Promise<string[]> {
-  const names = await resolveUserNamesByLoginIds([
-    'indie',
-    ...(DATA_VIEWER_LOGIN_IDS as readonly string[]),
-  ]);
+  const loginIds = [...new Set(['indie', ...(DATA_VIEWER_LOGIN_IDS as readonly string[])])];
+  const names = await resolveUserNamesByLoginIds(loginIds);
   if (names.length === 0) return ['인디'];
   return names;
 }

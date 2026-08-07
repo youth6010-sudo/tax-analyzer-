@@ -8,23 +8,29 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
     const body = (await request.json()) as {
       clientId?: string;
       receivedAt?: string;
       title?: string;
-      tags?: string[];
-      memo?: string;
       images?: { id?: string; name?: string; contentType?: string; dataUrl?: string }[];
+      addTag?: string;
+      deleteTag?: string;
+      addMemo?: string;
+      updateMemo?: { id: string; body: string };
+      deleteMemo?: string;
     };
 
-    const item = await updateMailReceipt(id, {
+    const item = await updateMailReceipt(id, user.name, {
       clientId: body.clientId,
       receivedAt: body.receivedAt,
       title: body.title,
-      tags: body.tags,
-      memo: body.memo,
+      addTag: body.addTag,
+      deleteTag: body.deleteTag,
+      addMemo: body.addMemo,
+      updateMemo: body.updateMemo,
+      deleteMemo: body.deleteMemo,
       images: body.images
         ? body.images.map(img => ({
             id: img.id || crypto.randomUUID(),
@@ -39,7 +45,14 @@ export async function PATCH(
     if (e instanceof Error && e.message === 'NOT_FOUND') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    if (e instanceof Error && (e.message.includes('수임처') || e.message.includes('이미지'))) {
+    if (
+      e instanceof Error
+      && (e.message.includes('수임처')
+        || e.message.includes('이미지')
+        || e.message.includes('본인')
+        || e.message.includes('태그')
+        || e.message.includes('메모'))
+    ) {
       return NextResponse.json({ error: e.message }, { status: 400 });
     }
     return handleApiError(e);
@@ -51,12 +64,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
-    const ok = await deleteMailReceipt(id);
+    const ok = await deleteMailReceipt(id, user.name);
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (e) {
+    if (e instanceof Error && e.message.includes('본인')) {
+      return NextResponse.json({ error: e.message }, { status: 403 });
+    }
     return handleApiError(e);
   }
 }

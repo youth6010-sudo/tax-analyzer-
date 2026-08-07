@@ -340,6 +340,8 @@ export const personalChecklistItems = pgTable('personal_checklist_items', {
   category: text('category').notNull().default('other'),
   taxType: text('tax_type').notNull().default(''),
   dueDate: text('due_date').notNull().default(''),
+  /** HH:mm — 비우면 종일 */
+  dueTime: text('due_time').notNull().default(''),
   completed: boolean('completed').notNull().default(false),
   reflectInNotes: boolean('reflect_in_notes').notNull().default(false),
   /** 공동 담당자(작성자 제외 가능) */
@@ -511,7 +513,11 @@ export const mailReceipts = pgTable('mail_receipts', {
   clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
   receivedAt: text('received_at').notNull().default(''),
   title: text('title').notNull().default(''),
-  tags: jsonb('tags').notNull().$type<string[]>().default([]),
+  /** { id, label, authorName, createdAt }[] — 레거시 string[]도 읽기 시 변환 */
+  tags: jsonb('tags').notNull().$type<unknown[]>().default([]),
+  /** { id, authorName, body, createdAt }[] */
+  memos: jsonb('memos').notNull().$type<unknown[]>().default([]),
+  /** 검색용 — memos body 합본 */
   memo: text('memo').notNull().default(''),
   images: jsonb('images')
     .notNull()

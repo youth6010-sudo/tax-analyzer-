@@ -49,10 +49,10 @@ export async function listCalendarEvents(
     events.push({
       id: `personal-${item.id}`,
       kind: 'personal',
-      title: item.title,
+      title: item.dueTime ? `${item.dueTime} ${item.title}` : item.title,
       startDate: item.dueDate,
       endDate: item.dueDate,
-      allDay: true,
+      allDay: !item.dueTime,
       href: `/calendar?highlight=${item.id}`,
       subtitle: item.clientName,
       ownerName: item.ownerName,

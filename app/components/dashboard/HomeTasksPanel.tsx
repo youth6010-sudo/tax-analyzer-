@@ -299,13 +299,17 @@ export default function HomeTasksPanel() {
       const leaveNotifRes = await fetchWithTimeout('/api/leave/notifications', {}, 10_000);
       if (leaveNotifRes.ok) {
         const payload = (await leaveNotifRes.json()) as { items?: LeaveNotificationDto[] };
-        // 신청자 완료/반려 알림만 홈에 노출 (결재 요청 알림은 결재 대기 목록으로 충분)
-        const items = (payload.items || []).filter(
-          n =>
-            n.title.includes('휴가 승인') ||
-            n.title.includes('휴가 반려') ||
-            n.title.includes('휴가 취소'),
-        );
+        // 신청자용 처리 완료 알림만 (결재/취소 요청은 대기 목록으로 충분)
+        const items = (payload.items || []).filter(n => {
+          const t = n.title;
+          if (t.includes('요청')) return false;
+          return (
+            t.includes('휴가 승인') ||
+            t.includes('휴가 반려') ||
+            t.includes('휴가 취소 승인') ||
+            t.includes('휴가 취소 반려')
+          );
+        });
         setLeaveNotifs(items);
       } else {
         setLeaveNotifs([]);
@@ -645,7 +649,7 @@ export default function HomeTasksPanel() {
                                     overdue ? 'text-red-700' : 'text-slate-600'
                                   }`}
                                 >
-                                  {overdue ? '기한 경과 · ' : ''}마감 {formatChecklistDueDate(item.dueDate)}
+                                  {overdue ? '기한 경과 · ' : ''}마감 {formatChecklistDueDate(item.dueDate, item.dueTime)}
                                 </span>
                               )}
                               {myDone && !!formatCheckoffCompletedAt(item.myCompletedAt) && (
@@ -717,6 +721,100 @@ export default function HomeTasksPanel() {
                   </ul>
                 )}
               </SectionCard>
+
+            {(canApproveLeaveUi || leaveNotifs.length > 0) && (
+              <SectionCard
+                title="휴가 결재"
+                count={leavePending.length + leaveNotifs.length}
+                open={sections.leave}
+                onToggle={() => toggleSection('leave')}
+              >
+                {leavePending.length === 0 && leaveNotifs.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {leaveNotifs.map(n => (
+                      <li
+                        key={n.id}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-sm shadow-sm"
+                      >
+                        <p className="font-semibold text-slate-800">{n.title}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {n.actorName} · 처리 완료
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void (async () => {
+                                await fetch('/api/leave/notifications', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: n.id }),
+                                });
+                                setLeaveNotifs(prev => prev.filter(x => x.id !== n.id));
+                              })();
+                            }}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                          >
+                            확인
+                          </button>
+                          <Link
+                            href="/leave"
+                            className="text-[11px] font-semibold text-emerald-700 underline-offset-2 hover:underline"
+                          >
+                            휴가관리
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
+                    {leavePending.map(item => (
+                      <li
+                        key={item.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openLeaveReview(item)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openLeaveReview(item);
+                          }
+                        }}
+                        className="cursor-pointer rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm hover:border-teal-300"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-semibold text-slate-800">{item.applicantName}</p>
+                          <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                            {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
+                          </span>
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                            {leaveStatusLabel(item.status, item.approvalStep)}
+                          </span>
+                          <span className="text-[11px] font-semibold text-teal-800">{item.days}일</span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          {item.startDate}
+                          {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
+                          {item.title ? ` · ${item.title}` : ''}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              openLeaveReview(item);
+                            }}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                          >
+                            {item.status === 'cancel_requested' ? '취소 승인 / 반려' : '승인 / 반려'}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+            )}
 
             <SectionCard
               title="비품주문/시스템개선"
@@ -903,99 +1001,7 @@ export default function HomeTasksPanel() {
               )}
             </SectionCard>
 
-            {(canApproveLeaveUi || leaveNotifs.length > 0) && (
-              <SectionCard
-                title="휴가 결재"
-                count={leavePending.length + leaveNotifs.length}
-                open={sections.leave}
-                onToggle={() => toggleSection('leave')}
-              >
-                {leavePending.length === 0 && leaveNotifs.length === 0 ? (
-                  <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {leaveNotifs.map(n => (
-                      <li
-                        key={n.id}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-sm shadow-sm"
-                      >
-                        <p className="font-semibold text-slate-800">{n.title}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          {n.actorName} · 처리 완료
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void (async () => {
-                                await fetch('/api/leave/notifications', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ id: n.id }),
-                                });
-                                setLeaveNotifs(prev => prev.filter(x => x.id !== n.id));
-                              })();
-                            }}
-                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
-                          >
-                            확인
-                          </button>
-                          <Link
-                            href="/leave"
-                            className="text-[11px] font-semibold text-emerald-700 underline-offset-2 hover:underline"
-                          >
-                            휴가관리
-                          </Link>
-                        </div>
-                      </li>
-                    ))}
-                    {leavePending.map(item => (
-                      <li
-                        key={item.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openLeaveReview(item)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            openLeaveReview(item);
-                          }
-                        }}
-                        className="cursor-pointer rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm hover:border-teal-300"
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <p className="font-semibold text-slate-800">{item.applicantName}</p>
-                          <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
-                            {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
-                          </span>
-                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                            {leaveStatusLabel(item.status, item.approvalStep)}
-                          </span>
-                          <span className="text-[11px] font-semibold text-teal-800">{item.days}일</span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-slate-600">
-                          {item.startDate}
-                          {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
-                          {item.title ? ` · ${item.title}` : ''}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              openLeaveReview(item);
-                            }}
-                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
-                          >
-                            {item.status === 'cancel_requested' ? '취소 승인 / 반려' : '승인 / 반려'}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </SectionCard>
-            )}
+            
 
             <SectionCard
               title={companySectionTitle}
