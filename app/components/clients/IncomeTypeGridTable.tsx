@@ -466,13 +466,9 @@ export default function IncomeTypeGridTable({
                     {row.semiAnnualTarget ? (
                       <span
                         className="shrink-0 whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
-                        title={
-                          row.semiAnnualMonthlyDisplay
-                            ? '반기 신고대상 · 매월 표시'
-                            : '반기 신고대상 (6·12월)'
-                        }
+                        title="반기 신고대상 (1·7월 신고만)"
                       >
-                        반기{row.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                        반기
                       </span>
                     ) : null}
                     {row.closureNotice ? (

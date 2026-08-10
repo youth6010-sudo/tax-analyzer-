@@ -75,10 +75,10 @@ export default function ClientMainMetaSection({
     if (Object.values(taxFlags).some(Boolean)) intakePatch.taxFlags = taxFlags;
     else intakePatch.taxFlags = null;
 
-    if (form.semiAnnualTarget || form.semiAnnualMonthlyDisplay) {
+    if (form.semiAnnualTarget) {
       intakePatch.withholdingSettings = {
-        semiAnnualTarget: form.semiAnnualTarget,
-        semiAnnualMonthlyDisplay: form.semiAnnualMonthlyDisplay,
+        semiAnnualTarget: true,
+        semiAnnualMonthlyDisplay: false,
       };
     } else {
       intakePatch.withholdingSettings = null;
@@ -98,7 +98,7 @@ export default function ClientMainMetaSection({
   const wh = readWithholdingSettings(intake);
   const flags = (intake.taxFlags ?? {}) as Record<string, boolean>;
   const metaVisible = MAIN_META_INTAKE_KEYS.some(k => String(intake[k] ?? '').trim());
-  const flagsVisible = TAX_FLAG_KEYS.some(k => flags[k]) || wh.semiAnnualTarget || wh.semiAnnualMonthlyDisplay;
+  const flagsVisible = TAX_FLAG_KEYS.some(k => flags[k]) || wh.semiAnnualTarget;
 
   if (!metaVisible && !flagsVisible && !canEdit) return null;
 
@@ -223,20 +223,16 @@ export default function ClientMainMetaSection({
               <input
                 type="checkbox"
                 checked={form.semiAnnualTarget}
-                onChange={e => setForm(f => ({ ...f, semiAnnualTarget: e.target.checked, semiAnnualMonthlyDisplay: e.target.checked ? f.semiAnnualMonthlyDisplay : false }))}
+                onChange={e =>
+                  setForm(f => ({
+                    ...f,
+                    semiAnnualTarget: e.target.checked,
+                    semiAnnualMonthlyDisplay: false,
+                  }))
+                }
                 className="h-3.5 w-3.5 accent-blue-600"
               />
-              반기
-            </label>
-            <label className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${form.semiAnnualTarget ? 'border-blue-200 bg-blue-50/50 text-blue-800' : 'border-slate-200 bg-white text-slate-400'}`}>
-              <input
-                type="checkbox"
-                checked={form.semiAnnualMonthlyDisplay}
-                disabled={!form.semiAnnualTarget}
-                onChange={e => setForm(f => ({ ...f, semiAnnualMonthlyDisplay: e.target.checked }))}
-                className="h-3.5 w-3.5 accent-blue-600 disabled:opacity-40"
-              />
-              매월
+              반기(1·7월)
             </label>
           </div>
           <label className="flex min-w-[10rem] items-center gap-1.5 text-[10px]">
@@ -299,7 +295,7 @@ export default function ClientMainMetaSection({
               ))}
               {wh.semiAnnualTarget && (
                 <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                  반기{wh.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                  반기(1·7월)
                 </span>
               )}
             </div>
@@ -321,7 +317,7 @@ function buildForm(intakeData: Record<string, unknown>) {
     meta,
     flags: flagState,
     semiAnnualTarget: wh.semiAnnualTarget,
-    semiAnnualMonthlyDisplay: wh.semiAnnualMonthlyDisplay,
+    semiAnnualMonthlyDisplay: false,
     fiscalYearEndMonth: readFiscalYearEndMonth(intakeData) ?? 0,
   };
 }

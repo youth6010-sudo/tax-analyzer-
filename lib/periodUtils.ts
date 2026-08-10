@@ -1,6 +1,6 @@
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
-/** 원천세 반기 신고 제출월 — 지급월 기준 6월(상반기)·12월(하반기) */
+/** 원천세 반기 신고 — 귀속월 6·12 (= 신고월 7·1) */
 export const SEMI_ANNUAL_FILING_MONTHS = [6, 12] as const;
 
 export type SimplePayrollHalf = 'H1' | 'H2';
@@ -21,14 +21,13 @@ export function isSemiAnnualWithholdingClient(intakeData: Record<string, unknown
   return readWithholdingSettings(intakeData).semiAnnualTarget;
 }
 
-/** 반기 신고대상 + 매월 미표시 + 반기 신고월(6·12월) 아님 → 자동 제외 */
+/** 반기 신고대상 + 반기 신고월(귀속 6·12 = 신고 1·7월) 아님 → 자동 제외 */
 export function isSemiAnnualOffMonthExcluded(
   intakeData: Record<string, unknown>,
   month: number,
 ): boolean {
-  const { semiAnnualTarget, semiAnnualMonthlyDisplay } = readWithholdingSettings(intakeData);
+  const { semiAnnualTarget } = readWithholdingSettings(intakeData);
   if (!semiAnnualTarget) return false;
-  if (semiAnnualMonthlyDisplay) return false;
   return !isSemiAnnualFilingMonth(month);
 }
 

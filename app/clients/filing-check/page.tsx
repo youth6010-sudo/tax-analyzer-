@@ -479,23 +479,21 @@ function FilingBottomStats({
 }) {
   return (
     <div
-      className={`${portalCard} mt-3 flex flex-wrap items-start justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
+      className={`${portalCard} mt-3 flex flex-wrap items-center justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
     >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-800">
-          총 체크{' '}
-          <span className="tabular-nums text-emerald-700">{received}</span>
-          <span className="font-normal text-slate-500"> / 신고대상 </span>
-          <span className="tabular-nums text-blue-700">{target}</span>
-          <span className="font-normal text-slate-500">{unit}</span>
-          {diff > 0 && (
-            <span className="ml-2 font-medium tabular-nums text-rose-600">
-              (차이 {diff}
-              {unit})
-            </span>
-          )}
-        </p>
-      </div>
+      <p className="text-sm font-semibold text-slate-800">
+        총 체크{' '}
+        <span className="tabular-nums text-emerald-700">{received}</span>
+        <span className="font-normal text-slate-500"> / 신고대상 </span>
+        <span className="tabular-nums text-blue-700">{target}</span>
+        <span className="font-normal text-slate-500">{unit}</span>
+        {diff > 0 && (
+          <span className="ml-2 font-medium tabular-nums text-rose-600">
+            (차이 {diff}
+            {unit})
+          </span>
+        )}
+      </p>
       {diff === 0 && target > 0 && (
         <span className="shrink-0 text-xs font-medium text-emerald-700">전체 접수 완료</span>
       )}
@@ -1073,13 +1071,7 @@ function FilingCheckPageInner() {
         scopeByManager(simplePayrollTargetsForPeriod(clients, prevAttr.month).filter(isContractProgressClient)),
       );
       const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, attribution.month).filter(isContractProgressClient));
-      return compareSessionTargets(prevTargets, currTargets, prevRec, record, {
-        isAutoExcluded: (c, which) =>
-          isSemiAnnualOffMonthExcluded(
-            c.intakeData ?? {},
-            which === 'prev' ? prevAttr.month : attribution.month,
-          ),
-      });
+      return compareSessionTargets(prevTargets, currTargets, prevRec, record);
     }
     if (tax === 'comprehensive') {
       const prevGroups = groupComprehensiveFilingTargets(
@@ -1464,7 +1456,7 @@ function FilingCheckPageInner() {
     // 수기로 다시 살린 업체는 반기 자동제외 무시
     if (isForceIncluded(c.id)) return null;
     if (
-      (tax === 'withholding' || tax === 'simplePayroll') &&
+      tax === 'withholding' &&
       isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, attribution.month)
     ) {
       return SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON;
@@ -1832,12 +1824,22 @@ function FilingCheckPageInner() {
     timer: number | null;
     startX: number;
     startY: number;
+    pointerId: number;
+    el: HTMLElement;
   } | null>(null);
   const suppressTargetClickRef = useRef(false);
 
   const endTargetDrag = useCallback(() => {
     if (targetDragRef.current?.timer) {
       window.clearTimeout(targetDragRef.current.timer);
+    }
+    const drag = targetDragRef.current;
+    if (drag?.longPress) {
+      try {
+        drag.el.releasePointerCapture(drag.pointerId);
+      } catch {
+        /* noop */
+      }
     }
     targetDragRef.current = null;
     setDraggingTargetId(null);
@@ -1846,17 +1848,20 @@ function FilingCheckPageInner() {
   const handleTargetPointerDown = useCallback((e: React.PointerEvent<HTMLElement>, id: string) => {
     if (!canReorderTargets) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* noop */
-    }
+    // 즉시 capture하면 업체명 클릭이 먹히므로, 길게 누른 뒤에만 capture
     suppressTargetClickRef.current = false;
+    const el = e.currentTarget;
+    const pointerId = e.pointerId;
     const timer = window.setTimeout(() => {
       if (targetDragRef.current?.id === id) {
         targetDragRef.current.longPress = true;
         suppressTargetClickRef.current = true;
         setDraggingTargetId(id);
+        try {
+          el.setPointerCapture(pointerId);
+        } catch {
+          /* noop */
+        }
       }
     }, FILING_LONG_PRESS_MS);
     targetDragRef.current = {
@@ -1866,6 +1871,8 @@ function FilingCheckPageInner() {
       timer,
       startX: e.clientX,
       startY: e.clientY,
+      pointerId,
+      el,
     };
   }, [canReorderTargets]);
 
@@ -2141,12 +2148,42 @@ function FilingCheckPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedComprehensiveGroupsOrdered, record.excluded, record.rowNotes, reviewFeeAmountForClient]);
 
+  const filteredReviewFeeTotal = useMemo(() => {
+    if (!showsReviewFeeColumn) return null;
+    const clientsForFee =
+      tax === 'comprehensive'
+        ? filteredComprehensiveGroupsOrdered
+            .map(g => g.clients[0])
+            .filter((c): c is ClientRecord => !!c)
+        : filteredTargetsForTable;
+    let sum = 0;
+    for (const c of clientsForFee) {
+      const fee = reviewFeeAmountForClient(c);
+      if (fee != null && Number.isFinite(fee)) sum += fee;
+    }
+    return sum;
+  }, [
+    showsReviewFeeColumn,
+    tax,
+    filteredComprehensiveGroupsOrdered,
+    filteredTargetsForTable,
+    reviewFeeAmountForClient,
+  ]);
+
+  const reviewFeeHeaderSubtitle =
+    filteredReviewFeeTotal != null && filteredReviewFeeTotal > 0
+      ? `${filteredReviewFeeTotal.toLocaleString('ko-KR')}원`
+      : filteredReviewFeeTotal != null
+        ? '—'
+        : undefined;
+
   const renderColFilter = (
     key: string,
     label: string,
     options: ReturnType<typeof buildColumnFilterOptions>,
     className?: string,
     extraMenus?: ReactNode,
+    subtitle?: ReactNode,
   ) => (
     <ColumnValueFilterHeader
       columnKey={key}
@@ -2160,6 +2197,7 @@ function FilingCheckPageInner() {
       align="center"
       className={className}
       extraMenus={extraMenus}
+      subtitle={subtitle}
     />
   );
 
@@ -2471,7 +2509,7 @@ function FilingCheckPageInner() {
         }
         // 반기 자동제외 등이면 수기 강제포함으로 살려서 접수 체크 가능하게
         const wouldAutoExclude =
-          (tax === 'withholding' || tax === 'simplePayroll') &&
+          tax === 'withholding' &&
           isSemiAnnualOffMonthExcluded(client.intakeData ?? {}, attribution.month) &&
           !nextForce[client.id];
         if (wouldAutoExclude) {
@@ -2926,7 +2964,7 @@ function FilingCheckPageInner() {
         )}
         {tax === 'simplePayroll' && employedFilingMonth && (
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-            근로 반기 신고월 (6·12월)
+            근로 반기 신고월 (1·7월)
           </span>
         )}
 
@@ -3292,7 +3330,14 @@ function FilingCheckPageInner() {
               {renderColFilter('receipt', '접수', comprehensiveColumnFilterOptions.receipt, 'w-12')}
               <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
               {showsReviewFeeColumn
-                ? renderColFilter('fee', '수수료', comprehensiveColumnFilterOptions.fee, 'w-24')
+                ? renderColFilter(
+                    'fee',
+                    '수수료',
+                    comprehensiveColumnFilterOptions.fee,
+                    'w-24',
+                    undefined,
+                    reviewFeeHeaderSubtitle,
+                  )
                 : null}
               <th className="sticky top-0 z-20 w-28 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">대표자명</th>
               <th className="sticky top-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">주민등록번호</th>
@@ -3582,7 +3627,14 @@ function FilingCheckPageInner() {
               {renderColFilter('receipt', '접수', targetColumnFilterOptions.receipt, 'w-12')}
               <th className="sticky top-0 z-20 w-12 whitespace-nowrap bg-slate-50 px-2 py-2 text-center font-semibold shadow-[0_1px_0_0_#e2e8f0]">순번</th>
               {showsReviewFeeColumn
-                ? renderColFilter('fee', '수수료', targetColumnFilterOptions.fee, 'w-24')
+                ? renderColFilter(
+                    'fee',
+                    '수수료',
+                    targetColumnFilterOptions.fee,
+                    'w-24',
+                    undefined,
+                    reviewFeeHeaderSubtitle,
+                  )
                 : null}
               {renderColFilter(
                 'company',
@@ -3714,14 +3766,16 @@ function FilingCheckPageInner() {
                         ) : tax === 'withholding' ? (
                           <button
                             type="button"
-                            disabled={locked}
-                            onClick={() => setIncomePanelClient(c)}
+                            onClick={() => {
+                              if (suppressTargetClickRef.current) return;
+                              setIncomePanelClient(c);
+                            }}
                             className={`min-w-0 break-words text-left text-sm font-semibold hover:underline ${
                               excluded
                                 ? 'text-slate-400 line-through decoration-slate-400'
                                 : 'text-slate-800 hover:text-blue-600'
-                            } disabled:cursor-default disabled:no-underline`}
-                            title="클릭 — 지급명세서 신고대상 설정"
+                            }`}
+                            title="클릭 — 신고대상 설정 · 길게 눌러 끌면 순서 변경"
                           >
                             {c.companyName || '(이름 없음)'}
                           </button>
@@ -3765,13 +3819,9 @@ function FilingCheckPageInner() {
                           return (
                             <span
                               className="shrink-0 whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
-                              title={
-                                wh.semiAnnualMonthlyDisplay
-                                  ? '반기 신고대상 · 매월 표시'
-                                  : '반기 신고대상 (6·12월)'
-                              }
+                              title="반기 신고대상 (1·7월 신고만)"
                             >
-                              반기{wh.semiAnnualMonthlyDisplay ? '·매월' : ''}
+                              반기
                             </span>
                           );
                         })()}

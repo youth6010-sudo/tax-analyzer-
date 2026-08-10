@@ -32,7 +32,7 @@ export default function ClientFilingSettingsModal({
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-slate-800">{companyName}</h2>
-            <p className="text-xs text-slate-500">지급명세서 신고대상 (간이지급 · 연말정산)</p>
+            <p className="text-xs text-slate-500">지급명세서 신고대상 · 원천 반기(1·7월 신고)</p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
             닫기

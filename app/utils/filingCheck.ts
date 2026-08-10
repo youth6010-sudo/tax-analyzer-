@@ -375,7 +375,7 @@ export function withholdingTargetsForPeriod(
 
 export { isSemiAnnualOffMonthExcluded, isSemiAnnualWithholdingClient, SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON };
 
-/** 간이지급 — 원천세와 동일한 업체·반기·매월 표시 규칙 */
+/** 간이지급 — 원천세와 동일 업체. 반기 자동제외는 원천세만 적용(간이지급은 매달) */
 export function simplePayrollTargetsForPeriod(
   clients: ClientRecord[],
   month: number,

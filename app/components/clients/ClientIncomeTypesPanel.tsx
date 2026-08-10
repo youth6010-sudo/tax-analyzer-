@@ -30,7 +30,6 @@ export default function ClientIncomeTypesPanel({
   const [types, setTypes] = useState<ClientIncomeTypes | null>(null);
   const [yearEndTypes, setYearEndTypes] = useState<YearEndClientTypes>(EMPTY_YEAR_END_TYPES);
   const [semiAnnualTarget, setSemiAnnualTarget] = useState(false);
-  const [semiAnnualMonthly, setSemiAnnualMonthly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -45,7 +44,6 @@ export default function ClientIncomeTypesPanel({
       interestDividend: Boolean((data.yearEndTypes as YearEndClientTypes)?.interestDividend),
     });
     setSemiAnnualTarget(Boolean(data.withholdingSettings?.semiAnnualTarget));
-    setSemiAnnualMonthly(Boolean(data.withholdingSettings?.semiAnnualMonthlyDisplay));
   }, [clientId]);
 
   useEffect(() => {
@@ -81,7 +79,7 @@ export default function ClientIncomeTypesPanel({
           yearEndTypes: normalizedYearEndTypes(),
           withholdingSettings: {
             semiAnnualTarget,
-            semiAnnualMonthlyDisplay: semiAnnualMonthly,
+            semiAnnualMonthlyDisplay: false,
           },
         }),
       });
@@ -167,6 +165,10 @@ export default function ClientIncomeTypesPanel({
 
       <div className="space-y-2 border-t border-slate-100 pt-3">
         <p className="text-xs font-bold text-slate-600">원천세 반기 신고</p>
+        <p className="text-[11px] text-slate-500">
+          원천세 탭에서만 1월·7월 신고분에 남고 그 외 월은 자동 제외됩니다. 간이지급은 반기여도
+          월별 항목(일용·사업·기타·근로내용확인)이 매달 표시되며, 근로(상용)만 6·12월입니다.
+        </p>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -176,16 +178,6 @@ export default function ClientIncomeTypesPanel({
             onChange={() => setSemiAnnualTarget(v => !v)}
           />
           <span>반기 신고대상</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="accent-blue-600"
-            checked={semiAnnualMonthly}
-            disabled={!canEdit || !semiAnnualTarget}
-            onChange={() => setSemiAnnualMonthly(v => !v)}
-          />
-          <span>매월 표시 (반기 대상일 때)</span>
         </label>
       </div>
 

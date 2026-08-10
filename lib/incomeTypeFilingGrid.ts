@@ -13,10 +13,8 @@ import { readIncomeTypes, readYearEndTypes } from '@/lib/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
   isEmployedColumnApplicable,
-  isSemiAnnualOffMonthExcluded,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
-  SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
@@ -154,6 +152,7 @@ export function buildSimplePayrollGrid(
   extraClientIds: string[] = [],
   opts?: { periodStartDate?: Date },
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
+  void forceIncluded;
   const meta = simplePayrollPeriodMeta(periodKey);
   const { monthlyPeriodKey, employedPeriodKey, employedFilingMonth } = meta;
   const filedMap = new Map(
@@ -223,11 +222,6 @@ export function buildSimplePayrollGrid(
       };
 
       const manualExcluded = Object.prototype.hasOwnProperty.call(excluded, c.id);
-      const forced = Boolean(forceIncluded[c.id]);
-      const autoSemi =
-        !manualExcluded &&
-        !forced &&
-        isSemiAnnualOffMonthExcluded(intakeData, meta.month);
 
       return {
         clientId: c.id,
@@ -236,11 +230,8 @@ export function buildSimplePayrollGrid(
         businessNo: c.businessNo,
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
-        excludeReason: manualExcluded
-          ? (excluded[c.id] ?? '')
-          : autoSemi
-            ? SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON
-            : null,
+        // 원천 반기 자동제외는 간이지급에 적용하지 않음 — 일용·사업·기타·근로내용확인은 매달
+        excludeReason: manualExcluded ? (excluded[c.id] ?? '') : null,
         rowNote: rowNotes[c.id] ?? '',
         semiAnnualTarget: whSettings.semiAnnualTarget,
         semiAnnualMonthlyDisplay: whSettings.semiAnnualMonthlyDisplay,

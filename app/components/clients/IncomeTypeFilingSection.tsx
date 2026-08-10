@@ -357,6 +357,10 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   );
   const fileRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
+  const saveInFlightRef = useRef(false);
+  const saveAgainRef = useRef(false);
 
   const periodKey =
     mode === 'simplePayroll' ? simplePayrollMonthlyPeriodKey(year, month) : String(year);
@@ -546,9 +550,17 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   }, [monthProp]);
 
   const persistGrid = useCallback(async () => {
+    if (saveInFlightRef.current) {
+      saveAgainRef.current = true;
+      return;
+    }
+    saveInFlightRef.current = true;
+    saveAgainRef.current = false;
     setSaving(true);
     if (!embedded) setMessage('');
     try {
+      // setState 직후 클로저가 한 박자 늦을 수 있어 ref 기준으로 저장
+      const snapshot = gridRef.current;
       if (mode === 'simplePayroll') {
         const monthlyKey = spMeta?.monthlyPeriodKey ?? simplePayrollMonthlyPeriodKey(year, month);
         const employedKey =
@@ -563,7 +575,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           notes: string;
         }[] = [];
 
-        for (const row of grid) {
+        for (const row of snapshot) {
           for (const col of SIMPLE_PAYROLL_GRID_COLUMNS) {
             if (col.kind === 'laborDate' || col.kind === 'laborMethod') continue;
             const cell = row.cells[col.key];
@@ -611,7 +623,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         if (!res.ok) throw new Error('저장 실패');
       } else {
         const rows: { clientId: string; incomeType: YearEndIncomeKey; filed: boolean }[] = [];
-        for (const row of grid) {
+        for (const row of snapshot) {
           for (const col of YEAR_END_COLUMNS) {
             const cell = row.cells[col.key];
             if (!cell) continue;
@@ -639,8 +651,15 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       throw e;
     } finally {
       setSaving(false);
+      saveInFlightRef.current = false;
+      if (saveAgainRef.current) {
+        saveAgainRef.current = false;
+        void persistGrid().catch(() => {
+          onUploadNotice?.('저장 실패 — 서버 연결을 확인해 주세요.');
+        });
+      }
     }
-  }, [mode, grid, spMeta, year, month, embedded, onUploadNotice, onSaved]);
+  }, [mode, spMeta, year, month, embedded, onUploadNotice, onSaved]);
 
   const scheduleSave = useCallback(() => {
     if (!embedded) return;
@@ -650,7 +669,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         onUploadNotice?.('저장 실패 — 서버 연결을 확인해 주세요.');
       });
     }, 400);
-  }, [embedded, persistGrid]);
+  }, [embedded, persistGrid, onUploadNotice]);
 
   useEffect(
     () => () => {
@@ -718,8 +737,8 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   );
 
   const updateCell = (clientId: string, incomeType: string, patch: Partial<GridCellState>) => {
-    setGrid(prev =>
-      prev.map(row => {
+    setGrid(prev => {
+      const next = prev.map(row => {
         if (row.clientId !== clientId) return row;
         return {
           ...row,
@@ -728,8 +747,10 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
             [incomeType]: { ...row.cells[incomeType], ...patch },
           },
         };
-      }),
-    );
+      });
+      gridRef.current = next;
+      return next;
+    });
   };
 
   const labelOf = (incomeType: string) =>
