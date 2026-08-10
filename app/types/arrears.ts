@@ -93,6 +93,56 @@ export function formatArrearsLetterDate(asOfOrLetter: string): string {
   return s;
 }
 
+/** 지급일시 → 엑셀 공문과 같은 `M월 D일` (이미 한국어면 공백만 정규화) */
+export function formatArrearsPaidDateKo(raw: string | number | Date | null | undefined): string {
+  if (raw == null || raw === '') return '';
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return `${raw.getMonth() + 1}월 ${raw.getDate()}일`;
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    // Excel serial (대략 1900~2200년)
+    if (raw > 20000 && raw < 80000) {
+      const epoch = Date.UTC(1899, 11, 30);
+      const d = new Date(epoch + Math.round(raw) * 86400000);
+      if (!Number.isNaN(d.getTime())) return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+    }
+    return '';
+  }
+
+  const s = String(raw).replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+
+  // 이미 한국어: 07월 02일 / 7월 2일
+  const ko = s.match(/^0?(\d{1,2})\s*월\s*0?(\d{1,2})\s*일$/);
+  if (ko) return `${Number(ko[1])}월 ${Number(ko[2])}일`;
+
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${Number(iso[2])}월 ${Number(iso[3])}일`;
+
+  const dot = s.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (dot) return `${Number(dot[2])}월 ${Number(dot[3])}일`;
+
+  const slash = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slash) return `${Number(slash[2])}월 ${Number(slash[3])}일`;
+
+  // 07/02, 7/2 (연도 없음 → 월/일)
+  const md = s.match(/^(\d{1,2})[./](\d{1,2})$/);
+  if (md) return `${Number(md[1])}월 ${Number(md[2])}일`;
+
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime()) && /\d{4}/.test(s)) {
+    return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일`;
+  }
+
+  return s;
+}
+
+/** 오늘 지급일시 (한국어) */
+export function todayArrearsPaidDateKo(now = new Date()): string {
+  return `${now.getMonth() + 1}월 ${now.getDate()}일`;
+}
+
+
 export type ArrearsManagerTotal = {
   managerName: string;
   count: number;

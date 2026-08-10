@@ -8,7 +8,7 @@ import type {
   ArrearsLetterLineSource,
   ArrearsMgmtCategory,
 } from '@/app/types/arrears';
-import { letterBalanceFromLines } from '@/app/types/arrears';
+import { letterBalanceFromLines, formatArrearsPaidDateKo } from '@/app/types/arrears';
 import type { ParsedLetterLine, ParsedLetterSheet } from '@/lib/arrearsLetterParse';
 import { letterLinesBalance } from '@/lib/arrearsLetterParse';
 import type { ParsedFeeEvent } from '@/lib/arrearsFeeEventParse';
@@ -23,7 +23,7 @@ function toLineDto(row: typeof arrearsLetterLines.$inferSelect): ArrearsLetterLi
     description: row.description,
     amount: row.amount,
     paidAmount: row.paidAmount,
-    paidDate: row.paidDate,
+    paidDate: formatArrearsPaidDateKo(row.paidDate),
     source: (row.source || 'manual') as ArrearsLetterLineSource,
   };
 }
@@ -122,7 +122,7 @@ export async function replaceLetterLines(
     description: String(l.description || '').trim(),
     amount: Math.round(Number(l.amount) || 0),
     paidAmount: Math.round(Number(l.paidAmount) || 0),
-    paidDate: String(l.paidDate || '').trim(),
+    paidDate: formatArrearsPaidDateKo(String(l.paidDate || '').trim()),
     source: (l.source || 'manual') as ArrearsLetterLineSource,
     sortOrder: i,
   })).filter(l => l.description);

@@ -68,6 +68,8 @@ function colIndex(headers: string[], ...cands: string[]): number {
   return -1;
 }
 
+import { formatArrearsPaidDateKo } from '@/app/types/arrears';
+
 /** 빌프랑(30) → 빌프랑 */
 export function stripCmsScheduleSuffix(name: string): string {
   return String(name || '')
@@ -76,13 +78,8 @@ export function stripCmsScheduleSuffix(name: string): string {
     .trim();
 }
 
-function formatPaidDateLabel(isoOrRaw: string): string {
-  const s = cellStr(isoOrRaw);
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${Number(m[2])}월 ${Number(m[3])}일`;
-  const m2 = s.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
-  if (m2) return `${Number(m2[2])}월 ${Number(m2[3])}일`;
-  return s;
+function formatPaidDateLabel(isoOrRaw: string | number | Date): string {
+  return formatArrearsPaidDateKo(isoOrRaw);
 }
 
 function detectKind(
@@ -209,6 +206,6 @@ export function parseArrearsFeeEventsWorkbook(
   return { events, detected };
 }
 
-export function feeEventPaidDateLabel(eventDate: string): string {
+export function feeEventPaidDateLabel(eventDate: string | number | Date): string {
   return formatPaidDateLabel(eventDate);
 }

@@ -13,8 +13,10 @@ import {
 import CenterModal from '@/app/components/portal/CenterModal';
 import {
   formatArrearsLetterDate,
+  formatArrearsPaidDateKo,
   formatArrearsWon,
   letterRunningBalances,
+  todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
   type ArrearsLetterLineInput,
@@ -134,7 +136,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           description: l.description.trim(),
           amount: parseWon(l.amount),
           paidAmount: parseWon(l.paidAmount),
-          paidDate: l.paidDate.trim(),
+          paidDate: formatArrearsPaidDateKo(l.paidDate.trim()),
           source: l.source || 'manual',
         }))
         .filter(l => l.description);
@@ -411,6 +413,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         <input
                           className={`${portalInput} py-1 text-xs w-28`}
                           value={l.paidDate}
+                          placeholder="예: 7월 2일"
                           onChange={e =>
                             setEditLines(prev =>
                               prev.map((x, i) =>
@@ -418,6 +421,16 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                               ),
                             )
                           }
+                          onBlur={e => {
+                            const next = formatArrearsPaidDateKo(e.target.value);
+                            if (next !== e.target.value) {
+                              setEditLines(prev =>
+                                prev.map((x, i) =>
+                                  i === idx ? { ...x, paidDate: next } : x,
+                                ),
+                              );
+                            }
+                          }}
                         />
                       </td>
                       <td className="px-2 py-1 text-center">
@@ -454,6 +467,21 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               }
             >
               행 추가
+            </button>
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              onClick={() =>
+                setEditLines(prev =>
+                  prev.map(x =>
+                    parseWon(x.paidAmount) > 0 && !x.paidDate.trim()
+                      ? { ...x, paidDate: todayArrearsPaidDateKo() }
+                      : { ...x, paidDate: formatArrearsPaidDateKo(x.paidDate) },
+                  ),
+                )
+              }
+            >
+              지급일시 한국어로
             </button>
           </div>
         ) : null}

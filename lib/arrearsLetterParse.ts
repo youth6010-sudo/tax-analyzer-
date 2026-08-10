@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { formatArrearsPaidDateKo } from '@/app/types/arrears';
 
 export type ParsedLetterLine = {
   description: string;
@@ -114,7 +115,7 @@ export function parseLetterSheet(sheet: XLSX.WorkSheet, sheetName: string): Pars
       description: desc,
       amount: cellMoney(row[iAmt]),
       paidAmount: cellMoney(row[iPay]),
-      paidDate: cellStr(row[iDate]),
+      paidDate: formatArrearsPaidDateKo(row[iDate] as string | number | Date),
     });
   }
 
