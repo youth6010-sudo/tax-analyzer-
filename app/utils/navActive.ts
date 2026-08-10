@@ -10,13 +10,13 @@ function allTaxMenuHrefs(): string[] {
 }
 
 /**
- * 검토표 허브 — 메뉴는 /clients/review-sheet 하나지만
- * 부가가치세·연간진행표 탭은 별도 경로.
+ * 검토표 허브 — 메뉴는 /clients/annual-progress 로 들어가고
+ * 부가가치세·결산 탭은 별도 경로.
  */
 export const REVIEW_HUB_PATHS = [
-  '/clients/review-sheet',
-  '/clients/vat-progress',
   '/clients/annual-progress',
+  '/clients/vat-progress',
+  '/clients/review-sheet',
 ] as const;
 
 function pathMatches(pathname: string, base: string): boolean {
@@ -36,7 +36,7 @@ export function isNavHrefActive(
   const [path] = href.split('?');
 
   // 검토표 메뉴: 허브 탭 전부 활성
-  if (path === '/clients/review-sheet') {
+  if (path === '/clients/annual-progress' || path === '/clients/review-sheet') {
     return isReviewHubPath(pathname);
   }
 
@@ -49,7 +49,10 @@ export function isNavHrefActive(
     const [siblingPath] = sibling.split('?');
 
     // 검토표 허브 하위(/vat-progress 등)는 /clients보다 구체적
-    if (siblingPath === '/clients/review-sheet' && isReviewHubPath(pathname)) {
+    if (
+      (siblingPath === '/clients/annual-progress' || siblingPath === '/clients/review-sheet') &&
+      isReviewHubPath(pathname)
+    ) {
       return true;
     }
 

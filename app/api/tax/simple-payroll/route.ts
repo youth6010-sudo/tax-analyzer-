@@ -5,7 +5,7 @@ import { listClients, updateClientDetail } from '@/lib/clientsDb';
 import { patchIncomeTypes, readIncomeTypes } from '@/lib/incomeTypes';
 import {
   listSimplePayrollFilingsByKeys,
-  listSimplePayrollPrevFiledKeys,
+  listSimplePayrollPrevActiveKeys,
   matchSimplePayrollFromExcel,
   resetSimplePayrollReceipt,
   upsertSimplePayrollFilings,
@@ -73,9 +73,9 @@ export async function GET(request: NextRequest) {
     const extraClientIds = await getExtraClientIds(manager, 'simplePayroll', monthlyPeriodKey);
     const rowNotes = await getWithholdingRowNotesForPeriod(manager, monthlyPeriodKey);
     const periodKeys = employedPeriodKey ? [monthlyPeriodKey, employedPeriodKey] : [monthlyPeriodKey];
-    const [saved, prevFiledKeys] = await Promise.all([
+    const [saved, prevActiveKeys] = await Promise.all([
       listSimplePayrollFilingsByKeys(periodKeys),
-      listSimplePayrollPrevFiledKeys(meta.year, meta.month),
+      listSimplePayrollPrevActiveKeys(clients, meta.year, meta.month),
     ]);
     const periodStart = new Date(meta.year, meta.month - 1, 1);
     const { grid } = buildSimplePayrollGrid(
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       excluded,
       rowNotes,
       forceIncluded,
-      prevFiledKeys,
+      prevActiveKeys,
       extraClientIds,
       { periodStartDate: periodStart },
     );
@@ -352,7 +352,7 @@ export async function POST(request: NextRequest) {
       : [meta.monthlyPeriodKey];
     const rowNotes = await getWithholdingRowNotesForPeriod(effectiveManager, meta.monthlyPeriodKey);
     const saved = await listSimplePayrollFilingsByKeys(periodKeys);
-    const prevFiledKeys = await listSimplePayrollPrevFiledKeys(meta.year, meta.month);
+    const prevActiveKeys = await listSimplePayrollPrevActiveKeys(clients, meta.year, meta.month);
     const { grid } = buildSimplePayrollGrid(
       clients,
       body.periodKey,
@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
       excluded,
       rowNotes,
       forceIncluded,
-      prevFiledKeys,
+      prevActiveKeys,
       extraClientIds,
     );
     const stats = computeIncomeGridStats(grid, 'simplePayroll', manager);

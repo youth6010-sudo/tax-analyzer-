@@ -24,6 +24,7 @@ import {
   MANAGER_CLIENT_ORDER_STORAGE_KEY,
   MANAGER_ORDER_STORAGE_KEY,
   compareManagersByOrder,
+  readFilingCheckClientOrder,
   type ClientSortKey,
 } from '@/app/utils/clientListPrefs';
 import { useTriangleListReorder } from '@/app/utils/useTriangleListReorder';
@@ -60,7 +61,11 @@ import {
   parsePeriodKey,
   periodKey,
   periodLabel,
+  multiFilingReasonKey,
   specialFilingKey,
+  countHometaxFilingsByBiz,
+  filingCountForBiz,
+  surplusFilingCountForTargets,
   usesMonthOverMonthCompare,
   withholdingTargetsForPeriod,
   simplePayrollTargetsForPeriod,
@@ -76,7 +81,11 @@ import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } 
 import type { ClientRecord } from '@/app/types/client';
 import { filingClosureNotice, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
 import { readVatFilingFee, vatProgressPeriodKey } from '@/lib/vatEntryProgress';
-import { compareWithholdingMonths, compareSessionTargets } from '@/lib/filingPeriodCompare';
+import {
+  compareWithholdingMonths,
+  compareSessionTargets,
+  type PeriodCompareResult,
+} from '@/lib/filingPeriodCompare';
 import {
   formatResidentNoDisplay,
   groupComprehensiveFilingTargets,
@@ -220,11 +229,13 @@ function ReviewLinkedCompanyName({
   name,
   className,
   title,
+  shouldSuppressClick,
 }: {
   clientId: string;
   name: string;
   className?: string;
   title?: string;
+  shouldSuppressClick?: () => boolean;
 }) {
   const map = useContext(ReviewClientIdMapContext);
   const href = reviewSheetHrefFromHints(clientId, map);
@@ -232,24 +243,20 @@ function ReviewLinkedCompanyName({
   if (map === null) {
     return <span className={className}>{display}</span>;
   }
-  if (href) {
-    return (
-      <a
-        href={href}
-        className={`${className ?? ''} hover:text-violet-700 hover:underline`}
-        title={title || '검토표로 이동'}
-        onClick={e => e.stopPropagation()}
-      >
-        {display}
-      </a>
-    );
-  }
+  const resolvedHref = href || `/clients/${clientId}`;
+  const tip =
+    title ||
+    (href ? '검토표로 이동' : '수임처 상세');
   return (
     <a
-      href={`/clients/${clientId}`}
-      className={`${className ?? ''} hover:text-blue-600 hover:underline`}
-      title={title || '수임처 상세'}
-      onClick={e => e.stopPropagation()}
+      href={resolvedHref}
+      draggable={false}
+      className={`${className ?? ''} ${href ? 'hover:text-violet-700' : 'hover:text-blue-600'} hover:underline`}
+      title={tip}
+      onClick={e => {
+        e.stopPropagation();
+        if (shouldSuppressClick?.()) e.preventDefault();
+      }}
     >
       {display}
     </a>
@@ -260,17 +267,25 @@ function ClientDetailCompanyName({
   clientId,
   name,
   className,
+  title,
+  shouldSuppressClick,
 }: {
   clientId: string;
   name: string;
   className?: string;
+  title?: string;
+  shouldSuppressClick?: () => boolean;
 }) {
   return (
     <a
       href={`/clients/${clientId}`}
+      draggable={false}
       className={`${className ?? ''} hover:text-blue-600 hover:underline`}
-      title="수임처 상세"
-      onClick={e => e.stopPropagation()}
+      title={title || '수임처 상세'}
+      onClick={e => {
+        e.stopPropagation();
+        if (shouldSuppressClick?.()) e.preventDefault();
+      }}
     >
       {name || '(이름 없음)'}
     </a>
@@ -355,6 +370,8 @@ type CheckRecord = {
   overrides: Record<string, boolean>; // 수동 체크 오버라이드
   excelBizNos: string[]; // 홈택스 접수목록 사업자번호(10자리)
   excelNamesByBiz?: Record<string, string>; // 사업자번호 → 상호
+  /** 사업자번호 → 접수목록 행 건수 (동일 번호 복수 신고) */
+  excelBizCounts?: Record<string, number>;
   fileName: string;
   diffReason: string;
   done: boolean;
@@ -372,6 +389,7 @@ const EMPTY_RECORD: CheckRecord = {
   overrides: {},
   excelBizNos: [],
   excelNamesByBiz: {},
+  excelBizCounts: {},
   fileName: '',
   diffReason: '',
   done: false,
@@ -471,31 +489,38 @@ function FilingBottomStats({
   received,
   diff,
   unit = '곳',
+  receivedFromExcel = false,
 }: {
   target: number;
   received: number;
   diff: number;
   unit?: '곳' | '건';
+  /** true면 접수는 업로드 건수, 대상은 곳 */
+  receivedFromExcel?: boolean;
 }) {
+  const receivedUnit = receivedFromExcel ? '건' : unit;
+  const targetUnit = unit;
   return (
     <div
       className={`${portalCard} mt-3 flex flex-wrap items-center justify-between gap-3 border-emerald-100 bg-emerald-50/40 px-4 py-3`}
     >
       <p className="text-sm font-semibold text-slate-800">
-        총 체크{' '}
+        {receivedFromExcel ? '업로드 접수 ' : '총 체크 '}
         <span className="tabular-nums text-emerald-700">{received}</span>
+        <span className="font-normal text-slate-500">{receivedUnit}</span>
         <span className="font-normal text-slate-500"> / 신고대상 </span>
         <span className="tabular-nums text-blue-700">{target}</span>
-        <span className="font-normal text-slate-500">{unit}</span>
+        <span className="font-normal text-slate-500">{targetUnit}</span>
         {diff > 0 && (
           <span className="ml-2 font-medium tabular-nums text-rose-600">
-            (차이 {diff}
-            {unit})
+            (차이 {diff}건)
           </span>
         )}
       </p>
       {diff === 0 && target > 0 && (
-        <span className="shrink-0 text-xs font-medium text-emerald-700">전체 접수 완료</span>
+        <span className="shrink-0 text-xs font-medium text-emerald-700">
+          {receivedFromExcel ? '건수 일치' : '전체 접수 완료'}
+        </span>
       )}
     </div>
   );
@@ -539,6 +564,8 @@ function FilingCheckPageInner() {
   const [prevSession, setPrevSession] = useState<FilingCheckSessionData | null>(null);
   /** 직전 대비에 쓰는 완료 신고분의 periodKey (없으면 대비 비표시) */
   const [prevCompletedPeriodKey, setPrevCompletedPeriodKey] = useState<string | null>(null);
+  /** 간이지급 — 활성 소득유형 칸 기준 전월대비 (그리드에서 계산) */
+  const [spPeriodCompare, setSpPeriodCompare] = useState<PeriodCompareResult | null>(null);
   // 전체 조회 권한(인디·개발자)만 담당자 선택 — 일반 담당자는 본인 세션만
   const [storedManager, setStoredManager] = useLocalStorage<string>('filingCheck.manager.v1', '');
   const selManager = useMemo(() => {
@@ -589,7 +616,7 @@ function FilingCheckPageInner() {
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
   const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [statFilter, setStatFilter] = useState<IncomeStatFilter>('all');
-  /** 신고대상 = 활성 대상만 · 전체 = 제외 업체 포함(취소선) */
+  /** 신고대상 = 활성 지급명세 칸 · 전체 = 원천 제외(비활성) 포함 */
   const [listScope, setListScope] = useState<'targets' | 'all'>('all');
   const [displayOrderEpoch, setDisplayOrderEpoch] = useState(0);
   const displayOrderEpochAppliedRef = useRef(-1);
@@ -1012,6 +1039,10 @@ function FilingCheckPageInner() {
     setEmployedFilingMonth(false);
   }, [tax, period.year, period.month, selManager]);
 
+  useEffect(() => {
+    if (tax !== 'simplePayroll') setSpPeriodCompare(null);
+  }, [tax]);
+
   const handleTaxChange = (next: FilingTaxId) => {
     if (next === tax) return;
     setTax(next);
@@ -1042,6 +1073,7 @@ function FilingCheckPageInner() {
   );
 
   const periodCompare = useMemo(() => {
+    if (tax === 'simplePayroll') return spPeriodCompare;
     // 직전 완료분 periodKey(없으면 API가 달력 직전으로 채움)
     if (!prevCompletedPeriodKey) return null;
     const prevPk = prevCompletedPeriodKey;
@@ -1064,14 +1096,6 @@ function FilingCheckPageInner() {
         prevAttr.month,
         attribution.month,
       );
-    }
-    if (tax === 'simplePayroll') {
-      const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
-      const prevTargets = withExtras(
-        scopeByManager(simplePayrollTargetsForPeriod(clients, prevAttr.month).filter(isContractProgressClient)),
-      );
-      const currTargets = scopeByManager(simplePayrollTargetsForPeriod(clients, attribution.month).filter(isContractProgressClient));
-      return compareSessionTargets(prevTargets, currTargets, prevRec, record);
     }
     if (tax === 'comprehensive') {
       const prevGroups = groupComprehensiveFilingTargets(
@@ -1155,15 +1179,12 @@ function FilingCheckPageInner() {
               }
               if (which === 'curr' && vatAutoUnreceivedCurr) {
                 if (Boolean(record.forceIncluded?.[c.id])) return false;
-                const received =
-                  record.overrides[c.id] ?? excelSet.has(normalizeBizNo(c.businessNo));
+                const received = excelSet.has(normalizeBizNo(c.businessNo));
                 return !received;
               }
               if (which === 'prev' && vatAutoUnreceivedPrev) {
                 if (Boolean(prevRec.forceIncluded?.[c.id])) return false;
-                const received =
-                  prevRec.overrides?.[c.id] ??
-                  prevExcelSet.has(normalizeBizNo(c.businessNo));
+                const received = prevExcelSet.has(normalizeBizNo(c.businessNo));
                 return !received;
               }
               return false;
@@ -1182,6 +1203,7 @@ function FilingCheckPageInner() {
     taxTargetsAll,
     attribution.month,
     excelSet,
+    spPeriodCompare,
   ]);
 
   const compareLabels = useMemo(() => {
@@ -1260,25 +1282,49 @@ function FilingCheckPageInner() {
     return [...set].sort((a, b) => compareManagersByOrder(a, b, managerOrder, UNCategorized));
   }, [clients, managerOrder]);
 
-  /** 간이지급·연말정산 — 원천세(동일 월) 목록 순서 기준 */
+  /** 간이지급·연말정산 — 원천세 탭에서 꾹 눌러 정한 순서(저장 목록) 우선 */
   const withholdingOrderIds = useMemo(() => {
     if (!isIncomeTypeTax) return [];
-    const whAll = withholdingTargetsForPeriod(clients, attribution.month).filter(isContractProgressClient);
-    const scoped =
-      selManager === ALL_MANAGERS
-        ? whAll
-        : whAll.filter(c => matchesSelManager(c.manager));
-    const ordered = applyManagerScopedFilingCheckOrder(
+    // 연말정산은 연간 원천 대상, 간이지급은 해당 귀속월 원천 대상과 맞춤
+    const whPool = (
+      tax === 'yearEnd'
+        ? filingTargets(clients, 'withholding')
+        : withholdingTargetsForPeriod(clients, attribution.month)
+    ).filter(isContractProgressClient);
+
+    if (selManager === ALL_MANAGERS) {
+      return applyManagerScopedFilingCheckOrder(
+        whPool,
+        clientListSort,
+        ALL_MANAGERS,
+        ALL_MANAGERS,
+        managerOrder,
+        'withholding',
+      ).map(c => c.id);
+    }
+
+    const scoped = whPool.filter(c => matchesSelManager(c.manager));
+    const custom = readFilingCheckClientOrder(selManager, 'withholding');
+    if (custom?.length) {
+      // 저장된 순서 id를 앞에 두고, 원천 대상에만 있는 나머지는 뒤에
+      const inScope = new Set(scoped.map(c => c.id));
+      const head = custom.filter(id => inScope.has(id));
+      const headSet = new Set(head);
+      const tail = scoped.map(c => c.id).filter(id => !headSet.has(id));
+      return [...head, ...tail];
+    }
+
+    return applyManagerScopedFilingCheckOrder(
       scoped,
       clientListSort,
       selManager,
       ALL_MANAGERS,
       managerOrder,
       'withholding',
-    );
-    return ordered.map(c => c.id);
+    ).map(c => c.id);
   }, [
     isIncomeTypeTax,
+    tax,
     clients,
     attribution.month,
     selManager,
@@ -1348,7 +1394,7 @@ function FilingCheckPageInner() {
         }
         continue;
       }
-      const received = record.overrides[c.id] ?? excelSet.has(normalizeBizNo(c.businessNo));
+      const received = excelSet.has(normalizeBizNo(c.businessNo));
       if (received) {
         if (nextExcluded[c.id] === AUTO) {
           delete nextExcluded[c.id];
@@ -1406,21 +1452,14 @@ function FilingCheckPageInner() {
     patchRecord({ rowNotes: { ...record.rowNotes, ...updates } });
   }, [carriedFrom, targets, selManager, tax, period, record.rowNotes, record.excluded]);
 
-  const isReceived = (id: string, bizNo: string) =>
-    record.overrides[id] ?? excelSet.has(normalizeBizNo(bizNo));
+  const isReceived = (_id: string, bizNo: string) =>
+    excelSet.has(normalizeBizNo(bizNo));
 
-  /** 종소세 접수 — 엑셀 대조(그룹 단위, 상호 작업체크와 무관) */
+  /** 종소세 접수 — 엑셀 대조만 (수기 체크 불가) */
   const isGroupFilingReceived = (g: ComprehensiveFilingGroup) => {
-    if (Object.prototype.hasOwnProperty.call(record.overrides, g.primaryClientId)) {
-      return record.overrides[g.primaryClientId];
-    }
     const withBiz = g.clients.filter(c => normalizeBizNo(c.businessNo) !== '');
     if (withBiz.length === 0) return false;
     return withBiz.every(c => excelSet.has(normalizeBizNo(c.businessNo)));
-  };
-
-  const setGroupFilingReceived = (g: ComprehensiveFilingGroup, checked: boolean) => {
-    patchRecord({ overrides: { ...record.overrides, [g.primaryClientId]: checked } });
   };
 
   /** 종소세 사업장별 작업 완료 — 접수와 별도 */
@@ -1514,7 +1553,7 @@ function FilingCheckPageInner() {
     return base.filter(c => !isVatSummaryOnlyClient(c));
   }, [tax, vatProvisional, vatFilingActiveTargets, activeTargets]);
 
-  const receivedCount =
+  const receivedMatchedCount =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.filter(g => isGroupReceived(g)).length
       : receiptActiveTargets.filter(c => isReceived(c.id, c.businessNo)).length;
@@ -1532,11 +1571,69 @@ function FilingCheckPageInner() {
   const showsReviewFeeColumn = tax === 'vat' || tax === 'comprehensive' || tax === 'corporate';
   const tableColSpan = (showsReviewFeeColumn ? 7 : 6) + tableExtraCols;
   const comprehensiveColSpan = showsReviewFeeColumn ? 8 : 7;
+
+  /** 원천세 — 같은 사업자번호 접수 행 2건↑ 초과분 (필터·안내용) */
+  const surplusFilingDiff = useMemo(() => {
+    if (tax !== 'withholding') return 0;
+    return surplusFilingCountForTargets(
+      record.excelBizCounts,
+      receiptActiveTargets.map(c => c.businessNo),
+    );
+  }, [tax, record.excelBizCounts, receiptActiveTargets]);
+
+  const excelFilingTotal = useMemo(() => {
+    const counts = record.excelBizCounts;
+    if (counts && Object.keys(counts).length > 0) {
+      return Object.values(counts).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    }
+    return excelSet.size;
+  }, [record.excelBizCounts, excelSet]);
+
+  /** 통계 카드용 접수완료 — 업로드 파일이 있으면 파일 행 수, 없으면 체크(매칭) 수 */
+  const hasExcelReceipt = excelSet.size > 0;
+  const receivedCount = hasExcelReceipt ? excelFilingTotal : receivedMatchedCount;
+
+  const multiFilings = useMemo(() => {
+    if (tax !== 'withholding') return [] as { bizNo: string; name: string; count: number }[];
+    const counts = record.excelBizCounts ?? {};
+    const nameByBiz = new Map<string, string>();
+    for (const [biz, name] of Object.entries(record.excelNamesByBiz ?? {})) {
+      if (biz && name?.trim()) nameByBiz.set(normalizeBizNo(biz), name.trim());
+    }
+    for (const c of receiptActiveTargets) {
+      const biz = normalizeBizNo(c.businessNo);
+      if (biz && !nameByBiz.has(biz)) nameByBiz.set(biz, c.companyName || '(이름없음)');
+    }
+    const targetBiz = new Set(
+      receiptActiveTargets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean),
+    );
+    const items: { bizNo: string; name: string; count: number }[] = [];
+    for (const [rawBiz, count] of Object.entries(counts)) {
+      const biz = normalizeBizNo(rawBiz);
+      const n = Number(count) || 0;
+      if (!biz || n <= 1 || !targetBiz.has(biz)) continue;
+      items.push({
+        bizNo: biz,
+        name: nameByBiz.get(biz) || biz,
+        count: n,
+      });
+    }
+    return items.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }, [tax, record.excelBizCounts, record.excelNamesByBiz, receiptActiveTargets]);
+
+  const multiFilingMissingReason = useMemo(
+    () =>
+      multiFilings.some(m => !(record.specialReasons[multiFilingReasonKey(m.bizNo)] ?? '').trim()),
+    [multiFilings, record.specialReasons],
+  );
+
   const diff =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.length -
         activeComprehensiveGroups.filter(g => isGroupReceived(g)).length
-      : targetCount - receivedCount;
+      : hasExcelReceipt
+        ? Math.abs(targetCount - receivedCount)
+        : targetCount - receivedMatchedCount;
   const notReceived =
     tax === 'comprehensive'
       ? activeComprehensiveGroups.filter(g => !isGroupReceived(g))
@@ -1631,7 +1728,14 @@ function FilingCheckPageInner() {
       if (skipReceipt && (statFilter === 'received' || statFilter === 'diff')) return false;
       const received = isReceived(c.id, c.businessNo);
       if (statFilter === 'received') return !excluded && received;
-      if (statFilter === 'diff') return !excluded && !received;
+      if (statFilter === 'diff') {
+        if (excluded) return false;
+        if (!received) return true;
+        if (tax === 'withholding') {
+          return filingCountForBiz(record.excelBizCounts, excelSet, c.businessNo) > 1;
+        }
+        return false;
+      }
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1641,6 +1745,7 @@ function FilingCheckPageInner() {
     statFilter,
     record.excluded,
     record.overrides,
+    record.excelBizCounts,
     excelSet,
     tax,
     vatProvisional,
@@ -1652,7 +1757,10 @@ function FilingCheckPageInner() {
       <p className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
         {statFilter === 'target' && '신고대상 업체만 표시 중'}
         {statFilter === 'received' && '접수완료 업체만 표시 중'}
-        {statFilter === 'diff' && '미완료(차이) 업체만 표시 중'}
+        {statFilter === 'diff' &&
+          (tax === 'withholding'
+            ? '미완료·복수접수(차이) 업체만 표시 중'
+            : '미완료(차이) 업체만 표시 중')}
         {' · '}
         <span className="text-blue-600">통계 카드를 다시 클릭하면 전체 보기</span>
       </p>
@@ -2461,6 +2569,7 @@ function FilingCheckPageInner() {
     try {
       const { bizNos, filings } = await parseHometaxFile(file);
       const special = extractSpecialFilings(filings);
+      const excelBizCounts = countHometaxFilingsByBiz(filings);
       const excelNamesByBiz: Record<string, string> = {};
       for (const f of filings) {
         const biz = normalizeBizNo(f.bizNo);
@@ -2538,11 +2647,17 @@ function FilingCheckPageInner() {
         const k = specialFilingKey(s.bizNo, s.type);
         if (record.specialReasons[k]) keptReasons[k] = record.specialReasons[k];
       }
+      for (const [k, v] of Object.entries(record.specialReasons)) {
+        if (!k.endsWith('|복수접수') || !v?.trim()) continue;
+        const biz = k.slice(0, -'|복수접수'.length);
+        if ((excelBizCounts[biz] ?? 0) > 1) keptReasons[k] = v;
+      }
       setUploadAddedNames(added);
       setTargetDisplayOrder(nextOrder);
       patchRecord({
         excelBizNos: bizNos,
         excelNamesByBiz,
+        excelBizCounts,
         overrides: {},
         fileName: file.name,
         done: false,
@@ -2574,14 +2689,28 @@ function FilingCheckPageInner() {
       vatProvisional
         ? `· 신고대상: ${targetCount}곳 · 예정고지: ${vatNoticeTargetCount}곳`
         : `· 신고대상: ${statTarget}곳`,
-      `· 접수완료: ${statReceived}곳`,
-      `· 차이: ${statDiff}곳`,
+      `· 접수완료: ${statReceived}${hasExcelReceipt && !isIncomeTypeTax ? '건' : '곳'}`,
+      `· 차이: ${statDiff}${hasExcelReceipt && !isIncomeTypeTax ? '건' : '곳'}`,
     ];
     const note = record.diffReason.trim();
     if (statDiff !== 0) {
-      lines.push(`· 차이 사유: ${note || '미기재'}`);
+      // 복수접수 사유로 설명되면 상위 '차이 사유: 미기재'는 내지 않음
+      if (note) {
+        lines.push(`· 차이 사유: ${note}`);
+      } else if (multiFilings.length === 0) {
+        lines.push('· 차이 사유: 미기재');
+      }
     } else if (note) {
       lines.push(`· 특이사항: ${note}`);
+    }
+    if (multiFilings.length > 0) {
+      lines.push('· 복수 접수');
+      for (const m of multiFilings) {
+        const reason = record.specialReasons[multiFilingReasonKey(m.bizNo)]?.trim();
+        lines.push(
+          `  - ${m.name || m.bizNo} 접수 ${m.count}건${reason ? ` (${reason})` : ' (사유 미기재)'}`,
+        );
+      }
     }
     if (record.specialFilings.length > 0) {
       lines.push('· 수정·기한후·경정청구 신고');
@@ -2628,15 +2757,32 @@ function FilingCheckPageInner() {
       }
     }
     if (periodCompare) {
-      lines.push(
-        `· ${compareLabels.title}: ${periodCompare.prevCount}곳 → ${periodCompare.currCount}곳 (${periodCompare.diff >= 0 ? '+' : ''}${periodCompare.diff})`,
-      );
-      if (periodCompare.changedClients.length > 0) {
-        lines.push(`· ${compareLabels.prev}과 다른 업체`);
-        for (const c of periodCompare.changedClients) {
+      if (periodCompare.byColumn && periodCompare.byColumn.length > 0) {
+        lines.push(
+          `· ${compareLabels.title} 합계: ${periodCompare.prevCount}건 → ${periodCompare.currCount}건 (${periodCompare.diff >= 0 ? '+' : ''}${periodCompare.diff})`,
+        );
+        for (const col of periodCompare.byColumn) {
+          if (col.diff === 0 && col.changedClients.length === 0) continue;
           lines.push(
-            `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+            `· ${col.label} (${col.prevPeriodLabel}): ${col.prevCount}건 → ${col.currCount}건 (${col.diff >= 0 ? '+' : ''}${col.diff})`,
           );
+          for (const c of col.changedClients) {
+            lines.push(
+              `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+            );
+          }
+        }
+      } else {
+        lines.push(
+          `· ${compareLabels.title}: ${periodCompare.prevCount}${tax === 'simplePayroll' ? '건' : '곳'} → ${periodCompare.currCount}${tax === 'simplePayroll' ? '건' : '곳'} (${periodCompare.diff >= 0 ? '+' : ''}${periodCompare.diff})`,
+        );
+        if (periodCompare.changedClients.length > 0) {
+          lines.push(`· ${compareLabels.prev}과 다른 업체`);
+          for (const c of periodCompare.changedClients) {
+            lines.push(
+              `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+            );
+          }
         }
       }
     }
@@ -2657,6 +2803,7 @@ function FilingCheckPageInner() {
     record.diffReason,
     record.specialFilings,
     record.specialReasons,
+    multiFilings,
     record.excluded,
     record.rowNotes,
     activeTargets,
@@ -2683,13 +2830,20 @@ function FilingCheckPageInner() {
   const mergeHometaxSpecialFilings = async (file: File) => {
     const { bizNos, filings } = await parseHometaxFile(file);
     const special = extractSpecialFilings(filings);
+    const excelBizCounts = countHometaxFilingsByBiz(filings);
     const keptReasons: Record<string, string> = {};
     for (const s of special) {
       const k = specialFilingKey(s.bizNo, s.type);
       if (record.specialReasons[k]) keptReasons[k] = record.specialReasons[k];
     }
+    for (const [k, v] of Object.entries(record.specialReasons)) {
+      if (!k.endsWith('|복수접수') || !v?.trim()) continue;
+      const biz = k.slice(0, -'|복수접수'.length);
+      if ((excelBizCounts[biz] ?? 0) > 1) keptReasons[k] = v;
+    }
     patchRecord({
       excelBizNos: bizNos,
+      excelBizCounts,
       specialFilings: special,
       specialReasons: keptReasons,
       fileName: file.name,
@@ -2730,9 +2884,16 @@ function FilingCheckPageInner() {
             <button type="button" onClick={() => patchRecord({ done: true })} className={portalBtnPrimary}>
               완료 처리
             </button>
-            {diffValue !== 0 && !record.diffReason.trim() && (
+            {diffValue !== 0 &&
+              !record.diffReason.trim() &&
+              !(multiFilings.length > 0 && !multiFilingMissingReason) && (
               <span className="text-xs text-rose-500">
                 신고대상과 접수완료에 {diffValue}건 차이가 있습니다. 사유를 적으면 요약에 함께 들어갑니다.
+              </span>
+            )}
+            {multiFilingMissingReason && (
+              <span className="text-xs text-violet-600">
+                복수 접수 업체 사유를 위에 적어 주세요.
               </span>
             )}
           </>
@@ -2764,8 +2925,10 @@ function FilingCheckPageInner() {
       periodCompare={periodCompare}
       comparePrevLabel={compareLabels.prev}
       compareCurrLabel={compareLabels.curr}
+      compareCountUnit={tax === 'simplePayroll' ? '건' : '곳'}
       record={record}
       parseError={parseError}
+      multiFilings={tax === 'withholding' ? multiFilings : []}
       onPatch={patchRecord}
       onSetSpecialReason={setSpecialReason}
     />
@@ -3149,12 +3312,13 @@ function FilingCheckPageInner() {
             />
             {listScope === 'targets' && incomeStats.excludedRows > 0 && (
               <span className="text-xs text-slate-500">
-                제외 {incomeStats.excludedRows}곳 · 「전체」에서 제외사유 확인
+                원천 제외 {incomeStats.excludedRows}곳 — 활성 칸이 있으면 신고대상·차이에 포함, 없으면
+                「전체」에서 확인
               </span>
             )}
             {listScope === 'all' && incomeStats.excludedRows > 0 && (
               <span className="text-xs text-slate-500">
-                제외 {incomeStats.excludedRows}곳은 목록 하단에 취소선으로 표시됩니다
+                원천 제외 {incomeStats.excludedRows}곳 — 활성·미접수면 차이에 포함됩니다
               </span>
             )}
           </div>
@@ -3179,6 +3343,7 @@ function FilingCheckPageInner() {
             rowFilter={statFilter}
             listScope={listScope}
             withholdingOrderIds={withholdingOrderIds}
+            onPeriodCompareChange={setSpPeriodCompare}
             onStatsChange={setIncomeStats}
             onUploadNotice={setIncomeNotice}
             onEmployedFilingMonth={setEmployedFilingMonth}
@@ -3227,7 +3392,7 @@ function FilingCheckPageInner() {
           />
         )}
         <StatCard
-          label="접수완료"
+          label={hasExcelReceipt ? '접수완료(업로드)' : '접수완료'}
           value={receivedCount}
           tone="border-emerald-100 bg-emerald-50/60 text-emerald-800"
           selected={statFilter === 'received'}
@@ -3276,15 +3441,23 @@ function FilingCheckPageInner() {
       {excelSet.size > 0 && (
         <div className={`${portalAlertInfo} mb-4 space-y-1`}>
           <p>
-            접수목록 {excelSet.size}건을 사업자번호로 대조했습니다.
+            접수목록 {excelFilingTotal}건
+            {excelFilingTotal !== excelSet.size ? ` (${excelSet.size}개 사업자번호)` : ''}을
+            사업자번호로 대조했습니다.
             {targetCount > 0 && (
               <>
                 {' '}
-                신고대상 {targetCount}곳 중 접수완료 {receivedCount}곳
-                {diff > 0 ? ` — ${diff}건 차이가 있습니다.` : ' 모두 접수완료되었습니다.'}
+                신고대상 {targetCount}곳 · 업로드 접수 {receivedCount}건
+                {diff > 0 ? ` — ${diff}건 차이가 있습니다.` : ' 건수가 일치합니다.'}
               </>
             )}
           </p>
+          {tax === 'withholding' && surplusFilingDiff > 0 && (
+            <p className="text-rose-700">
+              같은 사업자번호로 접수 행이 2건 이상인 경우 업로드 건수·차이에 반영됩니다.
+              (초과 {surplusFilingDiff}건 · 귀속 지급 등)
+            </p>
+          )}
           {uploadAddedNames.length > 0 && (
             <p>
               <span className="font-semibold text-slate-800">
@@ -3398,10 +3571,10 @@ function FilingCheckPageInner() {
                         <input
                           type="checkbox"
                           checked={received}
-                          disabled={excluded || locked}
-                          onChange={e => setGroupFilingReceived(g, e.target.checked)}
-                          className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
-                          title="홈택스 접수목록(엑셀) 대조"
+                          disabled
+                          readOnly
+                          className="h-4 w-4 accent-emerald-500 disabled:opacity-40"
+                          title="홈택스 접수목록 엑셀 업로드로만 매칭됩니다 (수기 체크 불가)"
                         />
                       </td>
                       <td className="px-2 py-2 text-center">
@@ -3446,7 +3619,12 @@ function FilingCheckPageInner() {
                           <ReviewLinkedCompanyName
                             clientId={g.primaryClientId}
                             name={siteLabel}
-                            title={comprehensiveSiteTooltip(g)}
+                            title={
+                              canReorderTargets
+                                ? `${comprehensiveSiteTooltip(g)}\n길게 눌러 순서 변경`
+                                : comprehensiveSiteTooltip(g)
+                            }
+                            shouldSuppressClick={() => suppressTargetClickRef.current}
                             className={
                               excluded
                                 ? 'min-w-0 truncate font-medium text-slate-400 line-through'
@@ -3532,13 +3710,10 @@ function FilingCheckPageInner() {
                         <input
                           type="checkbox"
                           checked={received}
-                          disabled={excluded || locked}
-                          onChange={e =>
-                            patchRecord({
-                              overrides: { ...record.overrides, [c.id]: e.target.checked },
-                            })
-                          }
-                          className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
+                          disabled
+                          readOnly
+                          className="h-4 w-4 accent-emerald-500 disabled:opacity-40"
+                          title="홈택스 접수목록 엑셀 업로드로만 매칭됩니다 (수기 체크 불가)"
                         />
                       </td>
                       <td className="px-2 py-2 text-center text-xs tabular-nums text-slate-400">{rowNo}</td>
@@ -3722,13 +3897,10 @@ function FilingCheckPageInner() {
                         <input
                           type="checkbox"
                           checked={received}
-                          disabled={excluded || locked}
-                          onChange={e =>
-                            patchRecord({
-                              overrides: { ...record.overrides, [c.id]: e.target.checked },
-                            })
-                          }
-                          className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
+                          disabled
+                          readOnly
+                          className="h-4 w-4 accent-emerald-500 disabled:opacity-40"
+                          title="홈택스 접수목록 엑셀 업로드로만 매칭됩니다 (수기 체크 불가)"
                         />
                       )}
                     </td>
@@ -3784,12 +3956,24 @@ function FilingCheckPageInner() {
                             clientId={c.id}
                             name={c.companyName || '(이름 없음)'}
                             className={nameCls}
+                            title={
+                              canReorderRow
+                                ? '클릭 — 검토표/상세 · 길게 눌러 순서 변경'
+                                : undefined
+                            }
+                            shouldSuppressClick={() => suppressTargetClickRef.current}
                           />
                         ) : (
                           <ClientDetailCompanyName
                             clientId={c.id}
                             name={c.companyName || '(이름 없음)'}
                             className={nameCls}
+                            title={
+                              canReorderRow
+                                ? '클릭 — 수임처 상세 · 길게 눌러 순서 변경'
+                                : '수임처 상세'
+                            }
+                            shouldSuppressClick={() => suppressTargetClickRef.current}
                           />
                         )}
                         {c.representative && (
@@ -3813,6 +3997,18 @@ function FilingCheckPageInner() {
                             {closureNotice}
                           </span>
                         )}
+                        {tax === 'withholding' && (() => {
+                          const n = filingCountForBiz(record.excelBizCounts, excelSet, c.businessNo);
+                          if (n <= 1) return null;
+                          return (
+                            <span
+                              className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                              title="접수목록에 같은 사업자번호 신고가 2건 이상입니다"
+                            >
+                              접수 {n}건
+                            </span>
+                          );
+                        })()}
                         {tax === 'withholding' && (() => {
                           const wh = readWithholdingSettings(c.intakeData);
                           if (!wh.semiAnnualTarget) return null;
@@ -3973,7 +4169,13 @@ function FilingCheckPageInner() {
       </div>
 
       {excelSet.size > 0 && (
-        <FilingBottomStats target={targetCount} received={receivedCount} diff={diff} />
+        <FilingBottomStats
+          target={targetCount}
+          received={receivedCount}
+          diff={diff}
+          unit="곳"
+          receivedFromExcel
+        />
       )}
 
       {completionFooter(diff)}

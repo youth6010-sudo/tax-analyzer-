@@ -570,24 +570,42 @@ export default function IncomeTypeGridTable({
                         );
                       }
                       return (
-                        <td key={col.key} className="px-1 py-2 text-center">
+                        <td
+                          key={col.key}
+                          className="px-1 py-2 text-center"
+                          onDoubleClick={() =>
+                            cellEditable && onDeactivate(row.clientId, col.key)
+                          }
+                          title={
+                            excluded && !cell.active
+                              ? '클릭 — 상호명에서 지급명세서 신고대상 설정'
+                              : locked
+                                ? '완료 처리됨'
+                                : mode === 'simplePayroll'
+                                  ? '더블클릭 — 이번 달 비활성화 (전월 접수 이월 숨김)'
+                                  : '더블클릭 — 소득유형 비활성화'
+                          }
+                        >
                           <input
                             type="checkbox"
                             checked={cell.filed}
                             disabled={!cellEditable}
-                            onClick={e => e.stopPropagation()}
-                            onDoubleClick={() => cellEditable && onDeactivate(row.clientId, col.key)}
-                            onChange={e =>
-                              cellEditable && onToggleFiled(row.clientId, col.key, e.target.checked)
-                            }
+                            onClick={e => {
+                              e.stopPropagation();
+                              // 간이지급 접수는 엑셀 매칭만 — 수기 토글 방지
+                              if (mode === 'simplePayroll') e.preventDefault();
+                            }}
+                            onDoubleClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              cellEditable && onDeactivate(row.clientId, col.key);
+                            }}
+                            onChange={e => {
+                              if (mode === 'simplePayroll') return;
+                              cellEditable &&
+                                onToggleFiled(row.clientId, col.key, e.target.checked);
+                            }}
                             className="h-4 w-4 accent-emerald-500 disabled:opacity-30"
-                            title={
-                              excluded && !cell.active
-                                ? '클릭 — 상호명에서 지급명세서 신고대상 설정'
-                                : locked
-                                  ? '완료 처리됨'
-                                  : '더블클릭 — 소득유형 비활성화'
-                            }
                           />
                         </td>
                       );

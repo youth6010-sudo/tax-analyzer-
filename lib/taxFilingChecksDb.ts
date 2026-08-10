@@ -15,6 +15,8 @@ export type FilingCheckSessionData = {
   excelBizNos: string[];
   /** 홈택스 접수목록 사업자번호 → 상호 (안내 문구용) */
   excelNamesByBiz?: Record<string, string>;
+  /** 홈택스 접수목록 사업자번호 → 행(신고) 건수 — 동일번호 복수 신고 감지 */
+  excelBizCounts?: Record<string, number>;
   fileName: string;
   diffReason: string;
   done: boolean;
@@ -38,6 +40,7 @@ export const EMPTY_SESSION_DATA: FilingCheckSessionData = {
   overrides: {},
   excelBizNos: [],
   excelNamesByBiz: {},
+  excelBizCounts: {},
   fileName: '',
   diffReason: '',
   done: false,
@@ -150,6 +153,7 @@ function receiptSlice(rec: Partial<FilingCheckSessionData> | null | undefined) {
     overrides: rec?.overrides ?? {},
     excelBizNos: rec?.excelBizNos ?? [],
     excelNamesByBiz: rec?.excelNamesByBiz ?? {},
+    excelBizCounts: rec?.excelBizCounts ?? {},
     fileName: rec?.fileName ?? '',
     specialFilings: rec?.specialFilings ?? [],
     done: rec?.done ?? false,
@@ -163,6 +167,7 @@ function mergeReceiptSlices(
 ): ReturnType<typeof receiptSlice> {
   const excelBizNos = new Set<string>();
   const excelNamesByBiz: Record<string, string> = {};
+  const excelBizCounts: Record<string, number> = {};
   const overrides: Record<string, boolean> = {};
   const specialFilings: FilingCheckSessionData['specialFilings'] = [];
   const specialKeys = new Set<string>();
@@ -178,6 +183,12 @@ function mergeReceiptSlices(
     }
     for (const [biz, name] of Object.entries(rec.excelNamesByBiz ?? {})) {
       if (!excelNamesByBiz[biz] && name) excelNamesByBiz[biz] = name;
+    }
+    for (const [biz, count] of Object.entries(rec.excelBizCounts ?? {})) {
+      const n = Number(count) || 0;
+      if (n <= 0) continue;
+      excelBizCounts[biz] = (excelBizCounts[biz] ?? 0) + n;
+      excelBizNos.add(biz);
     }
     for (const [id, v] of Object.entries(rec.overrides ?? {})) {
       if (v) overrides[id] = true;
@@ -199,10 +210,11 @@ function mergeReceiptSlices(
     overrides,
     excelBizNos: [...excelBizNos],
     excelNamesByBiz,
+    excelBizCounts,
     fileName: fileNames.join(' · '),
     specialFilings,
     done: anyDone,
-    siteDone,
+    siteDone: Object.keys(siteDone).length ? siteDone : undefined,
   };
 }
 

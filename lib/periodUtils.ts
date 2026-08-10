@@ -210,3 +210,19 @@ export function prevSimplePayrollCarryPeriodKeys(
   else if (month === 6) employed = simplePayrollPeriodKey(year - 1, 'H2');
   return { monthly, employed };
 }
+
+/**
+ * 간이지급 전월대비용 view period_key.
+ * - 일용·사업·기타: 달력 직전 달 YYYY-MM
+ * - 근로(상용): 직전 반기 귀속월 view (6↔12)
+ */
+export function prevSimplePayrollCompareViewKeys(
+  year: number,
+  month: number,
+): { monthly: string | null; employedView: string | null } {
+  const monthly = prevWithholdingPeriodKey(simplePayrollMonthlyPeriodKey(year, month));
+  let employedView: string | null = null;
+  if (month === 12) employedView = simplePayrollMonthlyPeriodKey(year, 6);
+  else if (month === 6) employedView = simplePayrollMonthlyPeriodKey(year - 1, 12);
+  return { monthly, employedView };
+}

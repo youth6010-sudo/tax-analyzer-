@@ -1,8 +1,14 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { simplePayrollFilings } from '@/db/schema';
+import type { ClientRecord } from '@/app/types/client';
 import type { IncomeTypeKey } from '@/app/types/incomeTypes';
-import { simplePayrollPeriodKeysForYear, prevSimplePayrollCarryPeriodKeys } from '@/lib/periodUtils';
+import {
+  prevSimplePayrollCarryPeriodKeys,
+  prevSimplePayrollCompareViewKeys,
+  simplePayrollPeriodKeysForYear,
+} from '@/lib/periodUtils';
+import { buildSimplePayrollGrid, simplePayrollPeriodMeta } from '@/lib/incomeTypeFilingGrid';
 
 /** 연말정산과 공유하는 간이지급 소득유형 */
 const YEAR_END_SHARED_SIMPLE_TYPES = new Set<IncomeTypeKey>(['employed', 'bizIncome', 'otherTax']);
@@ -81,6 +87,56 @@ export async function listSimplePayrollPrevFiledKeys(
   for (const r of rows) {
     if (!r.filed) continue;
     out.add(`${r.clientId}|${r.incomeType}`);
+  }
+  return out;
+}
+
+/**
+ * 전월(근로=직전 반기)에 활성였던 칸 키 — `clientId|incomeType`.
+ * 접수 여부와 무관. 이번 달 이월 활성·차이 집계에 사용.
+ */
+export async function listSimplePayrollPrevActiveKeys(
+  clients: ClientRecord[],
+  year: number,
+  month: number,
+): Promise<Set<string>> {
+  const { monthly, employedView } = prevSimplePayrollCompareViewKeys(year, month);
+  const out = new Set<string>();
+
+  const collect = async (viewPk: string | null, allow: (key: string) => boolean) => {
+    if (!viewPk) return;
+    const meta = simplePayrollPeriodMeta(viewPk);
+    const periodKeys = meta.employedPeriodKey
+      ? [meta.monthlyPeriodKey, meta.employedPeriodKey]
+      : [meta.monthlyPeriodKey];
+    const [saved, prevFiled] = await Promise.all([
+      listSimplePayrollFilingsByKeys(periodKeys),
+      listSimplePayrollPrevFiledKeys(meta.year, meta.month),
+    ]);
+    const { grid } = buildSimplePayrollGrid(
+      clients,
+      viewPk,
+      saved,
+      {},
+      {},
+      {},
+      prevFiled,
+      [],
+      { periodStartDate: new Date(meta.year, meta.month - 1, 1) },
+    );
+    for (const row of grid) {
+      for (const [key, cell] of Object.entries(row.cells)) {
+        if (!cell?.active || !allow(key)) continue;
+        out.add(`${row.clientId}|${key}`);
+      }
+    }
+  };
+
+  if (employedView) {
+    await collect(monthly, k => k !== 'employed');
+    await collect(employedView, k => k === 'employed');
+  } else {
+    await collect(monthly, () => true);
   }
   return out;
 }

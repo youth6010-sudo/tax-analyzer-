@@ -408,6 +408,60 @@ export function specialFilingKey(bizNo: string, type: string): string {
   return `${bizNo}|${type}`;
 }
 
+/** 같은 사업자번호 복수 접수 사유 키 */
+export function multiFilingReasonKey(bizNo: string): string {
+  return `${normalizeBizNo(bizNo)}|복수접수`;
+}
+
+/** 홈택스 접수목록 — 사업자번호별 행(신고) 건수 */
+export function countHometaxFilingsByBiz(filings: HometaxFiling[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const f of filings) {
+    const biz = normalizeBizNo(f.bizNo);
+    if (biz.length !== 10) continue;
+    counts[biz] = (counts[biz] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** 세션에 저장된 건수(없으면 목록 존재 시 1) */
+export function filingCountForBiz(
+  excelBizCounts: Record<string, number> | undefined,
+  excelBizSet: ReadonlySet<string>,
+  bizNo: string,
+): number {
+  const biz = normalizeBizNo(bizNo);
+  if (!biz) return 0;
+  if (excelBizCounts && Object.prototype.hasOwnProperty.call(excelBizCounts, biz)) {
+    return Math.max(0, Number(excelBizCounts[biz]) || 0);
+  }
+  return excelBizSet.has(biz) ? 1 : 0;
+}
+
+/**
+ * 같은 사업자번호로 접수목록 행이 2건 이상이면 초과분(건수−1) 합.
+ * 귀속 지급 등으로 정기 신고가 두 번 올라온 경우 차이에 반영.
+ */
+export function surplusFilingCountForTargets(
+  excelBizCounts: Record<string, number> | undefined,
+  targetBizNos: Iterable<string>,
+): number {
+  if (!excelBizCounts) return 0;
+  const targets = new Set<string>();
+  for (const raw of targetBizNos) {
+    const biz = normalizeBizNo(raw);
+    if (biz) targets.add(biz);
+  }
+  let surplus = 0;
+  for (const [biz, count] of Object.entries(excelBizCounts)) {
+    const n = Number(count) || 0;
+    if (n <= 1) continue;
+    if (!targets.has(normalizeBizNo(biz))) continue;
+    surplus += n - 1;
+  }
+  return surplus;
+}
+
 /** 접수목록에만 있고 신고대상 사업자번호에 없는 상호(또는 번호) 목록 */
 export function missingFromListLabels(
   fileBizSet: Iterable<string>,

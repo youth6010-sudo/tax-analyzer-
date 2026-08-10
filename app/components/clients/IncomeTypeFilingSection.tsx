@@ -28,6 +28,7 @@ import {
 import type { IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
+  prevSimplePayrollCompareViewKeys,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
 import { formatIncomeUploadNotice, parseHometaxFile, parseIncomeUploadResult, type IncomeUploadResult } from '@/app/utils/filingCheck';
@@ -42,6 +43,10 @@ import {
   simplePayrollMonthNotes,
 } from '@/lib/incomeTypeFilingGrid';
 import type { ClientIncomeTypes } from '@/app/types/incomeTypes';
+import {
+  compareSimplePayrollByColumns,
+  type PeriodCompareResult,
+} from '@/lib/filingPeriodCompare';
 
 const inputCls =
   'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400';
@@ -146,6 +151,7 @@ type Props = {
   listScope?: 'targets' | 'all';
   /** 원천세 신고대상확인 목록 순서(담당자·월 기준) */
   withholdingOrderIds?: string[];
+  onPeriodCompareChange?: (result: PeriodCompareResult | null) => void;
   /** 원천세 세션 특이사항 저장 */
   onSetRowNote?: (clientId: string, note: string) => void;
   /** 원천세 세션 제외 사유 저장 */
@@ -217,12 +223,12 @@ function matchesRowFilter(
 ): boolean {
   if (filter === 'all') return true;
   const hasActive = Object.values(row.cells).some(c => c.active);
-  const excluded = isGridRowExcluded(row);
-  if (filter === 'target') return hasActive;
-  if (excluded && !hasActive) return false;
+  // 원천 제외여도 활성 칸이 있으면 신고대상·차이·접수 필터에 포함
+  if (!hasActive) return false;
+  if (filter === 'target') return true;
   const fullyFiled = isRowFullyFiled(row, mode);
-  if (filter === 'received') return hasActive && fullyFiled;
-  if (filter === 'diff') return hasActive && !fullyFiled;
+  if (filter === 'received') return fullyFiled;
+  if (filter === 'diff') return !fullyFiled;
   return true;
 }
 
@@ -336,6 +342,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     rowFilter = 'all',
     listScope = 'all',
     withholdingOrderIds = [],
+    onPeriodCompareChange,
     onSetRowNote,
     onSetExcludeReason,
   },
@@ -344,14 +351,14 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   const now = new Date();
   const [month, setMonth] = useState(monthProp ?? now.getMonth() + 1);
   const [grid, setGrid] = useState<ApiGridRow[]>([]);
+  const [prevMonthlyGrid, setPrevMonthlyGrid] = useState<ApiGridRow[] | null>(null);
+  const [prevEmployedGrid, setPrevEmployedGrid] = useState<ApiGridRow[] | null>(null);
   const [spMeta, setSpMeta] = useState<SimplePayrollMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState('');
-  const [displayOrderEpoch, setDisplayOrderEpoch] = useState(0);
   const [rowDisplayOrder, setRowDisplayOrder] = useState<string[]>([]);
-  const displayOrderEpochAppliedRef = useRef(-1);
   const [settingsClient, setSettingsClient] = useState<{ id: string; companyName: string } | null>(
     null,
   );
@@ -383,30 +390,19 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
 
   const filteredGrid = useMemo(() => {
     const byManager = filterByManager(orderedGrid, manager);
+    // 신고대상 = 활성 지급명세 칸이 있는 업체 (원천 제외여도 활성·미접수면 차이 대상)
     const scoped =
-      listScope === 'targets' ? byManager.filter(row => !isGridRowExcluded(row)) : byManager;
+      listScope === 'targets'
+        ? byManager.filter(row => Object.values(row.cells).some(c => c?.active))
+        : byManager;
     if (rowFilter === 'all') return scoped;
     return scoped.filter(row => matchesRowFilter(row, mode, rowFilter));
   }, [orderedGrid, manager, mode, rowFilter, listScope]);
 
-  // 세션(기간·담당자) 진입 시 원천세 순서 적용 + 제외 업체 하단 — 제외 토글 직후에는 순서 유지
+  // 원천세 순서·그리드 변경 시마다 표시 순서를 다시 맞춤
   useEffect(() => {
-    if (displayOrderEpochAppliedRef.current !== displayOrderEpoch) {
-      displayOrderEpochAppliedRef.current = displayOrderEpoch;
-      setRowDisplayOrder(buildIncomeGridDisplayOrder(grid, withholdingOrderIds));
-      return;
-    }
-
-    setRowDisplayOrder(prev => {
-      const known = new Set(prev);
-      const extra = grid.map(r => r.clientId).filter(id => !known.has(id));
-      if (!extra.length) return prev;
-      if (prev.length === 0 && grid.length > 0) {
-        return buildIncomeGridDisplayOrder(grid, withholdingOrderIds);
-      }
-      return [...prev, ...extra];
-    });
-  }, [displayOrderEpoch, grid, withholdingOrderIds]);
+    setRowDisplayOrder(buildIncomeGridDisplayOrder(grid, withholdingOrderIds));
+  }, [grid, withholdingOrderIds]);
 
   const stats = useMemo(
     () => computeStats(grid, manager, mode),
@@ -416,6 +412,86 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   useEffect(() => {
     onStatsChange?.(stats);
   }, [stats, onStatsChange]);
+
+  // 전월·직전반기 그리드 로드 — 항목별 활성 칸 대비
+  useEffect(() => {
+    if (mode !== 'simplePayroll' || !manager) {
+      setPrevMonthlyGrid(null);
+      setPrevEmployedGrid(null);
+      return;
+    }
+    const { monthly, employedView } = prevSimplePayrollCompareViewKeys(year, month);
+    setPrevMonthlyGrid(null);
+    setPrevEmployedGrid(null);
+    if (!monthly) {
+      setPrevMonthlyGrid([]);
+      setPrevEmployedGrid(employedView ? [] : null);
+      return;
+    }
+    let cancelled = false;
+    const load = async (periodKey: string) => {
+      const res = await fetch(
+        `/api/tax/simple-payroll?periodKey=${encodeURIComponent(periodKey)}&manager=${encodeURIComponent(manager)}`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) return [] as ApiGridRow[];
+      const data = await res.json();
+      return Array.isArray(data?.grid) ? (data.grid as ApiGridRow[]) : [];
+    };
+    void (async () => {
+      try {
+        const keys = employedView && employedView !== monthly ? [monthly, employedView] : [monthly];
+        const grids = await Promise.all(keys.map(load));
+        if (cancelled) return;
+        setPrevMonthlyGrid(grids[0] ?? []);
+        if (employedView) {
+          setPrevEmployedGrid(employedView === monthly ? grids[0] ?? [] : grids[1] ?? []);
+        } else {
+          setPrevEmployedGrid(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPrevMonthlyGrid([]);
+          setPrevEmployedGrid(employedView ? [] : null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, year, month, manager]);
+
+  useEffect(() => {
+    if (!onPeriodCompareChange) return;
+    if (mode !== 'simplePayroll' || prevMonthlyGrid === null) {
+      onPeriodCompareChange(null);
+      return;
+    }
+    const { monthly, employedView } = prevSimplePayrollCompareViewKeys(year, month);
+    if (employedView && prevEmployedGrid === null) {
+      onPeriodCompareChange(null);
+      return;
+    }
+    onPeriodCompareChange(
+      compareSimplePayrollByColumns({
+        currGrid: filterByManager(grid, manager),
+        prevMonthlyGrid: filterByManager(prevMonthlyGrid, manager),
+        prevEmployedGrid: employedView ? filterByManager(prevEmployedGrid ?? [], manager) : null,
+        monthlyPrevKey: monthly,
+        employedPrevViewKey: employedView,
+        currMonth: month,
+      }),
+    );
+  }, [
+    mode,
+    year,
+    month,
+    prevMonthlyGrid,
+    prevEmployedGrid,
+    grid,
+    manager,
+    onPeriodCompareChange,
+  ]);
 
   const refreshClientIncomeTypes = useCallback(
     async (clientId: string) => {
@@ -523,7 +599,6 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       }
     } finally {
       setLoading(false);
-      setDisplayOrderEpoch(e => e + 1);
     }
   }, [
     mode,
@@ -539,11 +614,6 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (withholdingOrderIds.length === 0) return;
-    setDisplayOrderEpoch(e => e + 1);
-  }, [withholdingOrderIds]);
 
   useEffect(() => {
     if (monthProp) setMonth(monthProp);
@@ -808,15 +878,15 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         await patchYearEndType(clientId, { [incomeType as YearEndIncomeKey]: false });
         updateCell(clientId, incomeType, { active: false });
       } else {
-        await patchIncomeType(clientId, { [incomeType]: false });
-        // 접수 완료 자료는 유지 — 비활성 이월(다음달도 전월 미신고로 비활성)
+        // 이번 달만 비활성 — 수임처 소득유형 설정은 유지. 전월 접수 이월 칸을 숨김.
         updateCell(clientId, incomeType, {
           active: false,
           monthInactive: true,
           monthForcedActive: false,
+          filed: false,
         });
       }
-      if (!embedded) setMessage(`${labelOf(incomeType)} 비활성화`);
+      if (!embedded) setMessage(`${labelOf(incomeType)} 이번 달 비활성화`);
       scheduleSave();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '비활성화 실패';
@@ -826,6 +896,8 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
   };
 
   const handleToggleFiled = (clientId: string, incomeType: string, filed: boolean) => {
+    // 간이지급 접수는 엑셀 매칭만 — 수기 체크 불가
+    if (mode === 'simplePayroll') return;
     if (locked) return;
     updateCell(clientId, incomeType, { filed });
     scheduleSave();

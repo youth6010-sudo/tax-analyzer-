@@ -147,8 +147,8 @@ export function buildSimplePayrollGrid(
   excluded: Record<string, string> = {},
   rowNotes: Record<string, string> = {},
   forceIncluded: Record<string, boolean> = {},
-  /** 전월(또는 근로 직전 반기) 접수 완료 — clientId|incomeType */
-  prevFiledKeys: ReadonlySet<string> = new Set(),
+  /** 전월(또는 근로 직전 반기) 활성 칸 — clientId|incomeType */
+  prevActiveKeys: ReadonlySet<string> = new Set(),
   extraClientIds: string[] = [],
   opts?: { periodStartDate?: Date },
 ): { grid: IncomeTypeGridRow[]; meta: ReturnType<typeof simplePayrollPeriodMeta> } {
@@ -186,15 +186,16 @@ export function buildSimplePayrollGrid(
         const applicable = isEmployed ? isEmployedColumnApplicable(meta.month, intakeData) : true;
         const monthInactive = isSimplePayrollMonthInactive(saved?.notes);
         const monthForcedActive = isSimplePayrollMonthForcedActive(saved?.notes);
-        const prevFiled = prevFiledKeys.has(`${c.id}|${key}`);
+        const prevActive = prevActiveKeys.has(`${c.id}|${key}`);
         const hasFiled = !!saved?.filed;
-        // 전월 신고(접수)됐을 때만 이월 활성. 전월 미신고 → 비활성.
+        // 전월(근로=직전 반기)에 활성이었으면 이월. 접수 여부와 무관 → 미접수 시 차이.
         // 수동 활성화(__active__)면 전월 없어도 활성 → 미접수는 차이.
-        // 수동 비활성(__inactive__)이면 전월 신고분이 있어도 숨김.
+        // 수동 비활성(__inactive__)이면 전월 활성이어도 숨김.
+        // 원천세 제외는 활성·차이에 영향 없음.
         const active =
           applicable &&
           !monthInactive &&
-          !!(hasFiled || monthForcedActive || prevFiled);
+          !!(hasFiled || monthForcedActive || prevActive);
         cells[key] = {
           applicable,
           active,
@@ -209,7 +210,7 @@ export function buildSimplePayrollGrid(
       const laborSaved = filedMap.get(`${monthlyPeriodKey}|${c.id}|laborContentReport`);
       const laborInactive = isSimplePayrollMonthInactive(laborSaved?.notes);
       const laborForced = isSimplePayrollMonthForcedActive(laborSaved?.notes);
-      const laborPrev = prevFiledKeys.has(`${c.id}|laborContentReport`);
+      const laborPrev = prevActiveKeys.has(`${c.id}|laborContentReport`);
       const laborFiled = !!laborSaved?.filed;
       cells.laborContentReport = {
         applicable: true,
