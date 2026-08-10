@@ -18,7 +18,6 @@ function collectFiles(form: FormData): File[] {
       if (val.size > 0 && val.name) out.push(val);
     }
   }
-  // form.getAll('files')
   for (const v of form.getAll('files')) {
     if (v instanceof File && v.size > 0 && !out.includes(v)) out.push(v);
   }
@@ -30,7 +29,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '?? ?? ????? ????????(???)? ? ? ????.' },
+        { error: '공문 내역 가져오기는 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }
@@ -38,7 +37,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const files = collectFiles(form);
     if (!files.length) {
-      return NextResponse.json({ error: '?? ??? ??? ???.' }, { status: 400 });
+      return NextResponse.json({ error: '엑셀 파일을 선택해 주세요.' }, { status: 400 });
     }
 
     const confirm =
@@ -63,7 +62,7 @@ export async function POST(req: Request) {
       try {
         parsed = parseArrearsLetterWorkbookFile(buffer, file.name || '');
       } catch (e) {
-        const msg = e instanceof Error ? e.message : '?? ??';
+        const msg = e instanceof Error ? e.message : '파싱 실패';
         return NextResponse.json(
           { error: `${file.name}: ${msg}` },
           { status: 400 },
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
       if (!parsed.sheets.length) {
         return NextResponse.json(
           {
-            error: `${file.name}: ?? ?? ??? ?? ?????. (??=??, ?=?????)`,
+            error: `${file.name}: 공문 내역 시트를 찾지 못했습니다. (시트=상호, 열=내역·금액)`,
           },
           { status: 400 },
         );
@@ -88,7 +87,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // manager?? ?? preview/upsert (?? ??/???)
+    // manager별로 묶어 preview/upsert (담당 시트/파일별)
     if (!confirm) {
       let matched = 0;
       let unmatched = 0;

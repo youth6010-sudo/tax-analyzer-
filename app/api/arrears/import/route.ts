@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '?? ????? ??�??�??(???)? ? ? ????.' },
+        { error: '원장 가져오기는 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: '?? ??? ??? ???.' }, { status: 400 });
+      return NextResponse.json({ error: '엑셀 파일을 선택해 주세요.' }, { status: 400 });
     }
 
     const confirm =
@@ -42,12 +42,12 @@ export async function POST(req: Request) {
     try {
       ledgerRows = parseLedgerArrearsWorkbook(buffer);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '?? ??';
+      const msg = e instanceof Error ? e.message : '파싱 실패';
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     if (!ledgerRows.length) {
-      return NextResponse.json({ error: '??? ?? ????.' }, { status: 400 });
+      return NextResponse.json({ error: '가져올 행이 없습니다.' }, { status: 400 });
     }
 
     const asOfDate =
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
           matched: preview.matched,
           unmatched: preview.unmatched,
           newCount: preview.newCount,
-          /** ??? ?? ???? ??(??�??) */
+          /** 원장에 없어 제외되는 기존(현황·공문) */
           preserved: preview.preserved,
           letterDiffCount: letterDiffs.letterDiffCount,
           letterDiffSample: letterDiffs.sample,
