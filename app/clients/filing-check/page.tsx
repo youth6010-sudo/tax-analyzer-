@@ -1072,7 +1072,7 @@ function FilingCheckPageInner() {
     [record.extraClients],
   );
 
-  const periodCompare = useMemo(() => {
+  const periodCompare = useMemo((): PeriodCompareResult | null => {
     if (tax === 'simplePayroll') return spPeriodCompare;
     // 직전 완료분 periodKey(없으면 API가 달력 직전으로 채움)
     if (!prevCompletedPeriodKey) return null;
