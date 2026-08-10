@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: 'ê³µë¬¸ ?´ì—­ ê°€?¸ì˜¤ê¸°ëŠ” ?¸ë””Â·ì°°ë¦¬ë§??????ˆìŠµ?ˆë‹¤.' },
+        { error: '?? ?? ????? ????????(???)? ? ? ????.' },
         { status: 403 },
       );
     }
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const files = collectFiles(form);
     if (!files.length) {
-      return NextResponse.json({ error: '?‘ì? ?Œì¼??? íƒ??ì£¼ì„¸??' }, { status: 400 });
+      return NextResponse.json({ error: '?? ??? ??? ???.' }, { status: 400 });
     }
 
     const confirm =
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
       try {
         parsed = parseArrearsLetterWorkbookFile(buffer, file.name || '');
       } catch (e) {
-        const msg = e instanceof Error ? e.message : '?Œì‹± ?¤íŒ¨';
+        const msg = e instanceof Error ? e.message : '?? ??';
         return NextResponse.json(
           { error: `${file.name}: ${msg}` },
           { status: 400 },
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       if (!parsed.sheets.length) {
         return NextResponse.json(
           {
-            error: `${file.name}: ê³µë¬¸ ?´ì—­ ?œíŠ¸ë¥?ì°¾ì? ëª»í–ˆ?µë‹ˆ?? (?œíŠ¸=?í˜¸, ???´ì—­Â·ê¸ˆì•¡)`,
+            error: `${file.name}: ?? ?? ??? ?? ?????. (??=??, ?=?????)`,
           },
           { status: 400 },
         );
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // managerë³„ë¡œ ë¬¶ì–´ preview/upsert (?´ë‹¹ ?ŒíŠ¸???Œì¼ë³?
+    // manager?? ?? preview/upsert (?? ??/???)
     if (!confirm) {
       let matched = 0;
       let unmatched = 0;

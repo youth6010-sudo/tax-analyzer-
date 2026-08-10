@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '?ì¥ ê°€?¸ì˜¤ê¸°ëŠ” ?¸ë””Â·ì°°ë¦¬ë§??????ˆìŠµ?ˆë‹¤.' },
+        { error: '?? ????? ??·??·??(???)? ? ? ????.' },
         { status: 403 },
       );
     }
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: '?‘ì? ?Œì¼??? íƒ??ì£¼ì„¸??' }, { status: 400 });
+      return NextResponse.json({ error: '?? ??? ??? ???.' }, { status: 400 });
     }
 
     const confirm =
@@ -42,12 +42,12 @@ export async function POST(req: Request) {
     try {
       ledgerRows = parseLedgerArrearsWorkbook(buffer);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '?Œì‹± ?¤íŒ¨';
+      const msg = e instanceof Error ? e.message : '?? ??';
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     if (!ledgerRows.length) {
-      return NextResponse.json({ error: 'ê°€?¸ì˜¬ ?‰ì´ ?†ìŠµ?ˆë‹¤.' }, { status: 400 });
+      return NextResponse.json({ error: '??? ?? ????.' }, { status: 400 });
     }
 
     const asOfDate =
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
           matched: preview.matched,
           unmatched: preview.unmatched,
           newCount: preview.newCount,
-          /** ?ì¥???†ì–´ ? ì??˜ëŠ” ê¸°ì¡´(?„í™©Â·ê³µë¬¸) ??*/
+          /** ??? ?? ???? ??(??·??) */
           preserved: preview.preserved,
           letterDiffCount: letterDiffs.letterDiffCount,
           letterDiffSample: letterDiffs.sample,
