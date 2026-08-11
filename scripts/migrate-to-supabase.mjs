@@ -56,8 +56,10 @@ const sourceUrl = process.env.SOURCE_DATABASE_URL || fileEnv.DATABASE_URL;
 const destUrl =
   process.env.SUPABASE_DATABASE_URL ||
   process.env.DEST_DATABASE_URL ||
+  process.env.TARGET_DATABASE_URL ||
   fileEnv.SUPABASE_DATABASE_URL ||
   fileEnv.DEST_DATABASE_URL ||
+  fileEnv.TARGET_DATABASE_URL ||
   commentedUrl(envPath, /supabase/i);
 
 if (!sourceUrl || !destUrl) {
