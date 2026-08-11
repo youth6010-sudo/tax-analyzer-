@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import {
   portalAlertError,
@@ -71,6 +72,7 @@ function defaultYear() {
 }
 
 export default function ArrearsPageClient() {
+  const router = useRouter();
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
   const [totals, setTotals] = useState<ArrearsManagerTotal[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
@@ -79,6 +81,7 @@ export default function ArrearsPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const [manager, setManager] = useState('');
   const [category, setCategory] = useState('all');
@@ -335,20 +338,69 @@ export default function ArrearsPageClient() {
     return [...set];
   }, [totals]);
 
+  const selectedCount = selectedIds.size;
+  const selectedSum = useMemo(() => {
+    let s = 0;
+    for (const row of items) {
+      if (selectedIds.has(row.id)) s += row.balance;
+    }
+    return s;
+  }, [items, selectedIds]);
+
+  const allVisibleSelected =
+    items.length > 0 && items.every(r => selectedIds.has(r.id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const r of items) next.delete(r.id);
+      } else {
+        for (const r of items) next.add(r.id);
+      }
+      return next;
+    });
+  };
+
+  const openBatchInvoice = () => {
+    if (!selectedCount) return;
+    const ids = [...selectedIds].join(',');
+    router.push(`/arrears/batch-invoice?ids=${encodeURIComponent(ids)}`);
+  };
+
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full space-y-4 py-4`}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               사유는 수임처 기장료·조정료·더빌·CMS로 쌓고, 원장반영만 남은 곳은 「원장 분해」로
-              개월 단위로 나눕니다.
+              개월 단위로 나눕니다. 여러 업체를 체크하면 일괄 청구서를 인쇄할 수 있습니다.
             </p>
           </div>
-          {canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={portalBtnPrimary} onClick={() => openBulk('bookkeeping')}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={portalBtnPrimary}
+              disabled={!selectedCount}
+              onClick={openBatchInvoice}
+              title="선택한 업체를 한 장의 미수 수수료 안내로"
+            >
+              일괄 청구서{selectedCount ? ` (${selectedCount})` : ''}
+            </button>
+            {canManage ? (
+              <>
+              <button type="button" className={portalBtnSecondary} onClick={() => openBulk('bookkeeping')}>
                 월 기장료
               </button>
               <button
@@ -379,8 +431,9 @@ export default function ArrearsPageClient() {
               >
                 CMS
               </button>
-            </div>
-          ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -391,6 +444,11 @@ export default function ArrearsPageClient() {
             총미수 {formatArrearsWon(totalBalance)}원
           </span>
           <span className="text-xs text-slate-500">{items.length}건</span>
+          {selectedCount ? (
+            <span className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 tabular-nums">
+              선택 {selectedCount} · {formatArrearsWon(selectedSum)}원
+            </span>
+          ) : null}
         </div>
 
         {totals.length > 0 ? (
@@ -513,6 +571,16 @@ export default function ArrearsPageClient() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
               <tr>
+                <th className="px-2 py-2.5 w-10 print:hidden">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    title="화면의 업체 모두 선택"
+                    aria-label="전체 선택"
+                  />
+                </th>
                 <th className="px-3 py-2.5 whitespace-nowrap">코드</th>
                 <th className="px-3 py-2.5">상호</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap">미수 잔액</th>
@@ -528,13 +596,13 @@ export default function ArrearsPageClient() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={canManage ? 8 : 7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={canManage ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     불러오는 중…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 8 : 7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={canManage ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
                     {nonzero ? ' 「잔액 ≠ 0」 필터를 꺼 보세요.' : ''}
                     {ledgerRefOnly ? ' 「원장반영만」 필터를 꺼 보세요.' : ''}
@@ -548,8 +616,17 @@ export default function ArrearsPageClient() {
                       row.externalCode.startsWith('letter:')
                         ? 'bg-amber-50/80'
                         : arrearsCategoryRowClass(row.mgmtCategory)
-                    }`}
+                    } ${selectedIds.has(row.id) ? 'ring-1 ring-inset ring-violet-300' : ''}`}
                   >
+                    <td className="px-2 py-2 print:hidden">
+                      <input
+                        type="checkbox"
+                        className="rounded border-slate-300"
+                        checked={selectedIds.has(row.id)}
+                        onChange={() => toggleSelect(row.id)}
+                        aria-label={`${row.companyName} 선택`}
+                      />
+                    </td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">
                       {row.externalCode.startsWith('letter:') ? (
                         <span
