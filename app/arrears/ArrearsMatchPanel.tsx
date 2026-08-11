@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import {
   portalBtnPrimary,
   portalBtnSecondary,
@@ -9,84 +8,52 @@ import {
 } from '@/app/components/portal/uiClasses';
 import { formatArrearsWon } from '@/app/types/arrears';
 
-type SuggestionEntry = {
-  entryId: string;
-  companyName: string;
+type Suggestion = {
   externalCode: string;
+  companyName: string;
   balance: number;
-  managerName: string;
   score: number;
-  ledgerRefOnly: boolean;
-};
-
-type LetterLine = {
-  description: string;
-  amount: number;
-  paidAmount: number;
-  paidDate: string;
 };
 
 type LetterRow = {
-  sheetName: string;
-  filename: string;
-  managerName: string;
-  lineCount: number;
-  letterBalance: number;
-  letterDate: string;
-  sheetKey?: string;
-  lines?: LetterLine[];
-  sameNameEntry: SuggestionEntry | null;
-  balanceMismatch: boolean;
-  suggestions: SuggestionEntry[];
-};
-
-type LedgerOnly = {
   entryId: string;
   companyName: string;
   externalCode: string;
-  balance: number;
   managerName: string;
+  letterSoftKey: string;
+  letterBalance: number;
   lineCount: number;
-  lastDesc: string;
-  suggestions: Array<{
-    sheetName: string;
-    filename: string;
-    managerName: string;
-    score: number;
-    lineCount: number;
-  }>;
+  letterDate: string;
+  match: 'auto' | 'manual' | 'needs_link' | 'skip';
+  linkedLedgerCode: string;
+  linkedLedgerName: string;
+  balanceMismatch: boolean;
+  suggestions: Suggestion[];
 };
 
 type PickEntry = {
-  entryId: string;
-  companyName: string;
   externalCode: string;
+  companyName: string;
   balance: number;
-  managerName: string;
-  ledgerRefOnly: boolean;
+  businessNo: string;
 };
 
 type ReviewPayload = {
-  letterDir: string;
-  letterDirOk: boolean;
-  source?: 'upload' | 'disk' | 'none';
-  sourceLabel?: string;
-  letterSheets: LetterRow[];
-  unmatchedLetters: LetterRow[];
-  ledgerOnly: LedgerOnly[];
+  mode: 'restart';
+  ledgerFilename: string;
+  autoMatched: LetterRow[];
+  needsLink: LetterRow[];
+  skipped: LetterRow[];
+  ledgerOnly: PickEntry[];
   pickEntries: PickEntry[];
-  letterSheetCount: number;
-  sameNameCount: number;
+  letterCount: number;
+  ledgerCount: number;
   canLink: boolean;
-  uploadedFiles?: string[];
+  canApply: boolean;
 };
 
 function scoreLabel(score: number) {
   return `${Math.round(score * 100)}%`;
-}
-
-function sheetKeyOf(row: LetterRow) {
-  return row.sheetKey || `${row.sheetName}|||${row.filename}`;
 }
 
 type Props = {
@@ -94,151 +61,159 @@ type Props = {
 };
 
 export default function ArrearsMatchPanel({ onLinked }: Props) {
-  const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'need' | 'same' | 'all' | 'ledger'>('need');
+  const [open, setOpen] = useState(true);
+  const [tab, setTab] = useState<'need' | 'auto' | 'ledger'>('need');
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
   const [data, setData] = useState<ReviewPayload | null>(null);
+  const [ledgerFile, setLedgerFile] = useState<File | null>(null);
   const [busyKey, setBusyKey] = useState('');
-  const [manualEntryBySheet, setManualEntryBySheet] = useState<Record<string, string>>({});
-  const [manualSheetByEntry, setManualSheetByEntry] = useState<Record<string, string>>({});
+  const [manualBySoft, setManualBySoft] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
-  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
 
-  const applyPayload = (json: ReviewPayload) => {
-    if (!json.letterSheets) json.letterSheets = json.unmatchedLetters || [];
-    if (!json.pickEntries) json.pickEntries = [];
-    setData(json);
-  };
-
-  const loadDisk = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/arrears/match-review', { cache: 'no-store' });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as { error?: string }).error || '매칭 검토 실패');
-      applyPayload(json as ReviewPayload);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '매칭 검토 실패');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const uploadScan = async () => {
-    if (!uploadFiles?.length) {
-      setError('공문 엑셀 파일을 선택해 주세요.');
+  const scan = async () => {
+    if (!ledgerFile) {
+      setError('거래처원장 엑셀을 선택해 주세요.');
       return;
     }
     setLoading(true);
     setError('');
+    setMsg('');
     try {
       const form = new FormData();
-      for (const f of Array.from(uploadFiles)) form.append('files', f);
-      const res = await fetch('/api/arrears/match-review', { method: 'POST', body: form });
+      form.append('file', ledgerFile);
+      const res = await fetch('/api/arrears/restart-match', { method: 'POST', body: form });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as { error?: string }).error || '업로드 스캔 실패');
-      applyPayload(json as ReviewPayload);
+      if (!res.ok) throw new Error((json as { error?: string }).error || '대조 실패');
+      setData(json as ReviewPayload);
       setTab('need');
+      setMsg(
+        `공문 ${(json as ReviewPayload).letterCount} · 원장 ${(json as ReviewPayload).ledgerCount} · 연결필요 ${(json as ReviewPayload).needsLink.length}`,
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : '업로드 스캔 실패');
+      setError(e instanceof Error ? e.message : '대조 실패');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (open && !data && !loading) void loadDisk();
-  }, [open, data, loading, loadDisk]);
-
-  const findLetterRow = (sheetName: string, filename: string) =>
-    data?.letterSheets.find(r => r.sheetName === sheetName && r.filename === filename);
-
-  const link = async (opts: {
-    entryId: string;
-    sheetName: string;
-    filename: string;
+  const saveLink = async (opts: {
+    row: LetterRow;
+    ledgerExternalCode: string;
+    ledgerCompanyName: string;
+    status: 'manual' | 'skip';
     key: string;
-    entryName: string;
   }) => {
     if (!data?.canLink) return;
-    const letter = findLetterRow(opts.sheetName, opts.filename);
-    if (
-      !window.confirm(
-        `공문 «${opts.sheetName}» → 원장 «${opts.entryName}» 에 연결할까요?\n` +
-          `공문 상세를 그 행에 넣고, 잔액은 거래처원장 잔액으로 맞춥니다.\n` +
-          `연결되면 포털에서 사유를 볼 수 있어 Z: 를 다시 열 필요는 없습니다.`,
-      )
+    if (opts.status === 'manual') {
+      if (
+        !window.confirm(
+          `공문 «${opts.row.companyName}» → 원장 «${opts.ledgerCompanyName}» (${opts.ledgerExternalCode}) 연결할까요?\n(지금은 연결만 저장하고, 원장 반영 버튼에서 실제로 붙입니다.)`,
+        )
+      ) {
+        return;
+      }
+    } else if (
+      !window.confirm(`공문 «${opts.row.companyName}» 를 원장에서 제외(미반영)할까요?`)
     ) {
       return;
     }
+
     setBusyKey(opts.key);
     setError('');
     try {
-      const res = await fetch('/api/arrears/link-letter', {
+      const res = await fetch('/api/arrears/link-ledger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entryId: opts.entryId,
-          sheetName: opts.sheetName,
-          filename: opts.filename,
-          sheet: letter
-            ? {
-                companyName: letter.sheetName,
-                letterDate: letter.letterDate,
-                lines: letter.lines || [],
-              }
-            : undefined,
+          letterCompanyName: opts.row.companyName,
+          letterSoftKey: opts.row.letterSoftKey,
+          managerName: opts.row.managerName,
+          ledgerExternalCode: opts.ledgerExternalCode,
+          ledgerCompanyName: opts.ledgerCompanyName,
+          status: opts.status,
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as { error?: string }).error || '연결 실패');
-      // 업로드 목록은 유지 — 원장만 탭/픽 목록은 soft reload 없이 onLinked
-      onLinked?.();
-      // 연결한 시트는 목록에서 빼서 진행감 표시
+      if (!res.ok) throw new Error((json as { error?: string }).error || '연결 저장 실패');
+
       setData(prev => {
         if (!prev) return prev;
-        const nextSheets = prev.letterSheets.filter(
-          r => !(r.sheetName === opts.sheetName && r.filename === opts.filename),
-        );
-        return {
-          ...prev,
-          letterSheets: nextSheets,
-          unmatchedLetters: nextSheets.filter(r => !r.sameNameEntry),
-          letterSheetCount: nextSheets.length,
-          sameNameCount: nextSheets.filter(r => !!r.sameNameEntry).length,
+        const nextNeed = prev.needsLink.filter(r => r.letterSoftKey !== opts.row.letterSoftKey);
+        const updated: LetterRow = {
+          ...opts.row,
+          match: opts.status === 'skip' ? 'skip' : 'manual',
+          linkedLedgerCode: opts.status === 'skip' ? '' : opts.ledgerExternalCode,
+          linkedLedgerName: opts.status === 'skip' ? '' : opts.ledgerCompanyName,
         };
+        const nextAuto = [
+          ...prev.autoMatched.filter(r => r.letterSoftKey !== opts.row.letterSoftKey),
+          ...(opts.status === 'manual' ? [updated] : []),
+        ];
+        const nextSkip = [
+          ...prev.skipped.filter(r => r.letterSoftKey !== opts.row.letterSoftKey),
+          ...(opts.status === 'skip' ? [updated] : []),
+        ];
+        return { ...prev, needsLink: nextNeed, autoMatched: nextAuto, skipped: nextSkip };
       });
+      onLinked?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '연결 실패');
+      setError(e instanceof Error ? e.message : '연결 저장 실패');
     } finally {
       setBusyKey('');
     }
   };
 
-  const needCount = data?.letterSheets.filter(r => !r.sameNameEntry).length ?? 0;
-  const sameCount = data?.letterSheets.filter(r => !!r.sameNameEntry).length ?? 0;
-  const mismatchCount = data?.letterSheets.filter(r => r.balanceMismatch).length ?? 0;
+  const applyLedger = async () => {
+    if (!ledgerFile || !data?.canApply) return;
+    if (data.needsLink.length > 0) {
+      if (
+        !window.confirm(
+          `아직 연결 필요 ${data.needsLink.length}건이 있습니다.\n연결 안 한 공문은 원장 반영 시 제외(삭제)됩니다. 계속할까요?`,
+        )
+      ) {
+        return;
+      }
+    } else if (!window.confirm('원장을 DB에 반영하고, 연결된 공문 상세를 붙일까요?')) {
+      return;
+    }
 
-  const filteredLetters = useMemo(() => {
-    if (!data) return [];
+    setApplying(true);
+    setError('');
+    setMsg('');
+    try {
+      const form = new FormData();
+      form.append('file', ledgerFile);
+      const res = await fetch('/api/arrears/apply-ledger-links', { method: 'POST', body: form });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error || '원장 반영 실패');
+      setMsg(
+        `원장 반영 완료 · 부착 ${(json as { attached?: number }).attached ?? 0} · 제외 ${(json as { skipped?: number }).skipped ?? 0} · 신규 ${(json as { ledgerInserted?: number }).ledgerInserted ?? 0}`,
+      );
+      setData(null);
+      onLinked?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '원장 반영 실패');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const list = useMemo(() => {
+    if (!data) return [] as LetterRow[];
     const qq = q.trim().toLowerCase();
-    let list = data.letterSheets;
-    if (tab === 'need') list = list.filter(r => !r.sameNameEntry);
-    if (tab === 'same') list = list.filter(r => !!r.sameNameEntry);
-    if (!qq) return list;
-    return list.filter(
+    let rows =
+      tab === 'need' ? data.needsLink : tab === 'auto' ? data.autoMatched : ([] as LetterRow[]);
+    if (!qq) return rows;
+    return rows.filter(
       r =>
-        r.sheetName.toLowerCase().includes(qq) ||
-        r.filename.toLowerCase().includes(qq) ||
+        r.companyName.toLowerCase().includes(qq) ||
         r.managerName.toLowerCase().includes(qq) ||
-        (r.sameNameEntry?.companyName || '').toLowerCase().includes(qq),
+        r.linkedLedgerName.toLowerCase().includes(qq),
     );
   }, [data, tab, q]);
-
-  const pickList = data?.pickEntries ?? [];
-  const needsUpload = !data?.letterSheets?.length || data.source === 'none';
 
   return (
     <div className="rounded-xl border border-violet-200 bg-violet-50/40 shadow-sm">
@@ -248,382 +223,256 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
         onClick={() => setOpen(o => !o)}
       >
         <div>
-          <p className="text-sm font-semibold text-violet-950">공문 ↔ 원장 이름 맞추기</p>
+          <p className="text-sm font-semibold text-violet-950">공문 ↔ 원장 이름 맞추기 (재시작)</p>
           <p className="text-[11px] text-violet-800/80">
-            배포 사이트에서는 공문 xls를 올린 뒤, 원장 행을 직접 연결하세요. 잔액은 원장 기준.
+            공문은 CLI로 넣은 뒤, 여기서 원장 xls를 올려 없는 이름만 연결하고 마지막에 원장 반영.
           </p>
         </div>
         <span className="shrink-0 text-xs font-medium text-violet-700">
           {open ? '접기' : '펼치기'}
-          {data?.letterSheetCount
-            ? ` · 공문 ${data.letterSheetCount} · 연결필요 ${needCount}`
-            : ''}
+          {data ? ` · 연결필요 ${data.needsLink.length}` : ''}
         </span>
       </button>
 
       {open ? (
         <div className="space-y-3 border-t border-violet-100 px-3 py-3">
-          <div className="rounded-lg border border-violet-100 bg-white p-2.5 space-y-2">
-            <p className="text-xs font-semibold text-slate-800">1) 공문 엑셀 올리기</p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Vercel에는 Z: 드라이브가 없습니다. 담당자별 «미수수수료-○○.xls» 를 선택해 올리세요.
-              연결이 끝나면 내역은 DB에 남아서, 이후에는 포털 미수 상세만 보면 됩니다.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                multiple
-                className="text-xs max-w-full"
-                onChange={e => setUploadFiles(e.target.files)}
-              />
-              <button
-                type="button"
-                className={portalBtnPrimary}
-                disabled={loading || !uploadFiles?.length}
-                onClick={() => void uploadScan()}
-              >
-                {loading ? '스캔 중…' : '업로드·스캔'}
-              </button>
+          <ol className="list-decimal pl-4 text-[11px] text-slate-600 space-y-0.5">
+            <li>
+              로컬: <code className="rounded bg-slate-100 px-1">npx tsx scripts/reset-arrears-from-letters.ts</code>
+            </li>
+            <li>아래 원장 파일 선택 → 대조 → «연결 필요»만 수동 연결</li>
+            <li>«원장 반영» 또는 CLI apply-arrears-ledger-with-links.ts</li>
+          </ol>
+
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-100 bg-white p-2.5">
+            <input
+              type="file"
+              accept=".xls,.xlsx"
+              className="text-xs max-w-full"
+              onChange={e => setLedgerFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              className={portalBtnPrimary}
+              disabled={loading || !ledgerFile}
+              onClick={() => void scan()}
+            >
+              {loading ? '대조 중…' : '원장 대조'}
+            </button>
+            {data?.canApply ? (
               <button
                 type="button"
                 className={portalBtnSecondary}
-                disabled={loading}
-                onClick={() => void loadDisk()}
-                title="로컬 개발 PC에서 Z: 가 있을 때만"
+                disabled={applying || !ledgerFile}
+                onClick={() => void applyLedger()}
               >
-                디스크 다시 시도
+                {applying ? '반영 중…' : '원장 반영 (확정)'}
               </button>
-            </div>
-            {data?.source === 'upload' && data.sourceLabel ? (
-              <p className="text-[11px] text-emerald-800">스캔됨: {data.sourceLabel}</p>
             ) : null}
           </div>
 
-          {needsUpload && data?.source !== 'upload' ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-              공문 목록이 비어 있습니다. 위쪽에서 공문 xls를 올려 주세요.
-              {data?.letterDir ? ` (서버 경로 ${data.letterDir} 는 배포 환경에서 없음)` : ''}
-            </p>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={`${tab === 'need' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
-              onClick={() => setTab('need')}
-            >
-              연결 필요 ({needCount})
-            </button>
-            <button
-              type="button"
-              className={`${tab === 'same' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
-              onClick={() => setTab('same')}
-            >
-              이름 같음·확인 ({sameCount})
-              {mismatchCount ? ` · 잔액틀림 ${mismatchCount}` : ''}
-            </button>
-            <button
-              type="button"
-              className={`${tab === 'all' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
-              onClick={() => setTab('all')}
-            >
-              공문 전체
-            </button>
-            <button
-              type="button"
-              className={`${tab === 'ledger' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
-              onClick={() => setTab('ledger')}
-            >
-              원장만 ({data?.ledgerOnly.length ?? 0})
-            </button>
-          </div>
-
-          {tab !== 'ledger' ? (
-            <input
-              className={`${portalInput} py-1.5 text-xs`}
-              placeholder="공문 상호·담당·파일 검색"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-            />
-          ) : null}
-
-          {!data?.canLink ? (
-            <p className="text-[11px] text-slate-500">연결 버튼은 찰리 계정에서만 보입니다.</p>
-          ) : null}
-
+          {msg ? <p className="text-xs text-emerald-800">{msg}</p> : null}
           {error ? <p className="text-xs text-rose-700">{error}</p> : null}
 
-          {loading && !data?.letterSheets.length ? (
-            <p className="py-6 text-center text-sm text-slate-500">스캔 중…</p>
-          ) : null}
+          {data ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`${tab === 'need' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
+                  onClick={() => setTab('need')}
+                >
+                  연결 필요 ({data.needsLink.length})
+                </button>
+                <button
+                  type="button"
+                  className={`${tab === 'auto' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
+                  onClick={() => setTab('auto')}
+                >
+                  자동·수동 연결됨 ({data.autoMatched.length})
+                </button>
+                <button
+                  type="button"
+                  className={`${tab === 'ledger' ? portalBtnPrimary : portalBtnSecondary} py-1.5 text-xs`}
+                  onClick={() => setTab('ledger')}
+                >
+                  원장만 ({data.ledgerOnly.length})
+                </button>
+              </div>
 
-          {tab !== 'ledger' && data ? (
-            <div className="max-h-[32rem] space-y-3 overflow-auto">
-              {filteredLetters.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">
-                  {data.letterSheetCount === 0
-                    ? '먼저 공문 엑셀을 업로드하세요.'
-                    : '표시할 공문 시트가 없습니다.'}
-                </p>
+              {tab !== 'ledger' ? (
+                <input
+                  className={`${portalInput} py-1.5 text-xs`}
+                  placeholder="상호·담당 검색"
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                />
+              ) : null}
+
+              {!data.canLink ? (
+                <p className="text-[11px] text-slate-500">연결·원장 반영은 찰리만 가능합니다.</p>
+              ) : null}
+
+              {tab === 'ledger' ? (
+                <div className="max-h-72 overflow-auto rounded border border-slate-200 bg-white text-xs">
+                  <table className="min-w-full">
+                    <thead className="sticky top-0 bg-slate-50">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left">코드</th>
+                        <th className="px-2 py-1.5 text-left">상호</th>
+                        <th className="px-2 py-1.5 text-right">잔액</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {data.ledgerOnly.slice(0, 200).map(r => (
+                        <tr key={r.externalCode}>
+                          <td className="px-2 py-1 font-mono text-[10px]">{r.externalCode}</td>
+                          <td className="px-2 py-1">{r.companyName}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">
+                            {formatArrearsWon(r.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {data.ledgerOnly.length > 200 ? (
+                    <p className="px-2 py-1 text-[10px] text-slate-400">상위 200건만 표시</p>
+                  ) : null}
+                </div>
               ) : (
-                filteredLetters.map(row => {
-                  const sheetKey = sheetKeyOf(row);
-                  const manualId = manualEntryBySheet[sheetKey] || '';
-                  return (
-                    <div
-                      key={sheetKey}
-                      className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
-                    >
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{row.sheetName}</p>
-                          <p className="text-slate-500">
-                            {row.managerName} · {row.filename} · 줄 {row.lineCount}
-                            {row.letterDate ? ` · ${row.letterDate}` : ''}
-                          </p>
-                          {row.sameNameEntry ? (
-                            <p className="mt-1 text-[11px] text-slate-600">
-                              참고: 원장에 같은 이름 «{row.sameNameEntry.companyName}»
-                              {row.balanceMismatch ? (
-                                <span className="ml-1 font-semibold text-amber-800">
-                                  · 잔액 불일치 (공문 {formatArrearsWon(row.letterBalance)} / 원장{' '}
-                                  {formatArrearsWon(row.sameNameEntry.balance)})
-                                </span>
-                              ) : (
-                                <span className="ml-1 text-slate-500">
-                                  · 잔액 같음 {formatArrearsWon(row.sameNameEntry.balance)}
-                                </span>
-                              )}
-                              — 그래도 직접 연결해야 합니다.
+                <div className="max-h-[32rem] space-y-3 overflow-auto">
+                  {list.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-slate-500">목록이 비어 있습니다.</p>
+                  ) : (
+                    list.map(row => {
+                      const pick = manualBySoft[row.letterSoftKey] || '';
+                      return (
+                        <div
+                          key={row.entryId}
+                          className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
+                        >
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{row.companyName}</p>
+                              <p className="text-slate-500">
+                                {row.managerName} · 줄 {row.lineCount}
+                                {row.letterDate ? ` · ${row.letterDate}` : ''}
+                                {row.match !== 'needs_link' ? (
+                                  <span className="ml-1 text-emerald-800">
+                                    → {row.linkedLedgerName} ({row.linkedLedgerCode}) · {row.match}
+                                  </span>
+                                ) : (
+                                  <span className="ml-1 font-medium text-rose-800">원장 동일명 없음</span>
+                                )}
+                              </p>
+                            </div>
+                            <p className="tabular-nums font-semibold text-rose-800">
+                              공문 {formatArrearsWon(row.letterBalance)}
                             </p>
-                          ) : (
-                            <p className="mt-1 text-[11px] font-medium text-rose-800">
-                              동일 이름 원장 없음 · 아래에서 고르세요
-                            </p>
-                          )}
-                        </div>
-                        <p className="tabular-nums font-semibold text-rose-800">
-                          공문 {formatArrearsWon(row.letterBalance)}
-                        </p>
-                      </div>
+                          </div>
 
-                      <ul className="mt-2 space-y-1.5">
-                        {row.suggestions.map(s => (
-                          <li
-                            key={s.entryId}
-                            className="flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
-                          >
-                            <span className="font-medium text-slate-800">
-                              {s.companyName}
-                              <span className="ml-1 font-mono text-[10px] text-slate-400">
-                                {s.externalCode}
-                              </span>
-                            </span>
-                            <span className="text-slate-500">
-                              {s.managerName} · 원장 {formatArrearsWon(s.balance)}
-                            </span>
-                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-900">
-                              유사 {scoreLabel(s.score)}
-                            </span>
-                            {s.ledgerRefOnly ? (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">
-                                원장반영
-                              </span>
-                            ) : null}
-                            <Link
-                              href={`/arrears/${s.entryId}`}
-                              className="text-blue-700 underline-offset-2 hover:underline"
-                            >
-                              보기
-                            </Link>
-                            {data.canLink ? (
-                              <button
-                                type="button"
-                                className={`${portalBtnPrimary} ml-auto py-0.5 text-[11px]`}
-                                disabled={!!busyKey}
-                                onClick={() =>
-                                  void link({
-                                    entryId: s.entryId,
-                                    sheetName: row.sheetName,
-                                    filename: row.filename,
-                                    key: `L:${sheetKey}:${s.entryId}`,
-                                    entryName: s.companyName,
-                                  })
-                                }
-                              >
-                                {busyKey === `L:${sheetKey}:${s.entryId}` ? '연결 중…' : '이 행에 연결'}
-                              </button>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-
-                      {data.canLink && pickList.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
-                          <select
-                            className={`${portalInput} max-w-full flex-1 py-1 text-xs`}
-                            value={manualId}
-                            onChange={e =>
-                              setManualEntryBySheet(prev => ({
-                                ...prev,
-                                [sheetKey]: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">원장 업체 직접 고르기 (전체)…</option>
-                            {pickList.map(e => (
-                              <option key={e.entryId} value={e.entryId}>
-                                {e.companyName} ({e.externalCode}) · {formatArrearsWon(e.balance)}
-                                {e.ledgerRefOnly ? ' · 원장반영' : ''}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className={portalBtnSecondary}
-                            disabled={!manualId || !!busyKey}
-                            onClick={() => {
-                              const ent = pickList.find(e => e.entryId === manualId);
-                              if (!ent) return;
-                              void link({
-                                entryId: manualId,
-                                sheetName: row.sheetName,
-                                filename: row.filename,
-                                key: `M:${sheetKey}:${manualId}`,
-                                entryName: ent.companyName,
-                              });
-                            }}
-                          >
-                            선택 연결
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          ) : null}
-
-          {tab === 'ledger' && data ? (
-            <div className="max-h-[32rem] space-y-3 overflow-auto">
-              {data.ledgerOnly.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">
-                  원장반영만 있는 업체가 없습니다.
-                </p>
-              ) : (
-                data.ledgerOnly.map(row => {
-                  const pick = manualSheetByEntry[row.entryId] || '';
-                  return (
-                    <div
-                      key={row.entryId}
-                      className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
-                    >
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <div>
-                          <Link
-                            href={`/arrears/${row.entryId}`}
-                            className="text-sm font-semibold text-blue-800 underline-offset-2 hover:underline"
-                          >
-                            {row.companyName}
-                          </Link>
-                          <p className="text-slate-500">
-                            {row.externalCode} · {row.managerName} · 줄 {row.lineCount}
-                            {row.lastDesc ? ` · ${row.lastDesc}` : ''}
-                          </p>
-                        </div>
-                        <p className="tabular-nums font-semibold text-rose-800">
-                          원장 {formatArrearsWon(row.balance)}
-                        </p>
-                      </div>
-
-                      <ul className="mt-2 space-y-1.5">
-                        {row.suggestions.map(s => {
-                          const key = `G:${row.entryId}:${s.sheetName}:${s.filename}`;
-                          return (
-                            <li
-                              key={`${s.sheetName}-${s.filename}`}
-                              className="flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
-                            >
-                              <span className="font-medium text-slate-800">{s.sheetName}</span>
-                              <span className="text-slate-500">
-                                {s.managerName} · 줄 {s.lineCount}
-                              </span>
-                              <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-900">
-                                유사 {scoreLabel(s.score)}
-                              </span>
-                              {data.canLink && data.letterSheets.length > 0 ? (
+                          {row.match === 'needs_link' && data.canLink ? (
+                            <>
+                              <ul className="mt-2 space-y-1.5">
+                                {row.suggestions.map(s => (
+                                  <li
+                                    key={s.externalCode}
+                                    className="flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                                  >
+                                    <span className="font-medium">
+                                      {s.companyName}
+                                      <span className="ml-1 font-mono text-[10px] text-slate-400">
+                                        {s.externalCode}
+                                      </span>
+                                    </span>
+                                    <span className="text-slate-500">
+                                      원장 {formatArrearsWon(s.balance)}
+                                    </span>
+                                    <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-900">
+                                      유사 {scoreLabel(s.score)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className={`${portalBtnPrimary} ml-auto py-0.5 text-[11px]`}
+                                      disabled={!!busyKey}
+                                      onClick={() =>
+                                        void saveLink({
+                                          row,
+                                          ledgerExternalCode: s.externalCode,
+                                          ledgerCompanyName: s.companyName,
+                                          status: 'manual',
+                                          key: `${row.letterSoftKey}:${s.externalCode}`,
+                                        })
+                                      }
+                                    >
+                                      이 원장에 연결
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+                                <select
+                                  className={`${portalInput} max-w-full flex-1 py-1 text-xs`}
+                                  value={pick}
+                                  onChange={e =>
+                                    setManualBySoft(prev => ({
+                                      ...prev,
+                                      [row.letterSoftKey]: e.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">원장 전체에서 고르기…</option>
+                                  {data.pickEntries.map(p => (
+                                    <option key={p.externalCode} value={p.externalCode}>
+                                      {p.companyName} ({p.externalCode}) ·{' '}
+                                      {formatArrearsWon(p.balance)}
+                                    </option>
+                                  ))}
+                                </select>
                                 <button
                                   type="button"
-                                  className={`${portalBtnPrimary} ml-auto py-0.5 text-[11px]`}
+                                  className={portalBtnSecondary}
+                                  disabled={!pick || !!busyKey}
+                                  onClick={() => {
+                                    const ent = data.pickEntries.find(p => p.externalCode === pick);
+                                    if (!ent) return;
+                                    void saveLink({
+                                      row,
+                                      ledgerExternalCode: ent.externalCode,
+                                      ledgerCompanyName: ent.companyName,
+                                      status: 'manual',
+                                      key: `M:${row.letterSoftKey}:${pick}`,
+                                    });
+                                  }}
+                                >
+                                  선택 연결
+                                </button>
+                                <button
+                                  type="button"
+                                  className={portalBtnSecondary}
                                   disabled={!!busyKey}
                                   onClick={() =>
-                                    void link({
-                                      entryId: row.entryId,
-                                      sheetName: s.sheetName,
-                                      filename: s.filename,
-                                      key,
-                                      entryName: row.companyName,
+                                    void saveLink({
+                                      row,
+                                      ledgerExternalCode: '',
+                                      ledgerCompanyName: '',
+                                      status: 'skip',
+                                      key: `S:${row.letterSoftKey}`,
                                     })
                                   }
                                 >
-                                  {busyKey === key ? '연결 중…' : '이 공문 연결'}
+                                  제외
                                 </button>
-                              ) : null}
-                            </li>
-                          );
-                        })}
-                      </ul>
-
-                      {data.canLink && data.letterSheets.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
-                          <select
-                            className={`${portalInput} max-w-full flex-1 py-1 text-xs`}
-                            value={pick}
-                            onChange={e =>
-                              setManualSheetByEntry(prev => ({
-                                ...prev,
-                                [row.entryId]: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">공문 시트 직접 고르기…</option>
-                            {data.letterSheets.map(l => (
-                              <option key={sheetKeyOf(l)} value={sheetKeyOf(l)}>
-                                {l.sheetName} ({l.managerName}) · {l.filename}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className={portalBtnSecondary}
-                            disabled={!pick || !!busyKey}
-                            onClick={() => {
-                              const [sheetName, filename] = pick.split('|||');
-                              if (!sheetName || !filename) return;
-                              void link({
-                                entryId: row.entryId,
-                                sheetName,
-                                filename,
-                                key: `N:${row.entryId}:${pick}`,
-                                entryName: row.companyName,
-                              });
-                            }}
-                          >
-                            선택 연결
-                          </button>
+                              </div>
+                            </>
+                          ) : null}
                         </div>
-                      ) : (
-                        <p className="mt-2 text-[11px] text-amber-800">
-                          공문을 먼저 업로드해야 원장 쪽에 붙일 시트가 생깁니다.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })
+                      );
+                    })
+                  )}
+                </div>
               )}
-            </div>
+            </>
           ) : null}
         </div>
       ) : null}

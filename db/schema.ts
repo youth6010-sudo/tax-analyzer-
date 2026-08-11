@@ -672,6 +672,29 @@ export const arrearsLetterLines = pgTable('arrears_letter_lines', {
   index('arrears_letter_lines_entry_sort_idx').on(t.arrearsEntryId, t.sortOrder),
 ]);
 
+/** 공문 상호 → 원장 코드 연결 (원장 반영 전) */
+export const arrearsLetterLedgerLinks = pgTable(
+  'arrears_letter_ledger_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    letterSoftKey: text('letter_soft_key').notNull(),
+    letterCompanyName: text('letter_company_name').notNull().default(''),
+    letterFilename: text('letter_filename').notNull().default(''),
+    managerName: text('manager_name').notNull().default(''),
+    ledgerExternalCode: text('ledger_external_code').notNull().default(''),
+    ledgerCompanyName: text('ledger_company_name').notNull().default(''),
+    /** auto | manual | skip */
+    status: text('status').notNull().default('manual'),
+    updatedBy: text('updated_by').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [
+    uniqueIndex('arrears_letter_ledger_links_soft_uidx').on(t.letterSoftKey),
+    index('arrears_letter_ledger_links_ledger_code_idx').on(t.ledgerExternalCode),
+  ],
+);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -696,6 +719,7 @@ export type LeaveNotification = typeof leaveNotifications.$inferSelect;
 export type DutyWeek = typeof dutyWeeks.$inferSelect;
 export type ArrearsEntry = typeof arrearsEntries.$inferSelect;
 export type ArrearsLetterLine = typeof arrearsLetterLines.$inferSelect;
+export type ArrearsLetterLedgerLink = typeof arrearsLetterLedgerLinks.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;
