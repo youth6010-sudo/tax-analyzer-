@@ -85,9 +85,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // 기본: 원장 잔액만 반영. 공문에 「원장 추가미수」를 붙이려면 syncLetter=1
+    const syncLetter =
+      form.get('syncLetter') === '1' ||
+      form.get('syncLetter') === 'true' ||
+      String(form.get('syncLetter') ?? '').toLowerCase() === 'yes';
+
     const actor = user.name || user.loginId || '';
     const result = await upsertLedgerImport(ledgerRows, asOfDate, actor);
-    const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
+    let letterDiffApplied = 0;
+    if (syncLetter) {
+      const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
+      letterDiffApplied = letterSync.applied;
+    }
 
     return NextResponse.json(
       {
@@ -95,7 +105,8 @@ export async function POST(req: Request) {
         asOfDate,
         filename: file.name,
         total: ledgerRows.length,
-        letterDiffApplied: letterSync.applied,
+        letterDiffApplied,
+        letterSyncSkipped: !syncLetter,
         ...result,
       },
       NO_STORE,

@@ -78,8 +78,13 @@ async function main() {
     `잔액 반영: 갱신 ${result.updated} · 신규 ${result.inserted} · 원장 밖 유지 ${result.preserved}`,
   );
 
-  const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
-  console.log(`공문 맞춤 적용: ${letterSync.applied}건`);
+  // 기본은 공문 자동맞춤 OFF. 필요 시: --sync-letter
+  if (process.argv.includes('--sync-letter')) {
+    const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
+    console.log(`공문 맞춤 적용: ${letterSync.applied}건`);
+  } else {
+    console.log('공문 맞춤 건너뜀 (상세 내역 유지). 쓰려면 --sync-letter');
+  }
   console.log('완료');
 }
 

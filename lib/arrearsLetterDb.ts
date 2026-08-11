@@ -229,7 +229,7 @@ export async function syncLetterDiffWithLedger(
   const labelDate = asOfDate || new Date().toISOString().slice(0, 10);
   const bal = Math.round(ledgerBalance);
 
-  // 공문 없음 + 원장 잔액 있음 → 초기 라인 생성
+  // 공문 없음 + 원장 잔액 있음 → 「전기이월」한 줄만 (상세 공문 대체 아님)
   if (!lines.length) {
     if (bal === 0) return { applied: false, diff: 0 };
     await replaceLetterLines(
@@ -237,7 +237,7 @@ export async function syncLetterDiffWithLedger(
       actorName,
       [
         {
-          description: `원장 잔액 (${labelDate})`,
+          description: `전기이월 (${labelDate})`,
           amount: bal > 0 ? bal : 0,
           paidAmount: bal < 0 ? Math.abs(bal) : 0,
           paidDate: '',
@@ -254,6 +254,8 @@ export async function syncLetterDiffWithLedger(
     (desc.includes('원장 추가미수') ||
       desc.includes('원장 입금 반영') ||
       desc.includes('원장 잔액') ||
+      desc.includes('원장반영') ||
+      desc.includes('전기이월') ||
       desc.includes(`(${labelDate})`));
 
   const keep = lines.filter(l => !isSyncLine(l.description, l.source));
@@ -273,7 +275,7 @@ export async function syncLetterDiffWithLedger(
   if (need !== 0) {
     if (need > 0) {
       next.push({
-        description: `원장 추가미수 (${labelDate})`,
+        description: `원장반영 (${labelDate})`,
         amount: need,
         paidAmount: 0,
         paidDate: '',
@@ -281,7 +283,7 @@ export async function syncLetterDiffWithLedger(
       });
     } else {
       next.push({
-        description: `원장 입금 반영 (${labelDate})`,
+        description: `원장반영 입금 (${labelDate})`,
         amount: 0,
         paidAmount: Math.abs(need),
         paidDate: '',
