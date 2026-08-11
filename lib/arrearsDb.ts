@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, gte, ilike, inArray, like, ne, or, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines, clients } from '@/db/schema';
 import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '@/app/types/arrears';
@@ -138,6 +138,8 @@ export interface ListArrearsFilters {
   minBalance?: number;
   /** 담당자 본인만 — 서버에서 이름 목록으로 제한 */
   managerNames?: string[];
+  /** true면 「원장반영」등 원장 맞춤 줄이 있는 행만 */
+  ledgerRefOnly?: boolean;
 }
 
 export async function listArrearsEntries(filters: ListArrearsFilters = {}): Promise<{
@@ -173,6 +175,28 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   if (filters.managerNames?.length) {
     conditions.push(
       or(...filters.managerNames.map(n => eq(arrearsEntries.managerName, n)))!,
+    );
+  }
+  if (filters.ledgerRefOnly) {
+    conditions.push(
+      exists(
+        db
+          .select({ id: arrearsLetterLines.id })
+          .from(arrearsLetterLines)
+          .where(
+            and(
+              eq(arrearsLetterLines.arrearsEntryId, arrearsEntries.id),
+              or(
+                eq(arrearsLetterLines.source, 'ledger'),
+                like(arrearsLetterLines.description, '%원장반영%'),
+                like(arrearsLetterLines.description, '%원장 추가미수%'),
+                like(arrearsLetterLines.description, '%원장 잔액%'),
+                like(arrearsLetterLines.description, '%전기이월%'),
+                like(arrearsLetterLines.description, '%원장 입금%'),
+              )!,
+            )!,
+          ),
+      ),
     );
   }
 

@@ -22,6 +22,10 @@ export async function GET(req: Request) {
     const minBalanceRaw = sp.get('minBalance');
     const minBalance =
       minBalanceRaw != null && minBalanceRaw !== '' ? Number(minBalanceRaw) : undefined;
+    const ledgerRefOnly =
+      sp.get('ledgerRef') === '1' ||
+      sp.get('ledgerRef') === 'true' ||
+      sp.get('ledgerRefOnly') === '1';
 
     const canManage = canManageArrears(user);
     const managerNames = canManage
@@ -48,6 +52,7 @@ export async function GET(req: Request) {
       nonzero: nonzero || undefined,
       minBalance: Number.isFinite(minBalance) ? minBalance : undefined,
       managerNames,
+      ledgerRefOnly: ledgerRefOnly || undefined,
     });
 
     return NextResponse.json({ ...result, canManage }, NO_STORE);

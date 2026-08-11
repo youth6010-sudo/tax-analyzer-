@@ -25,6 +25,7 @@ import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import ArrearsManualEntryModal, {
   type ManualChannel,
 } from '@/app/arrears/ArrearsManualEntryModal';
+import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
 
 type BulkRow = {
   clientId: string;
@@ -66,6 +67,7 @@ export default function ArrearsPageClient() {
   const [manager, setManager] = useState('');
   const [category, setCategory] = useState('all');
   const [nonzero, setNonzero] = useState(false);
+  const [ledgerRefOnly, setLedgerRefOnly] = useState(false);
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
 
@@ -92,6 +94,7 @@ export default function ArrearsPageClient() {
       if (manager) params.set('manager', manager);
       if (category !== 'all') params.set('category', category);
       if (nonzero) params.set('nonzero', '1');
+      if (ledgerRefOnly) params.set('ledgerRef', '1');
       if (qDebounced) params.set('q', qDebounced);
 
       if (mode === 'full') {
@@ -121,7 +124,7 @@ export default function ArrearsPageClient() {
         if (mode === 'full') setLoading(false);
       }
     },
-    [manager, category, nonzero, qDebounced],
+    [manager, category, nonzero, ledgerRefOnly, qDebounced],
   );
 
   useEffect(() => {
@@ -393,6 +396,15 @@ export default function ArrearsPageClient() {
             />
             잔액 ≠ 0
           </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={ledgerRefOnly}
+              onChange={e => setLedgerRefOnly(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            원장반영만
+          </label>
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
             검색
             <input
@@ -430,6 +442,8 @@ export default function ArrearsPageClient() {
 
         {error ? <div className={portalAlertError}>{error}</div> : null}
 
+        {canManage ? <ArrearsMatchPanel onLinked={() => void load('full')} /> : null}
+
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
@@ -458,6 +472,7 @@ export default function ArrearsPageClient() {
                   <td colSpan={canManage ? 8 : 7} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
                     {nonzero ? ' 「잔액 ≠ 0」 필터를 꺼 보세요.' : ''}
+                    {ledgerRefOnly ? ' 「원장반영만」 필터를 꺼 보세요.' : ''}
                   </td>
                 </tr>
               ) : (
