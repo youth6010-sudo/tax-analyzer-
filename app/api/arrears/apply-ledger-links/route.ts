@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       ledgerRows,
       asOfDate,
       actorName: user.name?.trim() || '찰리',
+      keepUnmatchedLetters: form.get('dropUnmatched') !== '1',
     });
 
     return NextResponse.json({ ok: true, asOfDate, ...result }, NO_STORE);

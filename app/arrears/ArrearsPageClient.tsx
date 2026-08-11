@@ -544,10 +544,23 @@ export default function ArrearsPageClient() {
                 items.map(row => (
                   <tr
                     key={row.id}
-                    className={`hover:brightness-[0.98] ${arrearsCategoryRowClass(row.mgmtCategory)}`}
+                    className={`hover:brightness-[0.98] ${
+                      row.externalCode.startsWith('letter:')
+                        ? 'bg-amber-50/80'
+                        : arrearsCategoryRowClass(row.mgmtCategory)
+                    }`}
                   >
                     <td className="px-3 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">
-                      {row.externalCode}
+                      {row.externalCode.startsWith('letter:') ? (
+                        <span
+                          className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900"
+                          title="원장 코드 없음 — 공문만 있는 행. 이름 맞추기에서 연결하세요."
+                        >
+                          연결필요
+                        </span>
+                      ) : (
+                        row.externalCode
+                      )}
                     </td>
                     <td className="px-3 py-2 font-medium text-slate-900">
                       <div className="flex flex-col gap-0.5">

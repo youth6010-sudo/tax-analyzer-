@@ -49,6 +49,7 @@ async function main() {
     ledgerRows,
     asOfDate,
     actorName: 'ledger-apply-links',
+    keepUnmatchedLetters: !process.argv.includes('--drop-unmatched'),
   });
 
   console.log('—');
@@ -56,7 +57,7 @@ async function main() {
     `원장 갱신 ${result.ledgerUpdated} · 신규 ${result.ledgerInserted}`,
   );
   console.log(
-    `공문 부착 ${result.attached} · 제외(삭제) ${result.skipped} · orphan삭제누적 ${result.deletedOrphans} · 실패 ${result.failed}`,
+    `공문 부착 ${result.attached} · 제외 ${result.skipped} · 미연결유지 ${result.keptUnmatched} · orphan삭제 ${result.deletedOrphans} · 실패 ${result.failed}`,
   );
 }
 

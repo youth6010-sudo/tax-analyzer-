@@ -303,16 +303,20 @@ export async function applyLedgerWithLetterLinks(opts: {
   ledgerRows: LedgerArrearsRow[];
   asOfDate: string;
   actorName: string;
+  /** true면 미연결 공문 행을 삭제하지 않고 남김 */
+  keepUnmatchedLetters?: boolean;
 }): Promise<{
   ledgerUpdated: number;
   ledgerInserted: number;
   attached: number;
   skipped: number;
   deletedOrphans: number;
+  keptUnmatched: number;
   failed: number;
 }> {
   const db = getDb();
   const actor = opts.actorName || 'ledger-apply';
+  const keepUnmatched = opts.keepUnmatchedLetters === true;
 
   const ledgerResult = await upsertLedgerImport(opts.ledgerRows, opts.asOfDate, actor);
 
@@ -341,6 +345,7 @@ export async function applyLedgerWithLetterLinks(opts: {
   let attached = 0;
   let skipped = 0;
   let deletedOrphans = 0;
+  let keptUnmatched = 0;
   let failed = 0;
 
   for (const letterEnt of letterEntries) {
@@ -362,8 +367,12 @@ export async function applyLedgerWithLetterLinks(opts: {
 
     if (!targetCode) {
       skipped += 1;
-      await db.delete(arrearsEntries).where(eq(arrearsEntries.id, letterEnt.id));
-      deletedOrphans += 1;
+      if (keepUnmatched) {
+        keptUnmatched += 1;
+      } else {
+        await db.delete(arrearsEntries).where(eq(arrearsEntries.id, letterEnt.id));
+        deletedOrphans += 1;
+      }
       continue;
     }
 
@@ -390,10 +399,21 @@ export async function applyLedgerWithLetterLinks(opts: {
           syncBalance: false,
           letterDate: letterEnt.letterDate || undefined,
         });
-        // refresh target balance from ledger rows
         const ledgerBal =
           opts.ledgerRows.find(r => r.externalCode === targetCode)?.balance ?? target.balance;
         await syncLetterDiffWithLedger(target.id, ledgerBal, opts.asOfDate, actor);
+
+        if (letterEnt.managerName?.trim() && !(target.managerName || '').trim()) {
+          await db
+            .update(arrearsEntries)
+            .set({
+              managerName: letterEnt.managerName,
+              updatedAt: new Date(),
+              updatedBy: actor,
+            })
+            .where(eq(arrearsEntries.id, target.id));
+        }
+
         await db.delete(arrearsEntries).where(eq(arrearsEntries.id, letterEnt.id));
         deletedOrphans += 1;
       }
@@ -409,6 +429,7 @@ export async function applyLedgerWithLetterLinks(opts: {
     attached,
     skipped,
     deletedOrphans,
+    keptUnmatched,
     failed,
   };
 }
