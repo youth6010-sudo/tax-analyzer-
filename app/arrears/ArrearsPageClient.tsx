@@ -10,6 +10,7 @@ import {
   portalInput,
   portalMain,
 } from '@/app/components/portal/uiClasses';
+import CenterModal from '@/app/components/portal/CenterModal';
 import {
   ARREARS_MANAGER_NAMES,
   ARREARS_MGMT_CATEGORIES,
@@ -24,6 +25,33 @@ import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import ArrearsManualEntryModal, {
   type ManualChannel,
 } from '@/app/arrears/ArrearsManualEntryModal';
+
+type BulkRow = {
+  clientId: string;
+  clientName: string;
+  manager: string;
+  monthlyFee: number;
+  entryId: string | null;
+  externalCode: string | null;
+  status: string;
+  statusLabel: string;
+  description: string;
+};
+
+type BulkPreview = {
+  yearMonth: string;
+  description: string;
+  ready: number;
+  readyAmount: number;
+  skipped: number;
+  totalClients: number;
+  rows: BulkRow[];
+};
+
+function defaultYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function ArrearsPageClient() {
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
@@ -45,6 +73,13 @@ export default function ArrearsPageClient() {
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
   const [manualEntryId, setManualEntryId] = useState('');
   const [manualBusy, setManualBusy] = useState(false);
+
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkYearMonth, setBulkYearMonth] = useState(defaultYearMonth);
+  const [bulkManager, setBulkManager] = useState('');
+  const [bulkPreview, setBulkPreview] = useState<BulkPreview | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -166,6 +201,78 @@ export default function ArrearsPageClient() {
     }
   };
 
+  const openBulk = () => {
+    setBulkYearMonth(defaultYearMonth());
+    setBulkManager(manager);
+    setBulkPreview(null);
+    setBulkMsg('');
+    setBulkOpen(true);
+  };
+
+  const previewBulk = async () => {
+    setBulkBusy(true);
+    setBulkMsg('');
+    setError('');
+    try {
+      const res = await fetch('/api/arrears/bulk-bookkeeping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          yearMonth: bulkYearMonth,
+          manager: bulkManager || undefined,
+          confirm: false,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '미리보기 실패');
+      setBulkPreview(data as BulkPreview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '미리보기 실패');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const confirmBulk = async () => {
+    if (!bulkPreview?.ready) return;
+    if (
+      !window.confirm(
+        `${bulkPreview.description}\n${bulkPreview.ready}건 · ${formatArrearsWon(bulkPreview.readyAmount)}원 반영할까요?`,
+      )
+    ) {
+      return;
+    }
+    setBulkBusy(true);
+    setBulkMsg('');
+    setError('');
+    try {
+      const res = await fetch('/api/arrears/bulk-bookkeeping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          yearMonth: bulkYearMonth,
+          manager: bulkManager || undefined,
+          confirm: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '일괄 반영 실패');
+      const applied = Number((data as { applied?: number }).applied) || 0;
+      const amount = Number((data as { appliedAmount?: number }).appliedAmount) || 0;
+      const failed = Number((data as { failed?: number }).failed) || 0;
+      setBulkMsg(
+        `반영 완료: ${applied}건 · ${formatArrearsWon(amount)}원` +
+          (failed ? ` · 실패 ${failed}` : ''),
+      );
+      setBulkPreview(null);
+      await load('full');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '일괄 반영 실패');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const managerFilterOptions = useMemo(() => {
     const set = new Set<string>([...ARREARS_MANAGER_NAMES]);
     for (const t of totals) {
@@ -181,15 +288,18 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              상호를 누르면 미수 내역·사유를 볼 수 있습니다. 더빌로 청구를 남기고, CMS로 입금을
-              반영하세요.
+              상호를 누르면 미수 내역·사유를 볼 수 있습니다. 매달 기장료는 「월 기장료」로 일괄,
+              예외는 더빌·입금은 CMS로 반영하세요.
             </p>
           </div>
           {canManage ? (
             <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className={portalBtnPrimary} onClick={openBulk}>
+                월 기장료
+              </button>
               <button
                 type="button"
-                className={portalBtnPrimary}
+                className={portalBtnSecondary}
                 onClick={() => openManual('thebill')}
               >
                 더빌
@@ -519,6 +629,129 @@ export default function ArrearsPageClient() {
         onClose={() => setManualOpen(false)}
         onSubmit={submitManual}
       />
+
+      <CenterModal
+        open={bulkOpen}
+        onClose={() => {
+          if (bulkBusy) return;
+          setBulkOpen(false);
+        }}
+        title="월 기장료 일괄 청구"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 leading-relaxed">
+            수임처에 등록된 <b>기장수수료(월 공급가)</b>를 미수 내역에 넣습니다. VAT는 더하지
+            않습니다. 같은 달 설명이 이미 있으면 건너뜁니다.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              청구 월
+              <input
+                type="month"
+                className={portalInput}
+                value={bulkYearMonth}
+                onChange={e => {
+                  setBulkYearMonth(e.target.value);
+                  setBulkPreview(null);
+                }}
+                disabled={bulkBusy}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              담당 (수임처 기준)
+              <select
+                className={portalInput}
+                value={bulkManager}
+                onChange={e => {
+                  setBulkManager(e.target.value);
+                  setBulkPreview(null);
+                }}
+                disabled={bulkBusy}
+              >
+                <option value="">전체</option>
+                {managerFilterOptions.map(n => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {bulkPreview ? (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-700">
+                <span className="font-semibold">{bulkPreview.description}</span>
+                <br />
+                반영 예정 {bulkPreview.ready}건 · {formatArrearsWon(bulkPreview.readyAmount)}원 ·
+                건너뜀 {bulkPreview.skipped}건
+              </p>
+              <div className="max-h-56 overflow-auto rounded border border-slate-200">
+                <table className="min-w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-50">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left">수임처</th>
+                      <th className="px-2 py-1.5 text-right">월 기장료</th>
+                      <th className="px-2 py-1.5 text-left">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {bulkPreview.rows.map(r => (
+                      <tr key={`${r.clientId}-${r.status}`}>
+                        <td className="px-2 py-1">
+                          {r.clientName}
+                          {r.externalCode ? (
+                            <span className="ml-1 font-mono text-slate-400">{r.externalCode}</span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums">
+                          {r.monthlyFee ? formatArrearsWon(r.monthlyFee) : '—'}
+                        </td>
+                        <td
+                          className={`px-2 py-1 ${
+                            r.status === 'ready' ? 'text-emerald-800 font-medium' : 'text-slate-500'
+                          }`}
+                        >
+                          {r.statusLabel}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
+          {bulkMsg ? <p className="text-sm text-emerald-800">{bulkMsg}</p> : null}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={bulkBusy}
+              onClick={() => setBulkOpen(false)}
+            >
+              닫기
+            </button>
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={bulkBusy}
+              onClick={() => void previewBulk()}
+            >
+              {bulkBusy && !bulkPreview ? '조회 중…' : '미리보기'}
+            </button>
+            <button
+              type="button"
+              className={portalBtnPrimary}
+              disabled={bulkBusy || !bulkPreview?.ready}
+              onClick={() => void confirmBulk()}
+            >
+              {bulkBusy && bulkPreview ? '반영 중…' : '확정 반영'}
+            </button>
+          </div>
+        </div>
+      </CenterModal>
     </PortalPageShell>
   );
 }
