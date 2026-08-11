@@ -2,12 +2,22 @@ import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { clients, mailReceipts } from '@/db/schema';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
+import {
+  isMailStorageEnabled,
+  persistMailImageToStorage,
+  signMailImageUrl,
+} from '@/lib/supabaseStorage';
 
 export type MailReceiptImage = {
   id: string;
   name: string;
   contentType: string;
+  /** base64 data URL — Storage 사용 시 비울 수 있음 */
   dataUrl: string;
+  /** Supabase Storage 경로 (mail-receipts 버킷) */
+  storagePath?: string;
+  /** 서명 URL (조회 시 채움) */
+  url?: string;
 };
 
 export type MailAuthoredTag = {
@@ -45,8 +55,9 @@ export type MailReceiptView = {
 const MAX_IMAGES = 5;
 const MAX_TAGS = 24;
 const MAX_MEMOS = 50;
-/** 압축 후 data URL ~3MB 바이너리 */
+/** 압축 후 data URL — Storage 미사용 시. Pro Storage면 장당 더 여유 */
 const MAX_IMAGE_CHARS = 4_200_000;
+const MAX_IMAGE_CHARS_STORAGE = 8_000_000;
 
 function cleanTagLabel(raw: string): string {
   return raw.trim().replace(/^#/, '').slice(0, 40);
@@ -156,10 +167,12 @@ function normalizeImages(raw: unknown, opts?: { strict?: boolean }): MailReceipt
     if (!item || typeof item !== 'object') continue;
     const rec = item as Record<string, unknown>;
     const dataUrl = typeof rec.dataUrl === 'string' ? rec.dataUrl : '';
-    if (!dataUrl.startsWith('data:image/')) continue;
-    if (dataUrl.length > MAX_IMAGE_CHARS) {
+    const storagePath = typeof rec.storagePath === 'string' ? rec.storagePath.trim() : '';
+    if (!dataUrl.startsWith('data:image/') && !storagePath) continue;
+    const maxChars = storagePath ? MAX_IMAGE_CHARS_STORAGE : MAX_IMAGE_CHARS;
+    if (dataUrl && dataUrl.length > maxChars) {
       if (opts?.strict) {
-        throw new Error('이미지 용량이 너무 큽니다. 장당 약 3MB(압축 후) 이하로 올려 주세요.');
+        throw new Error('이미지 용량이 너무 큽니다. 장당 압축 후 용량을 줄여 주세요.');
       }
       continue;
     }
@@ -167,7 +180,9 @@ function normalizeImages(raw: unknown, opts?: { strict?: boolean }): MailReceipt
       id: typeof rec.id === 'string' && rec.id ? rec.id : crypto.randomUUID(),
       name: typeof rec.name === 'string' ? rec.name.slice(0, 120) : 'image',
       contentType: typeof rec.contentType === 'string' ? rec.contentType : 'image/*',
-      dataUrl,
+      dataUrl: dataUrl.startsWith('data:image/') ? dataUrl : '',
+      storagePath: storagePath || undefined,
+      url: typeof rec.url === 'string' ? rec.url : undefined,
     });
     if (out.length >= MAX_IMAGES) break;
   }
@@ -202,6 +217,31 @@ function toView(
     createdAt,
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+async function withSignedImageUrls(view: MailReceiptView): Promise<MailReceiptView> {
+  if (!isMailStorageEnabled()) return view;
+  const images = await Promise.all(
+    view.images.map(async img => {
+      if (img.dataUrl) return img;
+      if (!img.storagePath) return img;
+      const url = await signMailImageUrl(img.storagePath);
+      return url ? { ...img, url } : img;
+    }),
+  );
+  return { ...view, images };
+}
+
+async function storeImagesIfEnabled(
+  images: MailReceiptImage[],
+  receiptKey: string,
+): Promise<MailReceiptImage[]> {
+  if (!isMailStorageEnabled()) return images;
+  const out: MailReceiptImage[] = [];
+  for (const img of images) {
+    out.push(await persistMailImageToStorage(img, receiptKey));
+  }
+  return out;
 }
 
 function todayYmd() {
@@ -252,7 +292,11 @@ export async function listMailReceipts(opts?: {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(mailReceipts.receivedAt), desc(mailReceipts.createdAt));
 
-  return rows.map(r => toView(r.receipt, r.clientName ?? '', r.clientManager ?? ''));
+  return Promise.all(
+    rows.map(r =>
+      withSignedImageUrls(toView(r.receipt, r.clientName ?? '', r.clientManager ?? '')),
+    ),
+  );
 }
 
 export async function getMailReceipt(id: string): Promise<MailReceiptView | null> {
@@ -268,7 +312,7 @@ export async function getMailReceipt(id: string): Promise<MailReceiptView | null
     .where(eq(mailReceipts.id, id))
     .limit(1);
   if (!row) return null;
-  return toView(row.receipt, row.clientName ?? '', row.clientManager ?? '');
+  return withSignedImageUrls(toView(row.receipt, row.clientName ?? '', row.clientManager ?? ''));
 }
 
 export async function createMailReceipt(input: {
@@ -291,7 +335,7 @@ export async function createMailReceipt(input: {
     .limit(1);
   if (!client) throw new Error('선택한 수임처를 찾을 수 없습니다.');
 
-  const images = normalizeImages(input.images ?? [], { strict: true });
+  const imagesIn = normalizeImages(input.images ?? [], { strict: true });
   const title = (input.title ?? '').trim() || '우편물';
   const receivedAt = (input.receivedAt ?? '').trim() || todayYmd();
   const author = input.createdByName.trim() || '';
@@ -315,12 +359,18 @@ export async function createMailReceipt(input: {
       tags,
       memos,
       memo: memosToSearchText(memos),
-      images,
+      images: imagesIn,
       createdByName: author,
     })
     .returning();
 
-  return toView(row, client.companyName, client.manager ?? '');
+  let images = imagesIn;
+  if (isMailStorageEnabled() && imagesIn.length) {
+    images = await storeImagesIfEnabled(imagesIn, row.id);
+    await db.update(mailReceipts).set({ images, updatedAt: new Date() }).where(eq(mailReceipts.id, row.id));
+  }
+
+  return withSignedImageUrls(toView({ ...row, images }, client.companyName, client.manager ?? ''));
 }
 
 export type UpdateMailReceiptInput = {
@@ -478,7 +528,13 @@ export async function updateMailReceipt(
   if (input.clientId !== undefined) patch.clientId = nextClientId;
   if (input.receivedAt !== undefined) patch.receivedAt = input.receivedAt.trim() || todayYmd();
   if (input.title !== undefined) patch.title = input.title.trim() || '우편물';
-  if (input.images !== undefined) patch.images = normalizeImages(input.images, { strict: true });
+  if (input.images !== undefined) {
+    let images = normalizeImages(input.images, { strict: true });
+    if (isMailStorageEnabled() && images.length) {
+      images = await storeImagesIfEnabled(images, id);
+    }
+    patch.images = images;
+  }
 
   const [row] = await db
     .update(mailReceipts)
@@ -486,7 +542,7 @@ export async function updateMailReceipt(
     .where(eq(mailReceipts.id, id))
     .returning();
 
-  return toView(row, nextClientName, nextClientManager);
+  return withSignedImageUrls(toView(row, nextClientName, nextClientManager));
 }
 
 export async function deleteMailReceipt(id: string, actorName: string): Promise<boolean> {

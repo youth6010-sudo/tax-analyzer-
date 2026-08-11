@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const HEARTBEAT_MS = 45_000;
+const HEARTBEAT_MS = 20_000;
 
 async function ping() {
   try {
@@ -12,7 +12,7 @@ async function ping() {
   }
 }
 
-/** 로그인 셸에서 last_seen heartbeat (45초 + 탭 복귀 시) */
+/** 로그인 셸에서 last_seen heartbeat (20초 + 탭 복귀 시) — Pro DB 체감용 더 자주 */
 export default function PresenceHeartbeat() {
   useEffect(() => {
     void ping();

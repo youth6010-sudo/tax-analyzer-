@@ -75,6 +75,7 @@
     "db:compare-env": "node scripts/compare-db-env.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.2",
     "bcryptjs": "^3.0.3",
     "dom-to-image-more": "^3.7.2",
     "drizzle-orm": "^0.45.2",

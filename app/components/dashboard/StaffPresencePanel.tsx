@@ -3,38 +3,67 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { PresenceStaffDto } from '@/lib/presence';
 
-const POLL_MS = 30_000;
-
 export default function StaffPresencePanel() {
   const [staff, setStaff] = useState<PresenceStaffDto[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [live, setLive] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch('/api/presence', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const data = (await res.json()) as { staff?: PresenceStaffDto[] };
-      setStaff(Array.isArray(data.staff) ? data.staff : []);
-      setLoaded(true);
-    } catch {
-      /* ignore */
-    }
+  const applyPayload = useCallback((data: { staff?: PresenceStaffDto[]; live?: boolean }) => {
+    setStaff(Array.isArray(data.staff) ? data.staff : []);
+    setLoaded(true);
+    if (data.live) setLive(true);
   }, []);
 
   useEffect(() => {
-    void load();
-    const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
+    let es: EventSource | null = null;
+    let pollId = 0;
+    let cancelled = false;
+
+    const fallbackPoll = () => {
+      void (async () => {
+        try {
+          const res = await fetch('/api/presence', { credentials: 'same-origin' });
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as { staff?: PresenceStaffDto[] };
+          applyPayload({ staff: data.staff, live: false });
+        } catch {
+          /* ignore */
+        }
+      })();
     };
-    document.addEventListener('visibilitychange', onVisible);
+
+    try {
+      es = new EventSource('/api/presence/stream');
+      es.onmessage = ev => {
+        try {
+          const data = JSON.parse(ev.data) as { staff?: PresenceStaffDto[]; live?: boolean };
+          applyPayload(data);
+        } catch {
+          /* ignore */
+        }
+      };
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        setLive(false);
+        fallbackPoll();
+        pollId = window.setInterval(() => {
+          if (document.visibilityState === 'visible') fallbackPoll();
+        }, 12_000);
+      };
+    } catch {
+      fallbackPoll();
+      pollId = window.setInterval(() => {
+        if (document.visibilityState === 'visible') fallbackPoll();
+      }, 12_000);
+    }
+
     return () => {
-      window.clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
+      cancelled = true;
+      es?.close();
+      if (pollId) window.clearInterval(pollId);
     };
-  }, [load]);
+  }, [applyPayload]);
 
   const onlineCount = staff.filter(s => s.online).length;
 
@@ -44,7 +73,14 @@ export default function StaffPresencePanel() {
       aria-label="직원 접속 상태"
     >
       <div className="flex items-baseline justify-between gap-2 px-2">
-        <p className="text-[11px] font-bold tracking-wide text-slate-400">직원</p>
+        <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-slate-400">
+          직원
+          {live ? (
+            <span className="rounded bg-sky-100 px-1 py-px text-[9px] font-extrabold uppercase tracking-wider text-sky-700">
+              Live
+            </span>
+          ) : null}
+        </p>
         {loaded ? (
           <p className="text-[10px] font-medium text-slate-400">
             {onlineCount}/{staff.length} 접속
@@ -64,12 +100,16 @@ export default function StaffPresencePanel() {
             >
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  s.online ? 'bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]' : 'bg-slate-300'
+                  s.online
+                    ? 'bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]'
+                    : 'bg-slate-300'
                 }`}
                 title={s.online ? '온라인' : '오프라인'}
                 aria-label={s.online ? '온라인' : '오프라인'}
               />
-              <span className={s.online ? 'font-semibold text-slate-800' : 'font-medium text-slate-500'}>
+              <span
+                className={s.online ? 'font-semibold text-slate-800' : 'font-medium text-slate-500'}
+              >
                 {s.name}
               </span>
             </li>

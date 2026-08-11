@@ -630,8 +630,8 @@ function ReceiptFormModal({
               <div className="mt-2 flex flex-wrap gap-2">
                 {images.map(att => (
                   <div key={att.id} className="relative">
-                    <button type="button" className="block" onClick={() => setPreview({ url: att.dataUrl, name: att.name })}>
-                      <img src={att.dataUrl} alt={att.name} className="h-16 w-16 rounded-md border border-slate-200 object-cover" />
+                    <button type="button" className="block" onClick={() => setPreview({ url: att.dataUrl || att.url || '', name: att.name })}>
+                      <img src={att.dataUrl || att.url || ''} alt={att.name} className="h-16 w-16 rounded-md border border-slate-200 object-cover" />
                     </button>
                     {canEditCore ? (
                       <button
@@ -672,6 +672,7 @@ function ReceiptFormModal({
 
 export default function MailLedgerPageClient() {
   const [items, setItems] = useState<MailReceiptView[]>([]);
+  const [storagePro, setStoragePro] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -686,11 +687,17 @@ export default function MailLedgerPageClient() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => setCurrentUser(d?.user?.name || ''))
       .catch(() => setCurrentUser(''));
+    void fetch('/api/infra/status', { credentials: 'same-origin' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setStoragePro(Boolean(d?.storageConfigured)))
+      .catch(() => setStoragePro(false));
   }, []);
 
-  const load = useCallback(async (q = query) => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (q = query, mode: 'full' | 'soft' = 'full') => {
+    if (mode === 'full') {
+      setLoading(true);
+      setError('');
+    }
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
@@ -699,15 +706,27 @@ export default function MailLedgerPageClient() {
       if (!res.ok) throw new Error(data.error || '목록을 불러오지 못했습니다.');
       setItems((data.items ?? []) as MailReceiptView[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '불러오기 실패');
+      if (mode === 'full') setError(err instanceof Error ? err.message : '불러오기 실패');
     } finally {
-      setLoading(false);
+      if (mode === 'full') setLoading(false);
     }
   }, [query]);
 
   useEffect(() => {
-    void load('');
+    void load('', 'full');
   }, []);
+
+  useEffect(() => {
+    const soft = () => {
+      if (document.visibilityState === 'visible') void load(query, 'soft');
+    };
+    document.addEventListener('visibilitychange', soft);
+    const id = window.setInterval(soft, 45_000);
+    return () => {
+      document.removeEventListener('visibilitychange', soft);
+      window.clearInterval(id);
+    };
+  }, [load, query]);
 
   const groups = useMemo(() => {
     const map = new Map<
@@ -777,6 +796,17 @@ export default function MailLedgerPageClient() {
           </button>
         }
       />
+
+      {storagePro === true ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">
+          Supabase Pro Storage 연결됨 — 우편 사진은 DB가 아니라 전용 저장소에 올라갑니다.
+        </div>
+      ) : storagePro === false ? (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          사진은 압축 후 DB에 저장됩니다. Storage를 켜려면 관리자 → 데이터 백업에서 API 키를
+          연결하세요.
+        </div>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
@@ -897,12 +927,14 @@ export default function MailLedgerPageClient() {
                             <button
                               key={img.id}
                               type="button"
-                              onClick={() => setPreview({ url: img.dataUrl, name: img.name })}
+                              onClick={() =>
+                                setPreview({ url: img.dataUrl || img.url || '', name: img.name })
+                              }
                               className="block"
                               title="미리보기"
                             >
                               <img
-                                src={img.dataUrl}
+                                src={img.dataUrl || img.url || ''}
                                 alt={img.name}
                                 className="h-20 w-20 rounded-md border border-slate-200 object-cover"
                               />

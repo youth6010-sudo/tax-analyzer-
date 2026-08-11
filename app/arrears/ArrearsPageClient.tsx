@@ -131,47 +131,64 @@ export default function ArrearsPageClient() {
   const [pendingEventsFile, setPendingEventsFile] = useState<File | null>(null);
   const [balanceEdit, setBalanceEdit] = useState<BalanceEditState | null>(null);
   const [balanceSaving, setBalanceSaving] = useState(false);
+  const [softHint, setSoftHint] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
     return () => clearTimeout(t);
   }, [q]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mode: 'full' | 'soft' = 'full') => {
     const params = new URLSearchParams();
     if (manager) params.set('manager', manager);
     if (category !== 'all') params.set('category', category);
     if (nonzero) params.set('nonzero', '1');
     if (qDebounced) params.set('q', qDebounced);
 
-    const res = await fetchWithTimeout(
-      `/api/arrears?${params.toString()}`,
-      { cache: 'no-store' },
-      20_000,
-    );
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((data as { error?: string }).error || '목록 조회 실패');
+    if (mode === 'full') {
+      setLoading(true);
+      setError('');
+    }
 
-    setItems((data as { items: ArrearsEntryDto[] }).items || []);
-    setTotals((data as { totalsByManager: ArrearsManagerTotal[] }).totalsByManager || []);
-    setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
-    setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
-    setCanManage(!!(data as { canManage?: boolean }).canManage);
+    try {
+      const res = await fetchWithTimeout(
+        `/api/arrears?${params.toString()}`,
+        { cache: 'no-store' },
+        20_000,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '목록 조회 실패');
+
+      setItems((data as { items: ArrearsEntryDto[] }).items || []);
+      setTotals((data as { totalsByManager: ArrearsManagerTotal[] }).totalsByManager || []);
+      setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
+      setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
+      setCanManage(!!(data as { canManage?: boolean }).canManage);
+      if (mode === 'soft') {
+        setSoftHint(`목록 갱신 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
+      }
+    } catch (e) {
+      if (mode === 'full') {
+        setError(e instanceof Error ? e.message : '불러오기 실패');
+      }
+    } finally {
+      if (mode === 'full') setLoading(false);
+    }
   }, [manager, category, nonzero, qDebounced]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError('');
-    void load()
-      .catch(e => {
-        if (!cancelled) setError(e instanceof Error ? e.message : '불러오기 실패');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void load('full');
+  }, [load]);
+
+  useEffect(() => {
+    const soft = () => {
+      if (document.visibilityState === 'visible') void load('soft');
+    };
+    document.addEventListener('visibilitychange', soft);
+    const id = window.setInterval(soft, 45_000);
     return () => {
-      cancelled = true;
+      document.removeEventListener('visibilitychange', soft);
+      window.clearInterval(id);
     };
   }, [load]);
 
@@ -195,7 +212,7 @@ export default function ArrearsPageClient() {
         if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
         const item = (data as { item: ArrearsEntryDto }).item;
         setItems(prev => prev.map(r => (r.id === id ? item : r)));
-        void load().catch(() => undefined);
+        void load('soft');
         return item;
       } catch (e) {
         setError(e instanceof Error ? e.message : '저장 실패');
@@ -573,7 +590,7 @@ export default function ArrearsPageClient() {
           <button
             type="button"
             className={`${portalBtnSecondary} py-2`}
-            onClick={() => void load().catch(e => setError(e instanceof Error ? e.message : '새로고침 실패'))}
+            onClick={() => void load('full')}
           >
             새로고침
           </button>
@@ -596,6 +613,11 @@ export default function ArrearsPageClient() {
           ) : null}
         </div>
 
+        {softHint ? (
+          <p className="text-[11px] font-medium text-slate-400" aria-live="polite">
+            {softHint} · 다른 담당자 수정 반영(탭 복귀·45초)
+          </p>
+        ) : null}
         {error ? <div className={portalAlertError}>{error}</div> : null}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -802,6 +824,14 @@ export default function ArrearsPageClient() {
               원장에 없는 기존(현황·공문) 행은 삭제하거나 잔액을 바꾸지 않습니다. 신규 행은 매칭된
               수임처 담당으로 채웁니다.
             </p>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+              확정 전 JSON/pg_dump 백업 권장. 잘못 반영하면 Supabase Pro → Database → Backups/PITR
+              또는{' '}
+              <Link href="/admin/backup" className="font-semibold underline">
+                관리자 백업
+              </Link>
+              안내를 참고하세요.
+            </p>
             {typeof preview.letterDiffCount === 'number' && preview.letterDiffCount > 0 ? (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 공문 잔액과 차이 {preview.letterDiffCount}건 — 확정 시 「원장 추가미수/입금 반영」
@@ -886,6 +916,13 @@ export default function ArrearsPageClient() {
               매칭된 업체의 공문 내역을 통째로 교체합니다. 확정 후 잔액은 공문 내역 합계로
               맞춰집니다. 미매칭 시트는 건너뜁니다(먼저 현황·원장으로 행을 만들어 두세요).
             </p>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+              통째 교체라 되돌리기 어렵습니다. 확정 전 백업, 실수 시 Supabase PITR 또는{' '}
+              <Link href="/admin/backup" className="font-semibold underline">
+                관리자 백업
+              </Link>
+              을 확인하세요.
+            </p>
             <div className="max-h-56 overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-50 sticky top-0">
@@ -965,6 +1002,13 @@ export default function ArrearsPageClient() {
             <p className="text-xs text-slate-500">
               CMS·입금 → 공문 「지급내역」(대변), 세금계산서·미수 → 「금액」(차변)에 행을 추가합니다.
               이미 같은 내역·금액·일자가 있으면 건너뜁니다. 더빌/홈택스에서 받은 엑셀을 올려 주세요.
+            </p>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+              확정은 공문에 줄을 추가합니다. 대량 반영 전 백업을 권장하며, 복구는 Supabase PITR·{' '}
+              <Link href="/admin/backup" className="font-semibold underline">
+                관리자 백업
+              </Link>
+              을 이용하세요.
             </p>
             <div className="max-h-56 overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-xs">

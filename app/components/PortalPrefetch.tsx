@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   hydratePortal,
   reconcilePortalUser,
@@ -9,6 +10,8 @@ import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 /** 모든 페이지에서 포털 데이터 선로딩 (UI 없음) */
 export default function PortalPrefetch() {
+  const router = useRouter();
+
   useEffect(() => {
     let cancelled = false;
 
@@ -28,6 +31,20 @@ export default function PortalPrefetch() {
     hydratePortal();
     void syncUser();
 
+    // 자주 쓰는 탭·목록 워밍 (Seoul Pro 체감)
+    try {
+      router.prefetch('/arrears');
+      router.prefetch('/mail-ledger');
+    } catch {
+      /* ignore */
+    }
+    void fetchWithTimeout('/api/arrears?', { credentials: 'same-origin', cache: 'no-store' }, 15_000).catch(
+      () => undefined,
+    );
+    void fetchWithTimeout('/api/mail-receipts?', { credentials: 'same-origin', cache: 'no-store' }, 15_000).catch(
+      () => undefined,
+    );
+
     const onFocus = () => {
       void syncUser();
     };
@@ -36,7 +53,7 @@ export default function PortalPrefetch() {
       cancelled = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, []);
+  }, [router]);
 
   return null;
 }
