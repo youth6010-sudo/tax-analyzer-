@@ -19,6 +19,13 @@ type SuggestionEntry = {
   ledgerRefOnly: boolean;
 };
 
+type LetterLine = {
+  description: string;
+  amount: number;
+  paidAmount: number;
+  paidDate: string;
+};
+
 type LetterRow = {
   sheetName: string;
   filename: string;
@@ -26,6 +33,8 @@ type LetterRow = {
   lineCount: number;
   letterBalance: number;
   letterDate: string;
+  sheetKey?: string;
+  lines?: LetterLine[];
   sameNameEntry: SuggestionEntry | null;
   balanceMismatch: boolean;
   suggestions: SuggestionEntry[];
@@ -60,6 +69,8 @@ type PickEntry = {
 type ReviewPayload = {
   letterDir: string;
   letterDirOk: boolean;
+  source?: 'upload' | 'disk' | 'none';
+  sourceLabel?: string;
   letterSheets: LetterRow[];
   unmatchedLetters: LetterRow[];
   ledgerOnly: LedgerOnly[];
@@ -67,10 +78,15 @@ type ReviewPayload = {
   letterSheetCount: number;
   sameNameCount: number;
   canLink: boolean;
+  uploadedFiles?: string[];
 };
 
 function scoreLabel(score: number) {
   return `${Math.round(score * 100)}%`;
+}
+
+function sheetKeyOf(row: LetterRow) {
+  return row.sheetKey || `${row.sheetName}|||${row.filename}`;
 }
 
 type Props = {
@@ -87,20 +103,22 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
   const [manualEntryBySheet, setManualEntryBySheet] = useState<Record<string, string>>({});
   const [manualSheetByEntry, setManualSheetByEntry] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
+  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
 
-  const load = useCallback(async () => {
+  const applyPayload = (json: ReviewPayload) => {
+    if (!json.letterSheets) json.letterSheets = json.unmatchedLetters || [];
+    if (!json.pickEntries) json.pickEntries = [];
+    setData(json);
+  };
+
+  const loadDisk = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/arrears/match-review', { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as { error?: string }).error || '매칭 검토 실패');
-      const payload = json as ReviewPayload;
-      if (!payload.letterSheets) {
-        payload.letterSheets = payload.unmatchedLetters || [];
-      }
-      if (!payload.pickEntries) payload.pickEntries = [];
-      setData(payload);
+      applyPayload(json as ReviewPayload);
     } catch (e) {
       setError(e instanceof Error ? e.message : '매칭 검토 실패');
     } finally {
@@ -108,9 +126,34 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
     }
   }, []);
 
+  const uploadScan = async () => {
+    if (!uploadFiles?.length) {
+      setError('공문 엑셀 파일을 선택해 주세요.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const form = new FormData();
+      for (const f of Array.from(uploadFiles)) form.append('files', f);
+      const res = await fetch('/api/arrears/match-review', { method: 'POST', body: form });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error || '업로드 스캔 실패');
+      applyPayload(json as ReviewPayload);
+      setTab('need');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '업로드 스캔 실패');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (open && !data && !loading) void load();
-  }, [open, data, loading, load]);
+    if (open && !data && !loading) void loadDisk();
+  }, [open, data, loading, loadDisk]);
+
+  const findLetterRow = (sheetName: string, filename: string) =>
+    data?.letterSheets.find(r => r.sheetName === sheetName && r.filename === filename);
 
   const link = async (opts: {
     entryId: string;
@@ -120,10 +163,12 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
     entryName: string;
   }) => {
     if (!data?.canLink) return;
+    const letter = findLetterRow(opts.sheetName, opts.filename);
     if (
       !window.confirm(
         `공문 «${opts.sheetName}» → 원장 «${opts.entryName}» 에 연결할까요?\n` +
-          `공문 상세를 그 행에 넣고, 잔액은 거래처원장 잔액으로 맞춥니다.`,
+          `공문 상세를 그 행에 넣고, 잔액은 거래처원장 잔액으로 맞춥니다.\n` +
+          `연결되면 포털에서 사유를 볼 수 있어 Z: 를 다시 열 필요는 없습니다.`,
       )
     ) {
       return;
@@ -138,12 +183,33 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
           entryId: opts.entryId,
           sheetName: opts.sheetName,
           filename: opts.filename,
+          sheet: letter
+            ? {
+                companyName: letter.sheetName,
+                letterDate: letter.letterDate,
+                lines: letter.lines || [],
+              }
+            : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as { error?: string }).error || '연결 실패');
-      await load();
+      // 업로드 목록은 유지 — 원장만 탭/픽 목록은 soft reload 없이 onLinked
       onLinked?.();
+      // 연결한 시트는 목록에서 빼서 진행감 표시
+      setData(prev => {
+        if (!prev) return prev;
+        const nextSheets = prev.letterSheets.filter(
+          r => !(r.sheetName === opts.sheetName && r.filename === opts.filename),
+        );
+        return {
+          ...prev,
+          letterSheets: nextSheets,
+          unmatchedLetters: nextSheets.filter(r => !r.sameNameEntry),
+          letterSheetCount: nextSheets.length,
+          sameNameCount: nextSheets.filter(r => !!r.sameNameEntry).length,
+        };
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : '연결 실패');
     } finally {
@@ -152,9 +218,8 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
   };
 
   const needCount = data?.letterSheets.filter(r => !r.sameNameEntry).length ?? 0;
-  const sameCount = data?.sameNameCount ?? 0;
-  const mismatchCount =
-    data?.letterSheets.filter(r => r.balanceMismatch).length ?? 0;
+  const sameCount = data?.letterSheets.filter(r => !!r.sameNameEntry).length ?? 0;
+  const mismatchCount = data?.letterSheets.filter(r => r.balanceMismatch).length ?? 0;
 
   const filteredLetters = useMemo(() => {
     if (!data) return [];
@@ -173,6 +238,7 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
   }, [data, tab, q]);
 
   const pickList = data?.pickEntries ?? [];
+  const needsUpload = !data?.letterSheets?.length || data.source === 'none';
 
   return (
     <div className="rounded-xl border border-violet-200 bg-violet-50/40 shadow-sm">
@@ -184,19 +250,63 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
         <div>
           <p className="text-sm font-semibold text-violet-950">공문 ↔ 원장 이름 맞추기</p>
           <p className="text-[11px] text-violet-800/80">
-            자동 연결하지 않습니다. 공문 시트를 보고 원장 행을 직접 고르세요. 잔액은 원장 기준.
+            배포 사이트에서는 공문 xls를 올린 뒤, 원장 행을 직접 연결하세요. 잔액은 원장 기준.
           </p>
         </div>
         <span className="shrink-0 text-xs font-medium text-violet-700">
           {open ? '접기' : '펼치기'}
-          {data
-            ? ` · 공문 ${data.letterSheetCount} · 연결필요 ${needCount} · 이름같음 ${sameCount}`
+          {data?.letterSheetCount
+            ? ` · 공문 ${data.letterSheetCount} · 연결필요 ${needCount}`
             : ''}
         </span>
       </button>
 
       {open ? (
         <div className="space-y-3 border-t border-violet-100 px-3 py-3">
+          <div className="rounded-lg border border-violet-100 bg-white p-2.5 space-y-2">
+            <p className="text-xs font-semibold text-slate-800">1) 공문 엑셀 올리기</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Vercel에는 Z: 드라이브가 없습니다. 담당자별 «미수수수료-○○.xls» 를 선택해 올리세요.
+              연결이 끝나면 내역은 DB에 남아서, 이후에는 포털 미수 상세만 보면 됩니다.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                multiple
+                className="text-xs max-w-full"
+                onChange={e => setUploadFiles(e.target.files)}
+              />
+              <button
+                type="button"
+                className={portalBtnPrimary}
+                disabled={loading || !uploadFiles?.length}
+                onClick={() => void uploadScan()}
+              >
+                {loading ? '스캔 중…' : '업로드·스캔'}
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                disabled={loading}
+                onClick={() => void loadDisk()}
+                title="로컬 개발 PC에서 Z: 가 있을 때만"
+              >
+                디스크 다시 시도
+              </button>
+            </div>
+            {data?.source === 'upload' && data.sourceLabel ? (
+              <p className="text-[11px] text-emerald-800">스캔됨: {data.sourceLabel}</p>
+            ) : null}
+          </div>
+
+          {needsUpload && data?.source !== 'upload' ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+              공문 목록이 비어 있습니다. 위쪽에서 공문 xls를 올려 주세요.
+              {data?.letterDir ? ` (서버 경로 ${data.letterDir} 는 배포 환경에서 없음)` : ''}
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -227,14 +337,6 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
             >
               원장만 ({data?.ledgerOnly.length ?? 0})
             </button>
-            <button
-              type="button"
-              className={`${portalBtnSecondary} ml-auto py-1.5 text-xs`}
-              disabled={loading}
-              onClick={() => void load()}
-            >
-              {loading ? '조회 중…' : '다시 스캔'}
-            </button>
           </div>
 
           {tab !== 'ledger' ? (
@@ -246,37 +348,27 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
             />
           ) : null}
 
-          {data && !data.letterDirOk ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-              공문 폴더에 접근할 수 없습니다 ({data.letterDir}). 로컬에서 Z: 가 보이거나
-              ARREARS_LETTER_DIR 이 있는 환경에서만 공문 목록이 채워집니다.
-            </p>
-          ) : null}
-
-          {data?.letterDirOk ? (
-            <p className="text-[11px] text-slate-500">
-              이름만 같아도 연결되지 않습니다. 「연결」을 눌러야 공문 상세가 그 원장 행에
-              들어갑니다. {data.letterDir}
-            </p>
-          ) : null}
-
           {!data?.canLink ? (
             <p className="text-[11px] text-slate-500">연결 버튼은 찰리 계정에서만 보입니다.</p>
           ) : null}
 
           {error ? <p className="text-xs text-rose-700">{error}</p> : null}
 
-          {loading && !data ? (
+          {loading && !data?.letterSheets.length ? (
             <p className="py-6 text-center text-sm text-slate-500">스캔 중…</p>
           ) : null}
 
           {tab !== 'ledger' && data ? (
             <div className="max-h-[32rem] space-y-3 overflow-auto">
               {filteredLetters.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">표시할 공문 시트가 없습니다.</p>
+                <p className="py-4 text-center text-sm text-slate-500">
+                  {data.letterSheetCount === 0
+                    ? '먼저 공문 엑셀을 업로드하세요.'
+                    : '표시할 공문 시트가 없습니다.'}
+                </p>
               ) : (
                 filteredLetters.map(row => {
-                  const sheetKey = `${row.sheetName}|||${row.filename}`;
+                  const sheetKey = sheetKeyOf(row);
                   const manualId = manualEntryBySheet[sheetKey] || '';
                   return (
                     <div
@@ -461,7 +553,7 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
                               <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-900">
                                 유사 {scoreLabel(s.score)}
                               </span>
-                              {data.canLink ? (
+                              {data.canLink && data.letterSheets.length > 0 ? (
                                 <button
                                   type="button"
                                   className={`${portalBtnPrimary} ml-auto py-0.5 text-[11px]`}
@@ -498,10 +590,7 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
                           >
                             <option value="">공문 시트 직접 고르기…</option>
                             {data.letterSheets.map(l => (
-                              <option
-                                key={`${l.sheetName}|||${l.filename}`}
-                                value={`${l.sheetName}|||${l.filename}`}
-                              >
+                              <option key={sheetKeyOf(l)} value={sheetKeyOf(l)}>
                                 {l.sheetName} ({l.managerName}) · {l.filename}
                               </option>
                             ))}
@@ -525,7 +614,11 @@ export default function ArrearsMatchPanel({ onLinked }: Props) {
                             선택 연결
                           </button>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="mt-2 text-[11px] text-amber-800">
+                          공문을 먼저 업로드해야 원장 쪽에 붙일 시트가 생깁니다.
+                        </p>
+                      )}
                     </div>
                   );
                 })

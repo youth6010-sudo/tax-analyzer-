@@ -81,6 +81,14 @@ export type LetterReviewRow = {
   lineCount: number;
   letterBalance: number;
   letterDate: string;
+  sheetKey: string;
+  /** 연결 시 서버로 다시 보낼 공문 줄 (Vercel은 Z: 없음) */
+  lines: Array<{
+    description: string;
+    amount: number;
+    paidAmount: number;
+    paidDate: string;
+  }>;
   /** 이름 정규화 완전 일치 후보(참고만 — 자동 연결하지 않음) */
   sameNameEntry: NameCandidate | null;
   /** 공문잔액 ≠ 동일명 원장잔액 */
@@ -148,7 +156,7 @@ export type ScannedLetterSheet = {
   sheetName: string;
   filename: string;
   managerName: string;
-  filePath: string;
+  filePath?: string;
   sheet: ParsedLetterSheet;
 };
 
@@ -170,6 +178,31 @@ export function scanLetterSheets(dir = defaultLetterDir()): ScannedLetterSheet[]
     }
   }
   return out;
+}
+
+/** 업로드된 공문 버퍼 → 스캔 목록 */
+export function scanLetterSheetsFromBuffers(
+  files: Array<{ filename: string; buffer: Buffer }>,
+): ScannedLetterSheet[] {
+  const out: ScannedLetterSheet[] = [];
+  for (const file of files) {
+    const filename = file.filename || 'letter.xls';
+    const managerName = managerFromFilename(filename);
+    const parsed = parseArrearsLetterWorkbookFile(file.buffer, filename);
+    for (const sheet of parsed.sheets) {
+      out.push({
+        sheetName: sheet.companyName,
+        filename,
+        managerName: managerName || parsed.managerName,
+        sheet,
+      });
+    }
+  }
+  return out;
+}
+
+function sheetKeyOf(sheetName: string, filename: string): string {
+  return `${sheetName}|||${filename}`;
 }
 
 function findSameNameEntry(
@@ -199,9 +232,17 @@ function findSameNameEntry(
   };
 }
 
-export async function buildMatchReview(opts?: { letterDir?: string; minScore?: number }): Promise<{
+export async function buildMatchReview(opts?: {
+  letterDir?: string;
+  minScore?: number;
+  /** 있으면 디스크 대신 이 목록으로 스캔(업로드) */
+  scanned?: ScannedLetterSheet[];
+  sourceLabel?: string;
+}): Promise<{
   letterDir: string;
   letterDirOk: boolean;
+  source: 'upload' | 'disk' | 'none';
+  sourceLabel: string;
   /** 공문 시트 전부 — 자동 연결 없음, 찰리가 고름 */
   letterSheets: LetterReviewRow[];
   /** 연결 버튼용: 이름이 다른 유사 후보 위주 필터 (호환) */
@@ -215,7 +256,26 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
 }> {
   const letterDir = opts?.letterDir || defaultLetterDir();
   const minScore = opts?.minScore ?? 0.28;
-  const letterDirOk = fs.existsSync(letterDir);
+  const fromUpload = Array.isArray(opts?.scanned);
+  const diskOk = !fromUpload && fs.existsSync(letterDir);
+  const scanned = fromUpload
+    ? opts!.scanned!
+    : diskOk
+      ? scanLetterSheets(letterDir)
+      : [];
+  const source: 'upload' | 'disk' | 'none' = fromUpload
+    ? 'upload'
+    : diskOk
+      ? 'disk'
+      : 'none';
+  const sourceLabel =
+    opts?.sourceLabel ||
+    (source === 'upload'
+      ? '업로드한 공문 파일'
+      : source === 'disk'
+        ? letterDir
+        : letterDir);
+  const letterDirOk = scanned.length > 0 || diskOk;
 
   const db = getDb();
   const entries = await db
@@ -268,7 +328,6 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
     }))
     .sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
 
-  const scanned = letterDirOk ? scanLetterSheets(letterDir) : [];
   const letterSheets: LetterReviewRow[] = [];
 
   for (const s of scanned) {
@@ -305,6 +364,13 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
       lineCount: s.sheet.lines.length,
       letterBalance,
       letterDate: s.sheet.letterDate || '',
+      sheetKey: sheetKeyOf(s.sheetName, s.filename),
+      lines: s.sheet.lines.map(l => ({
+        description: l.description,
+        amount: Math.round(l.amount),
+        paidAmount: Math.round(l.paidAmount || 0),
+        paidDate: l.paidDate || '',
+      })),
       sameNameEntry,
       balanceMismatch,
       suggestions: scored,
@@ -362,6 +428,8 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
   return {
     letterDir,
     letterDirOk,
+    source,
+    sourceLabel,
     letterSheets,
     unmatchedLetters,
     ledgerOnly,
@@ -375,10 +443,22 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
 /** 공문 시트를 미수 행에 연결(상세 덮어쓰기 후 원장 잔액 유지) */
 export async function linkLetterSheetToEntry(opts: {
   entryId: string;
-  sheetName: string;
-  filename: string;
-  letterDir?: string;
   actorName: string;
+  /** 업로드 세션에서 온 시트(권장, Z: 불필요) */
+  sheet?: {
+    companyName: string;
+    letterDate?: string;
+    lines: Array<{
+      description: string;
+      amount: number;
+      paidAmount?: number;
+      paidDate?: string;
+    }>;
+  };
+  /** 디스크 폴백용 */
+  sheetName?: string;
+  filename?: string;
+  letterDir?: string;
 }): Promise<{
   ok: true;
   companyName: string;
@@ -386,12 +466,6 @@ export async function linkLetterSheetToEntry(opts: {
   letterBalance: number;
   entryBalance: number;
 }> {
-  const letterDir = opts.letterDir || defaultLetterDir();
-  const filePath = path.join(letterDir, opts.filename);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`공문 파일 없음: ${opts.filename}`);
-  }
-
   const db = getDb();
   const [entry] = await db
     .select()
@@ -400,12 +474,28 @@ export async function linkLetterSheetToEntry(opts: {
     .limit(1);
   if (!entry) throw new Error('미수 항목을 찾을 수 없습니다.');
 
-  const buf = fs.readFileSync(filePath);
-  const parsed = parseArrearsLetterWorkbookFile(buf, opts.filename);
-  const sheet =
-    parsed.sheets.find(s => softCompanyKey(s.companyName) === softCompanyKey(opts.sheetName)) ||
-    parsed.sheets.find(s => companyNameSimilarity(s.companyName, opts.sheetName) >= 0.9);
-  if (!sheet) throw new Error(`시트 «${opts.sheetName}» 를 파일에서 찾지 못했습니다.`);
+  let sheet = opts.sheet;
+  if (!sheet?.lines?.length) {
+    const sheetName = String(opts.sheetName || '').trim();
+    const filename = String(opts.filename || '').trim();
+    if (!sheetName || !filename) {
+      throw new Error('공문 시트 내용(또는 sheetName·filename)이 필요합니다.');
+    }
+    const letterDir = opts.letterDir || defaultLetterDir();
+    const filePath = path.join(letterDir, filename);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(
+        `공문 파일 없음: ${filename}. Vercel에서는 공문 엑셀을 다시 업로드한 뒤 연결하세요.`,
+      );
+    }
+    const buf = fs.readFileSync(filePath);
+    const parsed = parseArrearsLetterWorkbookFile(buf, filename);
+    const found =
+      parsed.sheets.find(s => softCompanyKey(s.companyName) === softCompanyKey(sheetName)) ||
+      parsed.sheets.find(s => companyNameSimilarity(s.companyName, sheetName) >= 0.9);
+    if (!found) throw new Error(`시트 «${sheetName}» 를 파일에서 찾지 못했습니다.`);
+    sheet = found;
+  }
 
   const inputs: ArrearsLetterLineInput[] = sheet.lines.map(l => ({
     description: l.description,

@@ -23,20 +23,56 @@ export async function POST(req: Request) {
       entryId?: string;
       sheetName?: string;
       filename?: string;
+      sheet?: {
+        companyName?: string;
+        letterDate?: string;
+        lines?: Array<{
+          description?: string;
+          amount?: number;
+          paidAmount?: number;
+          paidDate?: string;
+        }>;
+      };
     };
 
     const entryId = String(body.entryId || '').trim();
+    if (!entryId) {
+      return NextResponse.json({ error: 'entryId 가 필요합니다.' }, { status: 400 });
+    }
+
+    const lines = (body.sheet?.lines || [])
+      .map(l => ({
+        description: String(l.description || '').trim(),
+        amount: Math.round(Number(l.amount) || 0),
+        paidAmount: Math.round(Number(l.paidAmount) || 0),
+        paidDate: String(l.paidDate || '').trim(),
+      }))
+      .filter(l => l.description || l.amount || l.paidAmount);
+
+    const actorName = user.name?.trim() || '찰리';
+
+    if (lines.length) {
+      const result = await linkLetterSheetToEntry({
+        entryId,
+        actorName,
+        sheet: {
+          companyName: String(body.sheet?.companyName || body.sheetName || '').trim(),
+          letterDate: String(body.sheet?.letterDate || '').trim(),
+          lines,
+        },
+      });
+      return NextResponse.json(result, NO_STORE);
+    }
+
     const sheetName = String(body.sheetName || '').trim();
     const filename = String(body.filename || '').trim();
-
-    if (!entryId || !sheetName || !filename) {
+    if (!sheetName || !filename) {
       return NextResponse.json(
-        { error: 'entryId, sheetName, filename 이 필요합니다.' },
+        { error: '업로드한 공문 내용(sheet.lines) 또는 sheetName·filename 이 필요합니다.' },
         { status: 400 },
       );
     }
 
-    const actorName = user.name?.trim() || '찰리';
     const result = await linkLetterSheetToEntry({
       entryId,
       sheetName,
