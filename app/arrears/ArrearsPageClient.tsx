@@ -28,30 +28,46 @@ import ArrearsManualEntryModal, {
 import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
 
 type BulkRow = {
-  clientId: string;
-  clientName: string;
-  manager: string;
-  monthlyFee: number;
+  clientId?: string;
+  clientName?: string;
+  companyName?: string;
+  manager?: string;
+  managerName?: string;
+  monthlyFee?: number;
+  fee?: number;
+  balance?: number;
+  monthCount?: number;
+  covered?: number;
+  remainder?: number;
   entryId: string | null;
   externalCode: string | null;
   status: string;
   statusLabel: string;
-  description: string;
+  description?: string;
+  proposedDescriptions?: string[];
 };
 
 type BulkPreview = {
-  yearMonth: string;
-  description: string;
+  yearMonth?: string;
+  year?: number;
+  description?: string;
   ready: number;
   readyAmount: number;
   skipped: number;
-  totalClients: number;
+  totalClients?: number;
+  endYearMonthOverride?: string;
   rows: BulkRow[];
 };
+
+type ChargeMode = 'bookkeeping' | 'adjustment' | 'backfill';
 
 function defaultYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function defaultYear() {
+  return String(new Date().getFullYear());
 }
 
 export default function ArrearsPageClient() {
@@ -77,7 +93,9 @@ export default function ArrearsPageClient() {
   const [manualBusy, setManualBusy] = useState(false);
 
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkMode, setBulkMode] = useState<ChargeMode>('bookkeeping');
   const [bulkYearMonth, setBulkYearMonth] = useState(defaultYearMonth);
+  const [bulkYear, setBulkYear] = useState(defaultYear);
   const [bulkManager, setBulkManager] = useState('');
   const [bulkPreview, setBulkPreview] = useState<BulkPreview | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -204,8 +222,10 @@ export default function ArrearsPageClient() {
     }
   };
 
-  const openBulk = () => {
+  const openBulk = (mode: ChargeMode) => {
+    setBulkMode(mode);
     setBulkYearMonth(defaultYearMonth());
+    setBulkYear(defaultYear());
     setBulkManager(manager);
     setBulkPreview(null);
     setBulkMsg('');
@@ -217,14 +237,26 @@ export default function ArrearsPageClient() {
     setBulkMsg('');
     setError('');
     try {
-      const res = await fetch('/api/arrears/bulk-bookkeeping', {
+      const endpoint =
+        bulkMode === 'bookkeeping'
+          ? '/api/arrears/bulk-bookkeeping'
+          : bulkMode === 'adjustment'
+            ? '/api/arrears/bulk-adjustment'
+            : '/api/arrears/backfill-ledger';
+      const body =
+        bulkMode === 'bookkeeping'
+          ? { yearMonth: bulkYearMonth, manager: bulkManager || undefined, confirm: false }
+          : bulkMode === 'adjustment'
+            ? { year: bulkYear, manager: bulkManager || undefined, confirm: false }
+            : {
+                endYearMonth: bulkYearMonth,
+                manager: bulkManager || undefined,
+                confirm: false,
+              };
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          yearMonth: bulkYearMonth,
-          manager: bulkManager || undefined,
-          confirm: false,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '미리보기 실패');
@@ -238,9 +270,15 @@ export default function ArrearsPageClient() {
 
   const confirmBulk = async () => {
     if (!bulkPreview?.ready) return;
+    const label =
+      bulkMode === 'bookkeeping'
+        ? bulkPreview.description || '월 기장료'
+        : bulkMode === 'adjustment'
+          ? bulkPreview.description || '조정료'
+          : `원장반영 분해 ${bulkPreview.ready}건`;
     if (
       !window.confirm(
-        `${bulkPreview.description}\n${bulkPreview.ready}건 · ${formatArrearsWon(bulkPreview.readyAmount)}원 반영할까요?`,
+        `${label}\n${bulkPreview.ready}건 · ${formatArrearsWon(bulkPreview.readyAmount)}원 반영할까요?`,
       )
     ) {
       return;
@@ -249,14 +287,26 @@ export default function ArrearsPageClient() {
     setBulkMsg('');
     setError('');
     try {
-      const res = await fetch('/api/arrears/bulk-bookkeeping', {
+      const endpoint =
+        bulkMode === 'bookkeeping'
+          ? '/api/arrears/bulk-bookkeeping'
+          : bulkMode === 'adjustment'
+            ? '/api/arrears/bulk-adjustment'
+            : '/api/arrears/backfill-ledger';
+      const body =
+        bulkMode === 'bookkeeping'
+          ? { yearMonth: bulkYearMonth, manager: bulkManager || undefined, confirm: true }
+          : bulkMode === 'adjustment'
+            ? { year: bulkYear, manager: bulkManager || undefined, confirm: true }
+            : {
+                endYearMonth: bulkYearMonth,
+                manager: bulkManager || undefined,
+                confirm: true,
+              };
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          yearMonth: bulkYearMonth,
-          manager: bulkManager || undefined,
-          confirm: true,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '일괄 반영 실패');
@@ -264,7 +314,8 @@ export default function ArrearsPageClient() {
       const amount = Number((data as { appliedAmount?: number }).appliedAmount) || 0;
       const failed = Number((data as { failed?: number }).failed) || 0;
       setBulkMsg(
-        `반영 완료: ${applied}건 · ${formatArrearsWon(amount)}원` +
+        `반영 완료: ${applied}건` +
+          (amount ? ` · ${formatArrearsWon(amount)}원` : '') +
           (failed ? ` · 실패 ${failed}` : ''),
       );
       setBulkPreview(null);
@@ -291,14 +342,28 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              상호를 누르면 미수 내역·사유를 볼 수 있습니다. 매달 기장료는 「월 기장료」로 일괄,
-              예외는 더빌·입금은 CMS로 반영하세요.
+              사유는 수임처 기장료·조정료·더빌·CMS로 쌓고, 원장반영만 남은 곳은 「원장 분해」로
+              개월 단위로 나눕니다.
             </p>
           </div>
           {canManage ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={portalBtnPrimary} onClick={openBulk}>
+              <button type="button" className={portalBtnPrimary} onClick={() => openBulk('bookkeeping')}>
                 월 기장료
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() => openBulk('adjustment')}
+              >
+                조정료
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() => openBulk('backfill')}
+              >
+                원장 분해
               </button>
               <button
                 type="button"
@@ -651,29 +716,56 @@ export default function ArrearsPageClient() {
           if (bulkBusy) return;
           setBulkOpen(false);
         }}
-        title="월 기장료 일괄 청구"
+        title={
+          bulkMode === 'bookkeeping'
+            ? '월 기장료 일괄 청구'
+            : bulkMode === 'adjustment'
+              ? '조정료 일괄 청구'
+              : '원장반영 → 월 기장료 분해'
+        }
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-500 leading-relaxed">
-            수임처에 등록된 <b>기장수수료(월 공급가)</b>를 미수 내역에 넣습니다. VAT는 더하지
-            않습니다. 같은 달 설명이 이미 있으면 건너뜁니다.
+            {bulkMode === 'bookkeeping'
+              ? '수임처 기장수수료(월 공급가)를 미수 내역에 넣습니다. VAT는 더하지 않습니다. 같은 달 설명이 이미 있으면 건너뜁니다.'
+              : bulkMode === 'adjustment'
+                ? '수임처에 등록된 조정료(공급가)를 「○○년 조정료」로 넣습니다. 같은 설명이면 건너뜁니다.'
+                : '공문 상세 없이 원장반영·전기이월만 있는 업체를, 기장수수료×개월로 쪼갭니다. 원장 잔액은 그대로 두고 사유 줄만 바꿉니다. 나누어떨어지지 않으면 «확인필요 잔액차»가 남습니다.'}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
+            {bulkMode === 'adjustment' ? (
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                귀속 연도
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  className={portalInput}
+                  value={bulkYear}
+                  onChange={e => {
+                    setBulkYear(e.target.value);
+                    setBulkPreview(null);
+                  }}
+                  disabled={bulkBusy}
+                />
+              </label>
+            ) : (
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                {bulkMode === 'backfill' ? '끝 월 (최근 미수 달)' : '청구 월'}
+                <input
+                  type="month"
+                  className={portalInput}
+                  value={bulkYearMonth}
+                  onChange={e => {
+                    setBulkYearMonth(e.target.value);
+                    setBulkPreview(null);
+                  }}
+                  disabled={bulkBusy}
+                />
+              </label>
+            )}
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              청구 월
-              <input
-                type="month"
-                className={portalInput}
-                value={bulkYearMonth}
-                onChange={e => {
-                  setBulkYearMonth(e.target.value);
-                  setBulkPreview(null);
-                }}
-                disabled={bulkBusy}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              담당 (수임처 기준)
+              담당
               <select
                 className={portalInput}
                 value={bulkManager}
@@ -696,7 +788,10 @@ export default function ArrearsPageClient() {
           {bulkPreview ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-700">
-                <span className="font-semibold">{bulkPreview.description}</span>
+                <span className="font-semibold">
+                  {bulkPreview.description ||
+                    (bulkMode === 'backfill' ? '원장 분해 미리보기' : '미리보기')}
+                </span>
                 <br />
                 반영 예정 {bulkPreview.ready}건 · {formatArrearsWon(bulkPreview.readyAmount)}원 ·
                 건너뜀 {bulkPreview.skipped}건
@@ -705,32 +800,52 @@ export default function ArrearsPageClient() {
                 <table className="min-w-full text-xs">
                   <thead className="sticky top-0 bg-slate-50">
                     <tr>
-                      <th className="px-2 py-1.5 text-left">수임처</th>
-                      <th className="px-2 py-1.5 text-right">월 기장료</th>
+                      <th className="px-2 py-1.5 text-left">업체</th>
+                      <th className="px-2 py-1.5 text-right">
+                        {bulkMode === 'backfill' ? '잔액/개월' : '금액'}
+                      </th>
                       <th className="px-2 py-1.5 text-left">상태</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {bulkPreview.rows.map(r => (
-                      <tr key={`${r.clientId}-${r.status}`}>
-                        <td className="px-2 py-1">
-                          {r.clientName}
-                          {r.externalCode ? (
-                            <span className="ml-1 font-mono text-slate-400">{r.externalCode}</span>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-1 text-right tabular-nums">
-                          {r.monthlyFee ? formatArrearsWon(r.monthlyFee) : '—'}
-                        </td>
-                        <td
-                          className={`px-2 py-1 ${
-                            r.status === 'ready' ? 'text-emerald-800 font-medium' : 'text-slate-500'
-                          }`}
-                        >
-                          {r.statusLabel}
-                        </td>
-                      </tr>
-                    ))}
+                    {bulkPreview.rows.map((r, idx) => {
+                      const name = r.clientName || r.companyName || '—';
+                      const amt =
+                        bulkMode === 'adjustment'
+                          ? r.fee || 0
+                          : bulkMode === 'backfill'
+                            ? r.balance || 0
+                            : r.monthlyFee || 0;
+                      return (
+                        <tr key={`${r.entryId || r.clientId || name}-${r.status}-${idx}`}>
+                          <td className="px-2 py-1">
+                            {name}
+                            {r.externalCode ? (
+                              <span className="ml-1 font-mono text-slate-400">{r.externalCode}</span>
+                            ) : null}
+                            {bulkMode === 'backfill' && r.proposedDescriptions?.length ? (
+                              <div className="mt-0.5 text-[10px] text-slate-500 line-clamp-2">
+                                {r.proposedDescriptions.join(' · ')}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-2 py-1 text-right tabular-nums">
+                            {bulkMode === 'backfill'
+                              ? `${formatArrearsWon(amt)} / ${r.monthCount || 0}개월`
+                              : amt
+                                ? formatArrearsWon(amt)
+                                : '—'}
+                          </td>
+                          <td
+                            className={`px-2 py-1 ${
+                              r.status === 'ready' ? 'text-emerald-800 font-medium' : 'text-slate-500'
+                            }`}
+                          >
+                            {r.statusLabel}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
