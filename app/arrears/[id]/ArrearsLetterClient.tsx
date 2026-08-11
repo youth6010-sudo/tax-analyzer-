@@ -557,52 +557,63 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           </div>
         ) : null}
 
-        {/* 공문 본문 */}
-        <article className="arrears-letter mx-auto max-w-[720px] rounded-xl border border-slate-200 bg-white px-8 py-10 shadow-sm print:max-w-none print:border-0 print:px-6 print:py-4 print:shadow-none">
-          <p className="text-center text-sm tracking-wide text-slate-600">
-            Youth tax Management Corporation
-          </p>
-          <h2 className="mt-6 text-center text-2xl font-bold tracking-wide text-slate-900">
-            미수 수수료 안내
-          </h2>
-
-          <div className="mt-8 flex flex-wrap items-start justify-between gap-4 text-sm text-slate-800">
-            <div className="space-y-1">
-              <p>
-                <span className="inline-block w-16 text-slate-500">수 신</span>
-                <span className="font-semibold">: {companyLabel}</span>
-              </p>
-              <p>
-                <span className="inline-block w-16 text-slate-500">제 목</span>
-                <span>: 미수수수료 안내</span>
-              </p>
-            </div>
-            <p className="tabular-nums text-slate-700">{letterDateLabel || '—'}</p>
-          </div>
-
-          <div className="mt-8 space-y-2 text-sm leading-relaxed text-slate-800">
-            <p>귀사의 무궁한 발전을 기원합니다.</p>
-            <p>
-              다음과 같이 미수수수료를 안내하여 드리오니 빠른 시일내에 결제 부탁드립니다.
+        {/* 공문 본문 — 엑셀 「미수수수료 안내」양식 */}
+        <article className="arrears-letter mx-auto w-full max-w-[720px] rounded-xl border border-slate-200 bg-white px-8 py-10 text-black shadow-sm print:max-w-none print:rounded-none print:border-0 print:px-0 print:py-0 print:shadow-none">
+          <div className="arrears-letter-brand flex flex-col items-center gap-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/arrears-letter-header.png"
+              alt="세무법인청년들"
+              className="h-12 w-auto object-contain print:h-11"
+            />
+            <p className="text-center text-[11px] tracking-wide text-slate-500 print:text-[10px]">
+              Youth tax Management Corporation
             </p>
           </div>
 
-          <p className="mt-8 text-center text-sm font-semibold text-slate-800">- 다  음 -</p>
+          <h2 className="mt-5 text-center text-[22px] font-bold tracking-wide text-slate-900 underline decoration-2 underline-offset-4 print:mt-4 print:text-[20px]">
+            미수 수수료 안내
+          </h2>
 
-          <p className="mt-6 text-sm font-semibold text-slate-900">1. 미수 수수료 안내</p>
+          <div className="mt-7 flex items-start justify-between gap-4 text-[13px] text-slate-900 print:mt-6 print:text-[12px]">
+            <div className="space-y-1">
+              <p>
+                <span className="inline-block tracking-[0.35em]">수 신</span>
+                <span className="font-semibold"> : {companyLabel}</span>
+              </p>
+              <p>
+                <span className="inline-block tracking-[0.35em]">제 목</span>
+                <span> : 미수수수료 안내</span>
+              </p>
+            </div>
+            <p className="shrink-0 tabular-nums text-slate-800">{letterDateLabel || '—'}</p>
+          </div>
+
+          <div className="mt-6 space-y-1.5 text-[13px] leading-relaxed text-slate-900 print:mt-5 print:text-[12px]">
+            <p>귀사의 무궁한 발전을 기원합니다.</p>
+            <p>다음과 같이 미수수수료를 안내하여 드리오니 빠른 시일내에 결제 부탁드립니다.</p>
+          </div>
+
+          <p className="mt-6 text-center text-[13px] font-semibold tracking-[0.4em] text-slate-900 print:mt-5 print:text-[12px]">
+            - 다 음 -
+          </p>
+
+          <p className="mt-5 text-[13px] font-semibold text-slate-900 print:mt-4 print:text-[12px]">
+            1. 미수 수수료 안내
+          </p>
 
           {lines.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-4 text-sm text-slate-500 print:hidden">
               등록된 공문 내역이 없습니다.
               {canManage
                 ? ' 「내역 편집」으로 입력하거나, 목록에서 「공문 내역 가져오기」로 xls를 반영하세요.'
                 : ''}
             </p>
           ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full border-collapse text-[13px]" style={{ border: '1px solid #222' }}>
+            <div className="mt-2 overflow-x-auto">
+              <table className="arrears-letter-table w-full border-collapse text-[12px] print:text-[11px]">
                 <thead>
-                  <tr className="bg-[#f3f3f3]">
+                  <tr className="bg-[#ececec]">
                     <th className="border border-[#222] px-2 py-1.5 text-left font-semibold">내역</th>
                     <th className="border border-[#222] px-2 py-1.5 text-right font-semibold whitespace-nowrap">
                       금액(vat 포함)
@@ -619,22 +630,24 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 <tbody>
                   {lines.map((l, i) => (
                     <tr key={l.id}>
-                      <td className="border border-[#222] px-2 py-1 text-slate-900">{l.description}</td>
-                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-800">
+                      <td className="border border-[#222] px-2 py-1 text-slate-900">
+                        {l.description}
+                      </td>
+                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
                         {l.amount ? formatArrearsWon(l.amount) : ''}
                       </td>
-                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-800">
+                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
                         {l.paidAmount ? formatArrearsWon(l.paidAmount) : ''}
                       </td>
-                      <td className="border border-[#222] px-2 py-1 text-center text-slate-700 whitespace-nowrap">
+                      <td className="border border-[#222] px-2 py-1 text-center text-slate-800 whitespace-nowrap">
                         {l.paidDate || ''}
                       </td>
-                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums font-medium text-slate-900">
+                      <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
                         {formatArrearsWon(running[i] ?? 0)}
                       </td>
                     </tr>
                   ))}
-                  <tr className="bg-[#f3f3f3] font-semibold">
+                  <tr className="bg-[#ececec] font-semibold">
                     <td className="border border-[#222] px-2 py-1.5">총액</td>
                     <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
                       {formatArrearsWon(totalAmount)}
@@ -648,10 +661,13 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     </td>
                   </tr>
                   <tr className="font-semibold">
-                    <td className="border border-[#222] px-2 py-1.5" colSpan={4}>
+                    <td
+                      className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5"
+                      colSpan={4}
+                    >
                       미수 수수료
                     </td>
-                    <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums text-rose-800">
+                    <td className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5 text-right tabular-nums text-slate-900">
                       {formatArrearsWon(letterBalance)}
                     </td>
                   </tr>
@@ -660,12 +676,22 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             </div>
           )}
 
-          <p className="mt-8 text-sm font-semibold text-slate-900">2. 입금 계좌 번호</p>
-          <p className="mt-2 text-sm text-slate-800">{BANK_LINE}</p>
+          <p className="mt-7 text-[13px] font-semibold text-slate-900 print:mt-6 print:text-[12px]">
+            2. 입금 계좌 번호
+          </p>
+          <p className="mt-1.5 text-[13px] text-slate-900 print:text-[12px]">{BANK_LINE}</p>
 
-          <div className="mt-12 space-y-1 text-center text-xs text-slate-600">
-            <p>{ADDR_LINE}</p>
-            <p>{TEL_LINE}</p>
+          <div className="arrears-letter-footer mt-14 flex items-end gap-3 print:mt-12">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/arrears-letter-footer.png"
+              alt="세무법인청년들"
+              className="h-10 w-auto shrink-0 object-contain print:h-9"
+            />
+            <div className="min-w-0 space-y-0.5 text-[11px] leading-snug text-slate-600 print:text-[10px]">
+              <p>{ADDR_LINE}</p>
+              <p>{TEL_LINE}</p>
+            </div>
           </div>
         </article>
 
@@ -741,13 +767,45 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
       <style>{`
         @media print {
-          nav, aside, header, .print\\:hidden { display: none !important; }
-          body { background: white !important; }
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+          html, body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print,
+          .print\\:hidden {
+            display: none !important;
+          }
+          /* 안전망: 공문 외 요소 숨기고 공문만 표시 */
+          body * {
+            visibility: hidden !important;
+          }
+          .arrears-letter,
+          .arrears-letter * {
+            visibility: visible !important;
+          }
           .arrears-letter {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            max-width: none !important;
-            padding: 0.5rem 1rem !important;
+            border-radius: 0 !important;
+            background: white !important;
+            color: #111 !important;
+          }
+          .arrears-letter-table th,
+          .arrears-letter-table td {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>

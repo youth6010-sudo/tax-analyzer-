@@ -157,7 +157,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
     <div className="flex min-h-[100dvh] w-full">
       <PortalPrefetch />
       <aside
-        className="fixed left-0 top-0 z-40 h-[100dvh] shrink-0 border-r border-slate-200 bg-white"
+        className="fixed left-0 top-0 z-40 h-[100dvh] shrink-0 border-r border-slate-200 bg-white print:hidden"
         style={{ width: leftWidth }}
       >
         <div className="flex h-full flex-col overflow-hidden px-2.5 py-2 pr-3.5">
@@ -181,7 +181,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
       </aside>
 
       <div
-        className="flex min-w-0 flex-1 flex-col"
+        className="flex min-w-0 flex-1 flex-col print:!m-0"
         style={
           {
             marginLeft: leftWidth,
@@ -191,7 +191,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
           } as CSSProperties
         }
       >
-        <header className="sticky top-0 z-[35] shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 no-print">
+        <header className="sticky top-0 z-[35] shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 no-print print:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1">
               <ContactHeaderSearch expanded />
@@ -203,7 +203,7 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
       </div>
 
       <aside
-        className="fixed right-0 top-0 z-40 h-[100dvh] shrink-0 border-l border-slate-200 bg-slate-50 transition-[width] duration-200"
+        className="fixed right-0 top-0 z-40 h-[100dvh] shrink-0 border-l border-slate-200 bg-slate-50 transition-[width] duration-200 print:hidden"
         style={{ width: effectiveRightWidth }}
       >
         {rightMode === 'open' && (
