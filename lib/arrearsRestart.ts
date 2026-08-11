@@ -433,3 +433,182 @@ export async function applyLedgerWithLetterLinks(opts: {
     failed,
   };
 }
+
+/** DB 기준: letter: 연결필요 행 ↔ 코드 있는 원장 행 */
+export async function buildDbPendingLetterLinks(opts?: { minScore?: number }): Promise<{
+  needsLink: RestartLetterRow[];
+  pickEntries: Array<LedgerPick & { entryId: string; managerName: string }>;
+  letterOnlyCount: number;
+  codedCount: number;
+}> {
+  const minScore = opts?.minScore ?? 0.28;
+  const db = getDb();
+  const entries = await db.select().from(arrearsEntries);
+
+  const letterEntries = entries.filter(
+    e => e.source === 'letter' || e.externalCode.startsWith('letter:'),
+  );
+  const codedEntries = entries.filter(e => !e.externalCode.startsWith('letter:'));
+
+  const allLines = await db
+    .select()
+    .from(arrearsLetterLines)
+    .orderBy(asc(arrearsLetterLines.sortOrder));
+  const linesByEntry = new Map<string, typeof allLines>();
+  for (const l of allLines) {
+    const list = linesByEntry.get(l.arrearsEntryId) ?? [];
+    list.push(l);
+    linesByEntry.set(l.arrearsEntryId, list);
+  }
+
+  const needsLink: RestartLetterRow[] = [];
+  for (const e of letterEntries) {
+    const soft = softCompanyKey(e.companyName);
+    const lines = linesByEntry.get(e.id) ?? [];
+    const letterBalance = lines.reduce((s, l) => s + l.amount - l.paidAmount, 0);
+    const suggestions = codedEntries
+      .map(r => ({
+        externalCode: r.externalCode,
+        companyName: r.companyName,
+        balance: r.balance,
+        score: companyNameSimilarity(e.companyName, r.companyName),
+      }))
+      .filter(c => c.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
+    needsLink.push({
+      entryId: e.id,
+      companyName: e.companyName,
+      externalCode: e.externalCode,
+      managerName: e.managerName,
+      letterSoftKey: soft,
+      letterBalance,
+      lineCount: lines.length,
+      letterDate: e.letterDate || '',
+      letterFilename: '',
+      match: 'needs_link',
+      linkedLedgerCode: '',
+      linkedLedgerName: '',
+      balanceMismatch: false,
+      suggestions,
+    });
+  }
+
+  needsLink.sort((a, b) => (b.suggestions[0]?.score ?? 0) - (a.suggestions[0]?.score ?? 0));
+
+  const pickEntries = codedEntries
+    .map(r => ({
+      entryId: r.id,
+      externalCode: r.externalCode,
+      companyName: r.companyName,
+      balance: r.balance,
+      businessNo: r.businessNo || '',
+      managerName: r.managerName || '',
+    }))
+    .sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
+
+  return {
+    needsLink,
+    pickEntries,
+    letterOnlyCount: letterEntries.length,
+    codedCount: codedEntries.length,
+  };
+}
+
+/** 연결필요(공문) 행 → 코드 있는 원장 행으로 공문 상세 이동 후 공문 행 삭제 */
+export async function mergeLetterEntryIntoCodedEntry(opts: {
+  letterEntryId: string;
+  targetEntryId: string;
+  actorName: string;
+}): Promise<{
+  ok: true;
+  targetCompanyName: string;
+  targetExternalCode: string;
+  lineCount: number;
+  letterBalance: number;
+  entryBalance: number;
+}> {
+  const db = getDb();
+  const [letterEnt] = await db
+    .select()
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.id, opts.letterEntryId))
+    .limit(1);
+  if (!letterEnt) throw new Error('연결필요(공문) 행을 찾을 수 없습니다.');
+  if (!letterEnt.externalCode.startsWith('letter:') && letterEnt.source !== 'letter') {
+    throw new Error('공문 전용(연결필요) 행만 옮길 수 있습니다.');
+  }
+
+  const [target] = await db
+    .select()
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.id, opts.targetEntryId))
+    .limit(1);
+  if (!target) throw new Error('대상 원장 행을 찾을 수 없습니다.');
+  if (target.externalCode.startsWith('letter:')) {
+    throw new Error('대상은 코드가 있는 원장 행이어야 합니다.');
+  }
+  if (letterEnt.id === target.id) {
+    throw new Error('같은 행입니다.');
+  }
+
+  const actor = opts.actorName || '찰리';
+  const lines = await listLetterLines(letterEnt.id);
+  if (!lines.length) throw new Error('옮길 공문 줄이 없습니다.');
+
+  const inputs = lines.map(l => ({
+    description: l.description,
+    amount: l.amount,
+    paidAmount: l.paidAmount,
+    paidDate: l.paidDate,
+    source: (l.source === 'ledger' ? 'letter' : l.source) as 'letter' | 'manual' | 'ledger',
+  }));
+
+  await replaceLetterLines(target.id, actor, inputs, {
+    syncBalance: false,
+    letterDate: letterEnt.letterDate || undefined,
+  });
+
+  await syncLetterDiffWithLedger(
+    target.id,
+    target.balance,
+    target.asOfDate || new Date().toISOString().slice(0, 10),
+    actor,
+  );
+
+  if (letterEnt.managerName?.trim() && !(target.managerName || '').trim()) {
+    await db
+      .update(arrearsEntries)
+      .set({
+        managerName: letterEnt.managerName,
+        updatedAt: new Date(),
+        updatedBy: actor,
+      })
+      .where(eq(arrearsEntries.id, target.id));
+  }
+
+  await upsertLetterLedgerLink({
+    letterSoftKey: softCompanyKey(letterEnt.companyName),
+    letterCompanyName: letterEnt.companyName,
+    managerName: letterEnt.managerName || '',
+    ledgerExternalCode: target.externalCode,
+    ledgerCompanyName: target.companyName,
+    status: 'manual',
+    actorName: actor,
+  });
+
+  await db.delete(arrearsEntries).where(eq(arrearsEntries.id, letterEnt.id));
+
+  const after = await listLetterLines(target.id);
+  const letterBalance = after.reduce((s, l) => s + l.amount - l.paidAmount, 0);
+
+  return {
+    ok: true,
+    targetCompanyName: target.companyName,
+    targetExternalCode: target.externalCode,
+    lineCount: after.length,
+    letterBalance,
+    entryBalance: target.balance,
+  };
+}
