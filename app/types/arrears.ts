@@ -41,6 +41,8 @@ export type ArrearsEntryDto = {
   source: string;
   updatedBy: string;
   updatedAt: string;
+  /** 최근 청구(금액) 내역 요약 — 목록용 */
+  reasonSummary?: string;
 };
 
 export type ArrearsLetterLineSource =

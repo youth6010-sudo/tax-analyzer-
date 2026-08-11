@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, gte, ilike, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, ne, or, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { arrearsEntries, clients } from '@/db/schema';
+import { arrearsEntries, arrearsLetterLines, clients } from '@/db/schema';
 import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '@/app/types/arrears';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
@@ -26,7 +26,45 @@ function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     source: row.source,
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt ?? ''),
+    reasonSummary: '—',
   };
+}
+
+/** entry별 최근 청구(금액>0) 설명 1~2개 → 사유 요약 */
+async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsEntryDto[]> {
+  if (!items.length) return items;
+  const db = getDb();
+  const ids = items.map(i => i.id);
+  const lines = await db
+    .select({
+      arrearsEntryId: arrearsLetterLines.arrearsEntryId,
+      description: arrearsLetterLines.description,
+      amount: arrearsLetterLines.amount,
+      sortOrder: arrearsLetterLines.sortOrder,
+    })
+    .from(arrearsLetterLines)
+    .where(inArray(arrearsLetterLines.arrearsEntryId, ids))
+    .orderBy(desc(arrearsLetterLines.sortOrder));
+
+  const chargesByEntry = new Map<string, string[]>();
+  for (const line of lines) {
+    if (Math.round(line.amount) <= 0) continue;
+    const desc = (line.description || '').trim();
+    if (!desc) continue;
+    const list = chargesByEntry.get(line.arrearsEntryId) ?? [];
+    if (list.length >= 2) continue;
+    if (!list.includes(desc)) list.push(desc);
+    chargesByEntry.set(line.arrearsEntryId, list);
+  }
+
+  return items.map(item => {
+    const charges = chargesByEntry.get(item.id);
+    if (charges?.length) {
+      return { ...item, reasonSummary: charges.join(' · ') };
+    }
+    const memo = (item.memo || '').trim();
+    return { ...item, reasonSummary: memo || '—' };
+  });
 }
 
 function normalizeCompanyName(name: string): string {
@@ -144,7 +182,7 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(arrearsEntries.balance), asc(arrearsEntries.companyName));
 
-  const items = rows.map(toDto);
+  const items = await attachReasonSummaries(rows.map(toDto));
   const totalMap = new Map<string, ArrearsManagerTotal>();
   let totalBalance = 0;
   let asOfDate = '';

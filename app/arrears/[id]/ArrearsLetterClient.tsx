@@ -10,7 +10,9 @@ import {
   portalInput,
   portalMain,
 } from '@/app/components/portal/uiClasses';
-import CenterModal from '@/app/components/portal/CenterModal';
+import ArrearsManualEntryModal, {
+  type ManualChannel,
+} from '@/app/arrears/ArrearsManualEntryModal';
 import {
   formatArrearsLetterDate,
   formatArrearsPaidDateKo,
@@ -36,8 +38,6 @@ type EditLine = {
   source: ArrearsLetterLineDto['source'];
 };
 
-type QuickMode = 'charge' | 'pay' | null;
-
 function toEditLines(lines: ArrearsLetterLineDto[]): EditLine[] {
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
@@ -54,18 +54,6 @@ function parseWon(s: string): number {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-function downloadBlob(buf: ArrayBuffer, filename: string) {
-  const blob = new Blob([buf], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ArrearsLetterClient({ id }: { id: string }) {
   const [item, setItem] = useState<ArrearsEntryDto | null>(null);
   const [lines, setLines] = useState<ArrearsLetterLineDto[]>([]);
@@ -78,11 +66,10 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [letterDate, setLetterDate] = useState('');
   const [saving, setSaving] = useState(false);
-  const [quick, setQuick] = useState<QuickMode>(null);
-  const [quickAmount, setQuickAmount] = useState('');
-  const [quickDesc, setQuickDesc] = useState('');
-  const [quickBusy, setQuickBusy] = useState(false);
-  const [exportBusy, setExportBusy] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
+  const [manualBusy, setManualBusy] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetchWithTimeout(`/api/arrears/${id}`, { cache: 'no-store' }, 20_000);
@@ -179,25 +166,20 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     }
   };
 
-  const applyQuick = async () => {
-    if (!quick) return;
-    const amt = parseWon(quickAmount);
-    if (amt <= 0) {
-      setError('금액을 입력하세요.');
-      return;
-    }
-    setQuickBusy(true);
+  const submitManual = async (payload: {
+    entryId: string;
+    channel: ManualChannel;
+    amount: number;
+    eventDate: string;
+    description: string;
+  }) => {
+    setManualBusy(true);
     setError('');
     try {
-      const res = await fetch(`/api/arrears/${id}/lines`, {
+      const res = await fetch('/api/arrears/manual-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: quick,
-          amount: amt,
-          description: quickDesc.trim() || undefined,
-          syncBalance: true,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '반영 실패');
@@ -205,13 +187,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       setLines((data as { lines: ArrearsLetterLineDto[] }).lines || []);
       setLetterBalance((data as { letterBalance?: number }).letterBalance ?? 0);
       setBalanceDiff((data as { balanceDiff?: number }).balanceDiff ?? 0);
-      setQuick(null);
-      setQuickAmount('');
-      setQuickDesc('');
+      setManualOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '반영 실패');
+      throw e instanceof Error ? e : new Error('반영 실패');
     } finally {
-      setQuickBusy(false);
+      setManualBusy(false);
     }
   };
 
@@ -229,33 +209,12 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       setLetterBalance((data as { letterBalance?: number }).letterBalance ?? 0);
       setBalanceDiff((data as { balanceDiff?: number }).balanceDiff ?? 0);
       if (!(data as { applied?: boolean }).applied) {
-        setError('원장 잔액과 공문 잔액이 이미 같습니다.');
+        setError('관리 잔액과 내역 잔액이 이미 같습니다.');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '맞춤 실패');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const exportExcel = async () => {
-    setExportBusy(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/arrears/${id}/export`, { cache: 'no-store' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || '엑셀 저장 실패');
-      }
-      const cd = res.headers.get('Content-Disposition') || '';
-      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
-      const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료_안내.xlsx');
-      const buf = await res.arrayBuffer();
-      downloadBlob(buf, filename);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '엑셀 저장 실패');
-    } finally {
-      setExportBusy(false);
     }
   };
 
@@ -293,14 +252,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             <Link href="/arrears" className="text-xs text-blue-800 underline-offset-2 hover:underline">
               ← 미수관리
             </Link>
-            <h1 className="mt-1 text-xl font-bold text-slate-900">미수 수수료 안내</h1>
+            <h1 className="mt-1 text-xl font-bold text-slate-900">미수 내역</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 관리잔액{' '}
+              {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
               {lines.length > 0 ? (
                 <>
                   {' '}
-                  · 공문잔액 {formatArrearsWon(letterBalance)}원
+                  · 내역합계 {formatArrearsWon(letterBalance)}원
                   {balanceDiff !== 0 ? (
                     <span className="ml-1 font-semibold text-amber-800">
                       (차이 {formatArrearsWon(balanceDiff)})
@@ -313,41 +272,29 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             {canManage && !editing ? (
               <>
+                <button
+                  type="button"
+                  className={portalBtnPrimary}
+                  onClick={() => {
+                    setManualChannel('thebill');
+                    setManualOpen(true);
+                  }}
+                >
+                  더빌
+                </button>
+                <button
+                  type="button"
+                  className={portalBtnSecondary}
+                  onClick={() => {
+                    setManualChannel('cms');
+                    setManualOpen(true);
+                  }}
+                >
+                  CMS
+                </button>
                 <button type="button" className={portalBtnSecondary} onClick={startEdit}>
                   내역 편집
                 </button>
-                <button
-                  type="button"
-                  className={portalBtnSecondary}
-                  onClick={() => {
-                    setQuick('charge');
-                    setQuickDesc('');
-                    setQuickAmount('');
-                  }}
-                >
-                  미수 추가
-                </button>
-                <button
-                  type="button"
-                  className={portalBtnSecondary}
-                  onClick={() => {
-                    setQuick('pay');
-                    setQuickDesc('');
-                    setQuickAmount('');
-                  }}
-                >
-                  입금
-                </button>
-                {balanceDiff !== 0 && lines.length > 0 ? (
-                  <button
-                    type="button"
-                    className={portalBtnSecondary}
-                    disabled={saving}
-                    onClick={() => void syncWithLedger()}
-                  >
-                    원장 잔액과 맞추기
-                  </button>
-                ) : null}
               </>
             ) : null}
             {editing ? (
@@ -370,22 +317,40 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </button>
               </>
             ) : (
-              <>
-                <button
-                  type="button"
-                  className={portalBtnSecondary}
-                  disabled={exportBusy}
-                  onClick={() => void exportExcel()}
-                >
-                  {exportBusy ? '엑셀…' : '엑셀 저장'}
-                </button>
-                <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
-                  인쇄
-                </button>
-              </>
+              <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
+                인쇄
+              </button>
             )}
           </div>
         </div>
+
+        {canManage && !editing ? (
+          <div className="print:hidden">
+            <button
+              type="button"
+              className="text-[11px] font-medium text-slate-400 underline-offset-2 hover:underline"
+              onClick={() => setShowAdvanced(v => !v)}
+            >
+              {showAdvanced ? '고급 접기' : '고급…'}
+            </button>
+            {showAdvanced ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {balanceDiff !== 0 && lines.length > 0 ? (
+                  <button
+                    type="button"
+                    className={portalBtnSecondary}
+                    disabled={saving}
+                    onClick={() => void syncWithLedger()}
+                  >
+                    관리잔액과 내역 맞추기
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">내역·잔액 차이가 있을 때만 맞춤 가능</span>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? <div className={`${portalAlertError} print:hidden`}>{error}</div> : null}
 
@@ -604,10 +569,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
           {lines.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500 print:hidden">
-              등록된 공문 내역이 없습니다.
-              {canManage
-                ? ' 「내역 편집」으로 입력하거나, 목록에서 「공문 내역 가져오기」로 xls를 반영하세요.'
-                : ''}
+              등록된 미수 내역이 없습니다.
+              {canManage ? ' 「더빌」로 청구 사유를 남기거나 「내역 편집」으로 입력하세요.' : ''}
             </p>
           ) : (
             <div className="mt-2 overflow-x-auto">
@@ -707,63 +670,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
         ) : null}
       </div>
 
-      <CenterModal
-        open={!!quick}
-        onClose={() => {
-          if (quickBusy) return;
-          setQuick(null);
-        }}
-        title={quick === 'pay' ? '입금 반영' : '미수 추가'}
-      >
-        {quick ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              {companyLabel} 공문 내역에{' '}
-              {quick === 'pay' ? '입금' : '미수'} 행을 추가하고 잔액을 맞춥니다.
-            </p>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              내역 (선택)
-              <input
-                className={`${portalInput} py-2`}
-                value={quickDesc}
-                onChange={e => setQuickDesc(e.target.value)}
-                placeholder={quick === 'pay' ? '입금' : '미수 추가'}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              금액
-              <input
-                autoFocus
-                className={`${portalInput} py-2 tabular-nums`}
-                inputMode="numeric"
-                value={quickAmount}
-                onChange={e => setQuickAmount(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') void applyQuick();
-                }}
-              />
-            </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className={portalBtnSecondary}
-                disabled={quickBusy}
-                onClick={() => setQuick(null)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className={portalBtnPrimary}
-                disabled={quickBusy}
-                onClick={() => void applyQuick()}
-              >
-                {quickBusy ? '반영 중…' : '반영'}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </CenterModal>
+      <ArrearsManualEntryModal
+        open={manualOpen}
+        channel={manualChannel}
+        entries={item ? [item] : []}
+        initialEntryId={id}
+        busy={manualBusy}
+        onClose={() => setManualOpen(false)}
+        onSubmit={submitManual}
+      />
 
       <style>{`
         @media print {
