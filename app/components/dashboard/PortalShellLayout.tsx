@@ -6,7 +6,6 @@ import HomeTasksPanel from './HomeTasksPanel';
 import HomeSidebarNav from './HomeSidebarNav';
 import PresenceHeartbeat from './PresenceHeartbeat';
 import StaffPresencePanel from './StaffPresencePanel';
-import InfraStatusChip from './InfraStatusChip';
 import { MenuPrefsProvider } from './MenuPrefsProvider';
 import ContactHeaderSearch from '@/app/components/ContactHeaderSearch';
 import AppHeaderUser from '@/app/components/AppHeaderUser';
@@ -163,7 +162,6 @@ export default function PortalShellLayout({ children }: { children: React.ReactN
       >
         <div className="flex h-full flex-col overflow-hidden px-2.5 py-2 pr-3.5">
           <PortalBrand />
-          <InfraStatusChip />
           <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1">
             <HomeSidebarNav />
           </div>

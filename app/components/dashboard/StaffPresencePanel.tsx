@@ -6,12 +6,10 @@ import type { PresenceStaffDto } from '@/lib/presence';
 export default function StaffPresencePanel() {
   const [staff, setStaff] = useState<PresenceStaffDto[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [live, setLive] = useState(false);
 
-  const applyPayload = useCallback((data: { staff?: PresenceStaffDto[]; live?: boolean }) => {
+  const applyPayload = useCallback((data: { staff?: PresenceStaffDto[] }) => {
     setStaff(Array.isArray(data.staff) ? data.staff : []);
     setLoaded(true);
-    if (data.live) setLive(true);
   }, []);
 
   useEffect(() => {
@@ -25,7 +23,7 @@ export default function StaffPresencePanel() {
           const res = await fetch('/api/presence', { credentials: 'same-origin' });
           if (!res.ok || cancelled) return;
           const data = (await res.json()) as { staff?: PresenceStaffDto[] };
-          applyPayload({ staff: data.staff, live: false });
+          applyPayload({ staff: data.staff });
         } catch {
           /* ignore */
         }
@@ -36,7 +34,7 @@ export default function StaffPresencePanel() {
       es = new EventSource('/api/presence/stream');
       es.onmessage = ev => {
         try {
-          const data = JSON.parse(ev.data) as { staff?: PresenceStaffDto[]; live?: boolean };
+          const data = JSON.parse(ev.data) as { staff?: PresenceStaffDto[] };
           applyPayload(data);
         } catch {
           /* ignore */
@@ -45,7 +43,6 @@ export default function StaffPresencePanel() {
       es.onerror = () => {
         es?.close();
         es = null;
-        setLive(false);
         fallbackPoll();
         pollId = window.setInterval(() => {
           if (document.visibilityState === 'visible') fallbackPoll();
@@ -73,14 +70,7 @@ export default function StaffPresencePanel() {
       aria-label="직원 접속 상태"
     >
       <div className="flex items-baseline justify-between gap-2 px-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-slate-400">
-          직원
-          {live ? (
-            <span className="rounded bg-sky-100 px-1 py-px text-[9px] font-extrabold uppercase tracking-wider text-sky-700">
-              Live
-            </span>
-          ) : null}
-        </p>
+        <p className="text-[11px] font-bold tracking-wide text-slate-400">직원</p>
         {loaded ? (
           <p className="text-[10px] font-medium text-slate-400">
             {onlineCount}/{staff.length} 접속
