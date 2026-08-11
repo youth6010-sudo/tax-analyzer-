@@ -300,25 +300,14 @@ export async function syncLetterDiffWithLedger(
   return { applied: need !== 0 || diff !== 0, diff: need };
 }
 
+/** 완전 동일(정규화)만 매칭 — 부분일치/포함은 찰리 수동 연결로 */
 function findEntryByCompanyName<
   T extends { id: string; companyName: string; externalCode: string },
 >(entries: T[], sheetName: string): T | null {
-  const key = normCompanyName(sheetName);
-  const soft = softKey(sheetName);
-  const byName = new Map(entries.map(e => [normCompanyName(e.companyName), e]));
-  const bySoft = new Map(entries.map(e => [softKey(e.companyName), e]));
-
-  let hit = byName.get(key);
-  if (hit) return hit;
-  hit = bySoft.get(soft);
-  if (hit) return hit;
-  for (const [nk, row] of byName) {
-    if (nk.includes(key) || key.includes(nk)) return row;
-  }
-  for (const [sk, row] of bySoft) {
-    if (sk.includes(soft) || soft.includes(sk)) return row;
-  }
-  return null;
+  const key = softKey(sheetName);
+  if (!key) return null;
+  const hits = entries.filter(e => softKey(e.companyName) === key);
+  return hits.length === 1 ? hits[0]! : null;
 }
 
 export type LetterImportPreviewSheet = {

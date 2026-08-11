@@ -1,5 +1,5 @@
 /**
- * 공문 시트 ↔ 미수(원장) 행 매칭 검토 · 유사명 점수
+ * 공문 시트 ↔ 미수(원장) 행 — 자동 확정 없음, 찰리 수동 연결용 목록
  */
 import fs from 'fs';
 import path from 'path';
@@ -74,15 +74,22 @@ export type NameCandidate = {
   ledgerRefOnly: boolean;
 };
 
-export type UnmatchedLetterSheet = {
+export type LetterReviewRow = {
   sheetName: string;
   filename: string;
   managerName: string;
   lineCount: number;
   letterBalance: number;
   letterDate: string;
+  /** 이름 정규화 완전 일치 후보(참고만 — 자동 연결하지 않음) */
+  sameNameEntry: NameCandidate | null;
+  /** 공문잔액 ≠ 동일명 원장잔액 */
+  balanceMismatch: boolean;
   suggestions: NameCandidate[];
 };
+
+/** @deprecated UI는 letterSheets 사용. 호환용 별칭 */
+export type UnmatchedLetterSheet = LetterReviewRow;
 
 export type LedgerOnlyEntry = {
   entryId: string;
@@ -99,6 +106,15 @@ export type LedgerOnlyEntry = {
     score: number;
     lineCount: number;
   }>;
+};
+
+export type PickEntry = {
+  entryId: string;
+  companyName: string;
+  externalCode: string;
+  balance: number;
+  managerName: string;
+  ledgerRefOnly: boolean;
 };
 
 function defaultLetterDir(): string {
@@ -156,26 +172,49 @@ export function scanLetterSheets(dir = defaultLetterDir()): ScannedLetterSheet[]
   return out;
 }
 
-function findMatchedEntryId(
+function findSameNameEntry(
   sheetName: string,
-  entries: Array<{ id: string; companyName: string }>,
-): string | null {
+  entries: Array<{
+    id: string;
+    companyName: string;
+    externalCode: string;
+    balance: number;
+    managerName: string;
+  }>,
+  ledgerOnlyIds: Set<string>,
+): NameCandidate | null {
   const key = softCompanyKey(sheetName);
   if (!key) return null;
   const hits = entries.filter(e => softCompanyKey(e.companyName) === key);
-  return hits.length === 1 ? hits[0]!.id : null;
+  if (hits.length !== 1) return null;
+  const e = hits[0]!;
+  return {
+    entryId: e.id,
+    companyName: e.companyName,
+    externalCode: e.externalCode,
+    balance: e.balance,
+    managerName: e.managerName,
+    score: 1,
+    ledgerRefOnly: ledgerOnlyIds.has(e.id),
+  };
 }
 
 export async function buildMatchReview(opts?: { letterDir?: string; minScore?: number }): Promise<{
   letterDir: string;
   letterDirOk: boolean;
-  unmatchedLetters: UnmatchedLetterSheet[];
+  /** 공문 시트 전부 — 자동 연결 없음, 찰리가 고름 */
+  letterSheets: LetterReviewRow[];
+  /** 연결 버튼용: 이름이 다른 유사 후보 위주 필터 (호환) */
+  unmatchedLetters: LetterReviewRow[];
   ledgerOnly: LedgerOnlyEntry[];
+  pickEntries: PickEntry[];
   letterSheetCount: number;
+  /** 이름만 동일한 참고 건수(자동 연결한 적 없음) */
+  sameNameCount: number;
   matchedLetterCount: number;
 }> {
   const letterDir = opts?.letterDir || defaultLetterDir();
-  const minScore = opts?.minScore ?? 0.35;
+  const minScore = opts?.minScore ?? 0.28;
   const letterDirOk = fs.existsSync(letterDir);
 
   const db = getDb();
@@ -218,20 +257,26 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
     }
   }
 
+  const pickEntries: PickEntry[] = entries
+    .map(e => ({
+      entryId: e.id,
+      companyName: e.companyName,
+      externalCode: e.externalCode,
+      balance: e.balance,
+      managerName: e.managerName,
+      ledgerRefOnly: ledgerOnlyIds.has(e.id),
+    }))
+    .sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
+
   const scanned = letterDirOk ? scanLetterSheets(letterDir) : [];
-  let matchedLetterCount = 0;
-  const unmatchedLetters: UnmatchedLetterSheet[] = [];
+  const letterSheets: LetterReviewRow[] = [];
 
   for (const s of scanned) {
-    const hitId = findMatchedEntryId(s.sheetName, entries);
-    if (hitId) {
-      matchedLetterCount += 1;
-      continue;
-    }
     const letterBalance = s.sheet.lines.reduce(
       (sum, l) => sum + Math.round(l.amount) - Math.round(l.paidAmount || 0),
       0,
     );
+    const sameNameEntry = findSameNameEntry(s.sheetName, entries, ledgerOnlyIds);
     const scored = entries
       .map(e => ({
         entryId: e.id,
@@ -247,24 +292,41 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
         if (a.ledgerRefOnly !== b.ledgerRefOnly) return a.ledgerRefOnly ? -1 : 1;
         return b.score - a.score;
       })
-      .slice(0, 5);
+      .slice(0, 8);
 
-    unmatchedLetters.push({
+    const balanceMismatch = !!(
+      sameNameEntry && Math.round(sameNameEntry.balance) !== Math.round(letterBalance)
+    );
+
+    letterSheets.push({
       sheetName: s.sheetName,
       filename: s.filename,
       managerName: s.managerName,
       lineCount: s.sheet.lines.length,
       letterBalance,
       letterDate: s.sheet.letterDate || '',
+      sameNameEntry,
+      balanceMismatch,
       suggestions: scored,
     });
   }
 
-  unmatchedLetters.sort((a, b) => {
+  // 연결이 더 급해 보이는 순: 동일명 없음 → 잔액불일치 → 이름동일
+  letterSheets.sort((a, b) => {
+    const rank = (r: LetterReviewRow) => {
+      if (!r.sameNameEntry) return 0;
+      if (r.balanceMismatch) return 1;
+      return 2;
+    };
+    const d = rank(a) - rank(b);
+    if (d !== 0) return d;
     const as = a.suggestions[0]?.score ?? 0;
     const bs = b.suggestions[0]?.score ?? 0;
     return bs - as;
   });
+
+  const unmatchedLetters = letterSheets.filter(r => !r.sameNameEntry);
+  const sameNameCount = letterSheets.filter(r => !!r.sameNameEntry).length;
 
   const ledgerOnly: LedgerOnlyEntry[] = [];
   for (const e of entries) {
@@ -281,7 +343,7 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
       }))
       .filter(c => c.score >= minScore)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
+      .slice(0, 8);
 
     ledgerOnly.push({
       entryId: e.id,
@@ -300,14 +362,17 @@ export async function buildMatchReview(opts?: { letterDir?: string; minScore?: n
   return {
     letterDir,
     letterDirOk,
+    letterSheets,
     unmatchedLetters,
     ledgerOnly,
+    pickEntries,
     letterSheetCount: scanned.length,
-    matchedLetterCount,
+    sameNameCount,
+    matchedLetterCount: sameNameCount,
   };
 }
 
-/** 공문 시트를 미수 행에 연결(상세 덮어쓰기 후 원장 차액 유지) */
+/** 공문 시트를 미수 행에 연결(상세 덮어쓰기 후 원장 잔액 유지) */
 export async function linkLetterSheetToEntry(opts: {
   entryId: string;
   sheetName: string;
@@ -355,14 +420,13 @@ export async function linkLetterSheetToEntry(opts: {
     letterDate: sheet.letterDate || undefined,
   });
 
-  if (entry.balance !== 0 || entry.asOfDate) {
-    await syncLetterDiffWithLedger(
-      opts.entryId,
-      entry.balance,
-      entry.asOfDate || new Date().toISOString().slice(0, 10),
-      opts.actorName,
-    );
-  }
+  // 잔액은 항상 거래처원장(entry.balance) 기준
+  await syncLetterDiffWithLedger(
+    opts.entryId,
+    entry.balance,
+    entry.asOfDate || new Date().toISOString().slice(0, 10),
+    opts.actorName,
+  );
 
   const lines = await listLetterLines(opts.entryId);
   const letterBalance = lines.reduce((s, l) => s + l.amount - l.paidAmount, 0);
