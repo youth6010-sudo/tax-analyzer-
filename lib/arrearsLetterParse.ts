@@ -95,27 +95,35 @@ export function parseLetterSheet(sheet: XLSX.WorkSheet, sheetName: string): Pars
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
     const desc = cellStr(row[iDesc]);
-    if (!desc) continue;
+    const amount = cellMoney(row[iAmt]);
+    const paidAmount = cellMoney(row[iPay]);
+    const paidDateRaw = row[iDate];
+    const paidDateStr = cellStr(paidDateRaw);
 
     const compact = desc.replace(/\s+/g, '');
     if (compact === '미수수수료') {
       sheetBalance = cellMoney(row[iBal] ?? row[iAmt]);
       break;
     }
-    if (isTotalRow(desc)) {
+    if (desc && isTotalRow(desc)) {
       // 총액 행의 잔액을 sheetBalance 후보로
       const bal = cellMoney(row[iBal]);
-      if (bal !== 0 || cellMoney(row[iAmt]) !== 0) {
-        sheetBalance = bal || cellMoney(row[iAmt]) - cellMoney(row[iPay]);
+      if (bal !== 0 || amount !== 0) {
+        sheetBalance = bal || amount - paidAmount;
       }
       continue;
     }
 
+    // 내역 없는 지급-only / 메모성 지급일시 행 포함
+    if (!desc && !amount && !paidAmount && !paidDateStr) continue;
+    if (!desc && !amount && !paidAmount) continue;
+
     lines.push({
       description: desc,
-      amount: cellMoney(row[iAmt]),
-      paidAmount: cellMoney(row[iPay]),
-      paidDate: formatArrearsPaidDateKo(row[iDate] as string | number | Date),
+      amount,
+      paidAmount,
+      // 메모성 지급일시(예: 110,000*6)는 정규화하지 않고 유지
+      paidDate: formatArrearsPaidDateKo(paidDateRaw as string | number | Date),
     });
   }
 

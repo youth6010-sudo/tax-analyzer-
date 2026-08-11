@@ -43,7 +43,13 @@ export type ArrearsEntryDto = {
   updatedAt: string;
 };
 
-export type ArrearsLetterLineSource = 'letter' | 'ledger' | 'manual';
+export type ArrearsLetterLineSource =
+  | 'letter'
+  | 'ledger'
+  | 'manual'
+  | 'cms'
+  | 'tax'
+  | 'payment';
 
 export type ArrearsLetterLineDto = {
   id: string;

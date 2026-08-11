@@ -122,6 +122,7 @@ export default function ArrearsPageClient() {
   const letterFileRef = useRef<HTMLInputElement>(null);
   const eventsFileRef = useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [letterPreview, setLetterPreview] = useState<LetterImportPreview | null>(null);
@@ -354,13 +355,55 @@ export default function ArrearsPageClient() {
       const res = await fetch('/api/arrears/import-events', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '반영 실패');
+      const applied = Number((data as { applied?: number }).applied) || 0;
+      const duplicates = Number((data as { duplicates?: number }).duplicates) || 0;
+      const entryCount = Number((data as { entryCount?: number }).entryCount) || 0;
+      const skipped = Number((data as { skipped?: number }).skipped) || 0;
       setEventsPreview(null);
       setPendingEventsFile(null);
       await load();
+      window.alert(
+        `공문 반영 완료\n· 추가 ${applied}행 / ${entryCount}거래처\n· 중복 skip ${duplicates}\n· 미매칭 ${skipped}`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : '반영 실패');
     } finally {
       setImportBusy(false);
+    }
+  };
+
+  const exportLetters = async () => {
+    setExportBusy(true);
+    setError('');
+    try {
+      const sp = new URLSearchParams();
+      if (manager) sp.set('manager', manager);
+      if (category && category !== 'all') sp.set('category', category);
+      if (qDebounced.trim()) sp.set('q', qDebounced.trim());
+      if (nonzero) sp.set('nonzero', '1');
+      else sp.set('nonzero', '0');
+      const res = await fetch(`/api/arrears/export?${sp.toString()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || '안내서 엑셀 실패');
+      }
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료.xlsx');
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '안내서 엑셀 실패');
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -379,13 +422,21 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              상호를 누르면 업체별 미수 공문을 볼 수 있습니다. 원장 가져오기 시 공문 잔액과 차이가
-              있으면 자동 반영됩니다. 수정·가져오기는 인디·찰리·리아(관리자)만 가능하며, 담당자는 본인 분만 볼
-              수 있습니다.
+              상호를 누르면 미수수수료 안내서(엑셀형)를 보고 저장·인쇄할 수 있습니다. 더빌 CMS·입금·세금계산서
+              엑셀을 올리면 공문 금액/지급내역에 자동 반영됩니다(재업로드 시 중복 제외).
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={exportBusy || loading}
+              onClick={() => void exportLetters()}
+            >
+              {exportBusy ? '엑셀…' : '안내서 엑셀'}
+            </button>
           {canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <>
               <input
                 ref={fileRef}
                 type="file"
@@ -421,8 +472,9 @@ export default function ArrearsPageClient() {
                 className={portalBtnSecondary}
                 disabled={importBusy}
                 onClick={() => eventsFileRef.current?.click()}
+                title="더빌 CMS·입금·세금계산서 엑셀 (형식 자동 감지)"
               >
-                세금계산서·CMS
+                CMS·입금·세금계산서
               </button>
               <button
                 type="button"
@@ -432,8 +484,9 @@ export default function ArrearsPageClient() {
               >
                 {importBusy ? '처리 중…' : '원장 가져오기'}
               </button>
-            </div>
+            </>
           ) : null}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -893,21 +946,25 @@ export default function ArrearsPageClient() {
           setEventsPreview(null);
           setPendingEventsFile(null);
         }}
-        title="세금계산서·CMS 가져오기 미리보기"
+        title="CMS·입금·세금계산서 미리보기"
       >
         {eventsPreview ? (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
               <span className="font-semibold text-slate-800">{eventsPreview.filename}</span>
               <br />
-              형식 {eventsPreview.detected === 'cms' ? 'CMS 출금' : eventsPreview.detected === 'tax' ? '세금계산서' : '일반'} · 총{' '}
-              {eventsPreview.total}건 · 매칭 {eventsPreview.matched} / 미매칭{' '}
+              형식{' '}
+              {eventsPreview.detected === 'cms'
+                ? 'CMS/더빌 출금'
+                : eventsPreview.detected === 'tax'
+                  ? '세금계산서'
+                  : '일반·입금'}{' '}
+              · 총 {eventsPreview.total}건 · 매칭 {eventsPreview.matched} / 미매칭{' '}
               {eventsPreview.unmatched}
             </p>
             <p className="text-xs text-slate-500">
-              CMS·입금은 공문 「지급내역」에, 세금계산서·미수는 「금액」에 행을 추가합니다.
-              상호·사업자번호·코드로 매칭합니다. (홈택스 보안메일 HTML은 지원하지 않으며, 엑셀
-              내보내기 파일을 올려 주세요. 공급자 사업자 7988501836)
+              CMS·입금 → 공문 「지급내역」(대변), 세금계산서·미수 → 「금액」(차변)에 행을 추가합니다.
+              이미 같은 내역·금액·일자가 있으면 건너뜁니다. 더빌/홈택스에서 받은 엑셀을 올려 주세요.
             </p>
             <div className="max-h-56 overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-xs">

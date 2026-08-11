@@ -118,14 +118,17 @@ export async function replaceLetterLines(
 
   const now = new Date();
   const actor = actorName.trim() || '';
-  const normalized = lines.map((l, i) => ({
-    description: String(l.description || '').trim(),
-    amount: Math.round(Number(l.amount) || 0),
-    paidAmount: Math.round(Number(l.paidAmount) || 0),
-    paidDate: formatArrearsPaidDateKo(String(l.paidDate || '').trim()),
-    source: (l.source || 'manual') as ArrearsLetterLineSource,
-    sortOrder: i,
-  })).filter(l => l.description);
+  const normalized = lines
+    .map((l, i) => ({
+      description: String(l.description || '').trim(),
+      amount: Math.round(Number(l.amount) || 0),
+      paidAmount: Math.round(Number(l.paidAmount) || 0),
+      paidDate: formatArrearsPaidDateKo(String(l.paidDate || '').trim()),
+      source: (l.source || 'manual') as ArrearsLetterLineSource,
+      sortOrder: i,
+    }))
+    // 지급-only 행(내역 비움) 허용 — 사무실 공문 양식과 동일
+    .filter(l => l.description || l.amount || l.paidAmount);
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
 
@@ -645,11 +648,11 @@ export async function previewFeeEvents(events: ParsedFeeEvent[]): Promise<{
   return { rows, matched, unmatched };
 }
 
-/** 매칭된 이벤트를 공문 라인에 append하고 잔액 동기화 */
+/** 매칭된 이벤트를 공문 라인에 append하고 잔액 동기화 (동일 행 재업로드 시 skip) */
 export async function applyFeeEvents(
   events: ParsedFeeEvent[],
   actorName: string,
-): Promise<{ applied: number; skipped: number; entryCount: number }> {
+): Promise<{ applied: number; skipped: number; entryCount: number; duplicates: number }> {
   const preview = await previewFeeEvents(events);
   const byEntry = new Map<
     string,
@@ -658,7 +661,7 @@ export async function applyFeeEvents(
       amount: number;
       paidAmount: number;
       paidDate: string;
-      source: 'manual';
+      source: ArrearsLetterLineSource;
     }>
   >();
 
@@ -670,13 +673,21 @@ export async function applyFeeEvents(
     }
     const list = byEntry.get(row.entryId) ?? [];
     const paidDate = feeEventPaidDateLabel(row.eventDate);
+    const source: ArrearsLetterLineSource =
+      row.kind === 'cms'
+        ? 'cms'
+        : row.kind === 'payment'
+          ? 'payment'
+          : row.kind === 'tax_invoice'
+            ? 'tax'
+            : 'manual';
     if (row.isPayment) {
       list.push({
         description: row.description,
         amount: 0,
         paidAmount: row.amount,
         paidDate,
-        source: 'manual',
+        source,
       });
     } else {
       list.push({
@@ -684,15 +695,32 @@ export async function applyFeeEvents(
         amount: row.amount,
         paidAmount: 0,
         paidDate: '',
-        source: 'manual',
+        source,
       });
     }
     byEntry.set(row.entryId, list);
   }
 
   let applied = 0;
+  let duplicates = 0;
   for (const [entryId, additions] of byEntry) {
     const existing = await listLetterLines(entryId);
+    const seen = new Set(
+      existing.map(
+        l =>
+          `${l.description.trim()}|${Math.round(l.amount)}|${Math.round(l.paidAmount)}|${String(l.paidDate || '').trim()}`,
+      ),
+    );
+    const uniqueAdds = additions.filter(a => {
+      const key = `${a.description.trim()}|${Math.round(a.amount)}|${Math.round(a.paidAmount)}|${String(a.paidDate || '').trim()}`;
+      if (seen.has(key)) {
+        duplicates += 1;
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    if (!uniqueAdds.length) continue;
     await replaceLetterLines(
       entryId,
       actorName,
@@ -704,13 +732,13 @@ export async function applyFeeEvents(
           paidDate: l.paidDate,
           source: l.source,
         })),
-        ...additions,
+        ...uniqueAdds,
       ],
       { syncBalance: true },
     );
-    applied += additions.length;
+    applied += uniqueAdds.length;
   }
 
-  return { applied, skipped, entryCount: byEntry.size };
+  return { applied, skipped, entryCount: byEntry.size, duplicates };
 }
 

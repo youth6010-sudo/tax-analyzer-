@@ -54,6 +54,18 @@ function parseWon(s: string): number {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+function downloadBlob(buf: ArrayBuffer, filename: string) {
+  const blob = new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ArrearsLetterClient({ id }: { id: string }) {
   const [item, setItem] = useState<ArrearsEntryDto | null>(null);
   const [lines, setLines] = useState<ArrearsLetterLineDto[]>([]);
@@ -70,6 +82,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [quickAmount, setQuickAmount] = useState('');
   const [quickDesc, setQuickDesc] = useState('');
   const [quickBusy, setQuickBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetchWithTimeout(`/api/arrears/${id}`, { cache: 'no-store' }, 20_000);
@@ -139,7 +152,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           paidDate: formatArrearsPaidDateKo(l.paidDate.trim()),
           source: l.source || 'manual',
         }))
-        .filter(l => l.description);
+        .filter(l => l.description || l.amount || l.paidAmount);
 
       const res = await fetch(`/api/arrears/${id}/lines`, {
         method: 'PUT',
@@ -222,6 +235,27 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       setError(e instanceof Error ? e.message : '맞춤 실패');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const exportExcel = async () => {
+    setExportBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/arrears/${id}/export`, { cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || '엑셀 저장 실패');
+      }
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료_안내.xlsx');
+      const buf = await res.arrayBuffer();
+      downloadBlob(buf, filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '엑셀 저장 실패');
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -336,9 +370,19 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </button>
               </>
             ) : (
-              <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
-                인쇄
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={portalBtnSecondary}
+                  disabled={exportBusy}
+                  onClick={() => void exportExcel()}
+                >
+                  {exportBusy ? '엑셀…' : '엑셀 저장'}
+                </button>
+                <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
+                  인쇄
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -361,8 +405,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 <thead className="bg-slate-50 text-xs text-slate-600">
                   <tr>
                     <th className="px-2 py-2 text-left">내역</th>
-                    <th className="px-2 py-2 text-right">금액</th>
-                    <th className="px-2 py-2 text-right">지급내역</th>
+                    <th className="px-2 py-2 text-right">
+                      금액(vat 포함)
+                      <span className="block font-normal text-slate-400">차변·청구</span>
+                    </th>
+                    <th className="px-2 py-2 text-right">
+                      지급내역
+                      <span className="block font-normal text-slate-400">대변·입금</span>
+                    </th>
                     <th className="px-2 py-2 text-left">지급일시</th>
                     <th className="px-2 py-2 w-16" />
                   </tr>
@@ -449,40 +499,61 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </tbody>
               </table>
             </div>
-            <button
-              type="button"
-              className={portalBtnSecondary}
-              onClick={() =>
-                setEditLines(prev => [
-                  ...prev,
-                  {
-                    key: `new-${Date.now()}`,
-                    description: '',
-                    amount: '',
-                    paidAmount: '',
-                    paidDate: '',
-                    source: 'manual',
-                  },
-                ])
-              }
-            >
-              행 추가
-            </button>
-            <button
-              type="button"
-              className={portalBtnSecondary}
-              onClick={() =>
-                setEditLines(prev =>
-                  prev.map(x =>
-                    parseWon(x.paidAmount) > 0 && !x.paidDate.trim()
-                      ? { ...x, paidDate: todayArrearsPaidDateKo() }
-                      : { ...x, paidDate: formatArrearsPaidDateKo(x.paidDate) },
-                  ),
-                )
-              }
-            >
-              지급일시 한국어로
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() =>
+                  setEditLines(prev => [
+                    ...prev,
+                    {
+                      key: `new-${Date.now()}`,
+                      description: '',
+                      amount: '',
+                      paidAmount: '',
+                      paidDate: '',
+                      source: 'manual',
+                    },
+                  ])
+                }
+              >
+                행 추가
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() =>
+                  setEditLines(prev => [
+                    ...prev,
+                    {
+                      key: `pay-${Date.now()}`,
+                      description: '',
+                      amount: '',
+                      paidAmount: '',
+                      paidDate: todayArrearsPaidDateKo(),
+                      source: 'manual',
+                    },
+                  ])
+                }
+              >
+                입금만 행
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() =>
+                  setEditLines(prev =>
+                    prev.map(x =>
+                      parseWon(x.paidAmount) > 0 && !x.paidDate.trim()
+                        ? { ...x, paidDate: todayArrearsPaidDateKo() }
+                        : { ...x, paidDate: formatArrearsPaidDateKo(x.paidDate) },
+                    ),
+                  )
+                }
+              >
+                지급일시 한국어로
+              </button>
+            </div>
           </div>
         ) : null}
 

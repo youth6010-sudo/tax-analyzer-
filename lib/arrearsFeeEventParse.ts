@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { formatArrearsPaidDateKo } from '@/app/types/arrears';
 
 export type ArrearsFeeEventKind = 'tax_invoice' | 'cms' | 'charge' | 'payment';
 
@@ -47,6 +48,13 @@ function findHeaderRow(rows: unknown[][]): number {
     // CMS 출금내역
     if (joined.includes('회원명') && joined.includes('금액')) return i;
     if (joined.includes('출금일') && joined.includes('금액')) return i;
+    // 입금/수납
+    if (
+      (joined.includes('입금') || joined.includes('수납') || joined.includes('입금자')) &&
+      joined.includes('금액')
+    ) {
+      return i;
+    }
     // 세금계산서 / 일반
     if (
       (joined.includes('상호') || joined.includes('거래처') || joined.includes('공급받는자') || joined.includes('코드')) &&
@@ -67,8 +75,6 @@ function colIndex(headers: string[], ...cands: string[]): number {
   }
   return -1;
 }
-
-import { formatArrearsPaidDateKo } from '@/app/types/arrears';
 
 /** 빌프랑(30) → 빌프랑 */
 export function stripCmsScheduleSuffix(name: string): string {
@@ -127,19 +133,24 @@ export function parseArrearsFeeEventsWorkbook(
   const headerIdx = findHeaderRow(rows);
   if (headerIdx < 0) {
     throw new Error(
-      '형식을 인식하지 못했습니다. (CMS: 회원명·금액 / 세금계산서: 상호·금액 / 일반: 구분·금액)',
+      '형식을 인식하지 못했습니다. (CMS/더빌: 회원명·금액·출금일 / 세금계산서: 상호·금액 / 입금: 입금·금액 / 일반: 구분·금액)',
     );
   }
 
   const headers = (rows[headerIdx] ?? []).map(normHeader);
+  const fileHint = String(filename || '');
   const isCmsLayout =
     headers.some(h => h.includes('회원명')) ||
-    (headers.some(h => h.includes('출금일')) && headers.some(h => h.includes('회원')));
+    (headers.some(h => h.includes('출금일')) && headers.some(h => h.includes('회원'))) ||
+    /cms|씨엠에스|더빌|thebill/i.test(fileHint);
   const isTaxLayout =
     headers.some(h => h.includes('공급받는자') || h.includes('세금계산서')) ||
-    /세금|etax|invoice|nta/i.test(filename);
+    /세금|etax|invoice|nta/i.test(fileHint);
+  const isPaymentLayout =
+    headers.some(h => h.includes('입금') || h.includes('수납') || h.includes('출금금액')) ||
+    /입금|수납|payment|deposit/i.test(fileHint);
 
-  const iCode = colIndex(headers, '코드', '거래처코드', '회원아이디');
+  const iCode = colIndex(headers, '코드', '거래처코드', '회원아이디', '회원id');
   const iName = colIndex(
     headers,
     '회원명',
@@ -149,6 +160,8 @@ export function parseArrearsFeeEventsWorkbook(
     '거래처',
     '회사명',
     '업체명',
+    '예금주',
+    '입금자',
   );
   const iBiz = colIndex(
     headers,
@@ -158,10 +171,33 @@ export function parseArrearsFeeEventsWorkbook(
     '공급받는자등록번호',
     '사업자',
   );
-  const iKind = colIndex(headers, '구분', '유형', '종류');
-  const iDesc = colIndex(headers, '내역', '품목', '적요', '비고');
-  const iAmt = colIndex(headers, '금액', '합계금액', '합계', '공급가액', '청구금액');
-  const iDate = colIndex(headers, '출금일', '작성일자', '일자', '지급일시', '발급일', '날짜', '기준일');
+  const iKind = colIndex(headers, '구분', '유형', '종류', '상태');
+  const iDesc = colIndex(headers, '내역', '품목', '적요', '비고', '메모', '내용');
+  const iAmt = colIndex(
+    headers,
+    '금액',
+    '합계금액',
+    '합계',
+    '공급가액',
+    '청구금액',
+    '출금액',
+    '입금액',
+    '수납금액',
+    '결제금액',
+  );
+  const iDate = colIndex(
+    headers,
+    '출금일',
+    '입금일',
+    '수납일',
+    '작성일자',
+    '일자',
+    '지급일시',
+    '발급일',
+    '날짜',
+    '기준일',
+    '거래일',
+  );
 
   if (iName < 0 && iCode < 0 && iBiz < 0) {
     throw new Error('상호/회원명, 코드 또는 사업자번호 열이 필요합니다.');
@@ -184,7 +220,9 @@ export function parseArrearsFeeEventsWorkbook(
     if (!amount) continue;
 
     const kindRaw = iKind >= 0 ? cellStr(row[iKind]) : '';
-    const kind = detectKind(kindRaw, { isCmsLayout, isTaxLayout });
+    let kind = detectKind(kindRaw, { isCmsLayout, isTaxLayout });
+    if (kind === 'charge' && isPaymentLayout && !isTaxLayout) kind = 'payment';
+    if (kind === 'charge' && isCmsLayout) kind = 'cms';
     const isPayment = kind === 'cms' || kind === 'payment';
     const eventDate = iDate >= 0 ? cellStr(row[iDate]) : '';
     let description = iDesc >= 0 ? cellStr(row[iDesc]) : '';
@@ -202,7 +240,7 @@ export function parseArrearsFeeEventsWorkbook(
     });
   }
 
-  const detected = isCmsLayout ? 'cms' : isTaxLayout ? 'tax' : 'generic';
+  const detected = isCmsLayout ? 'cms' : isTaxLayout ? 'tax' : isPaymentLayout ? 'generic' : 'generic';
   return { events, detected };
 }
 
