@@ -82,6 +82,7 @@ export default function ArrearsPageClient() {
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [matchOpen, setMatchOpen] = useState(false);
 
   const [manager, setManager] = useState('');
   const [category, setCategory] = useState('all');
@@ -389,6 +390,16 @@ export default function ArrearsPageClient() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canManage ? (
+              <button
+                type="button"
+                className={`${portalBtnSecondary} ${matchOpen ? 'border-violet-400 bg-violet-50 text-violet-900' : ''}`}
+                onClick={() => setMatchOpen(o => !o)}
+                title="공문만 있고 원장 코드가 없는 업체 연결"
+              >
+                {matchOpen ? '연결필요 닫기' : '연결필요'}
+              </button>
+            ) : null}
             <button
               type="button"
               className={portalBtnPrimary}
@@ -435,6 +446,13 @@ export default function ArrearsPageClient() {
             ) : null}
           </div>
         </div>
+
+        {canManage && matchOpen ? (
+          <ArrearsMatchPanel
+            onLinked={() => void load('full')}
+            onClose={() => setMatchOpen(false)}
+          />
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-800">
@@ -564,8 +582,6 @@ export default function ArrearsPageClient() {
         </div>
 
         {error ? <div className={portalAlertError}>{error}</div> : null}
-
-        {canManage ? <ArrearsMatchPanel onLinked={() => void load('full')} /> : null}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-left text-sm">
