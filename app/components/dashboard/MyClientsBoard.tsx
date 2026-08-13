@@ -150,18 +150,18 @@ function ClientList({
                 <span
                   className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                     closureKind === '해임'
-                      ? 'bg-slate-200 text-slate-600'
+                      ? 'bg-red-200 text-red-900'
                       : closureKind === '휴업'
                         ? 'bg-amber-100 text-amber-800'
                         : 'bg-red-100 text-red-700'
                   }`}
                 >
-                  {closureKind}
+                  {closureKind === '해임' ? '유출' : closureKind}
                 </span>
               )}
               {!showClosureMeta && isChurned && (
-                <span className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                  해임
+                <span className="shrink-0 rounded-full bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+                  유출
                 </span>
               )}
               {ntsClosed && (

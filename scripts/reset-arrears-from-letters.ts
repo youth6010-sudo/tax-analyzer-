@@ -2,6 +2,8 @@
  * 미수 전량 초기화 + 담당자 공문 6파일 import
  *
  * Usage: npx tsx scripts/reset-arrears-from-letters.ts
+ *
+ * 전체 3단 재구성은 rebuild-arrears-stack.ts --apply 권장.
  */
 import fs from 'fs';
 import path from 'path';
@@ -22,17 +24,7 @@ for (const name of ['.env.local', '.env']) {
 import { parseArrearsLetterWorkbookFile } from '../lib/arrearsLetterParse';
 import { upsertLetterImport } from '../lib/arrearsLetterDb';
 import { wipeAllArrears } from '../lib/arrearsRestart';
-
-const LETTER_DIR = path.join('z:', '10_미수관리', '미수금 공문 - 26년');
-
-const LETTER_FILES = [
-  '미수수수료_다야-26.07.27.xls',
-  '미수수수료_리아-26.07.27.xls',
-  '미수수수료_블루-26.07.27.xls',
-  '미수수수료_윈터-26.07.27.xls',
-  '미수수수료_페리-26.07.27.xls',
-  '미수수수료-인디-26.07.27.xls',
-];
+import { LETTER_DIR, LETTER_FILES } from '../lib/arrearsStackConfig';
 
 async function main() {
   if (!process.env.DATABASE_URL) {
@@ -77,7 +69,7 @@ async function main() {
   console.log(
     `완료: 시트 ${totalSheets} · 생성 ${totalCreated} · 갱신 ${totalUpdated} · 줄 ${totalLines}`,
   );
-  console.log('다음: 포털에서 원장 xls 올려 «연결 필요»만 맞춘 뒤 apply-arrears-ledger-with-links.ts');
+  console.log('다음: npx tsx scripts/rebuild-arrears-stack.ts --apply');
 }
 
 main().catch(e => {

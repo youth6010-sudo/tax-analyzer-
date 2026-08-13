@@ -82,6 +82,11 @@ export default function ClientRowHeading({
       aria-label={`${companyTitle} — ${hint}`}
     >
       <span className="min-w-0 flex-1 truncate">{companyName}</span>
+      {isChurned && (
+        <span className="shrink-0 rounded px-1 py-px text-[10px] font-bold text-red-900 bg-red-200 ring-1 ring-red-300/80">
+          유출
+        </span>
+      )}
       {ntsClosed && (
         <span className="shrink-0 rounded px-1 py-px text-[10px] font-semibold text-red-700 bg-red-100 ring-1 ring-red-200/80">
           {ntsClosedLabel || '폐업/휴업'}

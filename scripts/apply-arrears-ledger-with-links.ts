@@ -2,6 +2,8 @@
  * 원장 upsert + 공문↔원장 링크로 공문 상세 부착
  *
  * Usage: npx tsx scripts/apply-arrears-ledger-with-links.ts [원장xls경로]
+ *
+ * 전체 3단 재구성은 rebuild-arrears-stack.ts --apply 권장.
  */
 import fs from 'fs';
 import path from 'path';
@@ -24,10 +26,9 @@ import {
   parseLedgerArrearsWorkbook,
 } from '../lib/arrearsLedgerParse';
 import { applyLedgerWithLetterLinks } from '../lib/arrearsRestart';
+import { DEFAULT_LEDGER_PATH } from '../lib/arrearsStackConfig';
 
-const file =
-  process.argv[2] ||
-  path.join(process.env.USERPROFILE || '', 'Desktop', '거래처원장_20260811_144759.xls');
+const file = process.argv[2] || DEFAULT_LEDGER_PATH;
 
 async function main() {
   if (!process.env.DATABASE_URL) {

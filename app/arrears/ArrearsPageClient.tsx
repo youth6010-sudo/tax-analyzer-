@@ -27,6 +27,7 @@ import ArrearsManualEntryModal, {
   type ManualChannel,
 } from '@/app/arrears/ArrearsManualEntryModal';
 import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
+import ArrearsFeeEventsImport from '@/app/arrears/ArrearsFeeEventsImport';
 
 type BulkRow = {
   clientId?: string;
@@ -83,11 +84,13 @@ export default function ArrearsPageClient() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [matchOpen, setMatchOpen] = useState(false);
+  const [feeImportOpen, setFeeImportOpen] = useState(false);
 
   const [manager, setManager] = useState('');
   const [category, setCategory] = useState('all');
-  const [nonzero, setNonzero] = useState(false);
-  const [ledgerRefOnly, setLedgerRefOnly] = useState(false);
+  /** false=잔액0 숨김(기본), true=0원도 보기 */
+  const [showZero, setShowZero] = useState(false);
+  const [churnedOnly, setChurnedOnly] = useState(false);
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
 
@@ -115,8 +118,8 @@ export default function ArrearsPageClient() {
       const params = new URLSearchParams();
       if (manager) params.set('manager', manager);
       if (category !== 'all') params.set('category', category);
-      if (nonzero) params.set('nonzero', '1');
-      if (ledgerRefOnly) params.set('ledgerRef', '1');
+      if (!showZero) params.set('nonzero', '1');
+      if (churnedOnly) params.set('churned', '1');
       if (qDebounced) params.set('q', qDebounced);
 
       if (mode === 'full') {
@@ -146,7 +149,7 @@ export default function ArrearsPageClient() {
         if (mode === 'full') setLoading(false);
       }
     },
-    [manager, category, nonzero, ledgerRefOnly, qDebounced],
+    [manager, category, showZero, churnedOnly, qDebounced],
   );
 
   useEffect(() => {
@@ -385,8 +388,10 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              사유는 수임처 기장료·조정료·더빌·CMS로 쌓고, 원장반영만 남은 곳은 「원장 분해」로
-              개월 단위로 나눕니다. 여러 업체를 체크하면 일괄 청구서를 인쇄할 수 있습니다.
+              잔액·최근 입금은 원장/상세 PDF 기준. 공문은 과거·누적 미수 확인용(전부 유지).
+              세금계산서는 PDF에 없는 분만 보충.
+              로컬 재구성:{' '}
+              <code className="rounded bg-slate-100 px-1">npx tsx scripts/rebuild-arrears-stack.ts --apply</code>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -398,6 +403,16 @@ export default function ArrearsPageClient() {
                 title="공문만 있고 원장 코드가 없는 업체 연결"
               >
                 {matchOpen ? '연결필요 닫기' : '연결필요'}
+              </button>
+            ) : null}
+            {canManage ? (
+              <button
+                type="button"
+                className={`${portalBtnSecondary} ${feeImportOpen ? 'border-emerald-400 bg-emerald-50 text-emerald-900' : ''}`}
+                onClick={() => setFeeImportOpen(o => !o)}
+                title="세금계산서 발급 엑셀(품목) · CMS"
+              >
+                {feeImportOpen ? '세금계산서 닫기' : '세금계산서'}
               </button>
             ) : null}
             <button
@@ -451,6 +466,13 @@ export default function ArrearsPageClient() {
           <ArrearsMatchPanel
             onLinked={() => void load('full')}
             onClose={() => setMatchOpen(false)}
+          />
+        ) : null}
+
+        {canManage && feeImportOpen ? (
+          <ArrearsFeeEventsImport
+            onApplied={() => void load('full')}
+            onClose={() => setFeeImportOpen(false)}
           />
         ) : null}
 
@@ -531,20 +553,20 @@ export default function ArrearsPageClient() {
           <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              checked={nonzero}
-              onChange={e => setNonzero(e.target.checked)}
+              checked={showZero}
+              onChange={e => setShowZero(e.target.checked)}
               className="rounded border-slate-300"
             />
-            잔액 ≠ 0
+            0원인것도 보기
           </label>
           <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              checked={ledgerRefOnly}
-              onChange={e => setLedgerRefOnly(e.target.checked)}
+              checked={churnedOnly}
+              onChange={e => setChurnedOnly(e.target.checked)}
               className="rounded border-slate-300"
             />
-            원장반영만
+            유출만
           </label>
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
             검색
@@ -620,8 +642,7 @@ export default function ArrearsPageClient() {
                 <tr>
                   <td colSpan={canManage ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
-                    {nonzero ? ' 「잔액 ≠ 0」 필터를 꺼 보세요.' : ''}
-                    {ledgerRefOnly ? ' 「원장반영만」 필터를 꺼 보세요.' : ''}
+                    {!showZero ? ' 「0원인것도 보기」를 켜 보세요.' : ''}
                   </td>
                 </tr>
               ) : (
@@ -657,13 +678,47 @@ export default function ArrearsPageClient() {
                     </td>
                     <td className="px-3 py-2 font-medium text-slate-900">
                       <div className="flex flex-col gap-0.5">
-                        <Link
-                          href={`/arrears/${row.id}`}
-                          className="text-blue-800 underline-offset-2 hover:underline"
-                          title="미수 내역"
-                        >
-                          {row.companyName}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link
+                            href={`/arrears/${row.id}`}
+                            className={`text-blue-800 underline-offset-2 hover:underline ${
+                              row.isChurned ? 'line-through decoration-red-300/80 text-slate-500' : ''
+                            }`}
+                            title="미수 내역"
+                          >
+                            {row.companyName}
+                          </Link>
+                          {row.isChurned ? (
+                            <Link
+                              href={
+                                row.clientId
+                                  ? `/clients/churn?tab=history&clientId=${row.clientId}`
+                                  : '/clients/churn?tab=history'
+                              }
+                              className="shrink-0 rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900 hover:bg-red-300"
+                              title="유출 이력"
+                            >
+                              유출
+                            </Link>
+                          ) : null}
+                          {row.balanceDiffKind === 'mismatch' ? (
+                            <span
+                              className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
+                              title={`원장 ${formatArrearsWon(row.balance)} · 내역 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff)}`}
+                            >
+                              불일치 {row.balanceDiff! > 0 ? '+' : ''}
+                              {formatArrearsWon(row.balanceDiff!)}
+                            </span>
+                          ) : null}
+                          {row.balanceDiffKind === 'ledger_only' ? (
+                            <span
+                              className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-800"
+                              title="공문 없음 · 내역합 0 · 원장 잔액 유지(장기미수)"
+                            >
+                              원장만 {formatArrearsWon(row.balance)}
+                            </span>
+                          ) : null}
+                        </div>
                         {row.clientId ? (
                           <Link
                             href={`/clients/${row.clientId}`}

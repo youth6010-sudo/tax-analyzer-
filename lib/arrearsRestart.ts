@@ -13,10 +13,10 @@ import { upsertLedgerImport } from '@/lib/arrearsDb';
 import {
   listLetterLines,
   replaceLetterLines,
-  syncLetterDiffWithLedger,
 } from '@/lib/arrearsLetterDb';
 import {
   companyNameSimilarity,
+  matchCompanyKey,
   softCompanyKey,
 } from '@/lib/arrearsMatchReview';
 
@@ -336,11 +336,49 @@ export async function applyLedgerWithLetterLinks(opts: {
     bySoftLedger.set(k, r);
   }
 
+  const matchCounts = new Map<string, number>();
+  for (const r of opts.ledgerRows) {
+    const k = matchCompanyKey(r.companyName);
+    if (!k) continue;
+    matchCounts.set(k, (matchCounts.get(k) || 0) + 1);
+  }
+  const byMatchLedger = new Map<string, LedgerArrearsRow>();
+  for (const r of opts.ledgerRows) {
+    const k = matchCompanyKey(r.companyName);
+    if (!k || matchCounts.get(k) !== 1) continue;
+    byMatchLedger.set(k, r);
+  }
+
   const entries = await db.select().from(arrearsEntries);
   const byCode = new Map(entries.map(e => [e.externalCode, e]));
   const letterEntries = entries.filter(
     e => e.source === 'letter' || e.externalCode.startsWith('letter:'),
   );
+
+  const resolveAutoTargetCode = (letterCompanyName: string): string => {
+    const soft = softCompanyKey(letterCompanyName);
+    const exact = soft ? bySoftLedger.get(soft) : undefined;
+    if (exact) return exact.externalCode;
+
+    const mk = matchCompanyKey(letterCompanyName);
+    const byParen = mk ? byMatchLedger.get(mk) : undefined;
+    if (byParen) return byParen.externalCode;
+
+    const ranked = opts.ledgerRows
+      .map(r => ({
+        externalCode: r.externalCode,
+        score: companyNameSimilarity(letterCompanyName, r.companyName),
+      }))
+      .filter(c => c.score >= 0.9)
+      .sort((a, b) => b.score - a.score);
+    if (
+      ranked.length >= 1 &&
+      (ranked.length === 1 || ranked[0]!.score - ranked[1]!.score >= 0.05)
+    ) {
+      return ranked[0]!.externalCode;
+    }
+    return '';
+  };
 
   let attached = 0;
   let skipped = 0;
@@ -361,8 +399,7 @@ export async function applyLedgerWithLetterLinks(opts: {
     if (link && (link.status === 'manual' || link.status === 'auto') && link.ledgerExternalCode) {
       targetCode = link.ledgerExternalCode;
     } else {
-      const auto = bySoftLedger.get(soft);
-      if (auto) targetCode = auto.externalCode;
+      targetCode = resolveAutoTargetCode(letterEnt.companyName);
     }
 
     if (!targetCode) {
@@ -393,15 +430,12 @@ export async function applyLedgerWithLetterLinks(opts: {
       }));
 
       if (target.id === letterEnt.id) {
-        await syncLetterDiffWithLedger(target.id, target.balance, opts.asOfDate, actor);
+        // 동일 행이면 줄은 이미 공문에 있음 — 잔액 자동맞춤(원장반영) 하지 않음
       } else {
         await replaceLetterLines(target.id, actor, inputs, {
           syncBalance: false,
           letterDate: letterEnt.letterDate || undefined,
         });
-        const ledgerBal =
-          opts.ledgerRows.find(r => r.externalCode === targetCode)?.balance ?? target.balance;
-        await syncLetterDiffWithLedger(target.id, ledgerBal, opts.asOfDate, actor);
 
         if (letterEnt.managerName?.trim() && !(target.managerName || '').trim()) {
           await db
@@ -570,12 +604,7 @@ export async function mergeLetterEntryIntoCodedEntry(opts: {
     letterDate: letterEnt.letterDate || undefined,
   });
 
-  await syncLetterDiffWithLedger(
-    target.id,
-    target.balance,
-    target.asOfDate || new Date().toISOString().slice(0, 10),
-    actor,
-  );
+  // 잔액 자동맞춤(원장반영) 하지 않음 — 불일치는 화면에서 확인
 
   if (letterEnt.managerName?.trim() && !(target.managerName || '').trim()) {
     await db

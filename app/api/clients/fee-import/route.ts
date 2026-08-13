@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     const buffer = await file.arrayBuffer();
-    const invoiceByBiz = parseFeeInvoiceWorkbook(buffer);
+    const invoiceByBiz = parseFeeInvoiceWorkbook(buffer, file.name || '');
     const allClients = (await listClients({ includeChurned: false })) as ClientRecord[];
 
     const clientsByBiz = new Map<string, ClientRecord[]>();

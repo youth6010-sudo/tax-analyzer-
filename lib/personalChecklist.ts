@@ -247,9 +247,29 @@ async function enrichItems(
   const collabIds = items.filter(i => i.collaborative).map(i => i.id);
   const detailMap = preloadedDetails
     ?? await listCheckoffDetailsForPersonalItems(collabIds);
-  return items.map(item =>
-    enrichDto(item, viewerName, detailMap.get(item.id)),
-  );
+
+  const clientIds = [
+    ...new Set(items.map(i => i.clientId).filter((id): id is string => Boolean(id))),
+  ];
+  const churnedIds = new Set<string>();
+  if (clientIds.length > 0) {
+    const db = getDb();
+    const statusRows = await db
+      .select({ id: clients.id, status: clients.status })
+      .from(clients)
+      .where(inArray(clients.id, clientIds));
+    for (const r of statusRows) {
+      if (r.status === 'churned') churnedIds.add(r.id);
+    }
+  }
+
+  return items.map(item => {
+    const enriched = enrichDto(item, viewerName, detailMap.get(item.id));
+    if (item.clientId && churnedIds.has(item.clientId)) {
+      return { ...enriched, clientChurned: true };
+    }
+    return { ...enriched, clientChurned: false };
+  });
 }
 
 function canAccessItem(

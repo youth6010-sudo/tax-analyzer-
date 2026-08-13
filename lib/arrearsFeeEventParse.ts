@@ -1,5 +1,10 @@
 import * as XLSX from 'xlsx';
 import { formatArrearsPaidDateKo } from '@/app/types/arrears';
+import {
+  isTaxInvoiceIssuanceSheet,
+  parseTaxInvoiceIssuanceWorkbook,
+  taxInvoiceLineTotal,
+} from '@/lib/taxInvoiceIssuanceParse';
 
 export type ArrearsFeeEventKind = 'tax_invoice' | 'cms' | 'charge' | 'payment';
 
@@ -14,6 +19,8 @@ export type ParsedFeeEvent = {
   eventDate: string;
   /** amount로 올릴지 paidAmount로 올릴지 */
   isPayment: boolean;
+  /** 엑셀 녹색(신규) 행 — CLI/특수 파서에서만 설정 */
+  isNew?: boolean;
 };
 
 function cellStr(v: unknown): string {
@@ -120,7 +127,7 @@ function kindDefaultDescription(kind: ArrearsFeeEventKind, eventDate: string): s
 export function parseArrearsFeeEventsWorkbook(
   buffer: ArrayBuffer | Buffer,
   filename = '',
-): { events: ParsedFeeEvent[]; detected: 'cms' | 'tax' | 'generic' } {
+): { events: ParsedFeeEvent[]; detected: 'cms' | 'tax' | 'generic' | 'tax_issuance' } {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheetName = wb.SheetNames[0];
   if (!sheetName) throw new Error('엑셀 시트가 없습니다.');
@@ -129,6 +136,23 @@ export function parseArrearsFeeEventsWorkbook(
     defval: '',
     raw: true,
   }) as unknown[][];
+
+  // 국세청 대량발급 양식 — 품목별로 매출(청구) 라인
+  if (isTaxInvoiceIssuanceSheet(rows)) {
+    const lines = parseTaxInvoiceIssuanceWorkbook(buffer, filename);
+    const events: ParsedFeeEvent[] = lines.map(line => ({
+      externalCode: '',
+      companyName: line.companyName,
+      businessNo: line.businessNo,
+      kind: 'tax_invoice' as const,
+      description: line.itemName,
+      amount: taxInvoiceLineTotal(line),
+      eventDate: line.writeDate,
+      isPayment: false,
+      isNew: line.isNew || undefined,
+    }));
+    return { events, detected: 'tax_issuance' };
+  }
 
   const headerIdx = findHeaderRow(rows);
   if (headerIdx < 0) {

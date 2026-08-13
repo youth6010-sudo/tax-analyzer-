@@ -14,12 +14,28 @@ import { normCompanyName } from '@/lib/arrearsLetterDb';
 import {
   listLetterLines,
   replaceLetterLines,
-  syncLetterDiffWithLedger,
 } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
 
 export function softCompanyKey(s: string): string {
   return normCompanyName(s).replace(/원/g, '');
+}
+
+/**
+ * 자동연결용 키 — 지점·대표자 등 **끝쪽** 괄호만 제거한 뒤 softCompanyKey.
+ * `(주)` / `(유)` 법인격은 유지.
+ * 예: (주)팀코리아 = 주식회사 팀코리아(광주) → 주팀코리아
+ */
+export function matchCompanyKey(s: string): string {
+  let t = String(s || '')
+    .replace(/㈜/g, '(주)')
+    .replace(/주식회사/g, '(주)')
+    .replace(/유한회사/g, '(유)');
+  // 법인격 보호 후 나머지 괄호(지점·대표 등) 제거
+  t = t.replace(/\(주\)/g, '\u0001주\u0001').replace(/\(유\)/g, '\u0001유\u0001');
+  t = t.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '');
+  t = t.replace(/\u0001주\u0001/g, '(주)').replace(/\u0001유\u0001/g, '(유)');
+  return softCompanyKey(t);
 }
 
 export function isLedgerRefDescription(desc: string, source?: string): boolean {
@@ -510,13 +526,7 @@ export async function linkLetterSheetToEntry(opts: {
     letterDate: sheet.letterDate || undefined,
   });
 
-  // 잔액은 항상 거래처원장(entry.balance) 기준
-  await syncLetterDiffWithLedger(
-    opts.entryId,
-    entry.balance,
-    entry.asOfDate || new Date().toISOString().slice(0, 10),
-    opts.actorName,
-  );
+  // 잔액은 거래처원장(entry.balance) 유지. 내역과 다르면 불일치로 확인 (자동 원장반영 없음)
 
   const lines = await listLetterLines(opts.entryId);
   const letterBalance = lines.reduce((s, l) => s + l.amount - l.paidAmount, 0);

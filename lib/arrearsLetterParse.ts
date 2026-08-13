@@ -95,10 +95,11 @@ export function parseLetterSheet(sheet: XLSX.WorkSheet, sheetName: string): Pars
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
     const desc = cellStr(row[iDesc]);
-    const amount = cellMoney(row[iAmt]);
+    let amount = cellMoney(row[iAmt]);
     const paidAmount = cellMoney(row[iPay]);
     const paidDateRaw = row[iDate];
     const paidDateStr = cellStr(paidDateRaw);
+    const balCell = cellMoney(row[iBal]);
 
     const compact = desc.replace(/\s+/g, '');
     if (compact === '미수수수료') {
@@ -107,11 +108,21 @@ export function parseLetterSheet(sheet: XLSX.WorkSheet, sheetName: string): Pars
     }
     if (desc && isTotalRow(desc)) {
       // 총액 행의 잔액을 sheetBalance 후보로
-      const bal = cellMoney(row[iBal]);
+      const bal = balCell;
       if (bal !== 0 || amount !== 0) {
         sheetBalance = bal || amount - paidAmount;
       }
       continue;
+    }
+
+    // 이월 행: 금액칸이 비고 잔액칸에만 있는 경우(예: 팀코리아 2021년 이월 990,000)
+    if (
+      amount === 0 &&
+      paidAmount === 0 &&
+      balCell !== 0 &&
+      /이월/.test(compact)
+    ) {
+      amount = balCell;
     }
 
     // 내역 없는 지급-only / 메모성 지급일시 행 포함

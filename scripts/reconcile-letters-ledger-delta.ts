@@ -1,6 +1,6 @@
 /**
- * 1) 담당자별 7월 공문 xls로 상세 내역 재반영 (잔액은 건드리지 않음)
- * 2) 8/11 원장 대비 차액만 「원장반영」한 줄로 붙인 뒤 entry.balance = 원장
+ * 1) 담당자별 공문 xls로 상세 내역 재반영 (잔액은 건드리지 않음)
+ * 2) 원장 잔액 upsert 후 잔액불일치만 보고 (자동 원장반영 없음)
  *
  * Usage:
  *   npx tsx scripts/reconcile-letters-ledger-delta.ts
@@ -27,7 +27,6 @@ import { getDb } from '../db';
 import { arrearsEntries } from '../db/schema';
 import { parseArrearsLetterWorkbookFile } from '../lib/arrearsLetterParse';
 import {
-  applyLedgerLetterDiffsForCodes,
   upsertLetterImport,
 } from '../lib/arrearsLetterDb';
 import {
@@ -125,9 +124,15 @@ async function main() {
     `원장 잔액: 갱신 ${ledgerResult.updated} · 신규 ${ledgerResult.inserted} · 유지 ${ledgerResult.preserved}`,
   );
 
-  // 상세 공문 위 차액만 붙이기
-  const delta = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
-  console.log(`원장반영(차액) 줄: ${delta.applied}건`);
+  // 상세 공문 위 차액은 자동 붙이지 않음 — 불일치만 보고
+  const { listLedgerBalanceMismatches } = await import('../lib/arrearsLetterDb');
+  const mismatches = await listLedgerBalanceMismatches({ limit: 20 });
+  console.log(`잔액불일치 ${mismatches.count}업체 (원장반영 자동 맞춤 안 함)`);
+  for (const m of mismatches.items.slice(0, 10)) {
+    console.log(
+      `  ${m.externalCode} ${m.companyName} 원장=${m.ledgerBalance} 내역=${m.linesOpen} diff=${m.diff}`,
+    );
+  }
 
   // 샘플 점검
   const db = getDb();

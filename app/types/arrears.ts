@@ -43,6 +43,16 @@ export type ArrearsEntryDto = {
   updatedAt: string;
   /** 최근 청구(금액) 내역 요약 — 목록용 */
   reasonSummary?: string;
+  /** 내역 미결합 = sum(amount − paidAmount). 없으면 0 */
+  linesOpen?: number;
+  /** 원장잔액 − 내역미결합. 0이면 일치 */
+  balanceDiff?: number;
+  /**
+   * ok=일치, mismatch=잔액불일치, ledger_only=공문 없는 장기미수(원장 유지)
+   */
+  balanceDiffKind?: 'ok' | 'mismatch' | 'ledger_only';
+  /** 연결 수임처가 유출(churned) 상태 */
+  isChurned?: boolean;
 };
 
 export type ArrearsLetterLineSource =

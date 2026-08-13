@@ -24,10 +24,7 @@ import {
   parseLedgerArrearsWorkbook,
 } from '../lib/arrearsLedgerParse';
 import { previewLedgerImport, upsertLedgerImport } from '../lib/arrearsDb';
-import {
-  applyLedgerLetterDiffsForCodes,
-  previewLedgerLetterDiffs,
-} from '../lib/arrearsLetterDb';
+import { previewLedgerLetterDiffs } from '../lib/arrearsLetterDb';
 
 const file =
   process.argv[2] ||
@@ -78,12 +75,14 @@ async function main() {
     `잔액 반영: 갱신 ${result.updated} · 신규 ${result.inserted} · 원장 밖 유지 ${result.preserved}`,
   );
 
-  // 기본은 공문 자동맞춤 OFF. 필요 시: --sync-letter
-  if (process.argv.includes('--sync-letter')) {
-    const letterSync = await applyLedgerLetterDiffsForCodes(ledgerRows, asOfDate, actor);
-    console.log(`공문 맞춤 적용: ${letterSync.applied}건`);
-  } else {
-    console.log('공문 맞춤 건너뜀 (상세 내역 유지). 쓰려면 --sync-letter');
+  // 자동 원장반영 맞춤 없음 — 불일치는 목록으로만 확인
+  const { listLedgerBalanceMismatches } = await import('../lib/arrearsLetterDb');
+  const mismatches = await listLedgerBalanceMismatches({ limit: 15 });
+  console.log(`잔액불일치 ${mismatches.count}업체 (자동 맞춤 안 함)`);
+  for (const m of mismatches.items.slice(0, 10)) {
+    console.log(
+      `  ${m.externalCode} ${m.companyName} 원장=${m.ledgerBalance} 내역=${m.linesOpen} diff=${m.diff}`,
+    );
   }
   console.log('완료');
 }

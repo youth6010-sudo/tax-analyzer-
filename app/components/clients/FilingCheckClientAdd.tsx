@@ -110,8 +110,8 @@ export default function FilingCheckClientAdd({ onSelect, disabled }: Props) {
                 <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                   {c.companyName || '(상호 없음)'}
                   {c.status === 'churned' ? (
-                    <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
-                      해임
+                    <span className="rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+                      유출
                     </span>
                   ) : null}
                 </span>

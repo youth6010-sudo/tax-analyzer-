@@ -64,6 +64,8 @@ export type PersonalChecklistDto = {
   ownerName: string;
   clientId: string | null;
   clientName?: string;
+  /** 연결 수임처가 유출(churned) 상태 */
+  clientChurned?: boolean;
   title: string;
   category: ChecklistCategory;
   taxType: ChecklistTaxType;

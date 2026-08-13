@@ -66,8 +66,12 @@ function checklistTaxToFilingTax(taxType: FilingChecklistTax): FilingTaxId {
 
 function clientsForTaxType(clients: ClientRecord[], taxType: FilingChecklistTax): ClientRecord[] {
   return filingTargets(clients, checklistTaxToFilingTax(taxType))
-    .filter(c => c.status !== 'churned')
-    .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
+    .sort((a, b) => {
+      const ac = a.status === 'churned' ? 1 : 0;
+      const bc = b.status === 'churned' ? 1 : 0;
+      if (ac !== bc) return ac - bc;
+      return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
+    });
 }
 
 function ensureForcedAssignees(
@@ -173,7 +177,9 @@ export default function PersonalChecklistAddForm({
     if (isMaster === null) return;
     hydratePortal();
     setClientsLoading(true);
-    const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+    const url = isMaster
+      ? '/api/clients?includeChurned=1'
+      : '/api/clients?mine=1&includeChurned=1';
     fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => setAllClients((d?.clients as ClientRecord[]) ?? getPortalClients()))
@@ -370,9 +376,12 @@ export default function PersonalChecklistAddForm({
 
   const clients = useMemo(() => {
     if (!taxType || taxType === 'other' || isRoutedRequestTaxType(taxType)) {
-      return allClients
-        .filter(c => c.status !== 'churned')
-        .sort((a, b) => (a.companyName || '').localeCompare(b.companyName || '', 'ko'));
+      return [...allClients].sort((a, b) => {
+        const ac = a.status === 'churned' ? 1 : 0;
+        const bc = b.status === 'churned' ? 1 : 0;
+        if (ac !== bc) return ac - bc;
+        return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
+      });
     }
     return clientsForTaxType(allClients, taxType as FilingChecklistTax);
   }, [allClients, taxType]);

@@ -73,10 +73,26 @@ export default function ScopedClientSearch({
   }
 
   if (selected) {
+    const selectedChurned = selected.status === 'churned';
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2">
+      <div
+        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${
+          selectedChurned
+            ? 'border-red-200 bg-red-50'
+            : 'border-blue-200 bg-blue-50'
+        }`}
+      >
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-slate-900 truncate">{selected.companyName}</p>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-900">
+            <span className={`truncate ${selectedChurned ? 'line-through decoration-red-300 text-slate-500' : ''}`}>
+              {selected.companyName}
+            </span>
+            {selectedChurned ? (
+              <span className="shrink-0 rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+                유출
+              </span>
+            ) : null}
+          </p>
           <p className="text-[10px] text-slate-500 truncate">
             {[selected.manager, selected.businessNo, selected.representative].filter(Boolean).join(' · ')}
           </p>
@@ -88,7 +104,11 @@ export default function ScopedClientSearch({
             setQuery('');
             setOpen(false);
           }}
-          className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 bg-white hover:bg-blue-100"
+          className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md border bg-white ${
+            selectedChurned
+              ? 'border-red-200 text-red-800 hover:bg-red-100'
+              : 'border-blue-200 text-blue-700 hover:bg-blue-100'
+          }`}
         >
           변경
         </button>
@@ -116,7 +136,9 @@ export default function ScopedClientSearch({
           {results.length === 0 ? (
             <p className="px-3 py-3 text-xs text-slate-500 text-center">{emptyHint}</p>
           ) : (
-            results.map(client => (
+            results.map(client => {
+              const churned = client.status === 'churned';
+              return (
               <button
                 key={client.id}
                 type="button"
@@ -127,12 +149,22 @@ export default function ScopedClientSearch({
                 }}
                 className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-slate-50 last:border-0"
               >
-                <p className="text-xs font-bold text-slate-900">{client.companyName}</p>
+                <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-900">
+                  <span className={churned ? 'line-through decoration-red-300 text-slate-500' : ''}>
+                    {client.companyName}
+                  </span>
+                  {churned ? (
+                    <span className="rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+                      유출
+                    </span>
+                  ) : null}
+                </p>
                 <p className="text-[10px] text-slate-500">
                   {[client.manager, client.businessNo, client.representative].filter(Boolean).join(' · ')}
                 </p>
               </button>
-            ))
+              );
+            })
           )}
         </div>
       )}

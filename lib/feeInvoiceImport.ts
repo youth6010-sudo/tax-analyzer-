@@ -2,6 +2,11 @@ import * as XLSX from 'xlsx';
 
 import type { FeeLineItem } from '@/app/utils/feeBreakdown';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
+import {
+  isTaxInvoiceIssuanceSheet,
+  normalizeFeeItemNameFromInvoice,
+  parseTaxInvoiceIssuanceWorkbook,
+} from '@/lib/taxInvoiceIssuanceParse';
 
 const BIZ_COL = '공급받는자사업자등록번호';
 const ITEM_COL = '품목명';
@@ -16,12 +21,59 @@ function parseAmount(value: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-/** 매출전자세금계산서목록 엑셀 → 사업자번호별 품목·공급가액 */
-export function parseFeeInvoiceWorkbook(buffer: ArrayBuffer): ParsedFeeInvoiceMap {
+function mapFromIssuance(buffer: ArrayBuffer, filename: string): ParsedFeeInvoiceMap {
+  const lines = parseTaxInvoiceIssuanceWorkbook(buffer, filename);
+  const byBiz = new Map<string, Map<string, number>>();
+
+  for (const line of lines) {
+    const biz = normalizeBizNo(line.businessNo);
+    if (!biz || biz.length !== 10 || !line.itemName || !line.supplyAmount) continue;
+    const itemName = normalizeFeeItemNameFromInvoice(line.itemName);
+    let items = byBiz.get(biz);
+    if (!items) {
+      items = new Map();
+      byBiz.set(biz, items);
+    }
+    // 같은 품목은 최근(또는 합산) — 기장/기타는 월 금액이므로 마지막 값 유지, 조정·기타 일회성은 합산
+    if (itemName === '기장수수료' || itemName === '기타수수료') {
+      items.set(itemName, line.supplyAmount);
+    } else {
+      items.set(itemName, (items.get(itemName) ?? 0) + line.supplyAmount);
+    }
+  }
+
+  const out: ParsedFeeInvoiceMap = new Map();
+  for (const [biz, items] of byBiz) {
+    const feeItems: FeeLineItem[] = [];
+    for (const [itemName, supplyAmount] of items) {
+      if (supplyAmount === 0) continue;
+      feeItems.push({ itemName, supplyAmount });
+    }
+    feeItems.sort((a, b) => a.itemName.localeCompare(b.itemName, 'ko'));
+    if (feeItems.length) out.set(biz, feeItems);
+  }
+  return out;
+}
+
+/** 매출전자세금계산서목록 또는 국세청 대량발급 양식 → 사업자번호별 품목·공급가액 */
+export function parseFeeInvoiceWorkbook(
+  buffer: ArrayBuffer,
+  filename = '',
+): ParsedFeeInvoiceMap {
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames.find(n => n.includes('세금계산서')) ?? wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
   if (!sheet) return new Map();
+
+  const matrix = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: true,
+  }) as unknown[][];
+
+  if (isTaxInvoiceIssuanceSheet(matrix)) {
+    return mapFromIssuance(buffer, filename);
+  }
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   const byBiz = new Map<string, Map<string, number>>();

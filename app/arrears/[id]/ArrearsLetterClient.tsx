@@ -266,7 +266,12 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     </span>
                   ) : null}
                 </>
+              ) : item.balance !== 0 ? (
+                <span className="ml-1 text-slate-600">· 원장만(장기미수, 공문·내역 없음)</span>
               ) : null}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              내역 출처: 공문(누적 이력) · ledger/payment(원장상세 PDF) · tax(PDF 없을 때 보완)
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -340,12 +345,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     type="button"
                     className={portalBtnSecondary}
                     disabled={saving}
+                    title="차이를 「원장반영」 줄로 메웁니다. 평소에는 불일치를 직접 확인하세요."
                     onClick={() => void syncWithLedger()}
                   >
-                    관리잔액과 내역 맞추기
+                    (고급) 원장반영으로 강제 맞춤
                   </button>
                 ) : (
-                  <span className="text-xs text-slate-400">내역·잔액 차이가 있을 때만 맞춤 가능</span>
+                  <span className="text-xs text-slate-400">
+                    잔액불일치는 목록 「잔액불일치」 필터로 확인. 강제 맞춤은 비권장.
+                  </span>
                 )}
               </div>
             ) : null}

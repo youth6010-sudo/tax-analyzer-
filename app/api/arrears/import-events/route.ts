@@ -1,13 +1,54 @@
 import { NextResponse } from 'next/server';
+import * as XLSX from 'xlsx';
 import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { parseArrearsFeeEventsWorkbook } from '@/lib/arrearsFeeEventParse';
+import {
+  isTaxInvoiceIssuanceSheet,
+  parseTaxInvoiceIssuanceWorkbook,
+  taxInvoiceLineTotal,
+} from '@/lib/taxInvoiceIssuanceParse';
+import { detectTaxInvoiceGreenRows } from '@/lib/taxInvoiceGreenRows';
 import { applyFeeEvents, previewFeeEvents } from '@/lib/arrearsLetterDb';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
+
+function parseWithOptionalGreen(buffer: Buffer, filename: string) {
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error('엑셀 시트가 없습니다.');
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+    header: 1,
+    defval: '',
+    raw: true,
+  }) as unknown[][];
+
+  if (isTaxInvoiceIssuanceSheet(rows)) {
+    const greenRows = detectTaxInvoiceGreenRows(buffer, filename);
+    const lines = parseTaxInvoiceIssuanceWorkbook(buffer, filename, {
+      greenRows: greenRows.size ? greenRows : undefined,
+    });
+    return {
+      events: lines.map(line => ({
+        externalCode: '',
+        companyName: line.companyName,
+        businessNo: line.businessNo,
+        kind: 'tax_invoice' as const,
+        description: line.itemName,
+        amount: taxInvoiceLineTotal(line),
+        eventDate: line.writeDate,
+        isPayment: false,
+        isNew: line.isNew || undefined,
+      })),
+      detected: 'tax_issuance' as const,
+    };
+  }
+
+  return parseArrearsFeeEventsWorkbook(buffer, filename);
+}
 
 export async function POST(req: Request) {
   try {
@@ -33,7 +74,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     let parsed;
     try {
-      parsed = parseArrearsFeeEventsWorkbook(buffer, file.name || '');
+      parsed = parseWithOptionalGreen(buffer, file.name || '');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '파싱 실패';
       return NextResponse.json({ error: msg }, { status: 400 });
@@ -53,6 +94,7 @@ export async function POST(req: Request) {
           total: parsed.events.length,
           matched: preview.matched,
           unmatched: preview.unmatched,
+          newCount: parsed.events.filter(e => e.isNew).length,
           sample: preview.rows.slice(0, 40).map(r => ({
             companyName: r.companyName,
             businessNo: r.businessNo,
@@ -61,6 +103,7 @@ export async function POST(req: Request) {
             amount: r.amount,
             eventDate: r.eventDate,
             isPayment: r.isPayment,
+            isNew: Boolean(r.isNew),
             matched: r.matched,
             matchedCompanyName: r.matchedCompanyName,
           })),
@@ -72,6 +115,9 @@ export async function POST(req: Request) {
     const result = await applyFeeEvents(
       parsed.events,
       user.name || user.loginId || '',
+      parsed.detected === 'tax_issuance'
+        ? { syncBalance: false, skipIfSameOpenAmount: true, skipIfPdfCovered: true, netAgainstLedgerRef: false }
+        : { syncBalance: true },
     );
 
     return NextResponse.json(

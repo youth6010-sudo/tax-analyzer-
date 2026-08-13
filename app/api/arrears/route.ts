@@ -26,6 +26,18 @@ export async function GET(req: Request) {
       sp.get('ledgerRef') === '1' ||
       sp.get('ledgerRef') === 'true' ||
       sp.get('ledgerRefOnly') === '1';
+    const mismatchOnly =
+      sp.get('mismatch') === '1' ||
+      sp.get('mismatch') === 'true' ||
+      sp.get('mismatchOnly') === '1';
+    const ledgerOnly =
+      sp.get('ledgerOnly') === '1' ||
+      sp.get('ledgerOnly') === 'true' ||
+      sp.get('ledger_only') === '1';
+    const churnedOnly =
+      sp.get('churned') === '1' ||
+      sp.get('churned') === 'true' ||
+      sp.get('churnedOnly') === '1';
 
     const canManage = canManageArrears(user);
     const managerNames = canManage
@@ -53,6 +65,9 @@ export async function GET(req: Request) {
       minBalance: Number.isFinite(minBalance) ? minBalance : undefined,
       managerNames,
       ledgerRefOnly: ledgerRefOnly || undefined,
+      mismatchOnly: mismatchOnly || undefined,
+      ledgerOnly: ledgerOnly || undefined,
+      churnedOnly: churnedOnly || undefined,
     });
 
     return NextResponse.json({ ...result, canManage }, NO_STORE);

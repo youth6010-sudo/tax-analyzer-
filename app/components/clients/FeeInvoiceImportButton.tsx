@@ -62,7 +62,8 @@ export default function FeeInvoiceImportButton({ onImported, allowed = false }: 
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-slate-800">세금계산서 수수료 불러오기</p>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            매출전자세금계산서목록 엑셀을 사업자번호로 매칭합니다. 기장수수료·기타수수료는 ×12 합산.
+            매출전자세금계산서목록 또는 국세청 대량발급 양식(품목1…). 기장·기타수수료는 ×12 합산.
+            녹색(신규) 표시는 미수 가져오기에서 반영됩니다.
           </p>
         </div>
         <input

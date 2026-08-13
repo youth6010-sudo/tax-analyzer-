@@ -658,7 +658,16 @@ export default function HomeTasksPanel() {
                                 </span>
                               )}
                               {item.clientName && (
-                                <span className="text-[10px] text-[#4b6cb7]">{item.clientName}</span>
+                                <span className="inline-flex flex-wrap items-center gap-1 text-[10px] text-[#4b6cb7]">
+                                  <span className={item.clientChurned ? 'line-through decoration-red-300 text-slate-500' : ''}>
+                                    {item.clientName}
+                                  </span>
+                                  {item.clientChurned ? (
+                                    <span className="rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+                                      유출
+                                    </span>
+                                  ) : null}
+                                </span>
                               )}
                               {item.ownerName && item.ownerName !== currentUser && (
                                 <span className="text-[10px] text-slate-500">작성 {item.ownerName}</span>

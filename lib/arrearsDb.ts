@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, exists, gte, ilike, inArray, like, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, gte, ilike, inArray, like, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines, clients } from '@/db/schema';
 import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '@/app/types/arrears';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
+import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
 
 function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
   return {
@@ -28,6 +29,39 @@ function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt ?? ''),
     reasonSummary: '—',
   };
+}
+
+async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<ArrearsEntryDto[]> {
+  if (!items.length) return items;
+  const db = getDb();
+  const ids = items.map(i => i.id);
+  const sums = await db
+    .select({
+      arrearsEntryId: arrearsLetterLines.arrearsEntryId,
+      total: sql<number>`coalesce(sum(${arrearsLetterLines.amount} - ${arrearsLetterLines.paidAmount}), 0)`,
+      hasLetter: sql<boolean>`bool_or(${arrearsLetterLines.source} = 'letter')`,
+    })
+    .from(arrearsLetterLines)
+    .where(inArray(arrearsLetterLines.arrearsEntryId, ids))
+    .groupBy(arrearsLetterLines.arrearsEntryId);
+
+  const openBy = new Map<string, number>();
+  const letterBy = new Map<string, boolean>();
+  for (const s of sums) {
+    openBy.set(s.arrearsEntryId, Math.round(Number(s.total) || 0));
+    letterBy.set(s.arrearsEntryId, Boolean(s.hasLetter));
+  }
+
+  return items.map(item => {
+    const linesOpen = openBy.get(item.id) ?? 0;
+    const balanceDiff = Math.round(item.balance) - linesOpen;
+    const balanceDiffKind = classifyBalanceDiff({
+      ledgerBalance: item.balance,
+      linesOpen,
+      hasLetter: letterBy.get(item.id) === true,
+    });
+    return { ...item, linesOpen, balanceDiff, balanceDiffKind };
+  });
 }
 
 /** entry별 최근 청구(금액>0) 설명 1~2개 → 사유 요약 */
@@ -64,6 +98,57 @@ async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsE
     }
     const memo = (item.memo || '').trim();
     return { ...item, reasonSummary: memo || '—' };
+  });
+}
+
+/** 연결 수임처(또는 미연결 시 사업자번호·상호) 유출 여부 */
+async function attachChurnFlags(items: ArrearsEntryDto[]): Promise<ArrearsEntryDto[]> {
+  if (!items.length) return items;
+  const db = getDb();
+  const clientIds = [
+    ...new Set(items.map(i => i.clientId).filter((id): id is string => Boolean(id))),
+  ];
+  const statusById = new Map<string, string>();
+  if (clientIds.length > 0) {
+    const byId = await db
+      .select({ id: clients.id, status: clients.status })
+      .from(clients)
+      .where(inArray(clients.id, clientIds));
+    for (const r of byId) statusById.set(r.id, r.status);
+  }
+
+  const unlinked = items.filter(i => !i.clientId);
+  const churnedBiz = new Set<string>();
+  const churnedName = new Set<string>();
+  if (unlinked.length > 0) {
+    const churnedRows = await db
+      .select({
+        businessNo: clients.businessNo,
+        companyName: clients.companyName,
+      })
+      .from(clients)
+      .where(eq(clients.status, 'churned'));
+    for (const r of churnedRows) {
+      const biz = normalizeBizNo(r.businessNo);
+      if (biz.length === 10) churnedBiz.add(biz);
+      const nameKey = normalizeCompanyName(r.companyName);
+      if (nameKey) churnedName.add(nameKey);
+    }
+  }
+
+  return items.map(item => {
+    if (item.clientId) {
+      return { ...item, isChurned: statusById.get(item.clientId) === 'churned' };
+    }
+    const biz = normalizeBizNo(item.businessNo);
+    if (biz.length === 10 && churnedBiz.has(biz)) {
+      return { ...item, isChurned: true };
+    }
+    const nameKey = normalizeCompanyName(item.companyName);
+    if (nameKey && churnedName.has(nameKey)) {
+      return { ...item, isChurned: true };
+    }
+    return { ...item, isChurned: false };
   });
 }
 
@@ -140,6 +225,12 @@ export interface ListArrearsFilters {
   managerNames?: string[];
   /** true면 「원장반영」등 원장 맞춤 줄이 있는 행만 */
   ledgerRefOnly?: boolean;
+  /** true면 진짜 잔액불일치(ledger_only 제외)만 */
+  mismatchOnly?: boolean;
+  /** true면 공문 없는 장기미수(원장만)만 */
+  ledgerOnly?: boolean;
+  /** true면 유출 수임처만 */
+  churnedOnly?: boolean;
 }
 
 export async function listArrearsEntries(filters: ListArrearsFilters = {}): Promise<{
@@ -206,7 +297,18 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(arrearsEntries.balance), asc(arrearsEntries.companyName));
 
-  const items = await attachReasonSummaries(rows.map(toDto));
+  const withReasons = await attachReasonSummaries(rows.map(toDto));
+  const withOpens = await attachLineOpenBalances(withReasons);
+  const withChurn = await attachChurnFlags(withOpens);
+  let items = filters.churnedOnly
+    ? withChurn.filter(i => i.isChurned)
+    : withChurn;
+  if (filters.mismatchOnly) {
+    items = items.filter(i => i.balanceDiffKind === 'mismatch');
+  }
+  if (filters.ledgerOnly) {
+    items = items.filter(i => i.balanceDiffKind === 'ledger_only');
+  }
   const totalMap = new Map<string, ArrearsManagerTotal>();
   let totalBalance = 0;
   let asOfDate = '';
