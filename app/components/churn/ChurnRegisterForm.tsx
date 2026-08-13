@@ -14,6 +14,7 @@ import {
 } from '@/app/config/churnOptions';
 import type { ClientRecord, ChurnRecordView } from '@/app/types/client';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 export type ChurnFormValues = {
   churnedAt: string;
@@ -130,7 +131,7 @@ export default function ChurnRegisterForm({
               type="text"
               inputMode="numeric"
               value={values.feeAmount}
-              onChange={e => onChange({ feeAmount: e.target.value })}
+              onChange={e => onChange({ feeAmount: fmt(e.target.value) })}
               disabled={!selectedClient || saving}
               placeholder="0"
               className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono disabled:opacity-50"

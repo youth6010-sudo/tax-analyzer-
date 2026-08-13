@@ -43,6 +43,7 @@ import {
 import {
   FILING_TAXES,
   VAT_PHASES,
+  CORP_PHASES,
   defaultPeriod,
   extractSpecialFilings,
   filingTargets,
@@ -75,6 +76,7 @@ import {
   type FilingTaxId,
   type SpecialFiling,
   type VatPhase,
+  type CorpPhase,
   type VatObligation,
 } from '@/app/utils/filingCheck';
 import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
@@ -633,7 +635,10 @@ function FilingCheckPageInner() {
   const cycle = getCycle(tax);
   const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
   /** 부가세는 기수별 순서 키 — ▲▼ 저장/조회 */
-  const orderTaxKey = filingCheckOrderTaxKey(tax, tax === 'vat' ? period.vatPhase : null);
+  const orderTaxKey = filingCheckOrderTaxKey(
+    tax,
+    tax === 'vat' ? period.vatPhase : tax === 'corporate' ? period.corpPhase : null,
+  );
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
@@ -646,7 +651,7 @@ function FilingCheckPageInner() {
     setIncomeNotice('');
     setIncomeUploaded(false);
     setUploadAddedNames([]);
-  }, [tax, period.year, period.month, period.vatPhase, selManager]);
+  }, [tax, period.year, period.month, period.vatPhase, period.corpPhase, selManager]);
 
   // 종소·법인 — 검토표 수수료 로드
   useEffect(() => {
@@ -2818,12 +2823,39 @@ function FilingCheckPageInner() {
   ]);
 
   const copySummary = async () => {
+    const plain = summary.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const html = summary
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => `<div>${line ? escapeHtml(line) : '<br>'}</div>`)
+      .join('');
     try {
-      await navigator.clipboard.writeText(summary);
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([plain], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* ignore */
+      try {
+        await navigator.clipboard.writeText(plain);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        /* ignore */
+      }
     }
   };
 
@@ -3119,6 +3151,19 @@ function FilingCheckPageInner() {
             className={inputCls}
           >
             {VAT_PHASES.map(ph => (
+              <option key={ph} value={ph}>
+                {ph}
+              </option>
+            ))}
+          </select>
+        )}
+        {tax === 'corporate' && (
+          <select
+            value={period.corpPhase}
+            onChange={e => setPeriod(p => ({ ...p, corpPhase: e.target.value as CorpPhase }))}
+            className={inputCls}
+          >
+            {CORP_PHASES.map(ph => (
               <option key={ph} value={ph}>
                 {ph}
               </option>

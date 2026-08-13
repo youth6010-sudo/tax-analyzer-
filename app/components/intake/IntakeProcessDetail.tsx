@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CHECKLIST_KEYS, CHECKLIST_LABEL_FULL, intakeChecklistProgress, type ProcessRow } from './intakeUtils';
 import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 const inputCls = 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none';
 
@@ -32,7 +33,9 @@ export default function IntakeProcessDetail({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [feeStartDate, setFeeStartDate] = useState(process.feeStartDate);
-  const [monthlyFee, setMonthlyFee] = useState(process.monthlyFee != null ? String(process.monthlyFee) : '');
+  const [monthlyFee, setMonthlyFee] = useState(
+    process.monthlyFee != null ? fmt(String(process.monthlyFee)) : '',
+  );
   const [channel, setChannel] = useState(process.channel);
 
   const save = async () => {
@@ -70,7 +73,7 @@ export default function IntakeProcessDetail({
               type="button"
               onClick={() => {
                 setFeeStartDate(process.feeStartDate);
-                setMonthlyFee(process.monthlyFee != null ? String(process.monthlyFee) : '');
+                setMonthlyFee(process.monthlyFee != null ? fmt(String(process.monthlyFee)) : '');
                 setChannel(process.channel);
                 setEditing(false);
                 setError('');
@@ -97,7 +100,12 @@ export default function IntakeProcessDetail({
           </label>
           <label className="block text-xs">
             <span className="font-semibold text-gray-600">{CLIENT_FIELD_LABELS.fee}</span>
-            <input value={monthlyFee} onChange={e => setMonthlyFee(e.target.value)} className={inputCls} />
+            <input
+              value={monthlyFee}
+              inputMode="numeric"
+              onChange={e => setMonthlyFee(fmt(e.target.value))}
+              className={inputCls}
+            />
           </label>
           <label className="block text-xs">
             <span className="font-semibold text-gray-600">유입</span>

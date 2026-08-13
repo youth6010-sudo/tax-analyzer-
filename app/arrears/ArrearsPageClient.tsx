@@ -107,6 +107,7 @@ export default function ArrearsPageClient() {
   const [bulkPreview, setBulkPreview] = useState<BulkPreview | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -381,6 +382,102 @@ export default function ArrearsPageClient() {
     router.push(`/arrears/batch-invoice?ids=${encodeURIComponent(ids)}`);
   };
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /** 담당자별 미수 공문 엑셀 (잔액≠0) — 미수수수료_블루-26.07.27.xls 형태 */
+  const exportManagerLetters = async () => {
+    if (exportBusy) return;
+    setExportBusy(true);
+    setError('');
+    try {
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+      if (selectedCount > 0) {
+        const params = new URLSearchParams({
+          nonzero: '1',
+          format: 'xls',
+          ids: [...selectedIds].join(','),
+        });
+        if (manager) params.set('manager', manager);
+        const res = await fetch(`/api/arrears/export?${params}`, { cache: 'no-store' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error || '엑셀 저장 실패');
+        }
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+        const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료_선택.xls');
+        downloadBlob(await res.blob(), filename);
+        return;
+      }
+
+      if (manager) {
+        const params = new URLSearchParams({
+          nonzero: '1',
+          format: 'xls',
+          manager,
+        });
+        if (category !== 'all') params.set('category', category);
+        if (qDebounced) params.set('q', qDebounced);
+        const res = await fetch(`/api/arrears/export?${params}`, { cache: 'no-store' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error || '엑셀 저장 실패');
+        }
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+        const filename = decodeURIComponent(m?.[1] || m?.[2] || `미수수수료_${manager}.xls`);
+        downloadBlob(await res.blob(), filename);
+        return;
+      }
+
+      const metaRes = await fetch('/api/arrears/export?byManager=1&nonzero=1&format=xls', {
+        cache: 'no-store',
+      });
+      const meta = await metaRes.json().catch(() => ({}));
+      if (!metaRes.ok) {
+        throw new Error((meta as { error?: string }).error || '엑셀 저장 실패');
+      }
+      const files = (meta as { files?: { manager: string; filename: string; count: number }[] })
+        .files;
+      if (!files?.length) throw new Error('내보낼 담당자가 없습니다.');
+
+      const ok = window.confirm(
+        `담당자별 공문 엑셀 ${files.length}개 파일을 다운로드합니다.\n` +
+          files.map(f => `· ${f.filename} (${f.count}곳)`).join('\n') +
+          `\n\n브라우저가 여러 번 다운로드를 물을 수 있습니다.`,
+      );
+      if (!ok) return;
+
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const res = await fetch(
+          `/api/arrears/export?manager=${encodeURIComponent(f.manager)}&nonzero=1&format=xls`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            (data as { error?: string }).error || `${f.manager} 엑셀 저장 실패`,
+          );
+        }
+        downloadBlob(await res.blob(), f.filename);
+        if (i < files.length - 1) await sleep(500);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '엑셀 저장 실패');
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full space-y-4 py-4`}>
@@ -415,6 +512,21 @@ export default function ArrearsPageClient() {
                 {feeImportOpen ? '세금계산서 닫기' : '세금계산서'}
               </button>
             ) : null}
+            <button
+              type="button"
+              className={portalBtnSecondary}
+              disabled={exportBusy}
+              onClick={() => void exportManagerLetters()}
+              title="잔액≠0 업체만 · 담당자별 미수수수료_블루-YY.MM.DD.xls 형태"
+            >
+              {exportBusy
+                ? '엑셀 저장 중…'
+                : selectedCount
+                  ? `공문 엑셀 (${selectedCount})`
+                  : manager
+                    ? `${manager} 공문 엑셀`
+                    : '담당자별 공문 엑셀'}
+            </button>
             <button
               type="button"
               className={portalBtnPrimary}

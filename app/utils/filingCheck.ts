@@ -35,6 +35,10 @@ export const FILING_TAXES: { id: FilingTaxId; label: string; cycle: FilingCycle;
 export const VAT_PHASES = ['1기 예정', '1기 확정', '2기 예정', '2기 확정'] as const;
 export type VatPhase = (typeof VAT_PHASES)[number];
 
+/** 법인세 신고 구분 — 중간예납 / 확정 */
+export const CORP_PHASES = ['중간예납', '확정'] as const;
+export type CorpPhase = (typeof CORP_PHASES)[number];
+
 /** 부가세 예정 기간 — 예정신고·예정고지 구분 대상 */
 export type VatObligation = '예정신고' | '예정고지' | '확정신고';
 
@@ -46,6 +50,7 @@ export type FilingPeriod = {
   year: number;
   month: number; // 원천세
   vatPhase: VatPhase; // 부가세
+  corpPhase: CorpPhase; // 법인세
   half: SimplePayrollHalf; // 간이지급
 };
 
@@ -59,6 +64,7 @@ export function defaultPeriod(): FilingPeriod {
     year,
     month,
     vatPhase: '1기 확정',
+    corpPhase: '확정',
     half: defaultSimplePayrollHalf(month),
   };
 }
@@ -76,7 +82,7 @@ export function periodLabel(taxId: FilingTaxId, p: FilingPeriod): string {
     return `${p.year}년 ${p.month}월 신고 (${attr.month}월 귀속)`;
   }
   if (cycle === 'vat') return `${p.year}년 ${p.vatPhase}`;
-  if (taxId === 'corporate') return `${p.year}년 사업연도`;
+  if (taxId === 'corporate') return `${p.year}년 ${p.corpPhase}`;
   return `${p.year}년 귀속`;
 }
 
@@ -92,6 +98,7 @@ export function periodKey(taxId: FilingTaxId, p: FilingPeriod): string {
     const attr = attributionMonthFromReportMonth(p.year, p.month);
     return simplePayrollMonthlyPeriodKey(attr.year, attr.month);
   }
+  if (taxId === 'corporate') return `${p.year}-${p.corpPhase}`;
   return `${p.year}`;
 }
 
@@ -126,6 +133,20 @@ export function parsePeriodKey(taxId: FilingTaxId, key: string): FilingPeriod {
     const report = reportMonthFromAttributionMonth(attrYear, attrMonth);
     return { ...base, year: report.year, month: report.month };
   }
+  if (taxId === 'corporate') {
+    // 구키 `2025` → 확정, 신키 `2025-중간예납` / `2025-확정`
+    const idx = key.indexOf('-');
+    if (idx < 0) {
+      return { ...base, year: Number(key) || base.year, corpPhase: '확정' };
+    }
+    const y = key.slice(0, idx);
+    const phase = key.slice(idx + 1) as CorpPhase;
+    return {
+      ...base,
+      year: Number(y) || base.year,
+      corpPhase: (CORP_PHASES as readonly string[]).includes(phase) ? phase : '확정',
+    };
+  }
   return { ...base, year: Number(key) || base.year };
 }
 
@@ -159,6 +180,12 @@ export function previousPeriodKey(taxId: FilingTaxId, currentKey: string): strin
     if (!year || !month) return null;
     if (month <= 1) return `${year - 1}-12`;
     return `${year}-${String(month - 1).padStart(2, '0')}`;
+  }
+  if (taxId === 'corporate') {
+    const p = parsePeriodKey(taxId, currentKey);
+    // 확정 ← 같은 해 중간예납 ← 전년 확정
+    if (p.corpPhase === '확정') return `${p.year}-중간예납`;
+    return `${p.year - 1}-확정`;
   }
   const y = Number(currentKey);
   if (!Number.isFinite(y)) return null;

@@ -6,6 +6,16 @@ import type { ChurnRecordView, ClientRecord, ClientSearchResult } from '@/app/ty
 import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { filterClientSearchIndex } from '@/app/utils/searchFilter';
 import { clearMenuCache } from '@/app/utils/menuPrefsCache';
+import {
+  buildIntakeDeepLink,
+  inquiryBlueholeCase,
+  inquiryChecklistKeys,
+  inquiryNeedsOnboardingChecklist,
+  inquiryOnboardingAlertHeld,
+  intakeChecklistProgress,
+  isIntakeProcessComplete,
+  type ProcessRow,
+} from '@/app/components/intake/intakeUtils';
 
 /** 처리된 업체의 국세청 할 일을 목록에서 제거 (폐업=유출, 휴업=확인) */
 export function filterNtsTasksForHandledChurn(
@@ -361,18 +371,108 @@ export function patchPortalClient(id: string, patch: Partial<ClientRecord>): voi
   notify();
 }
 
-/** 유입관리 단건 수정 — bootstrap 캐시의 inquiries 갱신 */
+/** 유입관리 단건 수정 — bootstrap 캐시의 inquiries·온보딩 할 일 갱신 */
 export function patchPortalInquiry(id: string, inquiry: Record<string, unknown>): void {
   if (!memory) return;
   const inquiries = memory.inquiries ?? [];
   const idx = inquiries.findIndex(q => String(q.id) === id);
   const next =
     idx >= 0
-      ? inquiries.map((q, i) => (i === idx ? { ...q, ...inquiry } : q))
-      : [inquiry, ...inquiries];
-  memory = { ...memory, inquiries: next, fetchedAt: Date.now() };
+      ? inquiries.map((q, i) => (i === idx ? { ...q, ...inquiry, id } : q))
+      : [{ ...inquiry, id }, ...inquiries];
+  let tasks = memory.tasks ?? [];
+  for (const p of memory.processes ?? []) {
+    const pid = String(p.id ?? '');
+    if (!pid) continue;
+    tasks = patchOnboardingTasksForProcess(tasks, pid, p, next);
+  }
+  memory = { ...memory, inquiries: next, tasks, fetchedAt: Date.now() };
   writeStorage(memory);
   notify();
+}
+
+function processChecklistFromRaw(
+  raw: Record<string, unknown> | undefined,
+): ProcessRow['checklist'] {
+  const checklist = raw?.checklist;
+  if (!checklist || typeof checklist !== 'object' || Array.isArray(checklist)) return {};
+  return checklist as ProcessRow['checklist'];
+}
+
+function inquiryExtraFromRaw(raw: Record<string, unknown> | undefined): Record<string, unknown> {
+  const extra = raw?.extra;
+  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {};
+  return extra as Record<string, unknown>;
+}
+
+/** 체크리스트 변경 직후 홈「업체 관련」온보딩 진행도를 즉시 맞춤 */
+function patchOnboardingTasksForProcess(
+  tasks: DashboardTask[],
+  processId: string,
+  process: Record<string, unknown>,
+  inquiries: Record<string, unknown>[],
+): DashboardTask[] {
+  const taskId = `onboard-${processId}`;
+  const companyName = String(process.companyName ?? process.company_name ?? '').trim() || '업체명 미정';
+  const clientId =
+    process.clientId != null
+      ? String(process.clientId)
+      : process.client_id != null
+        ? String(process.client_id)
+        : null;
+
+  const inquiry =
+    inquiries.find(q => {
+      const qClient =
+        q.clientId != null ? String(q.clientId) : q.client_id != null ? String(q.client_id) : null;
+      if (clientId && qClient && qClient === clientId) return true;
+      const qName = String(q.companyName ?? q.company_name ?? '').trim();
+      return Boolean(qName) && qName === companyName;
+    }) ?? null;
+
+  const extra = inquiryExtraFromRaw(inquiry ?? undefined);
+  const contractStatus = String(
+    inquiry?.contractStatus ?? inquiry?.contract_status ?? '',
+  ).trim();
+  if (inquiry && inquiryOnboardingAlertHeld(contractStatus)) {
+    return tasks.filter(t => t.id !== taskId);
+  }
+  if (inquiry && !inquiryNeedsOnboardingChecklist(extra)) {
+    return tasks.filter(t => t.id !== taskId);
+  }
+
+  const checklist = processChecklistFromRaw(process);
+  const bluehole = inquiryBlueholeCase(extra);
+  const keys = inquiry ? inquiryChecklistKeys(extra) : [];
+  if (keys.length === 0) {
+    return tasks.filter(t => t.id !== taskId);
+  }
+  if (isIntakeProcessComplete(checklist, bluehole, keys)) {
+    return tasks.filter(t => t.id !== taskId);
+  }
+
+  const progress = intakeChecklistProgress(checklist, bluehole, keys);
+  const existing = tasks.find(t => t.id === taskId);
+  const href = buildIntakeDeepLink({
+    inquiryId: inquiry?.id != null ? String(inquiry.id) : undefined,
+    processId,
+    companyName,
+  });
+  const nextTask: DashboardTask = existing
+    ? { ...existing, progress, title: existing.title || companyName, href: existing.href || href }
+    : {
+        id: taskId,
+        type: 'onboarding_incomplete',
+        title: companyName,
+        href,
+        priority: 2,
+        progress,
+      };
+
+  if (existing) {
+    return tasks.map(t => (t.id === taskId ? nextTask : t));
+  }
+  return [...tasks, nextTask];
 }
 
 /** 유입 프로세스 체크리스트 등 — bootstrap 캐시의 processes·tasks 갱신 */
@@ -380,11 +480,21 @@ export function patchPortalProcess(id: string, process: Record<string, unknown>)
   if (!memory) return;
   const processes = memory.processes ?? [];
   const idx = processes.findIndex(p => String(p.id) === id);
+  const nextProcess =
+    idx >= 0
+      ? { ...processes[idx], ...process, id }
+      : { ...process, id };
   const next =
     idx >= 0
-      ? processes.map((p, i) => (i === idx ? { ...p, ...process } : p))
-      : [process, ...processes];
-  memory = { ...memory, processes: next, fetchedAt: Date.now() };
+      ? processes.map((p, i) => (i === idx ? nextProcess : p))
+      : [nextProcess, ...processes];
+  const tasks = patchOnboardingTasksForProcess(
+    memory.tasks ?? [],
+    id,
+    nextProcess,
+    memory.inquiries ?? [],
+  );
+  memory = { ...memory, processes: next, tasks, fetchedAt: Date.now() };
   writeStorage(memory);
   notify();
 }

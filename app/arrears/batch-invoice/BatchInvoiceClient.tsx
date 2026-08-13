@@ -10,6 +10,7 @@ import {
   portalMain,
 } from '@/app/components/portal/uiClasses';
 import { formatArrearsWon } from '@/app/types/arrears';
+import { fmt } from '@/app/lib/taxAmountFmt';
 import {
   ARREARS_LETTER_ADDR,
   ARREARS_LETTER_BANK,
@@ -61,7 +62,7 @@ export default function BatchInvoiceClient() {
       const aMap: Record<string, string> = {};
       for (const r of list) {
         rMap[r.entryId] = r.remark;
-        aMap[r.entryId] = String(r.amount);
+        aMap[r.entryId] = formatArrearsWon(r.amount);
       }
       setRemarks(rMap);
       setAmounts(aMap);
@@ -187,8 +188,9 @@ export default function BatchInvoiceClient() {
                         <input
                           className={`${portalInput} w-[7.5rem] py-1 text-right text-xs tabular-nums`}
                           value={amounts[r.entryId] ?? ''}
+                          inputMode="numeric"
                           onChange={e =>
-                            setAmounts(prev => ({ ...prev, [r.entryId]: e.target.value }))
+                            setAmounts(prev => ({ ...prev, [r.entryId]: fmt(e.target.value) }))
                           }
                         />
                       </span>

@@ -46,6 +46,36 @@ function cellStr(v) {
   return String(v).replace(/\s+/g, ' ').trim();
 }
 
+/** 엑셀 일련일 → YY.MM.DD 또는 원문 */
+function cellMemoPart(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 80000) {
+    // Excel 1900 date system
+    const epoch = Date.UTC(1899, 11, 30);
+    const d = new Date(epoch + Math.round(v) * 86400000);
+    if (!Number.isNaN(d.getTime())) {
+      const yy = String(d.getUTCFullYear()).slice(2);
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      return `${yy}.${mm}.${dd}`;
+    }
+  }
+  return cellStr(v);
+}
+
+function buildMemo(parts) {
+  const seen = new Set();
+  const out = [];
+  for (const p of parts) {
+    const s = cellMemoPart(p);
+    if (!s || s === '-') continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out.join(' · ');
+}
+
 function normHeader(h) {
   return String(h ?? '')
     .replace(/\s+/g, '')
@@ -119,6 +149,8 @@ const iMgr = colIndex(headers, '담당');
 const iCms = colIndex(headers, 'CMS');
 const iMgmt = colIndex(headers, '관리');
 const iPast = colIndex(headers, '과거일정');
+const iSched = colIndex(headers, '일정');
+const iContact = colIndex(headers, '연락');
 const iNote = colIndex(headers, '참고');
 
 if (iCode < 0 || iName < 0) {
@@ -156,10 +188,21 @@ for (let r = headerIdx + 1; r < rows.length; r++) {
     if (Number.isFinite(n)) mgmtCategory = CATEGORY_MAP[n] ?? '';
   }
 
-  const cmsNote = iCms >= 0 ? cellStr(row[iCms]) : '';
-  const past = iPast >= 0 ? cellStr(row[iPast]) : '';
-  const note = iNote >= 0 ? cellStr(row[iNote]) : '';
-  const memo = [past, note].filter(Boolean).join(' / ');
+  const cmsRaw = iCms >= 0 ? row[iCms] : '';
+  let cmsNote = '';
+  if (typeof cmsRaw === 'number' && Number.isFinite(cmsRaw)) {
+    cmsNote = cmsRaw === 0 ? '' : String(cmsRaw);
+  } else {
+    cmsNote = cellStr(cmsRaw);
+    if (cmsNote === '0') cmsNote = '';
+  }
+
+  const memo = buildMemo([
+    iPast >= 0 ? row[iPast] : '',
+    iSched >= 0 ? row[iSched] : '',
+    iContact >= 0 ? row[iContact] : '',
+    iNote >= 0 ? row[iNote] : '',
+  ]);
 
   parsed.push({ code, companyName, managerName, mgmtCategory, cmsNote, memo });
 }
@@ -198,18 +241,12 @@ try {
               WHEN EXCLUDED.manager_name <> '' THEN EXCLUDED.manager_name
               ELSE arrears_entries.manager_name
             END,
-            mgmt_category = CASE
-              WHEN EXCLUDED.mgmt_category <> '' THEN EXCLUDED.mgmt_category
-              ELSE arrears_entries.mgmt_category
-            END,
+            mgmt_category = EXCLUDED.mgmt_category,
             cms_note = CASE
               WHEN EXCLUDED.cms_note <> '' THEN EXCLUDED.cms_note
               ELSE arrears_entries.cms_note
             END,
-            memo = CASE
-              WHEN EXCLUDED.memo <> '' THEN EXCLUDED.memo
-              ELSE arrears_entries.memo
-            END,
+            memo = EXCLUDED.memo,
             company_name = CASE
               WHEN arrears_entries.company_name = '' THEN EXCLUDED.company_name
               ELSE arrears_entries.company_name

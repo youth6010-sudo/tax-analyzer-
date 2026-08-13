@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import CenterModal from '@/app/components/portal/CenterModal';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import { formatArrearsWon, todayArrearsPaidDateKo, type ArrearsEntryDto } from '@/app/types/arrears';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 export type ManualChannel = 'thebill' | 'cms';
 
@@ -154,7 +155,7 @@ export default function ArrearsManualEntryModal({
               inputMode="numeric"
               className={portalInput}
               value={amount}
-              onChange={e => setAmount(e.target.value)}
+              onChange={e => setAmount(fmt(e.target.value))}
               placeholder="0"
               disabled={busy}
             />

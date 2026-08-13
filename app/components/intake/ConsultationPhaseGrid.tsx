@@ -3,6 +3,10 @@
 import type { ConsultationField, ConsultationFormConfig, ConsultationPhaseColumn } from '@/app/types/consultation';
 import { getDisplayPhaseColumns, isFieldVisible } from '@/app/types/consultation';
 import { isPhoneSourceField, PHONE_SOURCE_KEYS } from '@/lib/consultationFormLinks';
+import { fmt } from '@/app/lib/taxAmountFmt';
+
+/** 금액 입력 — 천단위 쉼표 */
+const MONEY_FIELD_KEYS = new Set(['proposedFee']);
 
 export const CONSULT_REGISTER_REQUIRED_KEYS = new Set(['phone', 'companyName', 'consultTypes']);
 export const CONSULT_MULTI_VALUE_DELIM = '\n';
@@ -148,6 +152,18 @@ function FieldRow({
           </label>
         ))}
       </div>
+    );
+  }
+  if (field.type === 'number' && MONEY_FIELD_KEYS.has(field.key)) {
+    return (
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onChange={e => onChange(fmt(e.target.value))}
+        className={base}
+        placeholder={field.placeholder}
+      />
     );
   }
   return (

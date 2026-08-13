@@ -16,6 +16,7 @@ import {
   REASON_ITEMS,
 } from '@/app/config/churnOptions';
 import type { ChurnRecordView } from '@/app/types/client';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 type Props = {
   record: ChurnRecordView | null;
@@ -49,7 +50,7 @@ export default function ChurnRecordPanel({
     if (!record) return;
     setForm({
       churnedAt: churnDateInputValue(record.churnedAt),
-      feeAmount: record.feeAmount != null ? String(record.feeAmount) : '',
+      feeAmount: record.feeAmount != null ? fmt(String(record.feeAmount)) : '',
       dataCleanup: record.dataCleanup,
       churnType: record.churnType,
       earlySign: record.earlySign,
@@ -192,7 +193,7 @@ export default function ChurnRecordPanel({
               </label>
               <label className="block">
                 <span className="text-[10px] font-bold text-gray-400">{CLIENT_FIELD_LABELS.fee}</span>
-                <input type="text" inputMode="numeric" value={form.feeAmount} onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono" />
+                <input type="text" inputMode="numeric" value={form.feeAmount} onChange={e => setForm(f => ({ ...f, feeAmount: fmt(e.target.value) }))} className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono" />
               </label>
             </div>
             <ChurnManagerSelect value={form.manager} onChange={v => setForm(f => ({ ...f, manager: v }))} disabled={saving} />

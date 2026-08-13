@@ -197,6 +197,7 @@ async function loadVatFilingSessions(
     year,
     month: 1,
     vatPhase: phase,
+    corpPhase: '확정',
     half: 'H1',
   });
   const uniqueManagers = [...new Set(managers.map(m => m.trim()).filter(Boolean))];

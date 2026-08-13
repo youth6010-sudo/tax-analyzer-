@@ -110,7 +110,9 @@ export default function ConsultationFormPanel({
   const buildPayload = (): Record<string, unknown> => {
     const linked = applyConsultationLinks(form);
     const payload: Record<string, unknown> = { ...linked };
-    if (linked.proposedFee) payload.proposedFee = Number(linked.proposedFee);
+    if (linked.proposedFee) {
+      payload.proposedFee = Number(String(linked.proposedFee).replace(/,/g, ''));
+    }
     if (linked.consultTypes) payload.consultTypes = splitConsultMultiValue(linked.consultTypes);
     return payload;
   };

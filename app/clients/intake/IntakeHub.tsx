@@ -423,7 +423,9 @@ export default function IntakeHub() {
   const toggleCheck = useCallback(async (process: ProcessRow, key: string) => {
     const prevChecklist = { ...process.checklist };
     const next = { ...process.checklist, [key]: !process.checklist?.[key] };
-    onProcessUpdated({ ...process, checklist: next });
+    const optimistic = { ...process, checklist: next };
+    onProcessUpdated(optimistic);
+    syncChecklistToPortal(optimistic);
 
     try {
       const res = await fetch(`/api/processes/${process.id}`, {
@@ -438,6 +440,7 @@ export default function IntakeHub() {
       syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
+      syncChecklistToPortal({ ...process, checklist: prevChecklist });
     }
   }, [onProcessUpdated, syncChecklistToPortal]);
 
@@ -448,7 +451,9 @@ export default function IntakeHub() {
       : [];
     const hidden = [...new Set([...prevHidden, key])];
     const next = { ...process.checklist, _hidden: hidden };
-    onProcessUpdated({ ...process, checklist: next });
+    const optimistic = { ...process, checklist: next };
+    onProcessUpdated(optimistic);
+    syncChecklistToPortal(optimistic);
 
     try {
       const res = await fetch(`/api/processes/${process.id}`, {
@@ -463,13 +468,16 @@ export default function IntakeHub() {
       syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
+      syncChecklistToPortal({ ...process, checklist: prevChecklist });
     }
   }, [onProcessUpdated, syncChecklistToPortal]);
 
   const restoreChecklist = useCallback(async (process: ProcessRow) => {
     const prevChecklist = { ...process.checklist };
     const next = { ...process.checklist, _hidden: [] };
-    onProcessUpdated({ ...process, checklist: next });
+    const optimistic = { ...process, checklist: next };
+    onProcessUpdated(optimistic);
+    syncChecklistToPortal(optimistic);
 
     try {
       const res = await fetch(`/api/processes/${process.id}`, {
@@ -484,6 +492,7 @@ export default function IntakeHub() {
       syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
+      syncChecklistToPortal({ ...process, checklist: prevChecklist });
     }
   }, [onProcessUpdated, syncChecklistToPortal]);
 
@@ -491,7 +500,9 @@ export default function IntakeHub() {
     if (process.checklist?.blueholeClient) return;
     const prevChecklist = { ...process.checklist };
     const next = { ...process.checklist, blueholeClient: true };
-    onProcessUpdated({ ...process, checklist: next });
+    const optimistic = { ...process, checklist: next };
+    onProcessUpdated(optimistic);
+    syncChecklistToPortal(optimistic);
 
     try {
       const res = await fetch(`/api/processes/${process.id}`, {
@@ -506,6 +517,7 @@ export default function IntakeHub() {
       syncChecklistToPortal(saved);
     } catch {
       onProcessUpdated({ ...process, checklist: prevChecklist });
+      syncChecklistToPortal({ ...process, checklist: prevChecklist });
     }
   }, [onProcessUpdated, syncChecklistToPortal]);
 

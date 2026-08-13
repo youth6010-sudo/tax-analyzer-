@@ -19,6 +19,7 @@ import {
 } from './intakeUtils';
 import BlueholeCaseLink from './BlueholeCaseLink';
 import { canChangeAssignedManager } from '@/lib/intakeManagerGate';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 const inputCls =
   'mt-1 w-full min-w-0 border border-indigo-200 rounded-md px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none';
@@ -29,14 +30,15 @@ function defaultCompanyName(inquiry: InquiryRow): string {
 }
 
 function formFrom(inquiry: InquiryRow, process: ProcessRow | null) {
+  const fee =
+    process?.monthlyFee != null
+      ? process.monthlyFee
+      : inquiry.proposedFee != null
+        ? inquiry.proposedFee
+        : null;
   return {
     feeStartDate: process?.feeStartDate ?? inquiry.inquiryDate ?? '',
-    monthlyFee:
-      process?.monthlyFee != null
-        ? String(process.monthlyFee)
-        : inquiry.proposedFee != null
-          ? String(inquiry.proposedFee)
-          : '',
+    monthlyFee: fee != null ? fmt(String(fee)) : '',
     contractStatus: inquiry.contractStatus || '',
     consultant: inquiry.consultant || '',
     assigneeManager: inquiryAssigneeManager(inquiry.extra),
@@ -152,11 +154,18 @@ export default function IntakeProcessPanel({
     currentUser,
   );
 
+  const processId = process?.id ?? null;
+
   useEffect(() => {
     setForm(formFrom(inquiry, process));
-    setRegisteredClientId(inquiry.clientId);
+    setRegisteredClientId(inquiry.clientId ?? process?.clientId ?? null);
     setError('');
-  }, [inquiry, process]);
+    // 체크리스트만 바뀌는 process 객체 갱신에는 폼을 리셋하지 않음 (담당자 입력 유지)
+  }, [inquiry, processId]); // eslint-disable-line react-hooks/exhaustive-deps -- process는 id 변경 시에만
+
+  useEffect(() => {
+    if (process?.clientId) setRegisteredClientId(process.clientId);
+  }, [process?.clientId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -501,9 +510,10 @@ export default function IntakeProcessPanel({
           <span className="font-semibold text-indigo-900">제안금액</span>
           <input
             value={form.monthlyFee}
-            onChange={e => setForm(prev => ({ ...prev, monthlyFee: e.target.value }))}
+            onChange={e => setForm(prev => ({ ...prev, monthlyFee: fmt(e.target.value) }))}
             className={inputCls}
             placeholder="숫자"
+            inputMode="numeric"
             aria-label="제안금액"
           />
         </label>

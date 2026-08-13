@@ -208,6 +208,13 @@ export function inquiryNeedsOnboardingChecklist(
   return consultTypesNeedOnboardingChecklist(inquiryConsultTypes(extra));
 }
 
+/** 계약유무 보류 — 홈「업체 관련」온보딩 알림 제외 */
+export function inquiryOnboardingAlertHeld(
+  contractStatus: string | null | undefined,
+): boolean {
+  return (contractStatus || '').trim() === '보류';
+}
+
 export function inquiryChecklistKeys(
   extra: Record<string, unknown> | undefined,
 ): readonly string[] {

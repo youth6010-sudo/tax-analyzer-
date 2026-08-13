@@ -23,6 +23,7 @@ import {
   type ArrearsLetterLineDto,
   type ArrearsLetterLineInput,
 } from '@/app/types/arrears';
+import { fmt } from '@/app/lib/taxAmountFmt';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
 const BANK_LINE = '부산은행 113-2016-5229-07 세무법인 청년들';
@@ -42,8 +43,8 @@ function toEditLines(lines: ArrearsLetterLineDto[]): EditLine[] {
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
     description: l.description,
-    amount: String(l.amount || ''),
-    paidAmount: String(l.paidAmount || ''),
+    amount: l.amount ? formatArrearsWon(l.amount) : '',
+    paidAmount: l.paidAmount ? formatArrearsWon(l.paidAmount) : '',
     paidDate: l.paidDate || '',
     source: l.source,
   }));
@@ -300,6 +301,13 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 <button type="button" className={portalBtnSecondary} onClick={startEdit}>
                   내역 편집
                 </button>
+                <a
+                  href={`/api/arrears/${id}/export`}
+                  className={portalBtnSecondary}
+                  title="미수수수료 안내 엑셀 다운로드"
+                >
+                  공문 엑셀
+                </a>
               </>
             ) : null}
             {editing ? (
@@ -410,10 +418,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         <input
                           className={`${portalInput} py-1 text-xs w-28 text-right tabular-nums`}
                           value={l.amount}
+                          inputMode="numeric"
                           onChange={e =>
                             setEditLines(prev =>
                               prev.map((x, i) =>
-                                i === idx ? { ...x, amount: e.target.value } : x,
+                                i === idx ? { ...x, amount: fmt(e.target.value) } : x,
                               ),
                             )
                           }
@@ -423,10 +432,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         <input
                           className={`${portalInput} py-1 text-xs w-28 text-right tabular-nums`}
                           value={l.paidAmount}
+                          inputMode="numeric"
                           onChange={e =>
                             setEditLines(prev =>
                               prev.map((x, i) =>
-                                i === idx ? { ...x, paidAmount: e.target.value } : x,
+                                i === idx ? { ...x, paidAmount: fmt(e.target.value) } : x,
                               ),
                             )
                           }

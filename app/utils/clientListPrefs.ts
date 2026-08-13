@@ -279,11 +279,12 @@ export const FILING_CHECK_CLIENT_ORDER_STORAGE_KEY = 'filingCheck.clientOrder.v1
 export type FilingCheckClientOrderStore = Record<string, string[]>;
 
 /**
- * 부가세는 기수마다 대상이 달라 기수를 키에 포함 (`vat` | `vat:1기 확정`).
- * 그 외 세목은 taxType 그대로.
+ * 부가세·법인세는 기수마다 대상이 달라 기수를 키에 포함
+ * (`vat:1기 확정`, `corporate:중간예납`). 그 외 세목은 taxType 그대로.
  */
-export function filingCheckOrderTaxKey(taxType: string, vatPhase?: string | null): string {
-  if (taxType === 'vat' && vatPhase) return `vat:${vatPhase}`;
+export function filingCheckOrderTaxKey(taxType: string, phase?: string | null): string {
+  if (taxType === 'vat' && phase) return `vat:${phase}`;
+  if (taxType === 'corporate' && phase) return `corporate:${phase}`;
   return taxType;
 }
 

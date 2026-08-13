@@ -87,10 +87,11 @@ export function getClientClosureKind(
  * 신고 기간의 시작 연월(첫날 00:00) — 유출일 비교 기준.
  * 원천세/간이지급: 해당 월 1일
  * 부가세: 1기 예정 = 1월, 1기 확정 = 1월, 2기 예정 = 7월, 2기 확정 = 7월
- * 법인·종소세·기타: 해당 연도 1월 1일
+ * 법인세: 중간예납 = 7월 1일, 확정 = 1월 1일
+ * 종소세·기타: 해당 연도 1월 1일
  */
 export function filingPeriodStartDate(taxId: FilingTaxId, period: FilingPeriod): Date {
-  const { year, month, vatPhase } = period;
+  const { year, month, vatPhase, corpPhase } = period;
   if (taxId === 'withholding' || taxId === 'simplePayroll') {
     return new Date(year, month - 1, 1);
   }
@@ -103,7 +104,10 @@ export function filingPeriodStartDate(taxId: FilingTaxId, period: FilingPeriod):
     };
     return new Date(year, (startMonth[vatPhase] ?? 1) - 1, 1);
   }
-  // corporate, income, comprehensive 등 연 단위
+  if (taxId === 'corporate') {
+    return new Date(year, corpPhase === '중간예납' ? 6 : 0, 1);
+  }
+  // income, comprehensive 등 연 단위
   return new Date(year, 0, 1);
 }
 

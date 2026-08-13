@@ -19,6 +19,7 @@ import {
   inquiryConsultTypes,
   type InquiryRow,
 } from './intakeUtils';
+import { fmt } from '@/app/lib/taxAmountFmt';
 
 function rowFromApi(inquiry: Record<string, unknown>): InquiryRow {
   return {
@@ -72,7 +73,11 @@ function mergeConsultationForm(
   if (!init.industry) init.industry = inquiry.industry || '';
   if (!init.businessNo) init.businessNo = inquiry.businessNo || '';
   if (!init.location) init.location = inquiry.address || '';
-  if (!init.proposedFee && inquiry.proposedFee != null) init.proposedFee = String(inquiry.proposedFee);
+  if (!init.proposedFee && inquiry.proposedFee != null) {
+    init.proposedFee = fmt(String(inquiry.proposedFee));
+  } else if (init.proposedFee) {
+    init.proposedFee = fmt(init.proposedFee);
+  }
   return applyConsultationLinks(init);
 }
 

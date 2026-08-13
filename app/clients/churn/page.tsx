@@ -23,6 +23,7 @@ import {
   refreshPortalBootstrap,
   subscribePortal,
 } from '@/app/utils/portalStore';
+import { fmt } from '@/app/lib/taxAmountFmt';
 import ScopeToggle from '@/app/components/portal/ScopeToggle';
 import { portalInput } from '../../components/portal/uiClasses';
 
@@ -132,7 +133,7 @@ function ChurnPageInner() {
       setTab('register');
       setSelectedClient(fromMissing);
       if (fromMissing.feeSummary != null) {
-        setFormValues(v => ({ ...v, feeAmount: String(fromMissing.feeSummary) }));
+        setFormValues(v => ({ ...v, feeAmount: fmt(String(fromMissing.feeSummary)) }));
       }
       return;
     }
@@ -143,7 +144,7 @@ function ChurnPageInner() {
           setTab('register');
           setSelectedClient(data.client);
           if (data.client.feeSummary != null) {
-            setFormValues(v => ({ ...v, feeAmount: String(data.client.feeSummary) }));
+            setFormValues(v => ({ ...v, feeAmount: fmt(String(data.client.feeSummary)) }));
           }
         }
       })
@@ -152,7 +153,7 @@ function ChurnPageInner() {
 
   useEffect(() => {
     if (selectedClient?.feeSummary != null && !formValues.feeAmount) {
-      setFormValues(v => ({ ...v, feeAmount: String(selectedClient.feeSummary) }));
+      setFormValues(v => ({ ...v, feeAmount: fmt(String(selectedClient.feeSummary)) }));
     }
   }, [selectedClient, formValues.feeAmount]);
 
@@ -177,7 +178,7 @@ function ChurnPageInner() {
   const handleClientChange = (client: ClientRecord | null) => {
     setSelectedClient(client);
     if (client?.feeSummary != null) {
-      setFormValues(v => ({ ...v, feeAmount: String(client.feeSummary) }));
+      setFormValues(v => ({ ...v, feeAmount: fmt(String(client.feeSummary)) }));
     }
   };
 
@@ -233,7 +234,7 @@ function ChurnPageInner() {
     setTab('register');
     setSelectedClient(client);
     if (client.feeSummary != null) {
-      setFormValues(v => ({ ...v, feeAmount: String(client.feeSummary) }));
+      setFormValues(v => ({ ...v, feeAmount: fmt(String(client.feeSummary)) }));
     }
   };
 

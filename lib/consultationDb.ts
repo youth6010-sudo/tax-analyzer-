@@ -528,19 +528,21 @@ export async function updateInquiry(
   if (nextAssignee !== undefined && nextClientId) {
     const [linked] = await db.select().from(clients).where(eq(clients.id, nextClientId)).limit(1);
     const prevMgr = (linked?.manager || '').trim();
-    if (!managerNamesMatch(prevMgr, nextAssignee) || prevMgr !== nextAssignee.trim()) {
+    const requestedMgr = nextAssignee.trim();
+    // 담당자 비우기만 할 때 수임처 담당자까지 지우지 않음 (체크·저장 부수효과 방지)
+    if (requestedMgr && (!managerNamesMatch(prevMgr, requestedMgr) || prevMgr !== requestedMgr)) {
       // 연결로 수임처 담당자를 유입에 맞춘 경우(수임처→유입)는 수임처 값 유지
       const linkingToClient =
         patch.clientId !== undefined &&
         patch.clientId &&
         patch.clientId !== existing.clientId &&
         Boolean(prevMgr) &&
-        managerNamesMatch(prevMgr, nextAssignee);
+        managerNamesMatch(prevMgr, requestedMgr);
       if (!linkingToClient) {
         if (actor) {
-          nextManagerAfterChange({ current: prevMgr, requested: nextAssignee, actor });
+          nextManagerAfterChange({ current: prevMgr, requested: requestedMgr, actor });
         }
-        await applyManagerToClient(nextClientId, nextAssignee);
+        await applyManagerToClient(nextClientId, requestedMgr);
       }
     }
   }
@@ -652,14 +654,15 @@ export async function registerClientFromIntake(
       ...(inquiry.address ? { address: inquiry.address } : {}),
     };
 
+    // 기존 수임처: 행위자(체크·저장한 사람)로 담당자를 채우지 않음
     const extManager = resolveLinkedManager({
       clientManager: existing?.manager,
       inquiryAssignee,
-      actorName: managerName,
+      actorName: '',
     });
     const extRefs = externalRefsFromInquiryExtra(
-      { ...(inquiry.extra ?? {}), assigneeManager: extManager },
-      extManager,
+      { ...(inquiry.extra ?? {}), ...(extManager ? { assigneeManager: extManager } : {}) },
+      extManager || undefined,
     );
 
     if (existing?.status === 'active') {
@@ -682,8 +685,10 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
-      await applyManagerToClient(updated.id, extManager);
-      await applyAssigneeToInquiry(inquiryId, extManager);
+      if (extManager) {
+        await applyManagerToClient(updated.id, extManager);
+        await applyAssigneeToInquiry(inquiryId, extManager);
+      }
       if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }
@@ -710,8 +715,10 @@ export async function registerClientFromIntake(
         })
         .where(eq(clients.id, existing.id))
         .returning();
-      await applyManagerToClient(updated.id, extManager);
-      await applyAssigneeToInquiry(inquiryId, extManager);
+      if (extManager) {
+        await applyManagerToClient(updated.id, extManager);
+        await applyAssigneeToInquiry(inquiryId, extManager);
+      }
       if (process && !process.clientId && processMatchesInquiry) {
         await db.update(intakeProcesses).set({ clientId: updated.id }).where(eq(intakeProcesses.id, process.id));
       }

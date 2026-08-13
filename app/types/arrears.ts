@@ -174,9 +174,8 @@ export function arrearsCategoryLabel(id: string): string {
 }
 
 /**
- * 현황표 엑셀 배경색에 맞춤
- * 채권회수 #ffcc99 / 악성 #ffcc00 / 장기 #ffff00 / 일시·CMS 구분색
- * 미분류는 흰색
+ * 현황표 엑셀 배경색에 맞춤 (26.07.27 시트 기준)
+ * 채권회수 #ffcc99 / 악성 #ffcc00 / 장기·일시·CMS #ffff00 / 미분류 흰색
  */
 export function arrearsCategoryRowClass(id: string): string {
   switch (id) {
@@ -185,11 +184,9 @@ export function arrearsCategoryRowClass(id: string): string {
     case 'bad':
       return 'bg-[#ffcc00]';
     case 'long':
-      return 'bg-[#ffff66]';
     case 'temp':
-      return 'bg-[#c5e1a5]';
     case 'cms':
-      return 'bg-[#80deea]';
+      return 'bg-[#ffff00]';
     default:
       return 'bg-white';
   }
@@ -202,11 +199,9 @@ export function arrearsCategoryChipClass(id: string): string {
     case 'bad':
       return 'bg-[#ffcc00] text-slate-900 border-[#d4a800]';
     case 'long':
-      return 'bg-[#ffff66] text-slate-900 border-[#d4d400]';
     case 'temp':
-      return 'bg-[#c5e1a5] text-slate-900 border-[#8bc34a]';
     case 'cms':
-      return 'bg-[#80deea] text-slate-900 border-[#26c6da]';
+      return 'bg-[#ffff00] text-slate-900 border-[#d4d400]';
     default:
       return 'bg-slate-100 text-slate-600 border-slate-200';
   }

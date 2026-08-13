@@ -32,7 +32,8 @@ export function assertCanChangeAssignedManager(
 /**
  * 수임처↔유입 담당자 최종값.
  * - 수임처에 담당자가 있으면 우선
- * - 없으면 유입 배정 → 없으면 행위자
+ * - 없으면 유입 배정
+ * - 둘 다 없고 신규 생성일 때만 행위자 (기존 수임처 동기화에는 actorName을 넘기지 말 것)
  */
 export function resolveLinkedManager(opts: {
   clientManager?: string | null;

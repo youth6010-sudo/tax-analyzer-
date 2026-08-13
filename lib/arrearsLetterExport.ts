@@ -131,13 +131,20 @@ export function buildArrearsLetterWorkbook(sheets: ArrearsLetterExportSheet[]): 
   return wb;
 }
 
-export function workbookToBuffer(wb: XLSX.WorkBook): Buffer {
-  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+export function workbookToBuffer(wb: XLSX.WorkBook, bookType: 'xlsx' | 'xls' = 'xlsx'): Buffer {
+  const out = XLSX.write(wb, { type: 'buffer', bookType });
   return Buffer.isBuffer(out) ? out : Buffer.from(out as ArrayBuffer);
 }
 
-/** 파일명: 미수수수료_{담당}-YY.MM.DD.xlsx */
-export function arrearsLetterExportFilename(managerName: string, letterDate = ''): string {
+/**
+ * 파일명: 미수수수료_{담당}-YY.MM.DD.xls
+ * 인디만 사무실 관례상 `미수수수료-인디-…`
+ */
+export function arrearsLetterExportFilename(
+  managerName: string,
+  letterDate = '',
+  ext: 'xlsx' | 'xls' = 'xlsx',
+): string {
   const d = formatArrearsLetterDate(letterDate);
   let stamp = '';
   const m = d.match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
@@ -147,5 +154,6 @@ export function arrearsLetterExportFilename(managerName: string, letterDate = ''
     stamp = `${String(now.getFullYear()).slice(2)}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
   }
   const mgr = (managerName || '전체').replace(/[\\/:*?"<>|]/g, '').trim() || '전체';
-  return `미수수수료_${mgr}-${stamp}.xlsx`;
+  const sep = mgr === '인디' ? '-' : '_';
+  return `미수수수료${sep}${mgr}-${stamp}.${ext}`;
 }

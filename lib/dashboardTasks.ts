@@ -12,6 +12,7 @@ import {
   intakeChecklistProgress,
   isIntakeProcessComplete,
   inquiryNeedsOnboardingChecklist,
+  inquiryOnboardingAlertHeld,
   resolveClientIdByName,
   type ClientNameRef,
   type InquiryRow,
@@ -213,6 +214,7 @@ export async function listDashboardTasks(
       (n): n is string => Boolean(n?.trim()),
     );
     const inquiry = findInquiryForProcess(process, inquiries, altNames, clientRefs);
+    if (inquiry && inquiryOnboardingAlertHeld(inquiry.contractStatus)) continue;
     if (inquiry && !inquiryNeedsOnboardingChecklist(inquiry.extra)) continue;
     const inquiryBluehole = inquiry ? inquiryBlueholeCase(inquiry.extra) : '';
     const checklistKeys = inquiry ? inquiryChecklistKeys(inquiry.extra) : [];

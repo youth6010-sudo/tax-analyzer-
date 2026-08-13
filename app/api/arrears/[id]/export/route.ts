@@ -37,16 +37,17 @@ export async function GET(_req: Request, ctx: Ctx) {
         })),
       },
     ]);
-    const buf = workbookToBuffer(wb);
+    const buf = workbookToBuffer(wb, 'xls');
     const filename = arrearsLetterExportFilename(
-      detail.item.managerName || '안내',
+      detail.item.companyName || detail.item.managerName || '안내',
       detail.item.letterDate || detail.item.asOfDate || '',
-    ).replace(/^미수수수료_/, `미수수수료_${detail.item.companyName || '업체'}_`);
+      'xls',
+    );
 
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/vnd.ms-excel',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'private, no-store',
       },

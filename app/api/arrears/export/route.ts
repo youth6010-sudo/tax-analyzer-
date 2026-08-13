@@ -4,6 +4,7 @@ import { canManageArrears } from '@/lib/arrearsAccess';
 import { listArrearsEntries } from '@/lib/arrearsDb';
 import { listLetterLines } from '@/lib/arrearsLetterDb';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { ARREARS_MANAGER_NAMES } from '@/app/types/arrears';
 import {
   arrearsLetterExportFilename,
   buildArrearsLetterWorkbook,
@@ -14,7 +15,33 @@ import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
 
-/** 담당/필터 기준 미수수수료 안내 멀티시트 xlsx */
+type EntryLike = Awaited<ReturnType<typeof listArrearsEntries>>['items'][number];
+
+async function sheetsForEntries(entries: EntryLike[]): Promise<ArrearsLetterExportSheet[]> {
+  const sheets: ArrearsLetterExportSheet[] = [];
+  for (const item of entries) {
+    if (item.balance === 0) continue;
+    const lines = await listLetterLines(item.id);
+    if (!lines.length) continue;
+    sheets.push({
+      companyName: item.companyName,
+      letterDate: item.letterDate || item.asOfDate || '',
+      lines: lines.map(l => ({
+        description: l.description,
+        amount: l.amount,
+        paidAmount: l.paidAmount,
+        paidDate: l.paidDate,
+      })),
+    });
+  }
+  return sheets;
+}
+
+function pickAsOf(sheets: ArrearsLetterExportSheet[], fallback = ''): string {
+  return sheets.find(s => s.letterDate)?.letterDate || fallback;
+}
+
+/** 담당/필터 기준 미수수수료 안내 멀티시트 (기본 xls · 잔액≠0) */
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
@@ -26,6 +53,8 @@ export async function GET(req: Request) {
     const q = sp.get('q')?.trim() || undefined;
     const nonzero = sp.get('nonzero') !== '0' && sp.get('nonzero') !== 'false';
     const idsParam = sp.get('ids')?.trim();
+    const byManager = sp.get('byManager') === '1' || sp.get('byManager') === 'true';
+    const format = sp.get('format') === 'xlsx' ? 'xlsx' : 'xls';
 
     const canManage = canManageArrears(user);
     const managerNames = canManage
@@ -44,49 +73,66 @@ export async function GET(req: Request) {
       managerNames,
     });
 
-    let filtered = items;
+    let filtered = items.filter(i => i.balance !== 0);
     if (idsParam) {
       const idSet = new Set(idsParam.split(',').map(s => s.trim()).filter(Boolean));
-      filtered = items.filter(i => idSet.has(i.id));
+      filtered = filtered.filter(i => idSet.has(i.id));
     }
 
-    // 안내서에 넣을 항목: 라인 있거나 잔액≠0
-    const sheets: ArrearsLetterExportSheet[] = [];
-    for (const item of filtered) {
-      const lines = await listLetterLines(item.id);
-      if (!lines.length && item.balance === 0) continue;
-      sheets.push({
-        companyName: item.companyName,
-        letterDate: item.letterDate || item.asOfDate || '',
-        lines: lines.map(l => ({
-          description: l.description,
-          amount: l.amount,
-          paidAmount: l.paidAmount,
-          paidDate: l.paidDate,
-        })),
-      });
+    /** 담당자별 파일 목록(메타) — UI에서 순차 다운로드 */
+    if (byManager && !manager && !idsParam) {
+      const names = canManage
+        ? [...ARREARS_MANAGER_NAMES]
+        : (managerNames ?? []).filter(n =>
+            (ARREARS_MANAGER_NAMES as readonly string[]).includes(n),
+          );
+      const files: { manager: string; count: number; filename: string }[] = [];
+      for (const name of names) {
+        const subset = filtered.filter(i => i.managerName === name);
+        const sheets = await sheetsForEntries(subset);
+        if (!sheets.length) continue;
+        files.push({
+          manager: name,
+          count: sheets.length,
+          filename: arrearsLetterExportFilename(
+            name,
+            pickAsOf(sheets, subset[0]?.letterDate || subset[0]?.asOfDate || ''),
+            format,
+          ),
+        });
+      }
+      if (!files.length) {
+        return NextResponse.json(
+          { error: '내보낼 미수(잔액≠0·공문 내역 있음) 업체가 없습니다.' },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json({ files, format });
     }
 
+    const sheets = await sheetsForEntries(filtered);
     if (!sheets.length) {
       return NextResponse.json(
-        { error: '내보낼 공문 내역이 없습니다. (잔액≠0 이거나 공문 라인이 있는 거래처)' },
+        { error: '내보낼 공문 내역이 없습니다. (잔액≠0 이고 공문 라인이 있는 거래처)' },
         { status: 400 },
       );
     }
 
     const wb = buildArrearsLetterWorkbook(sheets);
-    const buf = workbookToBuffer(wb);
-    const asOf =
-      sheets.find(s => s.letterDate)?.letterDate ||
-      filtered[0]?.letterDate ||
-      filtered[0]?.asOfDate ||
-      '';
-    const filename = arrearsLetterExportFilename(manager || '전체', asOf);
+    const buf = workbookToBuffer(wb, format);
+    const asOf = pickAsOf(
+      sheets,
+      filtered[0]?.letterDate || filtered[0]?.asOfDate || '',
+    );
+    const filename = arrearsLetterExportFilename(manager || '전체', asOf, format);
 
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type':
+          format === 'xls'
+            ? 'application/vnd.ms-excel'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'private, no-store',
       },
