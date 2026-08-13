@@ -704,10 +704,10 @@ export default function ArrearsPageClient() {
                           {row.balanceDiffKind === 'mismatch' ? (
                             <span
                               className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-                              title={`원장 ${formatArrearsWon(row.balance)} · 내역 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff)}`}
+                              title={`원장 ${formatArrearsWon(row.balance)} · 내역 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff ?? 0)}`}
                             >
-                              불일치 {row.balanceDiff! > 0 ? '+' : ''}
-                              {formatArrearsWon(row.balanceDiff!)}
+                              불일치 {(row.balanceDiff ?? 0) > 0 ? '+' : ''}
+                              {formatArrearsWon(row.balanceDiff ?? 0)}
                             </span>
                           ) : null}
                           {row.balanceDiffKind === 'ledger_only' ? (
