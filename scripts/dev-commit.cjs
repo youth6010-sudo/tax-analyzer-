@@ -1,40 +1,48 @@
-/* 로컬에 Git이 없을 때 dugite 번들 Git으로 초기 커밋·추가 커밋 실행 */
+/* 시스템 Git으로 스냅샷 커밋 (로컬 전용) */
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('dugite');
+const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 
-async function run(args) {
-  const r = await exec(args, root, { encoding: 'utf8' });
-  if (r.exitCode !== 0) {
-    throw new Error(`git ${args.join(' ')} → exit ${r.exitCode}\n${r.stderr || r.stdout}`);
+function run(args) {
+  const r = spawnSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || 'tax-analyzer',
+      GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || 'dev@local',
+      GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || 'tax-analyzer',
+      GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || 'dev@local',
+    },
+  });
+  if (r.status !== 0) {
+    throw new Error(
+      `git ${args.join(' ')} → exit ${r.status}\n${r.stderr || r.stdout || ''}`,
+    );
   }
   return r;
 }
 
-async function main() {
+function main() {
   const msg = process.argv.slice(2).join(' ') || 'chore: snapshot';
   if (!fs.existsSync(path.join(root, '.git'))) {
-    await run(['init', '-b', 'main']);
+    run(['init', '-b', 'main']);
   }
-  await run(['add', '-A']);
-  const st = await run(['status', '--porcelain']);
-  if (!st.stdout.trim()) {
+  run(['add', '-A']);
+  const st = run(['status', '--porcelain']);
+  if (!String(st.stdout || '').trim()) {
     console.log('커밋할 변경이 없습니다.');
     return;
   }
-  await run([
-    '-c', 'user.name=tax-analyzer',
-    '-c', 'user.email=dev@local',
-    'commit',
-    '-m',
-    msg,
-  ]);
+  run(['commit', '-m', msg]);
   console.log('커밋 완료:', msg);
 }
 
-main().catch(e => {
+try {
+  main();
+} catch (e) {
   console.error(e);
   process.exit(1);
-});
+}
