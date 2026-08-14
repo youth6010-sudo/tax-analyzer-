@@ -382,25 +382,18 @@ export async function workbookToBuffer(
 
 /**
  * 파일명: 미수수수료_{담당}-YY.MM.DD.xlsx
- * 인디만 사무실 관례상 `미수수수료-인디-…`
- * (서식 있는 파일을 위해 xlsx 사용 · Excel에서 기존 .xls와 동일하게 열림)
+ * 날짜는 저장(내려받기) 당일(한국시간). 인디만 `미수수수료-인디-…`
  */
 export function arrearsLetterExportFilename(
   managerName: string,
-  letterDate = '',
+  _letterDate = '',
   ext: 'xlsx' | 'xls' = 'xlsx',
 ): string {
-  const d = formatArrearsLetterDate(letterDate);
-  let stamp = '';
-  const m = d.match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
-  if (m) stamp = `${m[1].slice(2)}.${m[2]}.${m[3]}`;
-  else {
-    const now = new Date();
-    stamp = `${String(now.getFullYear()).slice(2)}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
-  }
+  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }).slice(0, 10);
+  const [y, mo, d] = today.split('-');
+  const stamp = `${(y || '').slice(2)}.${mo}.${d}`;
   const mgr = (managerName || '전체').replace(/[\\/:*?"<>|]/g, '').trim() || '전체';
   const sep = mgr === '인디' ? '-' : '_';
-  // 스타일(회색 미수행 등)은 xlsx에서만 유지 → 항상 xlsx 확장자
   const realExt = 'xlsx';
   void ext;
   return `미수수수료${sep}${mgr}-${stamp}.${realExt}`;
