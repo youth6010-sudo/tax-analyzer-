@@ -37,17 +37,18 @@ export async function GET(_req: Request, ctx: Ctx) {
         })),
       },
     ]);
-    const buf = workbookToBuffer(wb, 'xls');
+    const buf = await workbookToBuffer(wb, 'xlsx');
     const filename = arrearsLetterExportFilename(
       detail.item.companyName || detail.item.managerName || '안내',
       detail.item.letterDate || detail.item.asOfDate || '',
-      'xls',
+      'xlsx',
     );
 
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.ms-excel',
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'private, no-store',
       },

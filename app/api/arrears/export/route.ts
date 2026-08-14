@@ -119,7 +119,7 @@ export async function GET(req: Request) {
     }
 
     const wb = buildArrearsLetterWorkbook(sheets);
-    const buf = workbookToBuffer(wb, format);
+    const buf = await workbookToBuffer(wb, format);
     const asOf = pickAsOf(
       sheets,
       filtered[0]?.letterDate || filtered[0]?.asOfDate || '',
@@ -130,9 +130,7 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         'Content-Type':
-          format === 'xls'
-            ? 'application/vnd.ms-excel'
-            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'private, no-store',
       },

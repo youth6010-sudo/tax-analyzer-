@@ -82,6 +82,7 @@
     "bcryptjs": "^3.0.3",
     "dom-to-image-more": "^3.7.2",
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
     "html2canvas": "^1.4.1",
     "html2canvas-pro": "^2.0.2",
     "iron-session": "^8.0.4",

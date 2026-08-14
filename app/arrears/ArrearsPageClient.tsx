@@ -391,7 +391,7 @@ export default function ArrearsPageClient() {
     URL.revokeObjectURL(url);
   };
 
-  /** 담당자별 미수 공문 엑셀 (잔액≠0) — 미수수수료_블루-26.07.27.xls 형태 */
+  /** 담당자별 미수 공문 엑셀 (잔액≠0) — 미수수수료_블루-26.07.27.xlsx */
   const exportManagerLetters = async () => {
     if (exportBusy) return;
     setExportBusy(true);
@@ -402,7 +402,7 @@ export default function ArrearsPageClient() {
       if (selectedCount > 0) {
         const params = new URLSearchParams({
           nonzero: '1',
-          format: 'xls',
+          format: 'xlsx',
           ids: [...selectedIds].join(','),
         });
         if (manager) params.set('manager', manager);
@@ -413,7 +413,7 @@ export default function ArrearsPageClient() {
         }
         const cd = res.headers.get('Content-Disposition') || '';
         const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
-        const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료_선택.xls');
+        const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수수수료_선택.xlsx');
         downloadBlob(await res.blob(), filename);
         return;
       }
@@ -421,7 +421,7 @@ export default function ArrearsPageClient() {
       if (manager) {
         const params = new URLSearchParams({
           nonzero: '1',
-          format: 'xls',
+          format: 'xlsx',
           manager,
         });
         if (category !== 'all') params.set('category', category);
@@ -433,12 +433,12 @@ export default function ArrearsPageClient() {
         }
         const cd = res.headers.get('Content-Disposition') || '';
         const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
-        const filename = decodeURIComponent(m?.[1] || m?.[2] || `미수수수료_${manager}.xls`);
+        const filename = decodeURIComponent(m?.[1] || m?.[2] || `미수수수료_${manager}.xlsx`);
         downloadBlob(await res.blob(), filename);
         return;
       }
 
-      const metaRes = await fetch('/api/arrears/export?byManager=1&nonzero=1&format=xls', {
+      const metaRes = await fetch('/api/arrears/export?byManager=1&nonzero=1&format=xlsx', {
         cache: 'no-store',
       });
       const meta = await metaRes.json().catch(() => ({}));
@@ -459,7 +459,7 @@ export default function ArrearsPageClient() {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const res = await fetch(
-          `/api/arrears/export?manager=${encodeURIComponent(f.manager)}&nonzero=1&format=xls`,
+          `/api/arrears/export?manager=${encodeURIComponent(f.manager)}&nonzero=1&format=xlsx`,
           { cache: 'no-store' },
         );
         if (!res.ok) {

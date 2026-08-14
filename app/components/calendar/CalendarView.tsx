@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { calendarDateKind, krHolidayName } from '@/lib/calendarMonth';
 import CalendarEventChip from './CalendarEventChip';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -19,6 +20,32 @@ function weekdayHeaderClass(index: number): string {
   if (index === 0) return `${base} text-red-600`;
   if (index === 6) return `${base} text-blue-600`;
   return `${base} text-slate-700`;
+}
+
+function dayNumberClass(date: string, inMonth: boolean, isToday: boolean): string {
+  const kind = calendarDateKind(date);
+  const isRed = kind === 'holiday' || kind === 'sunday';
+  const isBlue = kind === 'saturday';
+  if (isToday) {
+    if (isRed) return 'bg-red-600 text-white shadow-sm';
+    if (isBlue) return 'bg-blue-600 text-white shadow-sm';
+    return 'bg-slate-800 text-white shadow-sm';
+  }
+  if (!inMonth) {
+    if (isRed) return 'text-red-300';
+    if (isBlue) return 'text-blue-300';
+    return 'text-slate-400';
+  }
+  if (isRed) return 'text-red-600';
+  if (isBlue) return 'text-blue-600';
+  return 'text-slate-800';
+}
+
+function weekDayNumberClass(date: string): string {
+  const kind = calendarDateKind(date);
+  if (kind === 'holiday' || kind === 'sunday') return 'text-red-600';
+  if (kind === 'saturday') return 'text-blue-600';
+  return 'text-slate-900';
 }
 
 type DayCellProps = {
@@ -67,13 +94,12 @@ export function CalendarDayCell({
       }`}
     >
       <span
-        className={`absolute left-1.5 top-1.5 z-10 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-bold leading-none ${
-          isToday
-            ? 'bg-blue-600 text-white shadow-sm'
-            : inMonth
-              ? 'text-slate-800'
-              : 'text-slate-400'
-        }`}
+        title={krHolidayName(date)}
+        className={`absolute left-1.5 top-1.5 z-10 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-bold leading-none ${dayNumberClass(
+          date,
+          inMonth,
+          isToday,
+        )}`}
       >
         {day}
       </span>
@@ -187,6 +213,7 @@ export default function CalendarView({
           const weekdayIndex = d.getDay();
           const dayEvents = events.filter(ev => eventOnDate(ev, date));
           const dayNum = Number(date.slice(8, 10));
+          const holiday = krHolidayName(date);
           return (
             <div
               key={date}
@@ -204,26 +231,18 @@ export default function CalendarView({
                 className="shrink-0 w-[5.5rem] text-left py-0.5"
               >
                 <span
-                  className={`block text-2xl font-bold leading-none ${
-                    weekdayIndex === 0
-                      ? 'text-red-600'
-                      : weekdayIndex === 6
-                        ? 'text-blue-600'
-                        : 'text-slate-900'
-                  } ${date === today ? 'underline decoration-blue-500 decoration-2 underline-offset-4' : ''}`}
+                  title={holiday}
+                  className={`block text-2xl font-bold leading-none ${weekDayNumberClass(date)} ${
+                    date === today ? 'underline decoration-blue-500 decoration-2 underline-offset-4' : ''
+                  }`}
                 >
                   {dayNum}
                 </span>
                 <span
-                  className={`mt-1 block text-sm font-semibold ${
-                    weekdayIndex === 0
-                      ? 'text-red-500'
-                      : weekdayIndex === 6
-                        ? 'text-blue-500'
-                        : 'text-slate-600'
-                  }`}
+                  className={`mt-1 block text-sm font-semibold ${weekDayNumberClass(date)}`}
                 >
                   {WEEKDAYS[weekdayIndex]}
+                  {holiday ? ` · ${holiday}` : ''}
                 </span>
               </button>
               <div className="min-w-0 flex-1 border-l border-slate-100 pl-4">
