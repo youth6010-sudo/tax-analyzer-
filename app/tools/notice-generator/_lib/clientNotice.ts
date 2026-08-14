@@ -228,6 +228,10 @@ export function emptyPaymentForTax(tax: TaxTypeKey): PaymentNotice {
     installments: [],
     withholdingItems: [],
     attachNote: '',
+    corpInterimBankFollowup: false,
+    corpInterimReplyDate: '',
+    corpInterimFilingNote: '',
+    corpInterimAmountNote: undefined,
   };
 }
 

@@ -392,7 +392,8 @@ function DualQuarterCell({
   if (track.bankNa || !track.applicable) {
     return <span className="block text-center text-[10px] text-slate-300">해당없음</span>;
   }
-  const allowNone = track.progressKey === 'otherEvidence';
+  const allowNone =
+    track.progressKey === 'otherEvidence' || track.progressKey === 'bankStatement';
   const noneQuarters = (track.phaseMarks ?? []).map(m => m === 'X');
   const receiveVisual = (track.phaseMarks ?? []).map(m => m === '△' || m === 'O');
   // 수취 X면 입력도 X로 표시
@@ -698,7 +699,7 @@ export default function VatAnnualProgressBoard() {
     const progressKey = track.progressKey;
     if (!progressKey) return;
 
-    const isOther = progressKey === 'otherEvidence';
+    const isOther = progressKey === 'otherEvidence' || progressKey === 'bankStatement';
     let bodyPayload: Record<string, unknown>;
     let optimisticTracks: VatAnnualTrackStatus[];
 
@@ -898,7 +899,7 @@ export default function VatAnnualProgressBoard() {
             ? '연간진행표 — 부가세 OX 상호연동 · 원천(연말정산) 분개 (전체)'
             : '연간진행표 — 부가세 OX 상호연동 · 원천(연말정산) 분개 (내 담당)'
         }
-        icon={<PageHeaderIcon name="filing-check" />}
+        icon={<PageHeaderIcon name="review-sheet" />}
       />
 
       <ReviewHubTabs active="annual" />

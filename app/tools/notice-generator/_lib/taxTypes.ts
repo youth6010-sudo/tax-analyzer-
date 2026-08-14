@@ -44,6 +44,19 @@ export const VAT_PERIODS: VatPeriod[] = [
     dueDay: 25,
   },
   {
+    id: '1-notice',
+    label: '1기 예정고지 (1월~3월)',
+    shortLabel: '1기 예정고지',
+    coverage: '1월 1일 ~ 3월 31일',
+    startMonth: 1,
+    startDay: 1,
+    endMonth: 3,
+    endDay: 31,
+    dueYearOffset: 0,
+    dueMonth: 4,
+    dueDay: 25,
+  },
+  {
     id: '1-final',
     label: '1기 확정 (4월~6월)',
     shortLabel: '1기 확정',
@@ -73,6 +86,19 @@ export const VAT_PERIODS: VatPeriod[] = [
     id: '2-pre',
     label: '2기 예정 (7월~9월)',
     shortLabel: '2기 예정',
+    coverage: '7월 1일 ~ 9월 30일',
+    startMonth: 7,
+    startDay: 1,
+    endMonth: 9,
+    endDay: 30,
+    dueYearOffset: 0,
+    dueMonth: 10,
+    dueDay: 25,
+  },
+  {
+    id: '2-notice',
+    label: '2기 예정고지 (7월~9월)',
+    shortLabel: '2기 예정고지',
     coverage: '7월 1일 ~ 9월 30일',
     startMonth: 7,
     startDay: 1,
@@ -130,6 +156,13 @@ export const CORPORATE_FY_END_MONTHS: { id: number; label: string }[] = [
   { id: 6, label: '6월 결산' },
   { id: 9, label: '9월 결산' },
 ];
+
+export const CORP_NOTICE_PHASES = ['중간예납', '확정'] as const;
+
+/** 부가세 예정고지 — 신고 없이 고지세액 납부만 안내 */
+export function isVatPreliminaryNotice(vatPeriodId: string | undefined): boolean {
+  return vatPeriodId === '1-notice' || vatPeriodId === '2-notice';
+}
 
 export type IncomeFilingType = {
   id: string;

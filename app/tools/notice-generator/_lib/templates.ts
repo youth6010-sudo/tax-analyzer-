@@ -28,6 +28,170 @@ const NAME: Record<TaxTypeKey, string> = {
   [TAX_TYPES.INCOME]: '종합소득세',
 };
 
+function displayTaxName(taxType: TaxTypeKey, _deadline: DeadlineResult | null): string {
+  return NAME[taxType] || '';
+}
+
+function isCorpInterimNotice(deadline: DeadlineResult | null): boolean {
+  return Boolean(deadline?.periodLabel.includes('중간예납'));
+}
+
+function coverageMonthRange(deadline: DeadlineResult | null): string {
+  if (!deadline) return '';
+  const a = deadline.coverageStart.getMonth() + 1;
+  const b = deadline.coverageEnd.getMonth() + 1;
+  if (!a || !b) return '';
+  return a === b ? `${a}월` : `${a}~${b}월`;
+}
+
+/** 예정고지·중간예납 — 쉬운 설명 + 이번 납부 안내 */
+function specialPaymentIntro(
+  vatNoticeOnly: boolean,
+  corpInterim: boolean,
+  deadline: DeadlineResult | null,
+): string {
+  const line = noticeLine;
+  const months = coverageMonthRange(deadline);
+  if (vatNoticeOnly) return '';
+  if (corpInterim) {
+    const period = months ? `(${months}) ` : '';
+    return (
+      line('안녕하세요. 법인세 중간예납 납부를 안내드립니다.') +
+      line(
+        `중간예납은 사업연도 전반기 ${period}실적에 대해 세액을 미리 납부하실 차례입니다. 아래 금액을 확인하신 뒤 기한 안에 납부해 주시면 됩니다.`,
+      )
+    );
+  }
+  return '';
+}
+
+function formatNoticeDateKo(date: Date): string {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일(${getWeekdayKo(date)})`;
+}
+
+function formatNoticeDateShort(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}(${getWeekdayKo(date)})`;
+}
+
+/** 부가세 예정고지 분납 기한 — 1기: 납부일·6/1·6/30, 2기: 납부일·12/1·12/31 (휴일 보정) */
+export function vatNoticeInstallmentDates(due: Date, secondHalf: boolean): Date[] {
+  const y = due.getFullYear();
+  const second = secondHalf ? new Date(y, 11, 1) : new Date(y, 5, 1);
+  const third = secondHalf ? new Date(y, 11, 31) : new Date(y, 5, 30);
+  return [
+    due,
+    adjustToNextBusinessDay(second).adjusted,
+    adjustToNextBusinessDay(third).adjusted,
+  ];
+}
+
+export const DEFAULT_CORP_INTERIM_FILING_NOTE =
+  "상반기 가결산 결과 결손이 발생하였습니다. 해당 결과로 신고 시 수반되는 세무적 리스크를 고려하여, '직전 사업연도 기준'으로 신고를 마쳤습니다.";
+
+export const DEFAULT_CORP_INTERIM_AMOUNT_NOTE = '직전 사업연도 법인세의 50%';
+
+function buildCorpInterimNoticeBody(
+  deadline: DeadlineResult | null,
+  payment: PaymentNotice,
+): string {
+  const line = noticeLine;
+  const blank = noticeBlank;
+  const yearMatch = deadline?.periodLabel.match(/^(\d{4})/);
+  const year = yearMatch ? Number(yearMatch[1]) : deadline?.final.getFullYear();
+  const month = deadline?.final ? deadline.final.getMonth() + 1 : '';
+  const due = deadline?.final;
+  const dueText = due ? `${formatNoticeDateKo(due)}까지` : '';
+  const amount = truncateWonUnit(payment.amount || 0);
+  const amountText = `${Math.abs(amount).toLocaleString('ko-KR')}원`;
+  const amountNote =
+    payment.corpInterimAmountNote === ''
+      ? ''
+      : (payment.corpInterimAmountNote?.trim() || DEFAULT_CORP_INTERIM_AMOUNT_NOTE);
+  const amountLine = amountNote ? `${amountText} (${amountNote})` : amountText;
+  const filingNote = (payment.corpInterimFilingNote || '').trim() || DEFAULT_CORP_INTERIM_FILING_NOTE;
+  const followup = Boolean(payment.corpInterimBankFollowup);
+  const replyIso = (payment.corpInterimReplyDate || '').trim();
+  let replyText = `${year}년 ${month}월 OO일까지`;
+  if (replyIso) {
+    const [y, m, d] = replyIso.split('-').map(Number);
+    if (y && m && d) replyText = `${y}년 ${m}월 ${d}일까지`;
+  }
+
+  const parts: string[] = [
+    line(`📋${year}년 법인세 중간예납 납부 안내`),
+    blank(),
+    line(
+      `${month}월 법인세 중간예납 신고·납부 기간을 맞아 관련 내용을 다음과 같이 안내해 드립니다.`,
+    ),
+    blank(),
+    line('1. 법인세 중간예납 납부 안내'),
+    line(`납부 기한: ${escapeHtml(dueText)}`),
+    line(`납부 세액: ${escapeHtml(amountLine)}`),
+    line(`신고 방식: ${escapeHtml(filingNote)}`),
+    line('조치 사항: 첨부된 납부서를 확인하시어 기한 내에 납부해 주시기 바랍니다.'),
+  ];
+
+  if (followup) {
+    parts.push(
+      blank(),
+      line('2. 통장 내역 추가 확인 요청'),
+      line(
+        '보내주신 통장 내역을 검토한 결과, 정확한 처리를 위해 추가로 확인이 필요한 사항이 있어 별첨으로 정리해 드립니다.',
+      ),
+      line(`회신 기한: ${escapeHtml(replyText)}`),
+      line("회신 방법: 첨부 파일의 '비고/답변란'을 작성하여 증빙과 함께 회신 부탁드립니다."),
+    );
+  }
+
+  parts.push(blank(), blank(), line('첨부 파일:'), line('법인세 중간예납 납부서 1부'));
+  if (followup) {
+    parts.push(line(`${year}년 상반기 추가 확인 요청 리스트 1부`));
+  }
+  return parts.join('');
+}
+
+function buildVatPreliminaryNoticeBody(
+  deadline: DeadlineResult | null,
+  payment: PaymentNotice,
+): string {
+  const line = noticeLine;
+  const blank = noticeBlank;
+  const amount = truncateWonUnit(payment.amount || 0);
+  const amountText = `${Math.abs(amount).toLocaleString('ko-KR')}원`;
+  const year = deadline?.coverageStart.getFullYear() || deadline?.final.getFullYear();
+  const secondHalf = (deadline?.periodLabel ?? '').includes('2기');
+  const half = secondHalf ? '2기' : '1기';
+  const due = deadline?.final;
+  const dueText = due ? formatNoticeDateKo(due) : '';
+  const inst = due ? vatNoticeInstallmentDates(due, secondHalf) : [];
+
+  const parts: string[] = [
+    line('안녕하세요 세무법인청년들 부산지점입니다.'),
+    blank(),
+    line(`${year}년 ${half} 부가가치세 예정고지 납부 안내드립니다.`),
+    blank(),
+    line('국세청 우편 고지서 수령이 늦어지거나 분실될 경우를 대비하여 납부서 먼저 송부드립니다.'),
+    blank(),
+    line(`납부금액 : ${escapeHtml(amountText)}`),
+    line(`납부기한: ${escapeHtml(dueText)}`),
+    line('가상계좌 납부는 당일 밤 11시 마감됩니다.'),
+    line('미납 시 가산세가 발생하므로 기한 내 납부 부탁드립니다.'),
+    blank(),
+    line('[분납 안내 (최대 3회)]'),
+    line('일시 납부가 어려우실 경우 아래 일정으로 나누어 납부 가능합니다.'),
+  ];
+  inst.forEach((d, i) => {
+    parts.push(line(`-${i + 1}차: ${escapeHtml(formatNoticeDateShort(d))}`));
+  });
+  parts.push(
+    blank(),
+    line('분납을 원하실 경우, 희망하시는 [횟수와 금액]을 회신해 주시기 바랍니다.'),
+    blank(),
+    line('감사합니다.'),
+  );
+  return parts.join('');
+}
+
 function escapeHtml(str: string): string {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -982,14 +1146,22 @@ function formatWon(n: number): string {
   return `${Math.abs(truncateWonUnit(n)).toLocaleString('ko-KR')} 원`;
 }
 
-// 부가세를 제외한 세목(원천세·종소세·법인세)은 지방소득세가 별도로 부과된다.
-export function hasLocalIncomeTax(taxType: TaxTypeKey): boolean {
-  return taxType !== TAX_TYPES.VAT;
+// 부가세·법인세 중간예납은 지방소득세 없음. 원천·종소·법인세 확정만 지방세 별도.
+export function hasLocalIncomeTax(
+  taxType: TaxTypeKey,
+  deadline?: DeadlineResult | null,
+): boolean {
+  if (taxType === TAX_TYPES.VAT) return false;
+  if (taxType === TAX_TYPES.CORPORATE && isCorpInterimNotice(deadline ?? null)) return false;
+  return true;
 }
 
-// 부가세 외 세목은 납부서 기본 2장(본세·지방소득세), 부가세는 1장
-export function defaultPaymentSlips(taxType: TaxTypeKey): number {
-  return hasLocalIncomeTax(taxType) ? 2 : 1;
+// 지방세 있는 세목은 납부서 기본 2장, 그 외 1장
+export function defaultPaymentSlips(
+  taxType: TaxTypeKey,
+  deadline?: DeadlineResult | null,
+): number {
+  return hasLocalIncomeTax(taxType, deadline) ? 2 : 1;
 }
 
 type PayItem = { name: string; amount: number };
@@ -1082,16 +1254,18 @@ export function buildPaymentNoticeTokens({
   taxType,
   deadline,
   payment,
+  vatNoticeOnly = false,
 }: {
   taxType: TaxTypeKey;
   deadline: DeadlineResult | null;
   payment: PaymentNotice;
+  vatNoticeOnly?: boolean;
 }): PaymentNoticeTokens {
-  const name = NAME[taxType] || '';
+  const name = displayTaxName(taxType, deadline);
   const belong = deadline ? escapeHtml(deadline.periodLabel) : '';
   const dueDate = deadline ? escapeHtml(formatDottedDate(deadline.final)) : '';
   const slips = Math.max(0, Math.round(payment.slips || 0));
-  const hasLocal = hasLocalIncomeTax(taxType);
+  const hasLocal = hasLocalIncomeTax(taxType, deadline);
   const main = truncateWonUnit(payment.amount || 0);
   const local = hasLocal ? truncateWonUnit(payment.localAmount || 0) : 0;
 
@@ -1115,6 +1289,30 @@ export function buildPaymentNoticeTokens({
     '{연체안내}': '',
     '{안내본문}': '',
   };
+
+  if (vatNoticeOnly) {
+    const body = buildVatPreliminaryNoticeBody(deadline, payment);
+    const due = deadline?.final;
+    return {
+      ...empty,
+      '{최종납부세액}': escapeHtml(`${Math.abs(truncateWonUnit(payment.amount || 0)).toLocaleString('ko-KR')}원`),
+      '{납부기한}': due ? escapeHtml(formatNoticeDateKo(due)) : dueDate,
+      '{서두}': body,
+      '{안내본문}': body,
+    };
+  }
+
+  if (isCorpInterimNotice(deadline)) {
+    const body = buildCorpInterimNoticeBody(deadline, payment);
+    const due = deadline?.final;
+    return {
+      ...empty,
+      '{최종납부세액}': escapeHtml(`${Math.abs(truncateWonUnit(payment.amount || 0)).toLocaleString('ko-KR')}원`),
+      '{납부기한}': due ? escapeHtml(`${formatNoticeDateKo(due)}까지`) : dueDate,
+      '{서두}': body,
+      '{안내본문}': body,
+    };
+  }
 
   if (taxType === TAX_TYPES.VAT && slips >= 2 && payment.installments.length >= 2) {
     const attachText = formatAttachText(payment);
@@ -1185,6 +1383,8 @@ export function buildPaymentNoticeTokens({
   const parts: string[] = [];
   const line = noticeLine;
   const blank = noticeBlank;
+  const corpInterim = isCorpInterimNotice(deadline);
+  const specialIntro = specialPaymentIntro(vatNoticeOnly, corpInterim, deadline);
 
   let 서두 = '';
   let 납부요약 = '';
@@ -1193,12 +1393,12 @@ export function buildPaymentNoticeTokens({
   let 환급내역 = '';
 
   if (anyRefund && !anyPay) {
-    서두 = line(`${belong} ${escapeHtml(name)} 신고 결과 환급 세액이 발생하여 별도로 납부하실 금액은 없습니다.`);
+    서두 = specialIntro || line(`${belong} ${escapeHtml(name)} 신고 결과 환급 세액이 발생하여 별도로 납부하실 금액은 없습니다.`);
     환급요약 = line(`최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`);
     환급내역 = breakdown(refundItems);
     parts.push(서두, blank(), 환급요약, 환급내역, refundTiming);
   } else if (anyPay && anyRefund) {
-    서두 = line(`${belong} ${escapeHtml(name)} 신고가 완료되었습니다. 납부·환급 내역을 함께 안내드립니다.`);
+    서두 = specialIntro || line(`${belong} ${escapeHtml(name)} 신고가 완료되었습니다. 납부·환급 내역을 함께 안내드립니다.`);
     납부요약 = line(`[납부] 최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`);
     납부내역 = breakdown(payItems);
     환급요약 = line(`[환급] 최종 환급 세액: 총 ${escapeHtml(formatWon(refundTotal))}`);
@@ -1218,9 +1418,11 @@ export function buildPaymentNoticeTokens({
     );
   } else {
     const listForBreakdown = payItems.length > 0 ? payItems : items;
-    서두 = line(
-      `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`,
-    );
+    서두 =
+      specialIntro ||
+      line(
+        `${belong} ${escapeHtml(name)} 신고가 완료되어 납부서를 첨부하오니, 아래 내용을 확인하시어 기한 내 납부 부탁드립니다.`,
+      );
     납부요약 = line(`최종 납부 세액: 총 ${escapeHtml(formatWon(payTotal))}`);
     납부내역 = breakdown(listForBreakdown);
     parts.push(서두, blank(), attach, 납부요약, 납부내역, dueLine, overdue);
@@ -1282,13 +1484,15 @@ export function buildPaymentNoticeHtml({
   deadline,
   payment,
   template,
+  vatNoticeOnly = false,
 }: {
   taxType: TaxTypeKey;
   deadline: DeadlineResult | null;
   payment: PaymentNotice;
   template?: string;
+  vatNoticeOnly?: boolean;
 }): string {
-  const tokens = buildPaymentNoticeTokens({ taxType, deadline, payment });
+  const tokens = buildPaymentNoticeTokens({ taxType, deadline, payment, vatNoticeOnly });
   return renderPaymentNoticeTemplate(template?.trim() || DEFAULT_PAYMENT_NOTICE_TEMPLATE, tokens);
 }
 
@@ -1794,7 +1998,7 @@ export function renderTemplate({
     ['{자료제출마감}', escapeHtml(materialDeadline)],
     ['{자료제출안내}', escapeHtml(materialDeadlineNote)],
     ['{업체명}', escapeHtml((companyName || '').trim())],
-    ['{세목}', escapeHtml(NAME[taxType] || '')],
+    ['{세목}', escapeHtml(displayTaxName(taxType, deadline))],
     ['{귀속}', deadline ? escapeHtml(deadline.periodLabel) : ''],
     ['{요일}', deadline ? escapeHtml(getWeekdayKo(deadline.final)) : ''],
     ['{필요자료}', materialsHtml],

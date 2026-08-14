@@ -2,12 +2,16 @@ export type TaxTypeKey = 'vat' | 'withholding' | 'corporate' | 'income';
 
 export type AccentKey = 'blue' | 'violet' | 'emerald' | 'amber';
 
+export type CorpNoticePhase = '확정' | '중간예납';
+
 export type DeadlineParams = {
   year: number;
   month: number;
   vatPeriodId: string;
   fyEndMonth: number;
   filingTypeId: string;
+  /** 법인세 신고 구분 — 없으면 확정 */
+  corpPhase?: CorpNoticePhase;
 };
 
 export type SkippedDay = {
@@ -71,6 +75,14 @@ export type PaymentNotice = {
   withholdingItems: WithholdingItem[];
   /** 첨부 서류 설명 (비우면 납부서 N장으로 표기) */
   attachNote: string;
+  /** 법인세 중간예납 — 통장 내역 추가 확인 요청 포함 */
+  corpInterimBankFollowup?: boolean;
+  /** 법인세 중간예납 — 통장 확인 회신 기한 YYYY-MM-DD */
+  corpInterimReplyDate?: string;
+  /** 법인세 중간예납 — 신고 방식 (비우면 기본 문구) */
+  corpInterimFilingNote?: string;
+  /** 법인세 중간예납 — 세액 괄호 설명 (비우면 기본 문구, 공백이면 생략) */
+  corpInterimAmountNote?: string;
 };
 
 // 부가세 매입세액 불공제 (사유별)

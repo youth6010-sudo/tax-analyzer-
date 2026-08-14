@@ -304,7 +304,7 @@ export default function ReviewSheetEmbed() {
       <PortalPageHeader
         title="검토표"
         description={meta || '결산 · 부가가치세'}
-        icon={<PageHeaderIcon name="filing-check" />}
+        icon={<PageHeaderIcon name="review-sheet" />}
       />
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <ReviewHubTabs active="review" />

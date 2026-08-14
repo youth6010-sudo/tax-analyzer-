@@ -3,6 +3,7 @@ import {
   TAX_TYPES,
   VAT_PERIODS,
   CORPORATE_FY_END_MONTHS,
+  CORP_NOTICE_PHASES,
   INCOME_FILING_TYPES,
 } from '../_lib/taxTypes';
 import { SELECTABLE_YEARS } from '../_lib/holidays';
@@ -98,19 +99,34 @@ export default function PeriodSelector({ taxType, params, onChange }: Props) {
 
         {/* 법인세: 결산월 */}
         {taxType === TAX_TYPES.CORPORATE && (
-          <Field label="사업연도 종료(결산)월">
-            <select
-              className={selectClass}
-              value={params.fyEndMonth}
-              onChange={e => onChange('fyEndMonth', Number(e.target.value))}
-            >
-              {CORPORATE_FY_END_MONTHS.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <>
+            <Field label="신고 구분">
+              <select
+                className={selectClass}
+                value={params.corpPhase === '중간예납' ? '중간예납' : '확정'}
+                onChange={e => onChange('corpPhase', e.target.value)}
+              >
+                {CORP_NOTICE_PHASES.map(ph => (
+                  <option key={ph} value={ph}>
+                    {ph === '중간예납' ? '법인세 중간예납' : '법인세 확정'}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="사업연도 종료(결산)월">
+              <select
+                className={selectClass}
+                value={params.fyEndMonth}
+                onChange={e => onChange('fyEndMonth', Number(e.target.value))}
+              >
+                {CORPORATE_FY_END_MONTHS.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
         )}
 
         {/* 종소세: 신고 유형 */}

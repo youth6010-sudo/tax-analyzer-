@@ -1,5 +1,5 @@
-import { TAX_TYPES, VAT_PERIODS } from './taxTypes';
-import type { DeadlineResult, TaxTypeKey } from './types';
+import { TAX_TYPES, VAT_PERIODS, isVatPreliminaryNotice } from './taxTypes';
+import type { CorpNoticePhase, DeadlineResult, TaxTypeKey } from './types';
 import { ALL_MANAGER_CONTACTS, type ManagerContact } from './managerContact';
 import { DEFAULT_OFFICIAL_INCOME_BODY } from './defaultOfficialIncomeBody';
 import { DEFAULT_OFFICIAL_VAT_BODY } from './defaultOfficialVatBody';
@@ -187,6 +187,8 @@ export function buildOfficialLetterVars(opts: {
   year: number;
   vatPeriodId?: string;
   vatBusinessType?: VatBusinessType;
+  fyEndMonth?: number;
+  corpPhase?: CorpNoticePhase;
   officialKind?: OfficialLetterKind | null;
 }): OfficialLetterVars {
   const { deadline, materialDeadlineLine, manager, companyName, year, vatPeriodId } = opts;
@@ -207,12 +209,22 @@ export function buildOfficialLetterVars(opts: {
   let periodNoteLine = '{공문기간안내}';
 
   if (kind === 'vat') {
-    subject = periodLabel ? `${periodLabel} 부가가치세 신고 자료안내의 건` : subject;
-    filingParagraph =
-      periodLabel && vatShort && dueShort
+    const noticeOnly = isVatPreliminaryNotice(vatPeriodId);
+    subject = noticeOnly
+      ? `${year}년 ${vatShort || '예정고지'} 납부 안내의 건`
+      : periodLabel
+        ? `${periodLabel} 부가가치세 신고 자료안내의 건`
+        : subject;
+    filingParagraph = noticeOnly
+      ? dueShort
+        ? `안녕하세요. 부가세 예정고지는 확정신고 전에 세무서에서 미리 알려 준 세액을 납부하실 차례입니다. 납부기한은 ${dueShort}입니다.`
+        : '안녕하세요. 부가세 예정고지는 확정신고 전에 세무서에서 미리 알려 준 세액을 납부하실 차례입니다.'
+      : periodLabel && vatShort && dueShort
         ? `${year}년도 부가가치세 ${vatShort}신고 및 납부기한은 ${dueShort}입니다.`
         : filingParagraph;
-    periodNoteLine = `신고대상 기간 : ${coveragePeriod}`;
+    periodNoteLine = noticeOnly
+      ? `고지 대상 기간 : ${coveragePeriod}`
+      : `신고대상 기간 : ${coveragePeriod}`;
   } else if (kind === 'income') {
     subject = `${year}년 귀속 종합소득세 신고 자료안내의 건`;
     filingParagraph = dueShort
@@ -220,11 +232,24 @@ export function buildOfficialLetterVars(opts: {
       : filingParagraph;
     periodNoteLine = `귀속 연도 : ${year}년`;
   } else if (kind === 'corporate') {
-    subject = `${year}년 귀속 법인세 신고 자료안내의 건`;
-    filingParagraph = dueShort
-      ? `회계기간이 ${year}.1.1~${year}.12.31인 법인은 법인세 결산 신고 및 납부기한은 ${dueShort}입니다.`
-      : `회계기간이 ${year}.1.1~${year}.12.31인 법인은 법인세 결산 신고를 하셔야 합니다.`;
-    periodNoteLine = `회계기간 : ${year}.1.1~${year}.12.31`;
+    const fy = opts.fyEndMonth ?? 12;
+    const interim = opts.corpPhase === '중간예납';
+    const cov =
+      deadline?.coverage?.replace(/^(사업연도|중간예납기간)\s*/, '') ||
+      `${year}.1.1~${year}.12.31`;
+    if (interim) {
+      subject = `${year}년 법인세 중간예납 자료안내의 건`;
+      filingParagraph = dueShort
+        ? `안녕하세요. 법인세 중간예납은 사업연도 전반기 실적에 대해 세액을 미리 납부하실 차례입니다. 납부기한은 ${dueShort}입니다.`
+        : '안녕하세요. 법인세 중간예납은 사업연도 전반기 실적에 대해 세액을 미리 납부하실 차례입니다.';
+      periodNoteLine = `중간예납기간 : ${cov}`;
+    } else {
+      subject = `${year}년 ${fy}월 결산 법인세 신고 자료안내의 건`;
+      filingParagraph = dueShort
+        ? `회계기간이 ${cov}인 법인은 법인세 결산 신고 및 납부기한은 ${dueShort}입니다.`
+        : `회계기간이 ${cov}인 법인은 법인세 결산 신고를 하셔야 합니다.`;
+      periodNoteLine = `회계기간 : ${cov}`;
+    }
   }
 
   return {

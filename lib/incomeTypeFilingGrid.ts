@@ -440,6 +440,39 @@ export function computeIncomeGridStats(
   return { target, received, diff: target - received };
 }
 
+type GridRowLike = {
+  manager?: string;
+  cells: Record<string, IncomeGridCell | undefined>;
+};
+
+/** 활성 근로내용확인신고 칸이 있고, 접수일·접수방법이 모두 채워짐 */
+export function isLaborContentFullyFilled(grid: GridRowLike[]): boolean {
+  const cells = grid
+    .map(row => row.cells.laborContentReport)
+    .filter((cell): cell is IncomeGridCell => Boolean(cell?.active));
+  if (cells.length === 0) return false;
+  return cells.every(
+    cell => Boolean(cell.acceptanceDate?.trim()) && Boolean(cell.acceptanceMethod?.trim()),
+  );
+}
+
+/** 연말정산 활성 칸이 모두 접수됨 */
+export function isYearEndFullyReceived(grid: GridRowLike[], manager?: string): boolean {
+  const rows =
+    manager && manager !== '전체' ? grid.filter(r => r.manager === manager) : grid;
+  let target = 0;
+  let received = 0;
+  for (const row of rows) {
+    for (const col of YEAR_END_COLUMNS) {
+      const cell = row.cells[col.key];
+      if (!cell?.active) continue;
+      target += 1;
+      if (cell.filed) received += 1;
+    }
+  }
+  return target > 0 && target === received;
+}
+
 export type UnreceivedByColumn = {
   key: string;
   label: string;

@@ -754,7 +754,7 @@ export default function VatEntryProgressBoard() {
             ? '부가세 자료입력 진행도 — 신고대상확인(부가세) 활성 업체 · 전체 담당자'
             : '부가세 자료입력 진행도 — 신고대상확인(부가세) 활성 업체 · 내 담당 수임처'
         }
-        icon={<PageHeaderIcon name="filing-check" />}
+        icon={<PageHeaderIcon name="review-sheet" />}
       />
 
       <ReviewHubTabs active="vat" />
@@ -831,7 +831,7 @@ export default function VatEntryProgressBoard() {
       ) : null}
 
       <p className="text-[11px] text-slate-500">
-        O/X/△ 열은 클릭으로 전환. 기타증빙·통장거래내역은 빈칸→△(자료수취)→O(입력). 수기·불공제·신용매출·영세율매출은
+        O/X/△ 열은 클릭으로 전환. 기타증빙·통장거래내역은 빈칸→△(자료수취)→O(입력)→X(수취없음). 수기·불공제·신용매출·영세율매출은
         거래처명을 눌러 체크박스로 활성화. 확정 기수에 체크 시 예정이 비어 있으면 예정까지 함께
         기록(연간진행표 상호연동). Alt+클릭 색칠.
       </p>

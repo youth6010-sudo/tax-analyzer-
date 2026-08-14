@@ -56,6 +56,16 @@ export async function setTaxDeadlineCheckoff(
     });
 }
 
+export async function setTaxDeadlineCheckoffs(
+  deadlineIds: string[],
+  memberName: string,
+  completed: boolean,
+): Promise<void> {
+  const name = memberName.trim();
+  if (!name || deadlineIds.length === 0) return;
+  await Promise.all(deadlineIds.map(id => setTaxDeadlineCheckoff(id, name, completed)));
+}
+
 export async function countUserCompletedTaxDeadlineCheckoffs(
   memberName: string,
   deadlineIds: string[],

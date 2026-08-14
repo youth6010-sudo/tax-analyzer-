@@ -7,8 +7,12 @@ import {
   usesWithholdingBreakdown,
   WITHHOLDING_ITEM_LABELS,
 } from '../_lib/withholdingItems';
-import { truncateWonUnit } from '../_lib/templates';
-import { noticeInput, noticeLabel, noticeSection, noticeSectionTitle } from './noticeUi';
+import {
+  truncateWonUnit,
+  DEFAULT_CORP_INTERIM_AMOUNT_NOTE,
+  DEFAULT_CORP_INTERIM_FILING_NOTE,
+} from '../_lib/templates';
+import { noticeInput, noticeLabel, noticeSection, noticeSectionTitle, noticeTextarea } from './noticeUi';
 
 const inputClass = `${noticeInput} w-full min-w-0 max-w-full box-border`;
 
@@ -94,6 +98,9 @@ type Props = {
   /** 수임처 연결 시 첨부 서류 문구가 세목별로 저장됨 */
   clientLinked?: boolean;
   embedded?: boolean;
+  sectionTitle?: string;
+  /** 법인세 중간예납 전용 입력 */
+  corpInterim?: boolean;
 };
 
 export default function PaymentNoticeField({
@@ -108,6 +115,8 @@ export default function PaymentNoticeField({
   onReLinkVatAmount,
   clientLinked = false,
   embedded = false,
+  sectionTitle,
+  corpInterim = false,
 }: Props) {
   const update = (patch: Partial<PaymentNotice>) => onChange({ ...value, ...patch });
 
@@ -172,7 +181,10 @@ export default function PaymentNoticeField({
   const body = (
     <>
       <div className={`flex flex-wrap items-center ${embedded ? 'justify-end' : 'justify-between'} gap-2`}>
-        {!embedded && <h2 className={noticeSectionTitle}>신고 결과 안내 (납부세액)</h2>}
+        {!embedded && (
+          <h2 className={noticeSectionTitle}>{sectionTitle ?? '신고 결과 안내 (납부세액)'}</h2>
+        )}
+        {!corpInterim && (
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
           납부서
           <input
@@ -185,8 +197,10 @@ export default function PaymentNoticeField({
           />
           장
         </label>
+        )}
       </div>
 
+      {!corpInterim && (
       <label className="mt-3 block min-w-0">
         <span className={`${noticeLabel} mb-1 block`}>첨부 서류</span>
         <div className="flex min-w-0 items-center gap-1">
@@ -211,6 +225,7 @@ export default function PaymentNoticeField({
           )}
         </p>
       </label>
+      )}
 
       {vatAmountLinked && (
         <p className="mt-2 text-[11px] font-medium text-blue-600">
@@ -268,6 +283,57 @@ export default function PaymentNoticeField({
                 </span>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {corpInterim && (
+        <div className="mt-3 space-y-3">
+          <label className="block min-w-0">
+            <span className={`${noticeLabel} mb-1 block`}>세액 설명 (괄호)</span>
+            <input
+              type="text"
+              value={value.corpInterimAmountNote ?? DEFAULT_CORP_INTERIM_AMOUNT_NOTE}
+              onChange={e => update({ corpInterimAmountNote: e.target.value })}
+              placeholder={DEFAULT_CORP_INTERIM_AMOUNT_NOTE}
+              className={inputClass}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={`${noticeLabel} mb-1 block`}>신고 방식</span>
+            <textarea
+              value={value.corpInterimFilingNote || ''}
+              onChange={e => update({ corpInterimFilingNote: e.target.value })}
+              placeholder={DEFAULT_CORP_INTERIM_FILING_NOTE}
+              rows={4}
+              className={`${noticeTextarea} w-full min-w-0`}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">비워 두면 기본 문구(직전 사업연도 기준)가 들어갑니다.</p>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <input
+              type="checkbox"
+              checked={Boolean(value.corpInterimBankFollowup)}
+              onChange={e => update({ corpInterimBankFollowup: e.target.checked })}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+            />
+            <span className="text-xs leading-relaxed text-slate-600">
+              <span className="font-bold text-slate-800">통장 내역 추가 확인 요청</span>
+              <br />
+              필요한 경우에만 체크하면 안내문 2번과 첨부 리스트가 추가됩니다.
+            </span>
+          </label>
+          {value.corpInterimBankFollowup && (
+            <label className="block min-w-0 max-w-xs">
+              <span className={`${noticeLabel} mb-1 block`}>회신 기한</span>
+              <input
+                type="date"
+                value={value.corpInterimReplyDate || ''}
+                onChange={e => update({ corpInterimReplyDate: e.target.value })}
+                className={inputClass}
+              />
+              <p className="mt-1 text-[11px] text-slate-400">비워 두면 「8월 OO일까지」로 표시됩니다.</p>
+            </label>
           )}
         </div>
       )}
@@ -422,7 +488,7 @@ export default function PaymentNoticeField({
             <b className="text-emerald-600">{refundTotal.toLocaleString('ko-KR')} 원</b>
           </p>
         )}
-        {!useInstallments && !useWhBreakdown && <p>환급은 금액 앞에 &lsquo;-&rsquo;를 붙여 입력하세요. (예: -500,000)</p>}
+        {!useInstallments && !useWhBreakdown && !corpInterim && <p>환급은 금액 앞에 &lsquo;-&rsquo;를 붙여 입력하세요. (예: -500,000)</p>}
         {useWhBreakdown && <p>선택한 항목만 안내문 납부 내역에 표시됩니다. 환급은 금액 앞에 &lsquo;-&rsquo;를 붙이세요.</p>}
       </div>
     </>

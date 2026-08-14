@@ -60,12 +60,29 @@ export function getCycle(taxId: FilingTaxId): FilingCycle {
 
 export function defaultPeriod(): FilingPeriod {
   const { year, month } = currentMonthlyFilingMonth();
+  const corp = defaultCorpFilingPeriod();
   return {
     year,
     month,
     vatPhase: '1기 확정',
-    corpPhase: '확정',
+    corpPhase: corp.corpPhase,
     half: defaultSimplePayrollHalf(month),
+  };
+}
+
+/**
+ * 법인세 기본 신고분 — 달력 월 기준.
+ * 6~11월 중간예납(당해연도), 12월·1~5월 확정(1~5월은 전년도 사업연도).
+ */
+export function defaultCorpFilingPeriod(now = new Date()): { year: number; corpPhase: CorpPhase } {
+  const month = now.getMonth() + 1;
+  const calYear = now.getFullYear();
+  if (month >= 6 && month <= 11) {
+    return { year: calYear, corpPhase: '중간예납' };
+  }
+  return {
+    year: month <= 5 ? calYear - 1 : calYear,
+    corpPhase: '확정',
   };
 }
 

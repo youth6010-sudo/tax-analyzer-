@@ -80,10 +80,25 @@ function calcVat({ year, vatPeriodId }: DeadlineParams): DeadlineResult {
   });
 }
 
-// 법인세: 사업연도 종료월 말일로부터 3개월이 되는 달의 말일
-function calcCorporate({ year, fyEndMonth }: DeadlineParams): DeadlineResult {
-  // 사업연도 종료 = year년 fyEndMonth월 말일
-  // 신고기한 = 종료월 + 3개월이 되는 달의 말일
+// 법인세: 확정 = 사업연도 종료월 말일부터 3개월이 되는 달의 말일
+// 중간예납 = 개시일부터 6개월이 되는 날부터 2개월이 되는 달의 말일
+function calcCorporate({ year, fyEndMonth, corpPhase }: DeadlineParams): DeadlineResult {
+  const fyStart = new Date(year, fyEndMonth - 12, 1);
+  const fyEnd = lastDayOfMonth(year, fyEndMonth);
+  const isInterim = corpPhase === '중간예납';
+
+  if (isInterim) {
+    const interimEnd = new Date(fyStart.getFullYear(), fyStart.getMonth() + 6, 0);
+    const dueDate = new Date(interimEnd.getFullYear(), interimEnd.getMonth() + 3, 0);
+    return buildResult({
+      periodLabel: `${year}년 중간예납`,
+      coverage: `중간예납기간 ${formatDottedDate(fyStart, { withWeekday: false })} ~ ${formatDottedDate(interimEnd, { withWeekday: false })}`,
+      coverageStart: fyStart,
+      coverageEnd: interimEnd,
+      statutory: dueDate,
+    });
+  }
+
   let dueMonth = fyEndMonth + 3;
   let dueYear = year;
   if (dueMonth > 12) {
@@ -91,14 +106,11 @@ function calcCorporate({ year, fyEndMonth }: DeadlineParams): DeadlineResult {
     dueYear += 1;
   }
   const dueDate = lastDayOfMonth(dueYear, dueMonth);
-  // 사업연도(과세기간): 종료월 말일 기준 직전 12개월
-  // 12월 결산 → 1/1~12/31, 3월 결산 → 전년 4/1~당해 3/31
-  const coverageEnd = lastDayOfMonth(year, fyEndMonth);
-  const coverageStart = new Date(year, fyEndMonth - 12, 1);
   return buildResult({
     periodLabel: `${year}년 ${fyEndMonth}월 결산`,
-    coverageStart,
-    coverageEnd,
+    coverage: `사업연도 ${formatDottedDate(fyStart, { withWeekday: false })} ~ ${formatDottedDate(fyEnd, { withWeekday: false })}`,
+    coverageStart: fyStart,
+    coverageEnd: fyEnd,
     statutory: dueDate,
   });
 }
@@ -122,7 +134,11 @@ function calcIncome({ year, filingTypeId }: DeadlineParams): DeadlineResult {
 //  · 부가세: 신고 마감 2주 전
 //  · 종소세: 신고 마감 3주 전
 //  · 법인세: 신고 마감월 직전 달 15일(= 12월 결산 기준 2월 중순)
-export function defaultMaterialDate(taxType: TaxTypeKey, finalDate: Date): string {
+export function defaultMaterialDate(
+  taxType: TaxTypeKey,
+  finalDate: Date,
+  opts?: { corpPhase?: string },
+): string {
   switch (taxType) {
     case TAX_TYPES.WITHHOLDING:
       return toISODate(addDays(finalDate, -3));
@@ -131,6 +147,9 @@ export function defaultMaterialDate(taxType: TaxTypeKey, finalDate: Date): strin
     case TAX_TYPES.INCOME:
       return toISODate(addDays(finalDate, -21));
     case TAX_TYPES.CORPORATE:
+      if (opts?.corpPhase === '중간예납') {
+        return toISODate(addDays(finalDate, -14));
+      }
       return toISODate(new Date(finalDate.getFullYear(), finalDate.getMonth() - 1, 15));
     default:
       return toISODate(finalDate);

@@ -13,6 +13,7 @@ import {
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { canReviewLeaveRequest, canDeleteCancelledLeave } from '@/lib/leaveAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
+import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 type Tab = 'balances' | 'mine' | 'pending';
 
 function formatNum(n: number): string {
@@ -153,7 +154,9 @@ export default function LeavePageClient() {
     <PortalPageShell bare>
       <div className={`${portalMain} w-full py-4 space-y-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="flex min-w-0 items-start gap-3">
+            <PageHeaderIcon name="leave" />
+            <div>
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
@@ -161,6 +164,7 @@ export default function LeavePageClient() {
               있고, 이미 승인된 휴가는 취소 요청 후 인디가 승인해야 취소됩니다(팀장 단계 없음).
               잔고 전체 조회·수정은 인디·페리만 가능합니다.
             </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

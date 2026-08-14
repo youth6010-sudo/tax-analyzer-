@@ -26,7 +26,10 @@ export function resolveOfficialFormId(
   params: DeadlineParams,
 ): string {
   if (kind === 'vat') return `formal-vat-${params.vatPeriodId}`;
-  if (kind === 'corporate') return `formal-corp-${params.fyEndMonth}`;
+  if (kind === 'corporate') {
+    const phase = params.corpPhase === '중간예납' ? 'interim' : 'final';
+    return `formal-corp-${params.fyEndMonth}-${phase}`;
+  }
   return `formal-income-${params.filingTypeId}`;
 }
 

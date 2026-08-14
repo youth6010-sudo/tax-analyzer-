@@ -41,7 +41,7 @@ export const TAX_MENU = [
     id: 'filing-help',
     label: '신고도움',
     items: [
-      { label: '신고검토', href: '/clients/filing-check' },
+      { label: '신고접수검토', href: '/clients/filing-check' },
       { label: '안내문 생성기', href: '/tools/notice-generator' },
     ],
   },

@@ -6,6 +6,7 @@ import {
   TAX_TYPES,
   VAT_PERIODS,
   CORPORATE_FY_END_MONTHS,
+  CORP_NOTICE_PHASES,
   INCOME_FILING_TYPES,
 } from '../_lib/taxTypes';
 import { SELECTABLE_YEARS } from '../_lib/holidays';
@@ -68,6 +69,7 @@ type Props = {
   clientPicker?: ReactNode;
   vatBusinessType?: VatBusinessType;
   onVatBusinessTypeChange?: (value: VatBusinessType) => void;
+  hideMaterialDeadline?: boolean;
 };
 
 function PeriodSecondField({
@@ -85,7 +87,7 @@ function PeriodSecondField({
       : taxType === TAX_TYPES.VAT
         ? '과세기간'
         : taxType === TAX_TYPES.CORPORATE
-          ? '결산월'
+          ? '신고 구분'
           : taxType === TAX_TYPES.INCOME
             ? '신고 유형'
             : '추가 선택';
@@ -120,17 +122,30 @@ function PeriodSecondField({
         </select>
       )}
       {taxType === TAX_TYPES.CORPORATE && (
-        <select
-          className={selectClass}
-          value={params.fyEndMonth}
-          onChange={e => onParamChange('fyEndMonth', Number(e.target.value))}
-        >
-          {CORPORATE_FY_END_MONTHS.map(m => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1.5">
+          <select
+            className={selectClass}
+            value={params.corpPhase === '중간예납' ? '중간예납' : '확정'}
+            onChange={e => onParamChange('corpPhase', e.target.value)}
+          >
+            {CORP_NOTICE_PHASES.map(ph => (
+              <option key={ph} value={ph}>
+                {ph === '중간예납' ? '법인세 중간예납' : '법인세 확정'}
+              </option>
+            ))}
+          </select>
+          <select
+            className={selectClass}
+            value={params.fyEndMonth}
+            onChange={e => onParamChange('fyEndMonth', Number(e.target.value))}
+          >
+            {CORPORATE_FY_END_MONTHS.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
       {taxType === TAX_TYPES.INCOME && (
         <select
@@ -165,6 +180,7 @@ export default function NoticeSetupBar({
   clientPicker,
   vatBusinessType = 'individual',
   onVatBusinessTypeChange,
+  hideMaterialDeadline = false,
 }: Props) {
   const updateMaterial = (patch: Partial<MaterialDeadline>) =>
     onMaterialDeadlineChange({ ...materialDeadline, ...patch });
@@ -254,6 +270,7 @@ export default function NoticeSetupBar({
             />
           </div>
 
+          {!hideMaterialDeadline && (
           <div className={noticeHalfRow}>
             <label className="block min-w-0">
               <span className={noticeLabel}>자료 제출 마감</span>
@@ -298,6 +315,7 @@ export default function NoticeSetupBar({
               </label>
             </div>
           </div>
+          )}
         </div>
 
         {deadline && (

@@ -14,7 +14,7 @@ import PaymentNoticeField from './_components/PaymentNoticeField';
 import VatReportField from './_components/VatReportField';
 import TemplateEditor from './_components/TemplateEditor';
 import OfficialLetterEditor from './_components/OfficialLetterEditor';
-import { TAX_TYPES, TAX_TYPE_META } from './_lib/taxTypes';
+import { TAX_TYPES, TAX_TYPE_META, isVatPreliminaryNotice } from './_lib/taxTypes';
 import { SELECTABLE_YEARS } from './_lib/holidays';
 import {
   DEFAULT_TEMPLATE_BY_SCENARIO,
@@ -88,12 +88,14 @@ function defaultNoticeParams(): DeadlineParams {
   const { year, month } = currentMonthlyFilingMonth();
   const min = SELECTABLE_YEARS[0];
   const max = SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1];
+  const calMonth = new Date().getMonth() + 1;
   return {
     year: Math.min(Math.max(year, min), max),
     month,
     vatPeriodId: '1-final',
     fyEndMonth: 12,
     filingTypeId: 'general',
+    corpPhase: calMonth >= 6 && calMonth <= 11 ? '중간예납' : '확정',
   };
 }
 
@@ -415,7 +417,7 @@ export default function NoticeGeneratorPage() {
     // (원천세 -3일 / 부가세 -2주 / 종소세 -3주 / 법인세 직전 달 15일)
     const nextDeadline = calculateDeadline(next, params);
     if (nextDeadline) {
-      const def = defaultMaterialDate(next, nextDeadline.final);
+      const def = defaultMaterialDate(next, nextDeadline.final, { corpPhase: params.corpPhase });
       lastAutoMaterialDate.current = def;
       setMaterialDeadline(prev => ({ ...prev, enabled: true, date: def }));
     }
@@ -514,6 +516,16 @@ export default function NoticeGeneratorPage() {
 
   const handleParamChange = (key: keyof DeadlineParams, value: string | number) => {
     setParams(prev => ({ ...prev, [key]: value }));
+    if (key === 'vatPeriodId' && isVatPreliminaryNotice(String(value))) {
+      setVatPaymentLinked(false);
+    }
+    if (key === 'corpPhase' && value === '중간예납') {
+      setPayment(prev => ({
+        ...prev,
+        localAmount: 0,
+        slips: prev.slips > 1 ? 1 : prev.slips || 1,
+      }));
+    }
   };
 
   // 마운트 시 담당자 서식 + 전역 기본 서식 로드
@@ -616,7 +628,7 @@ export default function NoticeGeneratorPage() {
   const periodTaxType = isOfficialMode ? taxTypeForOfficialKind(officialTaxKind) : taxType;
   const officialFormId = useMemo(
     () => resolveOfficialFormId(officialTaxKind, params),
-    [officialTaxKind, params.vatPeriodId, params.fyEndMonth, params.filingTypeId],
+    [officialTaxKind, params.vatPeriodId, params.fyEndMonth, params.filingTypeId, params.corpPhase],
   );
   const officialEditorKey = usesFormalLayout ? officialFormId : officialTaxKind;
 
@@ -924,7 +936,7 @@ export default function NoticeGeneratorPage() {
   useEffect(() => {
     if (!deadline) return;
     const finalISO = toISODate(deadline.final);
-    const def = defaultMaterialDate(periodTaxType, deadline.final);
+    const def = defaultMaterialDate(periodTaxType, deadline.final, { corpPhase: params.corpPhase });
     const prevAuto = lastAutoMaterialDate.current;
     lastAutoMaterialDate.current = def;
     setMaterialDeadline(prev => {
@@ -942,7 +954,7 @@ export default function NoticeGeneratorPage() {
 
   const handleMaterialDeadlineChange = (next: MaterialDeadline) => {
     if (!next.date && deadline) {
-      next = { ...next, date: defaultMaterialDate(periodTaxType, deadline.final) };
+      next = { ...next, date: defaultMaterialDate(periodTaxType, deadline.final, { corpPhase: params.corpPhase }) };
     }
     setMaterialDeadline({ ...next, enabled: true });
   };
@@ -967,6 +979,8 @@ export default function NoticeGeneratorPage() {
         year: params.year,
         vatPeriodId: params.vatPeriodId,
         vatBusinessType,
+        fyEndMonth: params.fyEndMonth,
+        corpPhase: params.corpPhase,
         officialKind: isOfficialMode ? officialTaxKind : null,
       }),
     [
@@ -976,6 +990,8 @@ export default function NoticeGeneratorPage() {
       effectiveCompanyName,
       params.year,
       params.vatPeriodId,
+      params.fyEndMonth,
+      params.corpPhase,
       vatBusinessType,
       isOfficialMode,
       officialTaxKind,
@@ -1008,6 +1024,9 @@ export default function NoticeGeneratorPage() {
     ],
   );
 
+  const vatNoticeOnly = taxType === TAX_TYPES.VAT && isVatPreliminaryNotice(params.vatPeriodId);
+  const corpInterim = taxType === TAX_TYPES.CORPORATE && params.corpPhase === '중간예납';
+
   const paymentHtml = useMemo(
     () =>
       buildPaymentNoticeHtml({
@@ -1015,15 +1034,16 @@ export default function NoticeGeneratorPage() {
         deadline,
         payment,
         template: activePaymentNoticeTemplate,
+        vatNoticeOnly,
       }),
-    [taxType, deadline, payment, activePaymentNoticeTemplate],
+    [taxType, deadline, payment, activePaymentNoticeTemplate, vatNoticeOnly],
   );
 
   const isVat = taxType === TAX_TYPES.VAT;
 
   // 부가세 분납: 납부서 장수만큼 회차 행을 맞추고, 빈 일자는 권장 일정으로 자동 채움(수정 가능)
   useEffect(() => {
-    if (!isVat || !deadline) return;
+    if (!isVat || vatNoticeOnly || !deadline) return;
     const dates = installmentSchedule(deadline.final).map(toISODate);
     setPayment(prev => {
       const n = Math.max(0, prev.slips);
@@ -1036,7 +1056,7 @@ export default function NoticeGeneratorPage() {
         prev.installments.every((it, i) => it.date === next[i].date && it.amount === next[i].amount);
       return same ? prev : { ...prev, installments: next };
     });
-  }, [isVat, deadline, payment.slips]);
+  }, [isVat, vatNoticeOnly, deadline, payment.slips]);
 
   const vatReportHtml = useMemo(
     () =>
@@ -1051,7 +1071,7 @@ export default function NoticeGeneratorPage() {
 
   // 부가세: 신고 결과 보고 최종세액 → 납부금액 자동 연동 (연동 모드일 때만, 수동 입력 시 중단)
   useEffect(() => {
-    if (!isVat || !vatPaymentLinked) return;
+    if (!isVat || vatNoticeOnly || !vatPaymentLinked) return;
     const { finalTax } = calcVatReport(vatReport);
     setPayment(prev => {
       const installments = [...prev.installments];
@@ -1065,7 +1085,7 @@ export default function NoticeGeneratorPage() {
       if (selectedClientRef.current) setClientDirty(true);
       return { ...prev, amount: finalTax, installments };
     });
-  }, [isVat, vatReport, payment.slips, vatPaymentLinked]);
+  }, [isVat, vatNoticeOnly, vatReport, payment.slips, vatPaymentLinked]);
 
   const meta = TAX_TYPE_META[periodTaxType];
 
@@ -1104,6 +1124,7 @@ export default function NoticeGeneratorPage() {
         onMaterialDeadlineChange={handleMaterialDeadlineChange}
         vatBusinessType={vatBusinessType}
         onVatBusinessTypeChange={setVatBusinessType}
+        hideMaterialDeadline={!isOfficialMode && vatNoticeOnly}
         clientPicker={
           <NoticeClientPicker
             value={
@@ -1162,6 +1183,7 @@ export default function NoticeGeneratorPage() {
       ) : (
       <div className={`${noticePageSplit} w-full`}>
         <div className="space-y-3 min-w-0">
+          {!vatNoticeOnly && (
           <CompanyNotesField
             key={`${selectedClient?.id ?? 'local'}-${taxType}`}
             materials={effectiveMaterials}
@@ -1177,26 +1199,43 @@ export default function NoticeGeneratorPage() {
             onPayrollChange={handlePayrollChange}
             onSave={flushed => void handleSaveClient(flushed)}
           />
+          )}
 
-          {isVat && (
+          {isVat && !vatNoticeOnly && (
             <NoticeCollapsibleSection title="신고 결과 보고 (부가세)">
               <VatReportField value={vatReport} onChange={handleVatReportChange} embedded />
             </NoticeCollapsibleSection>
           )}
 
-          <NoticeCollapsibleSection title="신고 결과 안내 (납부세액)">
+          <NoticeCollapsibleSection
+            title={
+              vatNoticeOnly
+                ? '예정고지 납부 안내'
+                : corpInterim
+                  ? '중간예납 납부 안내'
+                  : '신고 결과 안내 (납부세액)'
+            }
+          >
             <PaymentNoticeField
               value={payment}
               onChange={handlePaymentChange}
               taxTypeName={meta.name}
-              hasLocalTax={hasLocalIncomeTax(taxType)}
+              hasLocalTax={hasLocalIncomeTax(taxType, deadline)}
               isWithholding={taxType === TAX_TYPES.WITHHOLDING}
-              showInstallments={isVat}
-              vatAmountLinked={isVat && vatPaymentLinked}
-              onManualAmountEdit={isVat ? handleVatPaymentUnlink : undefined}
-              onReLinkVatAmount={isVat ? handleVatPaymentRelink : undefined}
+              showInstallments={isVat && !vatNoticeOnly}
+              vatAmountLinked={isVat && !vatNoticeOnly && vatPaymentLinked}
+              onManualAmountEdit={isVat && !vatNoticeOnly ? handleVatPaymentUnlink : undefined}
+              onReLinkVatAmount={isVat && !vatNoticeOnly ? handleVatPaymentRelink : undefined}
               clientLinked={inClientMode}
               embedded
+              sectionTitle={
+                vatNoticeOnly
+                  ? '예정고지 납부 안내'
+                  : corpInterim
+                    ? '중간예납 납부 안내'
+                    : undefined
+              }
+              corpInterim={corpInterim}
             />
           </NoticeCollapsibleSection>
         </div>
@@ -1204,6 +1243,7 @@ export default function NoticeGeneratorPage() {
         <div className="space-y-3 min-w-0 md:border-l md:border-slate-200 md:pl-4">
           {templateLoaded && (
             <NoticeCollapsibleSection title="담당자 서식 설정">
+              {!vatNoticeOnly && (
               <TemplateEditor
                 key={scenario}
                 html={noticeCustomHtml}
@@ -1220,7 +1260,8 @@ export default function NoticeGeneratorPage() {
                 onDefaultSave={() => void persistGlobalDefaults()}
                 defaultSaveState={defaultSaveState}
               />
-              {isVat && (
+              )}
+              {isVat && !vatNoticeOnly && (
                 <TemplateEditor
                   key="vat-report-template"
                   html={vatReportCustomHtml}
@@ -1266,7 +1307,8 @@ export default function NoticeGeneratorPage() {
               mainHtml={messageHtml}
               paymentHtml={paymentHtml}
               vatHtml={vatReportHtml}
-              showVat={isVat}
+              showVat={isVat && !vatNoticeOnly}
+              showMain={!vatNoticeOnly}
               embedded
             />
           </NoticeCollapsibleSection>
