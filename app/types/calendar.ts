@@ -1,3 +1,5 @@
+import { managerNamesMatch } from '@/app/utils/managerMatch';
+
 export type ChecklistCategory = 'tax' | 'other';
 
 export type ChecklistTaxType =
@@ -195,6 +197,9 @@ export type CalendarEventDto = {
   completed?: boolean;
   /** 개인 체크리스트 반복 시리즈 ID */
   repeatSeriesId?: string | null;
+  /** 협업자 지정된 개인 일정 */
+  collaborative?: boolean;
+  assigneeNames?: string[];
   /** 휴가 오전/오후 반차 */
   leaveHalfSlot?: 'am' | 'pm' | '';
   checkoffDone?: number;
@@ -312,4 +317,14 @@ export function normalizeChecklistTaxType(taxType: ChecklistTaxType): {
 
 export function getChecklistTypeLabel(taxType: ChecklistTaxType): string {
   return CHECKLIST_TAX_OPTIONS.find(t => t.id === taxType)?.label ?? '기타';
+}
+
+/** 현재 사용자가 협업자로 지정됐는지 (작성자 제외) */
+export function isChecklistCollaboratorForViewer(
+  item: Pick<PersonalChecklistDto, 'ownerName' | 'assigneeNames' | 'collaborative'>,
+  viewerName: string | undefined,
+): boolean {
+  if (!viewerName?.trim() || !item.collaborative) return false;
+  if (managerNamesMatch(item.ownerName, viewerName)) return false;
+  return (item.assigneeNames ?? []).some(a => managerNamesMatch(a, viewerName));
 }

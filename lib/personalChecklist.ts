@@ -31,7 +31,7 @@ import {
   setPersonalChecklistCheckoff,
   type PersonalChecklistCheckoffDetailMap,
 } from '@/lib/personalChecklistCheckoffs';
-import { createCompletionNotification, listUnreadPersonalChecklistNotifications, markItemNotificationsRead } from '@/lib/personalChecklistNotifications';
+import { createCollaborationInviteNotifications, createCompletionNotification, listUnreadPersonalChecklistNotifications, markItemNotificationsRead } from '@/lib/personalChecklistNotifications';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 import { getManagerMatchNames, managerNamesMatch, resolveCanonicalMemberName } from '@/app/utils/managerMatch';
 
@@ -295,7 +295,7 @@ function isOpenForViewer(item: PersonalChecklistDto, viewerName: string): boolea
 }
 
 /** 홈 할 일 — 마감 N일 전부터 노출 (반복 일정이 한꺼번에 쌓이지 않도록) */
-export const HOME_CHECKLIST_LEAD_DAYS = 3;
+export const HOME_CHECKLIST_LEAD_DAYS = 14;
 
 function localIsoDatePlusDays(days: number): string {
   const d = new Date();
@@ -405,9 +405,16 @@ export async function listPersonalChecklistInRange(
   ownerNames: string[],
   from: string,
   to: string,
+  viewerName?: string,
 ): Promise<PersonalChecklistDto[]> {
   const names = ownerNames.map(n => n.trim()).filter(Boolean);
   if (names.length === 0) return [];
+
+  const accessConds = names.flatMap(n => [
+    eq(personalChecklistItems.ownerName, n),
+    sql`COALESCE(${personalChecklistItems.assigneeNames}, '[]'::jsonb) ? ${n}`,
+  ]);
+  const access = accessConds.length === 1 ? accessConds[0]! : or(...accessConds)!;
 
   const db = getDb();
   const rows = await db
@@ -417,7 +424,7 @@ export async function listPersonalChecklistInRange(
     })
     .from(personalChecklistItems)
     .where(and(
-      inArray(personalChecklistItems.ownerName, names),
+      access,
       sql`${personalChecklistItems.dueDate} != ''`,
       sql`${personalChecklistItems.taxType} NOT IN ('supplies', 'improvement')`,
       gte(personalChecklistItems.dueDate, from),
@@ -427,7 +434,7 @@ export async function listPersonalChecklistInRange(
     .orderBy(asc(personalChecklistItems.dueDate));
 
   const base = rows.map(r => toBaseDto(r.item, r.clientName?.trim() || undefined));
-  return enrichItems(base);
+  return enrichItems(base, viewerName);
 }
 
 /** 비품주문요청 목록 (캘린더 탭용) */
@@ -832,7 +839,20 @@ export async function createPersonalChecklistItems(
   }
 
   const base = rows.map(row => toBaseDto(row, clientName));
-  return enrichItems(base, ownerName);
+  const enriched = await enrichItems(base, ownerName);
+
+  if (!isRouted && assigneeNames.length > 0) {
+    for (const row of rows) {
+      await createCollaborationInviteNotifications({
+        itemId: row.id,
+        ownerName,
+        assigneeNames,
+        title,
+      });
+    }
+  }
+
+  return enriched;
 }
 
 export type UpdateChecklistInput = Partial<{
@@ -1110,6 +1130,12 @@ export async function updatePersonalChecklistItem(
     ? participantsForCheckoff.length > 0
     : nextAssignees.length > 0;
 
+  const newlyInvited = !isRoutedRequestTaxType(nextTaxType)
+    ? nextAssignees.filter(
+        name => !existingAssignees.some(e => managerNamesMatch(e, name)),
+      )
+    : [];
+
   // 협업: 완료는 본인 checkoff. 항목 completed는 전원 완료 시 true.
   let patchCompleted = patch.completed;
   if (collaborative && patch.completed !== undefined) {
@@ -1120,6 +1146,10 @@ export async function updatePersonalChecklistItem(
 
     const canonicalActor = resolveCanonicalMemberName(actorName, participants);
     await setPersonalChecklistCheckoff(id, canonicalActor, patch.completed, participants);
+
+    if (patch.completed) {
+      await markItemNotificationsRead(actorName, id);
+    }
 
     const doneCount = await countCompletedAmongMembers(id, participants);
     // 시스템개선: 리아·찰리 중 1명만 완료해도 항목 완료
@@ -1202,6 +1232,15 @@ export async function updatePersonalChecklistItem(
   if (row.clientId) {
     const client = await getClientById(row.clientId);
     clientName = client?.companyName;
+  }
+
+  if (newlyInvited.length > 0) {
+    await createCollaborationInviteNotifications({
+      itemId: id,
+      ownerName: existing.ownerName,
+      assigneeNames: newlyInvited,
+      title: row.title,
+    });
   }
 
   const [enriched] = await enrichItems([toBaseDto(row, clientName)], actorName);

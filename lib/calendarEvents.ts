@@ -1,4 +1,5 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { isChecklistCollaboratorForViewer } from '@/app/types/calendar';
 import { formatLeaveKindLabel } from '@/app/types/leave';
 import { listCompanyEvents } from '@/lib/companyEvents';
 import {
@@ -23,7 +24,7 @@ export async function listCalendarEvents(
   const viewer = (opts?.viewerName || '').trim();
 
   // 커넥션 풀(max 3) 고갈 방지 — 병렬 대신 순차 조회
-  const personal = await listPersonalChecklistInRange(names, from, to);
+  const personal = await listPersonalChecklistInRange(names, from, to, viewer);
   const company = await listCompanyEvents({ from, to });
   const team = await listCalendarTeamMembers();
   let leaves: Awaited<ReturnType<typeof listApprovedLeaveInRange>> = [];
@@ -46,6 +47,13 @@ export async function listCalendarEvents(
   for (const item of personal) {
     if (!item.dueDate) continue;
     if (item.taxType === 'supplies' || item.taxType === 'improvement') continue;
+    const viewerIsCollaborator = isChecklistCollaboratorForViewer(item, viewer);
+    const subtitleParts: string[] = [];
+    if (viewerIsCollaborator) subtitleParts.push(`협업 요청 · ${item.ownerName}`);
+    else if (item.collaborative && (item.assigneeNames?.length ?? 0) > 0) {
+      subtitleParts.push(`협업 ${item.assigneeNames.join(', ')}`);
+    }
+    if (item.clientName) subtitleParts.push(item.clientName);
     events.push({
       id: `personal-${item.id}`,
       kind: 'personal',
@@ -54,11 +62,13 @@ export async function listCalendarEvents(
       endDate: item.dueDate,
       allDay: !item.dueTime,
       href: `/calendar?highlight=${item.id}`,
-      subtitle: item.clientName,
+      subtitle: subtitleParts.join(' · ') || undefined,
       ownerName: item.ownerName,
       createdAt: item.createdAt,
-      completed: !!item.completed,
+      completed: !!(item.myCheckoff ?? item.completed),
       repeatSeriesId: item.repeatSeriesId ?? null,
+      collaborative: item.collaborative,
+      assigneeNames: item.assigneeNames,
     });
   }
 

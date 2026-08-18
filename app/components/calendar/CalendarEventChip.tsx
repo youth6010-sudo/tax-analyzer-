@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from 'react';
 import type { CalendarEventDto } from '@/app/types/calendar';
+import { isChecklistCollaboratorForViewer } from '@/app/types/calendar';
 import {
   resolveEventChipColor,
   isLightManagerChipColor,
@@ -16,13 +17,24 @@ function displayTitle(event: CalendarEventDto, currentUser?: string): string {
     }
     return `${event.ownerName} 당번`;
   }
+  const collabViewer =
+    event.kind === 'personal'
+    && isChecklistCollaboratorForViewer(
+      {
+        ownerName: event.ownerName ?? '',
+        assigneeNames: event.assigneeNames ?? [],
+        collaborative: event.collaborative,
+      },
+      currentUser,
+    );
   if (
     (event.kind === 'personal' || event.kind === 'leave') &&
     event.ownerName &&
     currentUser &&
     event.ownerName !== currentUser
   ) {
-    return `[${event.ownerName}] ${event.title}`;
+    const prefix = collabViewer ? '[협업] ' : `[${event.ownerName}] `;
+    return `${prefix}${event.title}`;
   }
   if (event.kind === 'leave' && event.ownerName) {
     return `${event.ownerName} ${event.title}`;
@@ -56,6 +68,16 @@ export default function CalendarEventChip({
   const canEdit =
     (event.kind === 'personal' || event.kind === 'duty') && Boolean(onDoubleClick);
   const done = !!event.completed;
+  const collabHighlight =
+    event.kind === 'personal'
+    && isChecklistCollaboratorForViewer(
+      {
+        ownerName: event.ownerName ?? '',
+        assigneeNames: event.assigneeNames ?? [],
+        collaborative: event.collaborative,
+      },
+      currentUser,
+    );
 
   const handleDoubleClick = (e: MouseEvent) => {
     if (!canEdit) return;
@@ -76,7 +98,9 @@ export default function CalendarEventChip({
           : `shadow-sm ring-1 ring-black/10 ${color} ${lightText ? 'text-slate-900' : 'text-white'}`
       } ${compact ? 'px-1.5 py-0.5 text-[11px] leading-snug' : 'px-2.5 py-1 text-sm leading-snug'} ${
         canEdit ? 'cursor-pointer' : ''
-      } ${done ? 'opacity-60 line-through decoration-2' : ''}`}
+      } ${done ? 'opacity-60 line-through decoration-2' : ''} ${
+        collabHighlight ? 'ring-2 ring-violet-500 ring-offset-1' : ''
+      }`}
       title={canEdit ? `${label} (더블클릭: 수정)` : label}
       onDoubleClick={handleDoubleClick}
       onClick={handleClick}

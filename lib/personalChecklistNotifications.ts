@@ -38,6 +38,76 @@ export async function createCompletionNotification(input: {
   });
 }
 
+/** 협업자 지정 시 초대 알림 (일반 개인 체크리스트) */
+export async function createCollaborationInviteNotifications(input: {
+  itemId: string;
+  ownerName: string;
+  assigneeNames: string[];
+  title: string;
+}): Promise<void> {
+  const db = getDb();
+  const owner = input.ownerName.trim();
+  const title = input.title.trim();
+  if (!title) return;
+
+  for (const raw of input.assigneeNames) {
+    const name = raw.trim();
+    if (!name) continue;
+    if (getManagerMatchNames(name).some(a => getManagerMatchNames(owner).includes(a))) continue;
+
+    const recipientAliases = getManagerMatchNames(name);
+    const existing = await db
+      .select({ id: personalChecklistNotifications.id })
+      .from(personalChecklistNotifications)
+      .where(and(
+        eq(personalChecklistNotifications.itemId, input.itemId),
+        eq(personalChecklistNotifications.kind, 'invited'),
+        inArray(personalChecklistNotifications.recipientName, recipientAliases),
+        isNull(personalChecklistNotifications.readAt),
+      ))
+      .limit(1);
+    if (existing.length > 0) continue;
+
+    await db.insert(personalChecklistNotifications).values({
+      itemId: input.itemId,
+      recipientName: name,
+      actorName: owner,
+      kind: 'invited',
+      title,
+    });
+  }
+}
+
+/** 협업 초대 알림 — 홈·캘린더 배지용 */
+export async function listCollaborationInviteNotifications(
+  recipientName: string,
+  limit = 40,
+): Promise<PersonalChecklistNotificationDto[]> {
+  const db = getDb();
+  const recipientAliases = getManagerMatchNames(recipientName);
+  if (recipientAliases.length === 0) return [];
+
+  const rows = await db
+    .select()
+    .from(personalChecklistNotifications)
+    .where(and(
+      inArray(personalChecklistNotifications.recipientName, recipientAliases),
+      isNull(personalChecklistNotifications.readAt),
+      eq(personalChecklistNotifications.kind, 'invited'),
+    ))
+    .orderBy(desc(personalChecklistNotifications.createdAt))
+    .limit(limit);
+
+  return rows.map(r => ({
+    id: r.id,
+    itemId: r.itemId,
+    actorName: r.actorName,
+    kind: r.kind,
+    title: r.title,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
 /** 협업자가 완료를 취소하면 해당 완료 알림 제거 */
 export async function clearCompletionNotifications(input: {
   itemId: string;

@@ -8,6 +8,7 @@ import {
   listPersonalChecklistForOwner,
   listRoutedRequestsForHome,
 } from '@/lib/personalChecklist';
+import { listCollaborationInviteNotifications } from '@/lib/personalChecklistNotifications';
 import { syncAnnualDueRemindersForManager } from '@/lib/vatAnnualDueReminder';
 import type { ChecklistTaxType, PersonalChecklistAttachment } from '@/app/types/calendar';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const includeCompleted = url.searchParams.get('includeCompleted') === '1'
       || url.searchParams.get('includeCompleted') === 'true';
-    // 홈 할 일 기본: 마감 N일 전부터만 노출 (먼 미래 반복분이 한꺼번에 쌓이지 않게)
+    // 홈 할 일 기본: 마감 2주(14일) 전부터만 노출
     const leadRaw = url.searchParams.get('leadDays');
     const leadDays =
       leadRaw === 'all' || leadRaw === '-1'
@@ -37,13 +38,15 @@ export async function GET(req: Request) {
       console.error('[personal-checklist] annual due reminder sync failed', e);
     }
 
-    const [items, routed] = await Promise.all([
+    const [items, routed, inviteNotifications] = await Promise.all([
       listPersonalChecklistForOwner(user.name, { includeCompleted, leadDays }),
       listRoutedRequestsForHome(user.name),
+      listCollaborationInviteNotifications(user.name),
     ]);
     return NextResponse.json({
       items,
       notifications: routed.notifications,
+      inviteNotifications,
       routedOpen: routed.open,
       routedShared: routed.sharedCompleted,
     });

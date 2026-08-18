@@ -12,6 +12,7 @@ import type { CalendarEventDto, CompanyEventDto, PersonalChecklistDto } from '@/
 import {
   formatCalendarCreatedAt,
   formatCheckoffCompletedAt,
+  isChecklistCollaboratorForViewer,
   isImprovementRequestTaxType,
   isRoutedRequestTaxType,
   isSuppliesOrderTaxType,
@@ -666,6 +667,20 @@ export default function CalendarPageClient() {
                           : '개인 체크리스트'}
                   {selectedEvent.subtitle ? ` · ${selectedEvent.subtitle}` : ''}
                 </p>
+                {selectedEvent.kind === 'personal' && selectedEvent.collaborative && (
+                  <p className="mt-2 text-sm font-semibold text-violet-700">
+                    {isChecklistCollaboratorForViewer(
+                      {
+                        ownerName: selectedEvent.ownerName ?? '',
+                        assigneeNames: selectedEvent.assigneeNames ?? [],
+                        collaborative: true,
+                      },
+                      currentUser,
+                    )
+                      ? `${selectedEvent.ownerName}님이 협업으로 지정한 일정입니다.`
+                      : `협업자: ${(selectedEvent.assigneeNames ?? []).join(', ') || '—'}`}
+                  </p>
+                )}
                 {selectedEvent.createdAt && (
                   <p className="mt-1 text-xs text-slate-400">
                     등록 {formatCalendarCreatedAt(selectedEvent.createdAt)}

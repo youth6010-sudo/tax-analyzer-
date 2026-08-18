@@ -7,6 +7,7 @@ import type {
   ChecklistTaxType,
   CompanyEventDto,
   PersonalChecklistDto,
+  PersonalChecklistNotificationDto,
   ProcessedRoutedRequestDto,
 } from '@/app/types/calendar';
 import {
@@ -15,6 +16,7 @@ import {
   formatChecklistDueDate,
   formatCheckoffCompletedAt,
   getChecklistTypeLabel,
+  isChecklistCollaboratorForViewer,
   isChecklistPastDue,
   isImprovementRequestTaxType,
   isRoutedRequestTaxType,
@@ -168,6 +170,7 @@ export default function HomeTasksPanel() {
   const [sections, setSections] = useState<SectionState>(readSectionState);
   const [showCompleted, setShowCompleted] = useState(false);
   const [personal, setPersonal] = useState<PersonalChecklistDto[]>([]);
+  const [inviteNotifications, setInviteNotifications] = useState<PersonalChecklistNotificationDto[]>([]);
   const [routedOpen, setRoutedOpen] = useState<PersonalChecklistDto[]>([]);
   const [routedShared, setRoutedShared] = useState<ProcessedRoutedRequestDto[]>([]);
   const [companyEvents, setCompanyEvents] = useState<CompanyEventDto[]>([]);
@@ -225,6 +228,10 @@ export default function HomeTasksPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [personal, currentUser],
   );
+  const inviteItemIds = useMemo(
+    () => new Set(inviteNotifications.map(n => n.itemId)),
+    [inviteNotifications],
+  );
   const companyPending = useMemo(
     () => companyEvents.filter(e => !e.myCheckoff).length,
     [companyEvents],
@@ -265,8 +272,10 @@ export default function HomeTasksPanel() {
           items: PersonalChecklistDto[];
           routedOpen?: PersonalChecklistDto[];
           routedShared?: ProcessedRoutedRequestDto[];
+          inviteNotifications?: PersonalChecklistNotificationDto[];
         };
         setPersonal(payload.items || []);
+        setInviteNotifications(payload.inviteNotifications || []);
         setRoutedOpen(payload.routedOpen || []);
         setRoutedShared(payload.routedShared || []);
       }
@@ -500,6 +509,15 @@ export default function HomeTasksPanel() {
   };
 
   const openPersonalEdit = (item: PersonalChecklistDto) => {
+    if (inviteItemIds.has(item.id)) {
+      void fetch('/api/calendar/personal-checklist/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.id }),
+      }).then(() => {
+        setInviteNotifications(prev => prev.filter(n => n.itemId !== item.id));
+      });
+    }
     setEditItem(item);
     setEditModal('personal');
   };
@@ -589,6 +607,8 @@ export default function HomeTasksPanel() {
                         ? (item.myCheckoff ?? false)
                         : item.completed;
                       const isOwner = !!currentUser && item.ownerName === currentUser;
+                      const isCollabViewer = isChecklistCollaboratorForViewer(item, currentUser);
+                      const hasInvite = inviteItemIds.has(item.id);
                       const participants = item.participants ?? [
                         item.ownerName,
                         ...(item.assigneeNames ?? []),
@@ -598,9 +618,11 @@ export default function HomeTasksPanel() {
                         key={item.id}
                         onDoubleClick={() => openPersonalEdit(item)}
                         className={`relative cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm ${
-                          overdue
-                            ? 'border-red-400 bg-red-50 hover:border-red-500'
-                            : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30'
+                          isCollabViewer || hasInvite
+                            ? 'border-violet-400 bg-violet-50/50 hover:border-violet-500'
+                            : overdue
+                              ? 'border-red-400 bg-red-50 hover:border-red-500'
+                              : 'border-slate-200 bg-white hover:border-[#4b6cb7]/30'
                         }`}
                         title="더블클릭하여 수정·삭제"
                       >
@@ -631,6 +653,11 @@ export default function HomeTasksPanel() {
                               {item.title}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {isCollabViewer && (
+                                <span className="rounded bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  {hasInvite ? '협업 요청' : '나에게 협업'}
+                                </span>
+                              )}
                               <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
                                 overdue
                                   ? 'bg-red-100 text-red-700'
@@ -638,7 +665,7 @@ export default function HomeTasksPanel() {
                               }`}>
                                 {taxLabel(item.taxType)}
                               </span>
-                              {item.collaborative && (
+                              {item.collaborative && isOwner && (
                                 <span className="rounded bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
                                   협업
                                 </span>
@@ -669,12 +696,16 @@ export default function HomeTasksPanel() {
                                   ) : null}
                                 </span>
                               )}
-                              {item.ownerName && item.ownerName !== currentUser && (
-                                <span className="text-[10px] text-slate-500">작성 {item.ownerName}</span>
+                              {item.ownerName && !isOwner && (
+                                <span className="text-[10px] font-semibold text-violet-800">
+                                  {isCollabViewer
+                                    ? `${item.ownerName}님이 협업으로 지정`
+                                    : `작성 ${item.ownerName}`}
+                                </span>
                               )}
-                              {(item.assigneeNames?.length ?? 0) > 0 && (
+                              {isOwner && (item.assigneeNames?.length ?? 0) > 0 && (
                                 <span className="text-[10px] text-violet-700">
-                                  협업 {item.assigneeNames.join(', ')}
+                                  협업자 {item.assigneeNames.join(', ')}
                                 </span>
                               )}
                             </div>
