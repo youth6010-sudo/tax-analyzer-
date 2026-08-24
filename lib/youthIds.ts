@@ -1,9 +1,9 @@
 /**
  * 청년들 ID — 회사 계정/계좌/자료 모음
  *
- * 실제 비밀번호·계좌번호 등 민감정보이므로 소스/깃에 두지 않고
- * Vercel 환경변수 `YOUTH_IDS_JSON` (JSON 문자열)으로 주입한다.
- * 로컬은 .env.local 에 동일 키로 넣는다.
+ * 실제 비밀번호·계좌번호 등 민감정보이므로 소스/깃에 두지 않는다.
+ * 저장: DB app_config(youth_ids) — 포털에서 편집 가능.
+ * 초기/백업: Vercel 환경변수 `YOUTH_IDS_JSON` (DB 비어 있을 때만 사용).
  *
  * 접근정책:
  *  - 회사 공인 IP(YOUTH_IDS_ALLOWED_IPS)에서만 페이지 열림
