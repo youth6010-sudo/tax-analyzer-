@@ -987,13 +987,17 @@ export async function applyLedgerDetailTxs(
     }
     /** 동일 금액·일자 입금이 여러 건일 수 있음(우리펌프카 7/24 220만×2) → 건수 차감 */
     const payKeyRemain = new Map<string, number>();
+    /** 공문에 입금액만 있고 일자가 비어 있으면 PDF 동액 크레딧(취소·입금) 1건으로 흡수 */
+    const undatedPayRemain = new Map<number, number>();
     const bumpPay = (key: string, n = 1) => {
       payKeyRemain.set(key, (payKeyRemain.get(key) || 0) + n);
     };
     for (const l of existing) {
       const p = Math.round(l.paidAmount) || 0;
       if (p <= 0) continue;
-      bumpPay(`${p}|${String(l.paidDate || '').trim()}`);
+      const pd = String(l.paidDate || '').trim();
+      if (pd) bumpPay(`${p}|${pd}`);
+      else undatedPayRemain.set(p, (undatedPayRemain.get(p) || 0) + 1);
     }
     // 공문에 기장·기타를 같은 날 각각 입금 처리한 경우, 합산액도 PDF 입금 중복으로 본다
     const paidSumByDate = new Map<string, number>();
@@ -1026,6 +1030,11 @@ export async function applyLedgerDetailTxs(
       if (amt <= 0) continue;
       if (tx.kind === 'debit') {
         const desc = (tx.description || '외상매출').trim();
+        // 공문이 있으면 전기이월은 이미 공문 이력에 포함 → 이중 가산 금지
+        if (hasLetter && /^전기이월/.test(desc)) {
+          skippedDup += 1;
+          continue;
+        }
         const key = ledgerDetailChargeDedupKey(desc, amt, tx.eventDate);
         if (chargeKeys.has(key)) {
           skippedDup += 1;
@@ -1061,6 +1070,12 @@ export async function applyLedgerDetailTxs(
         const remain = payKeyRemain.get(key) || 0;
         if (remain > 0) {
           payKeyRemain.set(key, remain - 1);
+          skippedDup += 1;
+          continue;
+        }
+        const undatedRemain = undatedPayRemain.get(amt) || 0;
+        if (undatedRemain > 0) {
+          undatedPayRemain.set(amt, undatedRemain - 1);
           skippedDup += 1;
           continue;
         }
