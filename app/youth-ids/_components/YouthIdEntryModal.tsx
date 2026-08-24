@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { portalInput } from '@/app/components/portal/uiClasses';
 import type { YouthIdEntry, YouthIdField } from '@/lib/youthIds';
-import { newYouthIdEntryId } from '@/lib/youthIdsDb';
+import { newYouthIdEntryId } from '@/lib/youthIds';
 
 type Props = {
   open: boolean;

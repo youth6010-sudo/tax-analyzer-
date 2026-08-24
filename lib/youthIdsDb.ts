@@ -87,23 +87,3 @@ export async function isYouthIdsConfiguredAsync(): Promise<boolean> {
   const doc = await loadYouthIdsAsync();
   return doc.categories.some(c => (c.entries?.length ?? 0) > 0);
 }
-
-export function newYouthIdEntryId(title: string): string {
-  const slug = title
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9가-힣-]/g, '')
-    .slice(0, 24);
-  return `entry-${slug || 'new'}-${Date.now().toString(36)}`;
-}
-
-export function newYouthIdCategoryId(label: string): string {
-  const slug = label
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9가-힣-]/g, '')
-    .slice(0, 24);
-  return `cat-${slug || 'new'}-${Date.now().toString(36)}`;
-}

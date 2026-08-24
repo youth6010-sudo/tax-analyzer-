@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { portalEmptyState, portalInput } from '@/app/components/portal/uiClasses';
 import type { YouthIdCategory, YouthIdEntry } from '@/lib/youthIds';
-import { newYouthIdCategoryId } from '@/lib/youthIdsDb';
+import { newYouthIdCategoryId } from '@/lib/youthIds';
 import YouthIdEntryModal from './YouthIdEntryModal';
 
 type Props = {
