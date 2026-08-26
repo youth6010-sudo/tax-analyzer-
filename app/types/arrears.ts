@@ -102,8 +102,9 @@ export function letterRunningBalances(
 }
 
 /**
- * 전액 회수(누적 잔액 0) 이후의 신규 미수 사이클만.
- * 공문 출력·엑셀용 — 편집/원장대사에는 전체 이력을 유지.
+ * 전액 회수(누적 잔액 0) 이후의 신규 미수 사이클.
+ * 아직 신규 미수가 없고 직전 사이클만 전액 회수된 경우 → 그 사이클(입력 이력)을 그대로 반환.
+ * 편집/원장대사에는 전체 이력을 유지.
  */
 export function linesForCurrentLetterCycle<T extends { amount: number; paidAmount: number }>(
   lines: T[],
@@ -115,7 +116,14 @@ export function linesForCurrentLetterCycle<T extends { amount: number; paidAmoun
     if (running[i] === 0) lastZero = i;
   }
   if (lastZero < 0) return lines;
-  if (lastZero >= lines.length - 1) return [];
+  if (lastZero >= lines.length - 1) {
+    // 마지막까지 0 → 직전 완료 사이클(입력했던 내역) 유지
+    let prevZero = -1;
+    for (let i = 0; i < lastZero; i++) {
+      if (running[i] === 0) prevZero = i;
+    }
+    return lines.slice(prevZero + 1);
+  }
   return lines.slice(lastZero + 1);
 }
 

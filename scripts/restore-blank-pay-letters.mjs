@@ -1,10 +1,6 @@
 /**
- * 담당자별 미수수수료.xls → arrears_letter_lines 이관
- *
- * Usage:
- *   node scripts/import-arrears-letter-lines.mjs
- *   node scripts/import-arrears-letter-lines.mjs "z:/10_미수관리/미수금 공문 - 26년"
- *   node scripts/import-arrears-letter-lines.mjs path/to/미수수수료_다야-26.07.27.xls
+ * 8/4 임포트 버그 복구 — 내역 빈 지급행이 빠진 공문 시트 전부 재반영
+ * Usage: node scripts/restore-blank-pay-letters.mjs
  */
 import fs from 'fs';
 import path from 'path';
@@ -27,7 +23,6 @@ for (const name of ['.env.local', '.env']) {
 function cellStr(v) {
   if (v == null) return '';
   if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    // 엑셀 날짜 → YYYY-MM-DD (로컬)
     const y = v.getFullYear();
     const m = String(v.getMonth() + 1).padStart(2, '0');
     const d = String(v.getDate()).padStart(2, '0');
@@ -43,9 +38,19 @@ function cellMoney(v) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+function formatPaidDateKo(raw) {
+  const s = cellStr(raw);
+  if (!s) return '';
+  if (/[*×xX]/.test(s) && /\d/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const [y, m, d] = s.slice(0, 10).split('-');
+    return `${Number(y)}년 ${Number(m)}월 ${Number(d)}일`;
+  }
+  return s;
+}
+
 function looksLikeHeader(row) {
-  const cells = (row ?? []).map(c => cellStr(c).replace(/\s+/g, ''));
-  const joined = cells.join('|');
+  const joined = (row ?? []).map(c => cellStr(c).replace(/\s+/g, '')).join('|');
   return joined.includes('내역') && (joined.includes('금액') || joined.includes('vat'));
 }
 
@@ -91,39 +96,39 @@ function parseSheet(ws, sheetName) {
   if (iBal < 0) iBal = iDate + 1;
 
   const lines = [];
+  let blankPay = 0;
+  let withDesc = 0;
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
     const desc = cellStr(row[iDesc]);
     let amount = cellMoney(row[iAmt]);
     const paidAmount = cellMoney(row[iPay]);
-    const paidDate = cellStr(row[iDate]);
+    const paidDate = formatPaidDateKo(row[iDate]);
     const balCell = cellMoney(row[iBal]);
     const compact = desc.replace(/\s+/g, '');
 
     if (compact === '미수수수료') break;
     if (desc && isTotalRow(desc)) continue;
 
-    // 이월 행: 금액칸 비고 잔액칸만 있는 경우
     if (amount === 0 && paidAmount === 0 && balCell !== 0 && /이월/.test(compact)) {
       amount = balCell;
     }
 
-    // 내역 없는 지급-only 행도 포함 (하나비 등)
     if (!desc && !amount && !paidAmount && !paidDate) continue;
     if (!desc && !amount && !paidAmount) continue;
 
-    lines.push({
-      description: desc,
-      amount,
-      paidAmount,
-      paidDate,
-    });
+    if (!desc && (amount || paidAmount)) blankPay += 1;
+    if (desc) withDesc += 1;
+
+    lines.push({ description: desc, amount, paidAmount, paidDate });
   }
-  if (!lines.length) return null;
+  if (!lines.length || blankPay === 0) return null;
   return {
     companyName: cellStr(sheetName),
     letterDate: extractLetterDate(rows),
     lines,
+    blankPay,
+    withDesc,
   };
 }
 
@@ -150,6 +155,7 @@ function softKey(s) {
 }
 
 function findByName(entries, sheetName) {
+  // 빈 상호·더미코드는 매칭 대상에서 제외
   const usable = entries.filter(
     e => String(e.company_name || '').trim() && String(e.external_code || '') !== '00000',
   );
@@ -173,41 +179,18 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const arg = process.argv[2];
-const defaultDir = path.join('z:', '10_미수관리', '미수금 공문 - 26년');
-const target = arg || defaultDir;
-
-if (!fs.existsSync(target)) {
-  console.error('경로 없음:', target);
-  process.exit(1);
-}
-
-const files = [];
-const st = fs.statSync(target);
-if (st.isDirectory()) {
-  for (const f of fs.readdirSync(target)) {
-    if (!/\.xls[x]?$/i.test(f)) continue;
-    if (!/미수수수료/.test(f) || f.includes('현황')) continue;
-    if (!managerFromFilename(f)) continue;
-    files.push(path.join(target, f));
-  }
-} else {
-  files.push(target);
-}
+const dir = path.join('z:', '10_미수관리', '미수금 공문 - 26년');
+const files = fs
+  .readdirSync(dir)
+  .filter(f => /\.xls[x]?$/i.test(f) && /미수수수료/.test(f) && !f.includes('현황') && /26\.07\.27/.test(f))
+  .map(f => path.join(dir, f));
 
 if (!files.length) {
-  console.error('공문 xls 없음');
+  console.error('26.07.27 공문 xls 없음');
   process.exit(1);
 }
 
 const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
-
-// ensure migration
-const mig = path.join(root, 'drizzle', '0018_arrears_letter_lines.sql');
-if (fs.existsSync(mig)) {
-  await sql.unsafe(fs.readFileSync(mig, 'utf8'));
-}
-
 const entries = await sql`
   SELECT id, company_name, external_code, manager_name, balance
   FROM arrears_entries
@@ -215,29 +198,43 @@ const entries = await sql`
 
 let updated = 0;
 let skipped = 0;
-let totalLines = 0;
+let unmatched = 0;
 
 for (const filePath of files) {
   const base = path.basename(filePath);
   const managerName = managerFromFilename(base);
-  console.log('파일:', base, '담당:', managerName || '(미상)');
+  console.log(`\n파일: ${base}`);
   const wb = XLSX.readFile(filePath, { cellDates: true });
 
   for (const sheetName of wb.SheetNames) {
     const parsed = parseSheet(wb.Sheets[sheetName], sheetName);
-    if (!parsed) {
-      console.log('  skip sheet (형식 아님):', sheetName);
-      continue;
-    }
+    if (!parsed) continue;
+
     const hit = findByName(entries, parsed.companyName);
     if (!hit) {
-      console.log('  unmatched:', parsed.companyName, `(${parsed.lines.length}줄)`);
+      console.log(`  ✗ 미매칭: ${parsed.companyName} (지급행 ${parsed.blankPay})`);
+      unmatched += 1;
+      continue;
+    }
+
+    const before = await sql`
+      SELECT count(*)::int AS n,
+        coalesce(sum(amount - paid_amount), 0)::int AS open
+      FROM arrears_letter_lines
+      WHERE arrears_entry_id = ${hit.id}
+    `;
+    const letterBal = parsed.lines.reduce((s, l) => s + l.amount - l.paidAmount, 0);
+
+    // 이미 완전한 경우(줄 수·잔액 동일) 스킵
+    if (before[0].n === parsed.lines.length && before[0].open === letterBal) {
+      console.log(
+        `  · 유지: ${hit.company_name} (${parsed.lines.length}줄, 잔액 ${letterBal})`,
+      );
       skipped += 1;
       continue;
     }
 
     await sql`DELETE FROM arrears_letter_lines WHERE arrears_entry_id = ${hit.id}`;
-    const letterBal = parsed.lines.reduce((s, l) => s + l.amount - l.paidAmount, 0);
     for (let i = 0; i < parsed.lines.length; i++) {
       const l = parsed.lines[i];
       await sql`
@@ -256,17 +253,18 @@ for (const filePath of files) {
           WHEN manager_name = '' AND ${managerName} <> '' THEN ${managerName}
           ELSE manager_name
         END,
-        updated_by = 'letter_lines_import',
+        updated_by = 'restore-blank-pay-letters',
         updated_at = now()
       WHERE id = ${hit.id}
     `;
-    totalLines += parsed.lines.length;
-    updated += 1;
+
     console.log(
-      `  ✓ ${parsed.companyName} → ${hit.company_name} (${parsed.lines.length}줄, 잔액 ${letterBal})`,
+      `  ✓ ${parsed.companyName} → ${hit.company_name}: ${before[0].n}→${parsed.lines.length}줄, ` +
+        `잔액 ${hit.balance}→${letterBal} (지급행 +${parsed.blankPay})`,
     );
+    updated += 1;
   }
 }
 
-console.log(`완료: 반영 ${updated}, 미매칭 ${skipped}, 라인 ${totalLines}`);
+console.log(`\n완료: 복구 ${updated}, 이미완전 ${skipped}, 미매칭 ${unmatched}`);
 await sql.end({ timeout: 5 });

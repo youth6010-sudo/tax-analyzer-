@@ -80,6 +80,8 @@ export default function ArrearsPageClient() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [asOfDate, setAsOfDate] = useState('');
   const [canManage, setCanManage] = useState(false);
+  /** 총미수 목록 엑셀 — 관리자·인디·찰리 */
+  const [canExportList, setCanExportList] = useState(false);
   /** 로그인 사용자 표시명 — 일반 담당은 본인만 필터 가능 */
   const [viewerName, setViewerName] = useState('');
   /** 인디 등 관리자: 기본은 담당자 화면과 동일, 켤 때만 수정 UI */
@@ -114,6 +116,17 @@ export default function ArrearsPageClient() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
+  const [listExportBusy, setListExportBusy] = useState(false);
+  /** 목록 정렬 — 기본 잔액 내림차순(서버와 동일) */
+  const [sortKey, setSortKey] = useState<'companyName' | 'balance'>('balance');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  /** 상호·잔액 다중선택 필터 (빈 배열 = 전체) */
+  const [filterCompanies, setFilterCompanies] = useState<string[]>([]);
+  const [filterBalances, setFilterBalances] = useState<number[]>([]);
+  const [companyFilterOpen, setCompanyFilterOpen] = useState(false);
+  const [balanceFilterOpen, setBalanceFilterOpen] = useState(false);
+  const [companyFilterQ, setCompanyFilterQ] = useState('');
+  const [balanceFilterQ, setBalanceFilterQ] = useState('');
   const [bulkFieldManager, setBulkFieldManager] = useState('');
   const [bulkFieldCategory, setBulkFieldCategory] = useState('__keep__');
   const [bulkFieldBusy, setBulkFieldBusy] = useState(false);
@@ -153,6 +166,7 @@ export default function ArrearsPageClient() {
         setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
         setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
         setCanManage(!!(data as { canManage?: boolean }).canManage);
+        setCanExportList(!!(data as { canExportList?: boolean }).canExportList);
         setViewerName((data as { viewerName?: string }).viewerName?.trim() || '');
       } catch (e) {
         if (mode === 'full') {
@@ -372,17 +386,102 @@ export default function ArrearsPageClient() {
     );
   };
 
+  const companyOptions = useMemo(() => {
+    const names = [...new Set(items.map(i => i.companyName.trim()).filter(Boolean))];
+    names.sort((a, b) => a.localeCompare(b, 'ko'));
+    return names;
+  }, [items]);
+
+  const balanceOptions = useMemo(() => {
+    const vals = [...new Set(items.map(i => Math.round(i.balance)))];
+    vals.sort((a, b) => b - a);
+    return vals;
+  }, [items]);
+
+  const filteredCompanyOptions = useMemo(() => {
+    const needle = companyFilterQ.trim().toLowerCase();
+    if (!needle) return companyOptions;
+    return companyOptions.filter(n => n.toLowerCase().includes(needle));
+  }, [companyOptions, companyFilterQ]);
+
+  const filteredBalanceOptions = useMemo(() => {
+    const needle = balanceFilterQ.trim().replace(/,/g, '');
+    if (!needle) return balanceOptions;
+    return balanceOptions.filter(b => String(b).includes(needle) || formatArrearsWon(b).includes(needle));
+  }, [balanceOptions, balanceFilterQ]);
+
+  const displayItems = useMemo(() => {
+    let rows = items;
+    if (filterCompanies.length) {
+      const set = new Set(filterCompanies);
+      rows = rows.filter(r => set.has(r.companyName.trim()));
+    }
+    if (filterBalances.length) {
+      const set = new Set(filterBalances);
+      rows = rows.filter(r => set.has(Math.round(r.balance)));
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      if (sortKey === 'companyName') {
+        return a.companyName.localeCompare(b.companyName, 'ko') * dir;
+      }
+      const diff = Math.round(a.balance) - Math.round(b.balance);
+      if (diff !== 0) return diff * dir;
+      return a.companyName.localeCompare(b.companyName, 'ko');
+    });
+  }, [items, filterCompanies, filterBalances, sortKey, sortDir]);
+
+  const cycleSort = (key: 'companyName' | 'balance') => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === 'balance' ? 'desc' : 'asc');
+  };
+
+  const sortMark = (key: 'companyName' | 'balance') => {
+    if (sortKey !== key) return '↕';
+    return sortDir === 'asc' ? '↑' : '↓';
+  };
+
+  const toggleCompanyFilter = (name: string) => {
+    setFilterCompanies(prev =>
+      prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name],
+    );
+  };
+
+  const toggleBalanceFilter = (balance: number) => {
+    setFilterBalances(prev =>
+      prev.includes(balance) ? prev.filter(x => x !== balance) : [...prev, balance],
+    );
+  };
+
+  useEffect(() => {
+    // 목록이 바뀌면 사라진 선택값 정리
+    const nameSet = new Set(companyOptions);
+    const balSet = new Set(balanceOptions);
+    setFilterCompanies(prev => {
+      const next = prev.filter(n => nameSet.has(n));
+      return next.length === prev.length ? prev : next;
+    });
+    setFilterBalances(prev => {
+      const next = prev.filter(b => balSet.has(b));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [companyOptions, balanceOptions]);
+
   const selectedCount = selectedIds.size;
   const selectedSum = useMemo(() => {
     let s = 0;
-    for (const row of items) {
+    for (const row of displayItems) {
       if (selectedIds.has(row.id)) s += row.balance;
     }
     return s;
-  }, [items, selectedIds]);
+  }, [displayItems, selectedIds]);
 
   const allVisibleSelected =
-    items.length > 0 && items.every(r => selectedIds.has(r.id));
+    displayItems.length > 0 && displayItems.every(r => selectedIds.has(r.id));
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -397,9 +496,9 @@ export default function ArrearsPageClient() {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (allVisibleSelected) {
-        for (const r of items) next.delete(r.id);
+        for (const r of displayItems) next.delete(r.id);
       } else {
-        for (const r of items) next.add(r.id);
+        for (const r of displayItems) next.add(r.id);
       }
       return next;
     });
@@ -575,6 +674,41 @@ export default function ArrearsPageClient() {
     }
   };
 
+  /** 화면 목록(총미수) 요약 엑셀 — 관리자·인디·찰리 */
+  const exportArrearsList = async () => {
+    if (!canExportList || listExportBusy) return;
+    setListExportBusy(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      for (const m of managers) params.append('manager', m);
+      for (const c of categories) {
+        params.append('category', c === '' ? 'none' : c);
+      }
+      if (!showZero) params.set('nonzero', '1');
+      if (churnedOnly) params.set('churned', '1');
+      if (qDebounced) params.set('q', qDebounced);
+      for (const name of filterCompanies) params.append('company', name);
+      for (const bal of filterBalances) params.append('balance', String(bal));
+      params.set('sort', sortKey);
+      params.set('dir', sortDir);
+
+      const res = await fetch(`/api/arrears/export-list?${params}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || '총미수 엑셀 저장 실패');
+      }
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+      const filename = decodeURIComponent(m?.[1] || m?.[2] || '미수목록_전체.xlsx');
+      downloadBlob(await res.blob(), filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '총미수 엑셀 저장 실패');
+    } finally {
+      setListExportBusy(false);
+    }
+  };
+
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full space-y-4 py-4`}>
@@ -582,8 +716,8 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              잔액·최근 입금은 원장/상세 PDF 기준. 공문 출력·엑셀은 잔액 0원(전액 회수) 이후
-              신규 미수부터만 포함합니다.
+              잔액·최근 입금은 원장/상세 PDF 기준. 잔액 0원이어도 입력해 둔 공문·원장 내역이 있으면
+              목록·상세에 그대로 보입니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -710,7 +844,22 @@ export default function ArrearsPageClient() {
           <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-900 tabular-nums">
             총미수 {formatArrearsWon(totalBalance)}원
           </span>
-          <span className="text-xs text-slate-500">{items.length}건</span>
+          <span className="text-xs text-slate-500">
+            {displayItems.length === items.length
+              ? `${items.length}건`
+              : `${displayItems.length}/${items.length}건`}
+          </span>
+          {canExportList ? (
+            <button
+              type="button"
+              className={`${portalBtnSecondary} !py-1.5 text-xs`}
+              disabled={listExportBusy || loading || items.length === 0}
+              onClick={() => void exportArrearsList()}
+              title="현재 화면 필터 기준 총미수 목록 엑셀 (관리자·인디·찰리)"
+            >
+              {listExportBusy ? '총미수 엑셀…' : '총미수 엑셀'}
+            </button>
+          ) : null}
           {selectedCount ? (
             <span className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 tabular-nums">
               선택 {selectedCount} · {formatArrearsWon(selectedSum)}원
@@ -989,8 +1138,189 @@ export default function ArrearsPageClient() {
                   />
                 </th>
                 <th className="px-3 py-2.5 whitespace-nowrap">코드</th>
-                <th className="px-3 py-2.5">상호</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap">미수 잔액</th>
+                <th className="relative px-3 py-2.5">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-slate-200/80"
+                      onClick={() => cycleSort('companyName')}
+                      title="상호 정렬"
+                    >
+                      상호 <span className="tabular-nums text-[10px] text-slate-500">{sortMark('companyName')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                        filterCompanies.length || companyFilterOpen
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                      onClick={() => {
+                        setCompanyFilterOpen(o => !o);
+                        setBalanceFilterOpen(false);
+                      }}
+                      title="상호 다중 선택 필터"
+                    >
+                      필터{filterCompanies.length ? `(${filterCompanies.length})` : ''}
+                    </button>
+                    {filterCompanies.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-[10px] font-semibold text-slate-500 hover:text-slate-800"
+                        onClick={() => setFilterCompanies([])}
+                      >
+                        해제
+                      </button>
+                    ) : null}
+                  </div>
+                  {companyFilterOpen ? (
+                    <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                      <input
+                        className={`${portalInput} mb-2 w-full py-1.5 text-xs`}
+                        placeholder="상호 검색"
+                        value={companyFilterQ}
+                        onChange={e => setCompanyFilterQ(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="mb-1.5 flex gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          className="font-semibold text-blue-700 hover:underline"
+                          onClick={() => setFilterCompanies([...filteredCompanyOptions])}
+                        >
+                          보이는 것 모두
+                        </button>
+                        <button
+                          type="button"
+                          className="font-semibold text-slate-500 hover:underline"
+                          onClick={() => setFilterCompanies([])}
+                        >
+                          전체 해제
+                        </button>
+                        <button
+                          type="button"
+                          className="ml-auto font-semibold text-slate-500 hover:underline"
+                          onClick={() => setCompanyFilterOpen(false)}
+                        >
+                          닫기
+                        </button>
+                      </div>
+                      <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                        {filteredCompanyOptions.length === 0 ? (
+                          <p className="px-1 py-2 text-xs text-slate-400">없음</p>
+                        ) : (
+                          filteredCompanyOptions.map(name => (
+                            <label
+                              key={name}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-slate-50"
+                            >
+                              <input
+                                type="checkbox"
+                                className="rounded border-slate-300"
+                                checked={filterCompanies.includes(name)}
+                                onChange={() => toggleCompanyFilter(name)}
+                              />
+                              <span className="truncate">{name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </th>
+                <th className="relative px-3 py-2.5 text-right whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-slate-200/80"
+                      onClick={() => cycleSort('balance')}
+                      title="미수 잔액 정렬"
+                    >
+                      미수 잔액{' '}
+                      <span className="tabular-nums text-[10px] text-slate-500">{sortMark('balance')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                        filterBalances.length || balanceFilterOpen
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                      onClick={() => {
+                        setBalanceFilterOpen(o => !o);
+                        setCompanyFilterOpen(false);
+                      }}
+                      title="미수 잔액 다중 선택 필터"
+                    >
+                      필터{filterBalances.length ? `(${filterBalances.length})` : ''}
+                    </button>
+                    {filterBalances.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-[10px] font-semibold text-slate-500 hover:text-slate-800"
+                        onClick={() => setFilterBalances([])}
+                      >
+                        해제
+                      </button>
+                    ) : null}
+                  </div>
+                  {balanceFilterOpen ? (
+                    <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-lg">
+                      <input
+                        className={`${portalInput} mb-2 w-full py-1.5 text-xs`}
+                        placeholder="금액 검색"
+                        value={balanceFilterQ}
+                        onChange={e => setBalanceFilterQ(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="mb-1.5 flex gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          className="font-semibold text-blue-700 hover:underline"
+                          onClick={() => setFilterBalances([...filteredBalanceOptions])}
+                        >
+                          보이는 것 모두
+                        </button>
+                        <button
+                          type="button"
+                          className="font-semibold text-slate-500 hover:underline"
+                          onClick={() => setFilterBalances([])}
+                        >
+                          전체 해제
+                        </button>
+                        <button
+                          type="button"
+                          className="ml-auto font-semibold text-slate-500 hover:underline"
+                          onClick={() => setBalanceFilterOpen(false)}
+                        >
+                          닫기
+                        </button>
+                      </div>
+                      <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                        {filteredBalanceOptions.length === 0 ? (
+                          <p className="px-1 py-2 text-xs text-slate-400">없음</p>
+                        ) : (
+                          filteredBalanceOptions.map(bal => (
+                            <label
+                              key={bal}
+                              className="flex cursor-pointer items-center justify-between gap-2 rounded px-1.5 py-1 text-xs hover:bg-slate-50"
+                            >
+                              <span className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-slate-300"
+                                  checked={filterBalances.includes(bal)}
+                                  onChange={() => toggleBalanceFilter(bal)}
+                                />
+                                <span className="tabular-nums">{formatArrearsWon(bal)}</span>
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </th>
                 <th className="px-3 py-2.5 min-w-[12rem]">미수 사유</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">담당</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">관리</th>
@@ -1007,15 +1337,18 @@ export default function ArrearsPageClient() {
                     불러오는 중…
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : displayItems.length === 0 ? (
                 <tr>
                   <td colSpan={editMode ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
                     {!showZero ? ' 「0원인것도 보기」를 켜 보세요.' : ''}
+                    {filterCompanies.length || filterBalances.length
+                      ? ' 상호·잔액 필터를 해제해 보세요.'
+                      : ''}
                   </td>
                 </tr>
               ) : (
-                items.map(row => (
+                displayItems.map(row => (
                   <tr
                     key={row.id}
                     className={`hover:brightness-[0.98] ${

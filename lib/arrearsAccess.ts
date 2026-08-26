@@ -22,6 +22,11 @@ export function canManageArrears(user: UserLike): boolean {
   });
 }
 
+/** 총미수 목록 엑셀 — 관리자·인디·찰리만 */
+export function canExportArrearsList(user: UserLike): boolean {
+  return canManageArrears(user);
+}
+
 /** 행 조회 — 관리자이거나 본인 담당 행 */
 export function canViewArrearsRow(
   user: UserLike,

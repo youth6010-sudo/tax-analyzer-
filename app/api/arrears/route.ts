@@ -73,6 +73,7 @@ export async function GET(req: Request) {
           totalBalance: 0,
           asOfDate: '',
           canManage: false,
+          canExportList: false,
           viewerName,
         },
         NO_STORE,
@@ -92,7 +93,10 @@ export async function GET(req: Request) {
       churnedOnly: churnedOnly || undefined,
     });
 
-    return NextResponse.json({ ...result, canManage, viewerName }, NO_STORE);
+    return NextResponse.json(
+      { ...result, canManage, canExportList: canManage, viewerName },
+      NO_STORE,
+    );
   } catch (e) {
     return handleApiError(e);
   }

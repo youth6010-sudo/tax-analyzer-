@@ -19,7 +19,6 @@ import {
   formatArrearsPaidDateKo,
   formatArrearsWon,
   letterRunningBalances,
-  linesForCurrentLetterCycle,
   todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
@@ -117,12 +116,10 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     };
   }, [load]);
 
-  const displayLines = editing ? null : linesForCurrentLetterCycle(lines);
-  const running = useMemo(
-    () => letterRunningBalances(displayLines || lines),
-    [displayLines, lines],
-  );
-  const viewLines = displayLines ?? lines;
+  // 상세·인쇄는 입력된 전체 공문 이력 표시.
+  // (사이클 절단은 엑셀/일괄 출력용 linesForCurrentLetterCycle 에서만)
+  const viewLines = lines;
+  const running = useMemo(() => letterRunningBalances(lines), [lines]);
   const totalAmount = useMemo(
     () => viewLines.reduce((s, l) => s + l.amount, 0),
     [viewLines],
@@ -131,7 +128,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     () => viewLines.reduce((s, l) => s + l.paidAmount, 0),
     [viewLines],
   );
-  const archivedLineCount = editing ? 0 : Math.max(0, lines.length - viewLines.length);
 
   const startEdit = () => {
     if (!canManage) return;
@@ -604,9 +600,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
           {viewLines.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500 print:hidden">
-              {lines.length > 0
-                ? '현재 미수 구간 내역이 없습니다. (이전 회수 완료 구간은 편집에서 확인)'
-                : `등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
+              {`등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
             </p>
           ) : (
             <div className="mt-2 overflow-x-auto">
