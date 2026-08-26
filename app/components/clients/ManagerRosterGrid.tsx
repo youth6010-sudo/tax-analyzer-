@@ -536,16 +536,19 @@ function AcceptChip({
   on,
   canToggle,
   onClick,
+  compact = false,
 }: {
   label: string;
   on: boolean;
   canToggle: boolean;
   onClick: () => void;
+  /** true면 ON/OFF만 표시 (건수 뱃지 옆용) */
+  compact?: boolean;
 }) {
   const cls = on
     ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
     : 'bg-white text-slate-500 border-slate-300';
-  const text = `${label} ${on ? 'ON' : 'OFF'}`;
+  const text = compact ? (on ? 'ON' : 'OFF') : `${label} ${on ? 'ON' : 'OFF'}`;
   if (!canToggle) {
     return (
       <span
@@ -647,28 +650,27 @@ function ManagerSection({
                 <span className="text-xs text-slate-400">{realName}</span>
               )}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="text-[9px] font-semibold text-slate-400">수임가능</span>
-              <AcceptChip
-                label="개인"
-                on={acceptIndividual}
-                canToggle={canToggleAccept}
-                onClick={() => onToggleAccept?.('individual')}
-              />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <span className="inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-800">
+              법인 {corporate.length}
               <AcceptChip
                 label="법인"
                 on={acceptCorporate}
                 canToggle={canToggleAccept}
+                compact
                 onClick={() => onToggleAccept?.('corporate')}
               />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1 shrink-0">
-            <span className="rounded bg-sky-50 px-1.5 py-px text-[10px] font-medium tabular-nums text-sky-800">
-              법인 {corporate.length}
             </span>
-            <span className="rounded bg-emerald-50 px-1.5 py-px text-[10px] font-medium tabular-nums text-emerald-800">
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-800">
               개인 {personal.length}
+              <AcceptChip
+                label="개인"
+                on={acceptIndividual}
+                canToggle={canToggleAccept}
+                compact
+                onClick={() => onToggleAccept?.('individual')}
+              />
             </span>
           </div>
         </div>

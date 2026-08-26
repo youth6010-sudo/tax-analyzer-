@@ -24,17 +24,21 @@ interface LunchPenaltyFieldProps {
   kickSide?: KickSide;
   gkSide?: KickSide;
   saved?: boolean;
+  /** lunch = 점심컵, staff = 담당자 승부차기 */
+  variant?: 'lunch' | 'staff';
 }
 
 function phaseLabel(
   phase: PenaltyPhase,
   hintName: string | undefined,
   targetName: string,
-  saved?: boolean,
+  saved: boolean | undefined,
+  variant: 'lunch' | 'staff',
 ): string {
+  const isStaff = variant === 'staff';
   switch (phase) {
     case 'idle':
-      return '슛 버튼을 눌러 오늘의 맛집을 골인!';
+      return isStaff ? '슛 버튼을 눌러 담당자를 골인!' : '슛 버튼을 눌러 오늘의 맛집을 골인!';
     case 'ready':
       return '숨 고르고… 집중…';
     case 'kick':
@@ -42,7 +46,11 @@ function phaseLabel(
     case 'goal':
       return saved ? `🧤 GK 세이브! → ${targetName}` : 'GOAL!';
     case 'celebrate':
-      return saved ? `🧤 막혔지만… ${targetName}!` : `🏆 오늘의 점심 — ${targetName}`;
+      return saved
+        ? `🧤 막혔지만… ${targetName}!`
+        : isStaff
+          ? `🏆 담당 확정 — ${targetName}`
+          : `🏆 오늘의 점심 — ${targetName}`;
     default:
       return '';
   }
@@ -55,20 +63,21 @@ export default function LunchPenaltyField({
   kickSide = 'center',
   gkSide,
   saved,
+  variant = 'lunch',
 }: LunchPenaltyFieldProps) {
   const isGoal = phase === 'goal';
   const isCelebrate = phase === 'celebrate';
   const isPostGoal = isGoal || isCelebrate;
+  const isStaff = variant === 'staff';
 
-  const scenePhase =
-    phase === 'idle' ? 'ready' : phase;
+  const scenePhase = phase === 'idle' ? 'ready' : phase;
 
   return (
     <div className="mt-6 mx-auto max-w-lg">
       <div className="rounded-2xl overflow-hidden border-2 border-slate-700/60 shadow-2xl shadow-black/40">
         <div className="relative flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-[#0c1929] via-[#1a365d] to-[#0c1929] text-white text-xs sm:text-sm font-bold border-b border-amber-500/40">
           <span className="flex items-center gap-1.5 text-amber-400 tracking-wider">
-            <span className="text-base">🏆</span> LUNCH CUP
+            <span className="text-base">🏆</span> {isStaff ? 'STAFF CUP' : 'LUNCH CUP'}
           </span>
           <span
             className={`tabular-nums text-xl sm:text-2xl font-black px-4 py-0.5 rounded-md bg-black/50 border border-amber-500/30 ${
@@ -100,7 +109,7 @@ export default function LunchPenaltyField({
                     : 'text-sm text-slate-600'
             }`}
           >
-            {phaseLabel(phase, hintName, targetName, saved)}
+            {phaseLabel(phase, hintName, targetName, saved, variant)}
           </p>
         </div>
       </div>

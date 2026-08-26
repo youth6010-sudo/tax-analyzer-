@@ -221,6 +221,60 @@ function parseSimpleTableRows(html) {
   return rows;
 }
 
+/** 셀 안 <p> 단위로 추출 — 가입지원부처럼 전화·업무·팩스가 1:1로 나뉜 행 처리 */
+function extractCellParagraphs(cellHtml) {
+  const fromP = [...String(cellHtml || '').matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map(m => stripHtml(m[1]))
+    .filter(Boolean);
+  if (fromP.length) return fromP;
+  const plain = stripHtml(cellHtml);
+  return plain ? [plain] : [];
+}
+
+function splitPhoneTokens(text) {
+  const out = [];
+  for (const part of String(text || '').split(/\s+/)) {
+    const picked = pickPhone(part);
+    if (picked) out.push(picked);
+  }
+  return out;
+}
+
+/** 국민연금 지사조직 부명 테이블 — 담당업무(열3)까지 파싱, 병렬 <p>는 항목별로 분리 */
+function parseNpsDepartmentPhones(detailHtml) {
+  const tableHtml = extractTableByCaption(detailHtml, '지사조직의 부명');
+  const bodyMatch = tableHtml.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+  if (!bodyMatch) return [];
+
+  const items = [];
+  for (const m of bodyMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...m[1].matchAll(/<(td|th)[^>]*>([\s\S]*?)<\/\1>/gi)].map(x => x[2]);
+    if (cells.length < 4) continue;
+    const label = stripHtml(cells[0]);
+    if (!label || label === '부명') continue;
+
+    const phones = extractCellParagraphs(cells[1]).flatMap(splitPhoneTokens);
+    const roles = extractCellParagraphs(cells[2]);
+    const faxes = extractCellParagraphs(cells[3]).flatMap(splitPhoneTokens);
+
+    const slotCount = Math.max(phones.length, roles.length, faxes.length, 1);
+    for (let i = 0; i < slotCount; i += 1) {
+      const phone = phones[i] ?? (phones.length === 1 ? phones[0] : '');
+      const role = roles[i] ?? (roles.length === 1 ? roles[0] : '');
+      const fax = faxes[i] ?? (faxes.length === 1 ? faxes[0] : '');
+      if (!phone && !fax) continue;
+      items.push({
+        label,
+        phone: phone && isLikelyPhone(phone) ? phone : pickPhone(phone),
+        role,
+        fax: fax && isLikelyPhone(fax) ? fax : pickPhone(fax),
+      });
+    }
+  }
+
+  return uniqueDeptRows(items, item => item);
+}
+
 function extractTableByCaption(html, keyword) {
   const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const m = html.match(new RegExp(`<table[\\s\\S]*?<caption>[\\s\\S]*?${safe}[\\s\\S]*?<\\/caption>[\\s\\S]*?<\\/table>`, 'i'));
@@ -304,16 +358,7 @@ async function importNps() {
       const role = classifyRole(shortName);
       if (detailUrl) {
         const detailHtml = await fetchCached(detailUrl, `nps-${meta.code}.html`);
-        const rows = parseSimpleTableRows(extractTableByCaption(detailHtml, '지사조직의 부명'));
-        departmentPhones = uniqueDeptRows(rows, cells => {
-          if (cells.length < 4) return null;
-          return {
-            label: cells[0],
-            phone: pickPhone(cells[1]),
-            role: '',
-            fax: cells[3] || '',
-          };
-        });
+        departmentPhones = parseNpsDepartmentPhones(detailHtml);
       }
       hqName = inferNpsHqName(shortName, meta.jurisdiction || '', meta.region || '', role);
       return {
@@ -575,8 +620,35 @@ async function importNhis() {
 }
 
 const onlyNhis = process.argv.includes('--nhis-only');
-if (!onlyNhis) {
+const onlyNps = process.argv.includes('--nps-only');
+const reparseNpsFromCache = process.argv.includes('--nps-reparse-cache');
+
+async function reparseNpsDeptFromCache() {
+  const datasetPath = resolve('data/nps-branches.json');
+  const dataset = JSON.parse(readFileSync(datasetPath, 'utf8'));
+  let updated = 0;
+  for (const branch of dataset.branches) {
+    const cachePath = resolve(cacheDir, `nps-${branch.id}.html`);
+    if (!existsSync(cachePath)) continue;
+    const detailHtml = readFileSync(cachePath, 'utf8');
+    const departmentPhones = parseNpsDepartmentPhones(detailHtml);
+    if (departmentPhones.length) {
+      branch.departmentPhones = departmentPhones;
+      updated += 1;
+    }
+  }
+  writeFileSync(datasetPath, JSON.stringify(dataset, null, 2), 'utf8');
+  console.log(`re-parsed departmentPhones for ${updated} branches → ${datasetPath}`);
+}
+
+if (reparseNpsFromCache) {
+  await reparseNpsDeptFromCache();
+} else if (onlyNps) {
+  await importNps();
+} else if (onlyNhis) {
+  await importNhis();
+} else {
   await importNps();
   await importComwel();
+  await importNhis();
 }
-await importNhis();

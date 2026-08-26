@@ -17,10 +17,12 @@ import {
   CONTACT_PURPOSE_CHIPS,
   contactPurposeTags,
   filterContactsByPurpose,
+  filterContactsForWorkplace,
   filterInsuranceBranches,
   formatContactNumberRanges,
   hasVisibleContact,
   INSURANCE_ORGS,
+  isGenericInsuranceHotline,
   rankContactsForOffice,
   type ContactPurposeId,
   type InsuranceBranch,
@@ -120,8 +122,8 @@ function ContactRow({ item, showTags = false }: { item: InsuranceDeptContact; sh
 
 function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOrgId }) {
   const allContacts = useMemo(
-    () => (branch.departmentPhones ?? []).filter(hasVisibleContact),
-    [branch.departmentPhones],
+    () => filterContactsForWorkplace(branch.departmentPhones ?? [], org),
+    [branch.departmentPhones, org],
   );
   const ranked = useMemo(() => rankContactsForOffice(allContacts, org), [allContacts, org]);
   const [purpose, setPurpose] = useState<ContactPurposeId>('recommend');
@@ -146,6 +148,7 @@ function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOr
 
   const phoneDisplay = formatContactNumberRanges(branch.phone);
   const faxDisplay = formatContactNumberRanges(branch.fax);
+  const phoneIsHotline = isGenericInsuranceHotline(branch.phone);
 
   return (
     <article className={`${portalCard} p-3`}>
@@ -163,7 +166,9 @@ function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOr
         </div>
         <div className="flex items-start gap-1.5">
           <div className="text-right">
-            <p className="text-[10px] font-medium text-slate-400">대표번호</p>
+            <p className="text-[10px] font-medium text-slate-400">
+              {phoneIsHotline ? '고객센터(대표)' : '대표번호'}
+            </p>
             <p className="text-base font-semibold tabular-nums text-slate-900">
               {phoneDisplay[0] || branch.phone || '—'}
             </p>
@@ -188,6 +193,18 @@ function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOr
         {branch.address || '—'}
       </p>
 
+      {branch.sourceUrl ? (
+        <p className="mt-1.5">
+          <a
+            href={branch.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline"
+          >
+            이 지사 공식 연락처 페이지 →
+          </a>
+        </p>
+      ) : null}
       {allContacts.length ? (
         <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 p-2">
           <p className="mb-1.5 text-[11px] font-semibold text-slate-600">업무별 연락처</p>
@@ -261,6 +278,7 @@ export default function ClientInsuranceBranchesPanel({
 
   const data = DATASETS[org];
   const results = useMemo(() => filterInsuranceBranches(data.branches, query, 6), [data.branches, query]);
+  const orgMeta = INSURANCE_ORGS.find(o => o.id === org);
 
   return (
     <div>
@@ -268,25 +286,40 @@ export default function ClientInsuranceBranchesPanel({
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">
-          수임처 주소를 검색어로 자동 적용합니다.
+          수임처 주소로 관할 지사를 찾습니다. 번호는 공식 사이트 스냅샷이라, 확실하지 않으면 아래에서 공식 조회를 확인하세요.
           {!addressText ? ' 주소가 없으면 수동 검색으로만 찾을 수 있습니다.' : ''}
         </p>
-        {addressText ? (
-          <button
-            type="button"
-            className={`${portalBtnSecondary} !px-2 !py-1 text-[11px]`}
-            onClick={() => setQuery(addressText)}
-          >
-            주소 다시 적용
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {addressText ? (
+            <>
+              <button
+                type="button"
+                className={`${portalBtnSecondary} !px-2 !py-1 text-[11px]`}
+                onClick={() => setQuery(addressText)}
+              >
+                주소 다시 적용
+              </button>
+              <CopyButton text={addressText} label="주소 복사" />
+            </>
+          ) : null}
+          {orgMeta ? (
+            <a
+              href={orgMeta.officialSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${portalBtnSecondary} !px-2 !py-1 text-[11px] no-underline`}
+            >
+              {orgMeta.officialSearchLabel}
+            </a>
+          ) : null}
+        </div>
       </div>
 
       <PortalToolTabs
-        className="mb-3"
+        className="mb-3 flex-wrap"
         value={org}
         onChange={setOrg}
-        tabs={INSURANCE_ORGS.map(o => ({ id: o.id, label: o.shortLabel, accent: o.accent }))}
+        tabs={INSURANCE_ORGS.map(o => ({ id: o.id, label: o.label, accent: o.accent }))}
       />
 
       <input

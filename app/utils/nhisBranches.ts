@@ -24,16 +24,43 @@ export type InsuranceOrgId = 'nhis' | 'nps' | 'comwel';
 
 export const INSURANCE_ORGS: {
   id: InsuranceOrgId;
+  /** 공단 정식 명칭 (탭·표시) */
   label: string;
-  shortLabel: string;
   accent: 'blue' | 'indigo' | 'orange';
   note?: string;
+  /** 주소로 지사·연락처 확인하는 공식 페이지 */
+  officialSearchUrl: string;
+  officialSearchLabel: string;
 }[] = [
-  { id: 'nhis', label: '건강보험', shortLabel: '건보', accent: 'blue' },
-  { id: 'nps', label: '국민연금', shortLabel: '연금', accent: 'indigo' },
-  { id: 'comwel', label: '근로복지(고용·산재)', shortLabel: '근로복지', accent: 'orange' },
+  {
+    id: 'nhis',
+    label: '국민건강보험공단',
+    accent: 'blue',
+    officialSearchUrl: 'https://www.nhis.or.kr/nhis/about/retrieveBranchList.do',
+    officialSearchLabel: '국민건강보험공단 지사찾기',
+  },
+  {
+    id: 'nps',
+    label: '국민연금공단',
+    accent: 'indigo',
+    officialSearchUrl:
+      'https://nps.or.kr/pbcpgdnc/ognzprsn/getOHAG0021M0.do?menuId=MN24001022',
+    officialSearchLabel: '국민연금공단 지사찾기',
+  },
+  {
+    id: 'comwel',
+    label: '근로복지공단',
+    accent: 'orange',
+    officialSearchUrl: 'https://www.comwel.or.kr/comwel/intr/srch/srch.jsp',
+    officialSearchLabel: '근로복지공단 지사찾기',
+  },
 ];
 
+/** 대표·고객센터 번호로만 찍힌 경우 (지사 직통이 아님) */
+export function isGenericInsuranceHotline(phone: string | undefined): boolean {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits === '15771000' || digits === '1355' || digits === '15860070';
+}
 function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, '');
 }
@@ -274,6 +301,29 @@ const PURPOSE_KEYWORDS: Record<
 const DEMOTE_PATTERN =
   /행정지원|시설|총무|재물|구매|기록물|사회공헌|재활보상|행복노후|장애인|노후준비|산재의학|복지사업|부정수급|송무|\bTF\b|특고/;
 
+/** 국민연금 — 지역(개인)가입자 전용 연락처 (세무·사업장 업무와 무관) */
+const NPS_REGIONAL_SUBSCRIBER =
+  /지역가입지원|지역\s*\(\s*개인\s*\)\s*가입|지역가입자|개인\s*\)\s*가입자|^지역가입자$/;
+
+const NPS_WORKPLACE = /사업장/;
+
+export function isNpsRegionalSubscriberContact(item: InsuranceDeptContact): boolean {
+  const hay = contactHay(item);
+  if (/지역가입지원/.test(item.label || '')) return true;
+  if (NPS_REGIONAL_SUBSCRIBER.test(hay) && !NPS_WORKPLACE.test(hay)) return true;
+  return false;
+}
+
+/** 수임처(사업장) 실무용 — 연금공단은 지역가입자 창구 제외 */
+export function filterContactsForWorkplace(
+  contacts: InsuranceDeptContact[],
+  org: InsuranceOrgId,
+): InsuranceDeptContact[] {
+  const visible = contacts.filter(hasVisibleContact);
+  if (org !== 'nps') return visible;
+  return visible.filter(item => !isNpsRegionalSubscriberContact(item));
+}
+
 const BOOST_QUAL = /자격|취득|상실|피부양|사업장|자격징수|가입지원/;
 const BOOST_PREMIUM = /보험료|징수|부과|고지/;
 const BOOST_MAIN = /지사장|대표|고객센터/;
@@ -297,9 +347,10 @@ export function filterContactsByPurpose(
   purposeId: ContactPurposeId,
 ): InsuranceDeptContact[] {
   const visible = contacts.filter(hasVisibleContact);
-  if (purposeId === 'all' || purposeId === 'recommend') return visible;
+  const scoped = filterContactsForWorkplace(visible, org);
+  if (purposeId === 'all' || purposeId === 'recommend') return scoped;
   const keywords = PURPOSE_KEYWORDS[purposeId][org];
-  return visible.filter(item => matchesKeywords(contactHay(item), keywords));
+  return scoped.filter(item => matchesKeywords(contactHay(item), keywords));
 }
 
 /** 세무 실무 추천용 점수 — 자격·가입·보험료 가산, 행정/재활 등 감점 */
@@ -311,6 +362,7 @@ export function scoreContactForOffice(item: InsuranceDeptContact, _org: Insuranc
   if (/가입지원/.test(hay)) score += 6;
   if (BOOST_MAIN.test(hay)) score += 2;
   if (DEMOTE_PATTERN.test(hay)) score -= 12;
+  if (isNpsRegionalSubscriberContact(item)) score -= 20;
   if (/센터/.test(hay) && !/가입지원|자격징수/.test(hay)) score -= 3;
   // 팀장·부장 등 총괄 라인 약간 가산 (실무 창구)
   if (/부장|팀장|총괄/.test(hay) && (BOOST_QUAL.test(hay) || BOOST_PREMIUM.test(hay))) score += 2;
@@ -332,7 +384,7 @@ export function rankContactsForOffice(
   contacts: InsuranceDeptContact[],
   org: InsuranceOrgId,
 ): InsuranceDeptContact[] {
-  return [...contacts.filter(hasVisibleContact)].sort((a, b) => {
+  return [...filterContactsForWorkplace(contacts, org)].sort((a, b) => {
     const diff = scoreContactForOffice(b, org) - scoreContactForOffice(a, org);
     if (diff !== 0) return diff;
     return contactHay(a).localeCompare(contactHay(b), 'ko');

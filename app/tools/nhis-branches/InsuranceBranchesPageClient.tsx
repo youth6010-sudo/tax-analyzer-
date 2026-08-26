@@ -21,10 +21,12 @@ import {
   CONTACT_PURPOSE_CHIPS,
   contactPurposeTags,
   filterContactsByPurpose,
+  filterContactsForWorkplace,
   filterInsuranceBranches,
   formatContactNumberRanges,
   hasVisibleContact,
   INSURANCE_ORGS,
+  isGenericInsuranceHotline,
   rankContactsForOffice,
   type ContactPurposeId,
   type InsuranceBranch,
@@ -129,8 +131,8 @@ function ContactListItem({ item, showTags = false }: { item: InsuranceDeptContac
 
 function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOrgId }) {
   const allContacts = useMemo(
-    () => (branch.departmentPhones ?? []).filter(hasVisibleContact),
-    [branch.departmentPhones],
+    () => filterContactsForWorkplace(branch.departmentPhones ?? [], org),
+    [branch.departmentPhones, org],
   );
   const ranked = useMemo(() => rankContactsForOffice(allContacts, org), [allContacts, org]);
   const regionTags = extractRegionTags(branch.jurisdiction);
@@ -205,11 +207,25 @@ function ResultCard({ branch, org }: { branch: InsuranceBranch; org: InsuranceOr
           {branch.address || '—'}
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-[10px] font-medium text-slate-400">대표번호</p>
+          <p className="text-[10px] font-medium text-slate-400">
+            {isGenericInsuranceHotline(branch.phone) ? '고객센터(대표)' : '대표번호'}
+          </p>
           <p className="font-semibold tabular-nums text-slate-900">{branch.phone || '—'}</p>
           {branch.fax ? <p className="text-[10px] tabular-nums text-slate-500">팩스 {branch.fax}</p> : null}
         </div>
       </div>
+      {branch.sourceUrl ? (
+        <p className="mt-2">
+          <a
+            href={branch.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline"
+          >
+            이 지사 공식 연락처 페이지 →
+          </a>
+        </p>
+      ) : null}
       {hasAnyContacts ? (
         <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
           <p className="mb-1 text-xs font-semibold text-slate-600">업무별 연락처</p>
@@ -365,7 +381,7 @@ export default function InsuranceBranchesPageClient({
     <PortalPageShell narrow>
       <PortalPageHeader
         title="4대보험 지사 찾기"
-        description="건보·국민연금·근로복지(고용·산재) 지사를 지역·구·동·지사명으로 바로 검색합니다."
+        description="국민건강보험공단·국민연금공단·근로복지공단 지사를 지역·구·동·지사명으로 검색합니다."
         icon={<PageHeaderIcon name="nhis-branches" />}
       />
 
@@ -380,12 +396,12 @@ export default function InsuranceBranchesPageClient({
       <CallContextBanner businessNo={businessNo} companyName={companyName} />
 
       <PortalToolTabs
-        className="mb-4"
+        className="mb-4 flex-wrap"
         value={org}
         onChange={setOrg}
         tabs={INSURANCE_ORGS.map(o => ({
           id: o.id,
-          label: o.shortLabel,
+          label: o.label,
           accent: o.accent,
         }))}
       />
@@ -407,6 +423,15 @@ export default function InsuranceBranchesPageClient({
           {orgMeta.label} · 기준일 {data.updated} · {data.branches.length}개
           {trimmed ? ` · ${results.length}건` : ''}
           {orgMeta.note ? ` · ${orgMeta.note}` : ''}
+          {' · '}
+          <a
+            href={orgMeta.officialSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+          >
+            {orgMeta.officialSearchLabel}
+          </a>
         </p>
       </div>
 
