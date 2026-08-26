@@ -164,6 +164,7 @@ async function attachChurnFlags(items: ArrearsEntryDto[]): Promise<ArrearsEntryD
 
 /**
  * 수임처 월 기장료(공급가)의 2배 이상 미수이면 관리분류「일시」로 자동 지정.
+ * 「일시」인데 잔액이 0원이면 미분류로 되돌림.
  * 채권회수·악성·장기·CMS는 수동 값 유지.
  */
 async function syncTempCategoryByMonthlyFee(
@@ -173,20 +174,33 @@ async function syncTempCategoryByMonthlyFee(
   const clientIds = [
     ...new Set(items.map(i => i.clientId).filter((id): id is string => Boolean(id))),
   ];
-  if (!clientIds.length) return items;
 
   const db = getDb();
-  const rows = await db
-    .select({ id: clients.id, intakeData: clients.intakeData })
-    .from(clients)
-    .where(inArray(clients.id, clientIds));
+
+  // 목록 필터와 무관하게 일시+0원은 미분류로 정리
+  await db
+    .update(arrearsEntries)
+    .set({ mgmtCategory: '', updatedAt: new Date() })
+    .where(and(eq(arrearsEntries.mgmtCategory, 'temp'), eq(arrearsEntries.balance, 0)));
+
   const feeByClient = new Map<string, number>();
-  for (const r of rows) {
-    feeByClient.set(r.id, monthlyBookkeepingFeeFromIntake(r.intakeData));
+  if (clientIds.length) {
+    const rows = await db
+      .select({ id: clients.id, intakeData: clients.intakeData })
+      .from(clients)
+      .where(inArray(clients.id, clientIds));
+    for (const r of rows) {
+      feeByClient.set(r.id, monthlyBookkeepingFeeFromIntake(r.intakeData));
+    }
   }
 
   const toTemp: string[] = [];
   const next = items.map(item => {
+    // 일시 + 잔액 0 → 미분류 (위에서 DB 반영, 응답 DTO도 맞춤)
+    if (item.mgmtCategory === 'temp' && Math.round(item.balance) === 0) {
+      return { ...item, mgmtCategory: '' as ArrearsMgmtCategory };
+    }
+
     if (!item.clientId) return item;
     const fee = feeByClient.get(item.clientId) ?? 0;
     if (!shouldAutoTempByMonthlyFee(item.balance, fee)) return item;
@@ -290,6 +304,11 @@ export interface ListArrearsFilters {
   ledgerOnly?: boolean;
   /** true면 유출 수임처만 */
   churnedOnly?: boolean;
+  /**
+   * 목록/총미수 엑셀용 — 사유요약(+유출필터 시 churn)만.
+   * 잔액불일치·일시동기 등 무거운 후처리를 생략한다.
+   */
+  light?: boolean;
 }
 
 export async function listArrearsEntries(filters: ListArrearsFilters = {}): Promise<{
@@ -381,17 +400,28 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
     .orderBy(desc(arrearsEntries.balance), asc(arrearsEntries.companyName));
 
   const withReasons = await attachReasonSummaries(rows.map(toDto));
-  const withOpens = await attachLineOpenBalances(withReasons);
-  const withChurn = await attachChurnFlags(withOpens);
-  const withTemp = await syncTempCategoryByMonthlyFee(withChurn);
-  let items = filters.churnedOnly
-    ? withTemp.filter(i => i.isChurned)
-    : withTemp;
-  if (filters.mismatchOnly) {
-    items = items.filter(i => i.balanceDiffKind === 'mismatch');
-  }
-  if (filters.ledgerOnly) {
-    items = items.filter(i => i.balanceDiffKind === 'ledger_only');
+
+  let items: ArrearsEntryDto[];
+  if (filters.light) {
+    // 총미수 엑셀·가벼운 목록: 라인합계/일시동기 생략
+    if (filters.churnedOnly) {
+      items = (await attachChurnFlags(withReasons)).filter(i => i.isChurned);
+    } else {
+      items = withReasons;
+    }
+  } else {
+    const withOpens = await attachLineOpenBalances(withReasons);
+    const withChurn = await attachChurnFlags(withOpens);
+    const withTemp = await syncTempCategoryByMonthlyFee(withChurn);
+    items = filters.churnedOnly
+      ? withTemp.filter(i => i.isChurned)
+      : withTemp;
+    if (filters.mismatchOnly) {
+      items = items.filter(i => i.balanceDiffKind === 'mismatch');
+    }
+    if (filters.ledgerOnly) {
+      items = items.filter(i => i.balanceDiffKind === 'ledger_only');
+    }
   }
   const totalMap = new Map<string, ArrearsManagerTotal>();
   let totalBalance = 0;

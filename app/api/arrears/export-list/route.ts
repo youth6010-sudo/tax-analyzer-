@@ -4,8 +4,10 @@ import { canExportArrearsList } from '@/lib/arrearsAccess';
 import { listArrearsEntries } from '@/lib/arrearsDb';
 import {
   arrearsListExportFilename,
+  buildArrearsListManagerTotals,
   buildArrearsListWorkbook,
   workbookToXlsxBuffer,
+  type ArrearsListExportItem,
 } from '@/lib/arrearsListExport';
 import { handleApiError } from '@/lib/apiError';
 
@@ -30,7 +32,71 @@ function parseCategoryParams(sp: URLSearchParams): string[] | undefined {
   return out.length ? [...new Set(out)] : undefined;
 }
 
-/** 미수관리 화면 목록(총미수) 요약 엑셀 — 관리자·인디·찰리만 */
+function xlsxResponse(buf: Buffer, asOfDate: string) {
+  const filename = arrearsListExportFilename(asOfDate);
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Cache-Control': 'private, no-store',
+    },
+  });
+}
+
+function normalizeExportItems(raw: unknown): ArrearsListExportItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArrearsListExportItem[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const companyName = String(r.companyName ?? '').trim();
+    if (!companyName) continue;
+    out.push({
+      externalCode: String(r.externalCode ?? ''),
+      companyName,
+      balance: Math.round(Number(r.balance) || 0),
+      reasonSummary: r.reasonSummary != null ? String(r.reasonSummary) : undefined,
+      managerName: String(r.managerName ?? ''),
+      mgmtCategory: String(r.mgmtCategory ?? ''),
+      memo: String(r.memo ?? ''),
+    });
+  }
+  return out;
+}
+
+/** 화면에서 넘긴 목록 → 색상 포함 엑셀 (DB 재조회 없음) */
+export async function POST(req: Request) {
+  try {
+    const user = await requireUser();
+    if (!canExportArrearsList(user)) {
+      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+    }
+
+    const body = (await req.json().catch(() => ({}))) as {
+      items?: unknown;
+      asOfDate?: string;
+    };
+    const items = normalizeExportItems(body.items);
+    if (!items.length) {
+      return NextResponse.json({ error: '내보낼 미수 목록이 없습니다.' }, { status: 400 });
+    }
+
+    const asOfDate = String(body.asOfDate ?? '').trim();
+    const totalBalance = items.reduce((s, i) => s + i.balance, 0);
+    const wb = await buildArrearsListWorkbook(items, {
+      asOfDate,
+      totalBalance,
+      totalsByManager: buildArrearsListManagerTotals(items),
+    });
+    return xlsxResponse(await workbookToXlsxBuffer(wb), asOfDate);
+  } catch (e) {
+    return handleApiError(e);
+  }
+}
+
+/** 미수관리 화면 목록(총미수) 요약 엑셀 — 관리자·인디·찰리만 (필터 재조회) */
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
@@ -54,6 +120,7 @@ export async function GET(req: Request) {
       q,
       nonzero: nonzero || undefined,
       churnedOnly: churnedOnly || undefined,
+      light: true,
     });
 
     const companies = [
@@ -89,15 +156,7 @@ export async function GET(req: Request) {
     });
 
     const totalBalance = items.reduce((s, i) => s + i.balance, 0);
-    const totalMap = new Map<string, { managerName: string; count: number; balance: number }>();
-    for (const item of items) {
-      const key = item.managerName.trim() || '(미지정)';
-      const cur = totalMap.get(key) ?? { managerName: key, count: 0, balance: 0 };
-      cur.count += 1;
-      cur.balance += item.balance;
-      totalMap.set(key, cur);
-    }
-    const totalsByManager = [...totalMap.values()].sort((a, b) => b.balance - a.balance);
+    const totalsByManager = buildArrearsListManagerTotals(items);
 
     if (!items.length) {
       return NextResponse.json({ error: '내보낼 미수 목록이 없습니다.' }, { status: 400 });
@@ -108,18 +167,7 @@ export async function GET(req: Request) {
       totalBalance,
       totalsByManager,
     });
-    const buf = await workbookToXlsxBuffer(wb);
-    const filename = arrearsListExportFilename(result.asOfDate);
-
-    return new NextResponse(new Uint8Array(buf), {
-      status: 200,
-      headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        'Cache-Control': 'private, no-store',
-      },
-    });
+    return xlsxResponse(await workbookToXlsxBuffer(wb), result.asOfDate);
   } catch (e) {
     return handleApiError(e);
   }

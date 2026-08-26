@@ -29,6 +29,7 @@ import ArrearsManualEntryModal, {
 } from '@/app/arrears/ArrearsManualEntryModal';
 import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
 import ArrearsFeeEventsImport from '@/app/arrears/ArrearsFeeEventsImport';
+import { toArrearsListExportItem } from '@/lib/arrearsListExportShared';
 
 type BulkRow = {
   clientId?: string;
@@ -674,26 +675,25 @@ export default function ArrearsPageClient() {
     }
   };
 
-  /** 화면 목록(총미수) 요약 엑셀 — 관리자·인디·찰리 */
+  /** 화면 목록(총미수) 요약 엑셀 — 화면 데이터·행 색상 그대로 (DB 재조회 없음) */
   const exportArrearsList = async () => {
     if (!canExportList || listExportBusy) return;
+    if (!displayItems.length) {
+      setError('내보낼 미수 목록이 없습니다.');
+      return;
+    }
     setListExportBusy(true);
     setError('');
     try {
-      const params = new URLSearchParams();
-      for (const m of managers) params.append('manager', m);
-      for (const c of categories) {
-        params.append('category', c === '' ? 'none' : c);
-      }
-      if (!showZero) params.set('nonzero', '1');
-      if (churnedOnly) params.set('churned', '1');
-      if (qDebounced) params.set('q', qDebounced);
-      for (const name of filterCompanies) params.append('company', name);
-      for (const bal of filterBalances) params.append('balance', String(bal));
-      params.set('sort', sortKey);
-      params.set('dir', sortDir);
-
-      const res = await fetch(`/api/arrears/export-list?${params}`, { cache: 'no-store' });
+      const res = await fetch('/api/arrears/export-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          asOfDate,
+          items: displayItems.map(toArrearsListExportItem),
+        }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || '총미수 엑셀 저장 실패');
@@ -853,9 +853,9 @@ export default function ArrearsPageClient() {
             <button
               type="button"
               className={`${portalBtnSecondary} !py-1.5 text-xs`}
-              disabled={listExportBusy || loading || items.length === 0}
+              disabled={listExportBusy || loading || displayItems.length === 0}
               onClick={() => void exportArrearsList()}
-              title="현재 화면 필터 기준 총미수 목록 엑셀 (관리자·인디·찰리)"
+              title="현재 화면에 보이는 총미수 목록 엑셀 (관리자·인디·찰리)"
             >
               {listExportBusy ? '총미수 엑셀…' : '총미수 엑셀'}
             </button>

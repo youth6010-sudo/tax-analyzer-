@@ -1,13 +1,23 @@
 /**
- * 미수관리 화면(총미수 목록)과 같은 열 구성의 요약 엑셀
+ * 미수관리 화면(총미수 목록)과 같은 열 구성의 요약 엑셀 (ExcelJS)
  */
 import ExcelJS from 'exceljs';
+import { type ArrearsManagerTotal } from '@/app/types/arrears';
 import {
-  arrearsCategoryLabel,
-  formatArrearsWon,
-  type ArrearsEntryDto,
-  type ArrearsManagerTotal,
-} from '@/app/types/arrears';
+  arrearsListRowFillArgb,
+  toArrearsListSheetRow,
+  type ArrearsListExportItem,
+} from '@/lib/arrearsListExportShared';
+
+export {
+  arrearsListExportFilename,
+  arrearsListRowFillArgb,
+  buildArrearsListManagerTotals,
+  toArrearsListExportItem,
+  toArrearsListSheetRow,
+  type ArrearsListExportItem,
+  type ArrearsListSheetRow,
+} from '@/lib/arrearsListExportShared';
 
 const FMT_AMT = '#,##0';
 
@@ -17,20 +27,12 @@ export type ArrearsListExportMeta = {
   totalsByManager: ArrearsManagerTotal[];
 };
 
-export function arrearsListExportFilename(asOfDate: string): string {
-  const d = (asOfDate || '').trim();
-  let stamp = '';
-  const m = d.match(/^(\d{4})[.\-](\d{2})[.\-](\d{2})/);
-  if (m) stamp = `${m[1].slice(2)}.${m[2]}.${m[3]}`;
-  else {
-    const now = new Date();
-    stamp = `${String(now.getFullYear()).slice(2)}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
-  }
-  return `미수목록_전체_${stamp}.xlsx`;
+function solidFill(argb: string): ExcelJS.Fill {
+  return { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 }
 
 export async function buildArrearsListWorkbook(
-  items: ArrearsEntryDto[],
+  items: ArrearsListExportItem[],
   meta: ArrearsListExportMeta,
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
@@ -49,68 +51,71 @@ export async function buildArrearsListWorkbook(
     { header: '담당', key: 'manager', width: 10 },
     { header: '관리', key: 'category', width: 10 },
     { header: '메모', key: 'memo', width: 24 },
-    { header: '사업자번호', key: 'biz', width: 14 },
-    { header: '대표자', key: 'rep', width: 10 },
-    { header: '유출', key: 'churn', width: 8 },
-    { header: '비고', key: 'note', width: 18 },
   ];
+  // 코드·사유·메모 등 — 날짜/숫자 자동변환 방지 (텍스트)
+  for (const key of ['code', 'name', 'reason', 'manager', 'category', 'memo'] as const) {
+    ws.getColumn(key).numFmt = '@';
+  }
 
   const header = ws.getRow(1);
   header.font = { bold: true, name: '맑은 고딕', size: 10 };
-  header.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FFE2E8F0' },
-  };
+  header.fill = solidFill('FFE2E8F0');
   header.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  for (const item of items) {
-    const noteParts: string[] = [];
-    if (item.externalCode.startsWith('letter:')) noteParts.push('연결필요');
-    if (item.balanceDiffKind === 'mismatch') {
-      noteParts.push(
-        `불일치 ${item.balanceDiff && item.balanceDiff > 0 ? '+' : ''}${formatArrearsWon(item.balanceDiff ?? 0)}`,
-      );
-    }
-    if (item.balanceDiffKind === 'ledger_only') noteParts.push('원장만');
+  const applyTextCell = (cell: ExcelJS.Cell, text: string) => {
+    cell.value = String(text ?? '');
+    cell.numFmt = '@';
+  };
 
+  for (const item of items) {
+    const sheet = toArrearsListSheetRow(item);
     const row = ws.addRow({
-      code: item.externalCode.startsWith('letter:') ? '' : item.externalCode,
-      name: item.companyName,
-      balance: Math.round(item.balance),
-      reason: item.reasonSummary || '',
-      manager: item.managerName || '',
-      category: arrearsCategoryLabel(item.mgmtCategory),
-      memo: item.memo || '',
-      biz: item.businessNo || '',
-      rep: item.representative || '',
-      churn: item.isChurned ? '유출' : '',
-      note: noteParts.join(' · '),
+      code: '',
+      name: '',
+      balance: sheet['미수 잔액'],
+      reason: '',
+      manager: '',
+      category: '',
+      memo: '',
     });
+    applyTextCell(row.getCell('code'), sheet.코드);
+    applyTextCell(row.getCell('name'), sheet.상호);
+    applyTextCell(row.getCell('reason'), sheet['미수 사유']);
+    applyTextCell(row.getCell('manager'), sheet.담당);
+    applyTextCell(row.getCell('category'), sheet.관리);
+    applyTextCell(row.getCell('memo'), sheet.메모);
     row.getCell('balance').numFmt = FMT_AMT;
     row.font = { name: '맑은 고딕', size: 10 };
+    const fillArgb = arrearsListRowFillArgb(item);
+    if (fillArgb) {
+      for (let c = 1; c <= 7; c++) {
+        const cell = row.getCell(c);
+        cell.fill = solidFill(fillArgb);
+        cell.font = { name: '맑은 고딕', size: 10 };
+      }
+    }
   }
 
   const totalRow = ws.addRow({
     code: '',
-    name: '총미수',
+    name: '',
     balance: Math.round(meta.totalBalance),
-    reason: `${items.length}건`,
+    reason: '',
     manager: '',
     category: '',
-    memo: meta.asOfDate ? `기준일 ${meta.asOfDate}` : '',
-    biz: '',
-    rep: '',
-    churn: '',
-    note: '',
+    memo: '',
   });
-  totalRow.font = { bold: true, name: '맑은 고딕', size: 10 };
+  applyTextCell(totalRow.getCell('name'), '총미수');
+  applyTextCell(totalRow.getCell('reason'), `${items.length}건`);
+  applyTextCell(
+    totalRow.getCell('memo'),
+    meta.asOfDate ? `기준일 ${meta.asOfDate}` : '',
+  );
   totalRow.getCell('balance').numFmt = FMT_AMT;
-  totalRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FFFEF3C7' },
-  };
+  for (let c = 1; c <= 7; c++) {
+    totalRow.getCell(c).fill = solidFill('FFFEF3C7');
+    totalRow.getCell(c).font = { bold: true, name: '맑은 고딕', size: 10 };
+  }
 
   if (meta.totalsByManager.length) {
     const wsMgr = wb.addWorksheet('담당별 합계');
@@ -120,6 +125,7 @@ export async function buildArrearsListWorkbook(
       { header: '미수 합계', key: 'balance', width: 14 },
     ];
     wsMgr.getRow(1).font = { bold: true, name: '맑은 고딕', size: 10 };
+    wsMgr.getRow(1).fill = solidFill('FFE2E8F0');
     for (const t of meta.totalsByManager) {
       const r = wsMgr.addRow({
         manager: t.managerName,
@@ -134,8 +140,11 @@ export async function buildArrearsListWorkbook(
       count: items.length,
       balance: Math.round(meta.totalBalance),
     });
-    sum.font = { bold: true, name: '맑은 고딕', size: 10 };
     sum.getCell('balance').numFmt = FMT_AMT;
+    for (let c = 1; c <= 3; c++) {
+      sum.getCell(c).fill = solidFill('FFFEF3C7');
+      sum.getCell(c).font = { bold: true, name: '맑은 고딕', size: 10 };
+    }
   }
 
   return wb;
