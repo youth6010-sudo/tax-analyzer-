@@ -22,6 +22,7 @@ export async function GET(req: Request) {
       year,
       canManage: canManageLeaveBalance(user),
       canViewAll: canViewAllLeaveBalances(user),
+      viewerName: user.name?.trim() || '',
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : '조회 실패';

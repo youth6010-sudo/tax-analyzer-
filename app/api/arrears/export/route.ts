@@ -47,9 +47,25 @@ export async function GET(req: Request) {
     const user = await requireUser();
     const sp = new URL(req.url).searchParams;
     const manager = sp.get('manager')?.trim() || undefined;
+    const managers = [
+      ...sp.getAll('manager').flatMap(v => v.split(',')).map(s => s.trim()).filter(Boolean),
+    ].filter((n, i, a) => a.indexOf(n) === i);
     const categoryParam = sp.get('category');
-    const category =
-      categoryParam == null || categoryParam === 'all' ? undefined : categoryParam;
+    const categoriesRaw = sp.getAll('category').flatMap(v => v.split(','));
+    let categories: string[] | undefined;
+    if (categoriesRaw.length) {
+      categories = [];
+      for (const v of categoriesRaw) {
+        const t = v.trim();
+        if (!t || t === 'all') continue;
+        if (t === 'none' || t === '__none__') categories.push('');
+        else categories.push(t);
+      }
+      categories = [...new Set(categories)];
+      if (!categories.length) categories = undefined;
+    } else if (categoryParam != null && categoryParam !== 'all') {
+      categories = [categoryParam];
+    }
     const q = sp.get('q')?.trim() || undefined;
     const nonzero = sp.get('nonzero') !== '0' && sp.get('nonzero') !== 'false';
     const idsParam = sp.get('ids')?.trim();
@@ -66,8 +82,8 @@ export async function GET(req: Request) {
     }
 
     const { items } = await listArrearsEntries({
-      manager,
-      category,
+      managers: managers.length ? managers : manager ? [manager] : undefined,
+      categories,
       q,
       nonzero: nonzero || undefined,
       managerNames,
@@ -80,7 +96,7 @@ export async function GET(req: Request) {
     }
 
     /** 담당자별 파일 목록(메타) — UI에서 순차 다운로드 */
-    if (byManager && !manager && !idsParam) {
+    if (byManager && managers.length === 0 && !manager && !idsParam) {
       const names = canManage
         ? [...ARREARS_MANAGER_NAMES]
         : (managerNames ?? []).filter(n =>

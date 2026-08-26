@@ -21,7 +21,7 @@ export async function PATCH(req: Request) {
     const user = await requireUser();
     const body = await req.json().catch(() => null);
     if (body?.reset === true) {
-      const prefs = await setUserMenuPrefs(user.id, {});
+      const prefs = await setUserMenuPrefs(user.id, {}, { replace: true });
       return NextResponse.json({ prefs });
     }
     const prefs = await setUserMenuPrefs(user.id, normalizeMenuPrefs(body?.prefs ?? body));

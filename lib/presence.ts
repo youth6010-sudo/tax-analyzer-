@@ -2,6 +2,7 @@ import { asc, eq, ne } from 'drizzle-orm';
 import { STAFF_REAL_NAMES } from '@/app/config/dataSources';
 import { getDb } from '@/db';
 import { users } from '@/db/schema';
+import { normalizeAcceptNewClients } from '@/lib/menuPrefs';
 
 /** last_seen 이후 이 시간 이내면 온라인 */
 export const PRESENCE_ONLINE_MS = 2 * 60 * 1000;
@@ -13,6 +14,10 @@ export type PresenceStaffDto = {
   name: string;
   online: boolean;
   lastSeenAt: string | null;
+  /** 개인 신규수임 추가 수신 */
+  acceptIndividual: boolean;
+  /** 법인 신규수임 추가 수신 */
+  acceptCorporate: boolean;
 };
 
 function sortStaff<T extends { name: string }>(rows: T[]): T[] {
@@ -44,17 +49,27 @@ export async function listStaffPresence(now = Date.now()): Promise<PresenceStaff
       id: users.id,
       name: users.name,
       lastSeenAt: users.lastSeenAt,
+      menuPrefs: users.menuPrefs,
     })
     .from(users)
     .where(ne(users.loginId, 'admin'))
     .orderBy(asc(users.name));
 
   return sortStaff(
-    rows.map(r => ({
-      id: r.id,
-      name: r.name,
-      online: isOnline(r.lastSeenAt, now),
-      lastSeenAt: r.lastSeenAt ? r.lastSeenAt.toISOString() : null,
-    })),
+    rows.map(r => {
+      const accept = normalizeAcceptNewClients(
+        r.menuPrefs && typeof r.menuPrefs === 'object'
+          ? (r.menuPrefs as Record<string, unknown>).acceptNewClients
+          : undefined,
+      );
+      return {
+        id: r.id,
+        name: r.name,
+        online: isOnline(r.lastSeenAt, now),
+        lastSeenAt: r.lastSeenAt ? r.lastSeenAt.toISOString() : null,
+        acceptIndividual: accept?.individual === true,
+        acceptCorporate: accept?.corporate === true,
+      };
+    }),
   );
 }

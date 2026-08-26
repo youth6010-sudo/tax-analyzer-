@@ -4,6 +4,8 @@
 // 색상·이모지·줄간격 등이 들어간 내용을 그대로 붙여넣으면 형식이 유지되고,
 // 본문에 넣은 아래 토큰만 계산 결과로 자동 치환됩니다.
 
+import type { TaxTypeKey } from './types';
+
 export type TemplateToken = { token: string; desc: string };
 
 export const TOKENS: TemplateToken[] = [
@@ -81,15 +83,25 @@ export const WITHHOLDING_TEMPLATES: Record<WithholdingMode, WithholdingTemplate>
 export const WITHHOLDING_MODE_LIST: WithholdingMode[] = ['request', 'filing'];
 
 // 담당자별로 서버 저장하는 안내문 서식은 "시나리오" 단위로 관리한다.
-// - general: 부가세·법인세·종소세 공통
-// - withholding_request: 원천세 + 급여대장 미작성(업체가 급여대장 제출) → 자료요청
-// - withholding_filing: 원천세 + 급여대장 작성(우리가 작성) → 신고안내
-export type TemplateScenario = 'general' | 'withholding_request' | 'withholding_filing';
+// - general_*: 세목별 안내문 (부가세·법인세·종소세)
+// - general: 레거시 공통 (로드 시 세목별로 복사)
+// - withholding_request: 원천세 + 급여대장 미작성 → 자료요청
+// - withholding_filing: 원천세 + 급여대장 작성 → 신고안내
+export type TemplateScenario =
+  | 'general'
+  | 'general_vat'
+  | 'general_corporate'
+  | 'general_income'
+  | 'withholding_request'
+  | 'withholding_filing';
 
 export type TemplateMap = Partial<Record<TemplateScenario, string>>;
 
 export const DEFAULT_TEMPLATE_BY_SCENARIO: Record<TemplateScenario, string> = {
   general: DEFAULT_TEMPLATE,
+  general_vat: DEFAULT_TEMPLATE,
+  general_corporate: DEFAULT_TEMPLATE,
+  general_income: DEFAULT_TEMPLATE,
   withholding_request: WITHHOLDING_TEMPLATES.request.html,
   withholding_filing: WITHHOLDING_TEMPLATES.filing.html,
 };
@@ -97,9 +109,34 @@ export const DEFAULT_TEMPLATE_BY_SCENARIO: Record<TemplateScenario, string> = {
 // 시나리오별 편집기 헤더 라벨
 export const SCENARIO_LABEL: Record<TemplateScenario, string> = {
   general: '안내문 서식',
+  general_vat: '안내문 서식 · 부가가치세',
+  general_corporate: '안내문 서식 · 법인세',
+  general_income: '안내문 서식 · 종합소득세',
   withholding_request: '안내문 서식 · 원천세 자료요청',
   withholding_filing: '안내문 서식 · 원천세 신고안내(급여대장 작성)',
 };
+
+/** 전역 기본 서식 키 (세목별 general_* 는 general 기본값 공유) */
+export type GlobalGuideScenario = 'general' | 'withholding_request' | 'withholding_filing';
+
+export function globalDefaultScenarioKey(scenario: TemplateScenario): GlobalGuideScenario {
+  if (scenario === 'withholding_request' || scenario === 'withholding_filing') return scenario;
+  return 'general';
+}
+
+/** 현재 세목·원천 급여대장 여부에 맞는 담당자 서식 시나리오 */
+export function resolveNoticeTemplateScenario(
+  taxType: TaxTypeKey,
+  payrollByUs: boolean,
+): TemplateScenario {
+  if (taxType === 'withholding') {
+    return payrollByUs ? 'withholding_filing' : 'withholding_request';
+  }
+  if (taxType === 'vat') return 'general_vat';
+  if (taxType === 'corporate') return 'general_corporate';
+  if (taxType === 'income') return 'general_income';
+  return 'general';
+}
 
 /** 기본 서식 vs 담당자 저장 서식 */
 export type TemplateSource = 'default' | 'custom';
@@ -159,18 +196,33 @@ export type { OfficialLetterKind };
 
 export type NoticeTemplateStore = {
   version: 3;
+  /** 세목 분리·부가세 복제 정리 버전 (2 = 법인세·종소세 오복사 정리 완료) */
+  templateSplitVersion?: number;
   templates: TemplateMap;
   sources: Partial<Record<TemplateScenario, TemplateSource>>;
   vatReportTemplate?: string;
   vatReportSource?: TemplateSource;
+  /** @deprecated 단일 납부안내 서식 — 로드 시 세목별로 분리 */
   paymentNoticeTemplate?: string;
+  /** @deprecated */
   paymentNoticeSource?: TemplateSource;
+  /** 세목별 신고 결과 안내(납부세액) 서식 */
+  paymentNoticeTemplates?: Partial<Record<TaxTypeKey, string>>;
+  paymentNoticeSources?: Partial<Record<TaxTypeKey, TemplateSource>>;
   officialLetters?: Partial<Record<OfficialLetterKind, string>>;
   officialLetterSources?: Partial<Record<OfficialLetterKind, TemplateSource>>;
   officialFormTemplates?: Partial<Record<string, string>>;
   officialFormSources?: Partial<Record<string, TemplateSource>>;
 };
 
+/** 부가세 복제 정리 완료 표시 — 미만이면 법인세·종소세 커스텀을 한 번 비움 */
+export const NOTICE_TEMPLATE_SPLIT_VERSION = 2;
+
 export function emptyNoticeTemplateStore(): NoticeTemplateStore {
-  return { version: 3, templates: {}, sources: {} };
+  return {
+    version: 3,
+    templateSplitVersion: NOTICE_TEMPLATE_SPLIT_VERSION,
+    templates: {},
+    sources: {},
+  };
 }

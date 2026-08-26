@@ -1491,6 +1491,44 @@ export async function findUserByName(name: string) {
   return row ?? null;
 }
 
+/** 승부차기 당첨 → 빈 수임처 1건 생성 */
+export async function createClientFromShootout(data: {
+  companyName: string;
+  manager: string;
+  entity: 'individual' | 'corporate';
+  assignedUserId?: string | null;
+}) {
+  const companyName = data.companyName.trim();
+  const manager = data.manager.trim();
+  if (!companyName) throw new Error('COMPANY_NAME_REQUIRED');
+  if (!manager) throw new Error('MANAGER_REQUIRED');
+
+  const entityType: BusinessEntityType = data.entity;
+  const category = data.entity === 'corporate' ? '법인' : '개인';
+  const assignedUserId =
+    data.assignedUserId !== undefined
+      ? data.assignedUserId
+      : ((await findUserByName(manager))?.id ?? null);
+
+  const db = getDb();
+  const [row] = await db
+    .insert(clients)
+    .values({
+      companyName,
+      manager,
+      assignedUserId,
+      status: 'active',
+      source: 'manual_intake',
+      businessEntityType: entityType,
+      taxTypes: [],
+      serviceTypes: [],
+      intakeData: applySyncedCategory({ category }, entityType, []),
+    })
+    .returning();
+
+  return clientToRecord(row);
+}
+
 /** 담당자(manager)와 assignedUserId 불일치 건을 담당자 기준으로 맞춤 */
 export async function syncAssignedUsersToManagers(): Promise<{ updated: number; skipped: number }> {
   const db = getDb();

@@ -33,11 +33,12 @@ import { getPortalChurnRecords, subscribePortal } from '@/app/utils/portalStore'
 import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManagerColors';
 import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
-import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
 import { isSimplifiedVatClient, isTaxExemptClient } from '@/app/utils/filingCheck';
 import { fiscalYearEndBadgeLabel } from '@/app/utils/fiscalYearEnd';
 import { useClientRowExpand } from '@/app/components/clients/useClientRowExpand';
+import { useStaffAcceptMap } from '@/app/components/clients/useStaffAcceptMap';
 import ClientRowHeading, { type ClientRowBadge } from '@/app/components/clients/ClientRowHeading';
 import ClientFeeCell from '@/app/components/clients/ClientFeeCell';
 import ClientRowExpandPanel from '@/app/components/clients/ClientRowExpandPanel';
@@ -530,6 +531,47 @@ function MainCategorySummary({
   );
 }
 
+function AcceptChip({
+  label,
+  on,
+  canToggle,
+  onClick,
+}: {
+  label: string;
+  on: boolean;
+  canToggle: boolean;
+  onClick: () => void;
+}) {
+  const cls = on
+    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    : 'bg-white text-slate-500 border-slate-300';
+  const text = `${label} ${on ? 'ON' : 'OFF'}`;
+  if (!canToggle) {
+    return (
+      <span
+        className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${cls}`}
+        title={`신규 ${label} 수신 ${on ? '가능' : '불가'} (본인만 변경)`}
+      >
+        {text}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      title={`클릭: 신규 ${label} 수신 ${on ? '끄기' : '켜기'}`}
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold tracking-wide shadow-sm transition-colors hover:ring-2 hover:ring-blue-200 ${cls}`}
+    >
+      {text}
+    </button>
+  );
+}
+
 function ManagerSection({
   manager,
   clients,
@@ -546,6 +588,10 @@ function ManagerSection({
   onClientOrderChange,
   entityHeights,
   onEntityHeightChange,
+  acceptIndividual = false,
+  acceptCorporate = false,
+  canToggleAccept = false,
+  onToggleAccept,
 }: {
   manager: string;
   clients: ClientRecord[];
@@ -562,6 +608,10 @@ function ManagerSection({
   onClientOrderChange?: () => void;
   entityHeights: Record<RosterEntityHeightKey, number>;
   onEntityHeightChange: (key: RosterEntityHeightKey, height: number) => void;
+  acceptIndividual?: boolean;
+  acceptCorporate?: boolean;
+  canToggleAccept?: boolean;
+  onToggleAccept?: (kind: 'individual' | 'corporate') => void;
 }) {
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
@@ -596,6 +646,21 @@ function ManagerSection({
               {realName && realName !== manager && (
                 <span className="text-xs text-slate-400">{realName}</span>
               )}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span className="text-[9px] font-semibold text-slate-400">신규수신</span>
+              <AcceptChip
+                label="개인"
+                on={acceptIndividual}
+                canToggle={canToggleAccept}
+                onClick={() => onToggleAccept?.('individual')}
+              />
+              <AcceptChip
+                label="법인"
+                on={acceptCorporate}
+                canToggle={canToggleAccept}
+                onClick={() => onToggleAccept?.('corporate')}
+              />
             </div>
           </div>
           <div className="flex flex-wrap gap-1 shrink-0">
@@ -961,6 +1026,7 @@ export default function ManagerRosterGrid({
 }) {
   const [columnWidth, setColumnWidth] = useState(DEFAULT_ROSTER_COLUMN_WIDTH);
   const [entityHeights, setEntityHeights] = useState(() => readRosterEntityHeights());
+  const { getAccept, canToggle, toggle } = useStaffAcceptMap();
 
   useEffect(() => {
     setColumnWidth(readRosterColumnWidth());
@@ -1035,7 +1101,7 @@ export default function ManagerRosterGrid({
             clients={mgr.clients}
             query={query}
             returnTo={returnTo}
-            isSelf={Boolean(currentUserName && mgr.manager === currentUserName)}
+            isSelf={Boolean(currentUserName && managerNamesMatch(currentUserName, mgr.manager))}
             feeEditable={isAdmin || myManagerNames.has(mgr.manager)}
             feeVisible={isAdmin || myManagerNames.has(mgr.manager)}
             visibleOptionalCategories={visibleOptionalCategories}
@@ -1046,6 +1112,10 @@ export default function ManagerRosterGrid({
             onClientOrderChange={onClientOrderChange}
             entityHeights={entityHeights}
             onEntityHeightChange={onEntityHeightChange}
+            acceptIndividual={getAccept(mgr.manager).acceptIndividual}
+            acceptCorporate={getAccept(mgr.manager).acceptCorporate}
+            canToggleAccept={canToggle(mgr.manager)}
+            onToggleAccept={kind => void toggle(mgr.manager, kind)}
           />
           <RosterColumnResizeHandle columnWidth={columnWidth} onResize={setColumnWidth} />
         </div>

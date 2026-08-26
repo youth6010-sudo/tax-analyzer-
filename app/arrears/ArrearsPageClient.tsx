@@ -86,8 +86,9 @@ export default function ArrearsPageClient() {
   const [matchOpen, setMatchOpen] = useState(false);
   const [feeImportOpen, setFeeImportOpen] = useState(false);
 
-  const [manager, setManager] = useState('');
-  const [category, setCategory] = useState('all');
+  const [managers, setManagers] = useState<string[]>([]);
+  /** 선택된 관리분류 id. '' = 미분류. 빈 배열 = 전체 */
+  const [categories, setCategories] = useState<string[]>([]);
   /** false=잔액0 숨김(기본), true=0원도 보기 */
   const [showZero, setShowZero] = useState(false);
   const [churnedOnly, setChurnedOnly] = useState(false);
@@ -108,6 +109,9 @@ export default function ArrearsPageClient() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
+  const [bulkFieldManager, setBulkFieldManager] = useState('');
+  const [bulkFieldCategory, setBulkFieldCategory] = useState('__keep__');
+  const [bulkFieldBusy, setBulkFieldBusy] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -117,8 +121,10 @@ export default function ArrearsPageClient() {
   const load = useCallback(
     async (mode: 'full' | 'soft' = 'full') => {
       const params = new URLSearchParams();
-      if (manager) params.set('manager', manager);
-      if (category !== 'all') params.set('category', category);
+      for (const m of managers) params.append('manager', m);
+      for (const c of categories) {
+        params.append('category', c === '' ? 'none' : c);
+      }
       if (!showZero) params.set('nonzero', '1');
       if (churnedOnly) params.set('churned', '1');
       if (qDebounced) params.set('q', qDebounced);
@@ -150,7 +156,7 @@ export default function ArrearsPageClient() {
         if (mode === 'full') setLoading(false);
       }
     },
-    [manager, category, showZero, churnedOnly, qDebounced],
+    [managers, categories, showZero, churnedOnly, qDebounced],
   );
 
   useEffect(() => {
@@ -234,7 +240,7 @@ export default function ArrearsPageClient() {
     setBulkMode(mode);
     setBulkYearMonth(defaultYearMonth());
     setBulkYear(defaultYear());
-    setBulkManager(manager);
+    setBulkManager(managers.length === 1 ? managers[0] : '');
     setBulkPreview(null);
     setBulkMsg('');
     setBulkOpen(true);
@@ -382,6 +388,69 @@ export default function ArrearsPageClient() {
     router.push(`/arrears/batch-invoice?ids=${encodeURIComponent(ids)}`);
   };
 
+  const applyBulkFields = async () => {
+    if (!canManage || !selectedCount || bulkFieldBusy) return;
+    const patch: Partial<Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory'>> = {};
+    if (bulkFieldManager !== '') patch.managerName = bulkFieldManager;
+    if (bulkFieldCategory !== '__keep__') {
+      patch.mgmtCategory = bulkFieldCategory as ArrearsEntryDto['mgmtCategory'];
+    }
+    if (Object.keys(patch).length === 0) {
+      setError('담당 또는 관리분류를 선택한 뒤 적용하세요.');
+      return;
+    }
+    const ids = [...selectedIds];
+    const labelParts: string[] = [];
+    if (patch.managerName !== undefined) {
+      labelParts.push(`담당 → ${patch.managerName || '(비움)'}`);
+    }
+    if (patch.mgmtCategory !== undefined) {
+      labelParts.push(
+        `관리 → ${patch.mgmtCategory ? arrearsCategoryLabel(patch.mgmtCategory) : '미분류'}`,
+      );
+    }
+    if (
+      !window.confirm(
+        `선택한 ${ids.length}건에 일괄 적용할까요?\n${labelParts.join('\n')}`,
+      )
+    ) {
+      return;
+    }
+    setBulkFieldBusy(true);
+    setError('');
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const id of ids) {
+        try {
+          const res = await fetch(`/api/arrears/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+          });
+          if (!res.ok) {
+            fail += 1;
+            continue;
+          }
+          const data = await res.json().catch(() => ({}));
+          const item = (data as { item?: ArrearsEntryDto }).item;
+          if (item) {
+            setItems(prev => prev.map(r => (r.id === id ? { ...r, ...item } : r)));
+          }
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      if (fail) {
+        setError(`일괄 변경: 성공 ${ok}건 · 실패 ${fail}건`);
+      }
+      void load('soft');
+    } finally {
+      setBulkFieldBusy(false);
+    }
+  };
+
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -405,7 +474,9 @@ export default function ArrearsPageClient() {
           format: 'xlsx',
           ids: [...selectedIds].join(','),
         });
-        if (manager) params.set('manager', manager);
+        if (managers.length) {
+          for (const m of managers) params.append('manager', m);
+        }
         const res = await fetch(`/api/arrears/export?${params}`, { cache: 'no-store' });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -418,13 +489,15 @@ export default function ArrearsPageClient() {
         return;
       }
 
-      if (manager) {
+      if (managers.length > 0) {
         const params = new URLSearchParams({
           nonzero: '1',
           format: 'xlsx',
-          manager,
         });
-        if (category !== 'all') params.set('category', category);
+        for (const m of managers) params.append('manager', m);
+        for (const c of categories) {
+          params.append('category', c === '' ? 'none' : c);
+        }
         if (qDebounced) params.set('q', qDebounced);
         const res = await fetch(`/api/arrears/export?${params}`, { cache: 'no-store' });
         if (!res.ok) {
@@ -433,7 +506,8 @@ export default function ArrearsPageClient() {
         }
         const cd = res.headers.get('Content-Disposition') || '';
         const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
-        const filename = decodeURIComponent(m?.[1] || m?.[2] || `미수수수료_${manager}.xlsx`);
+        const label = managers.length === 1 ? managers[0] : `선택${managers.length}`;
+        const filename = decodeURIComponent(m?.[1] || m?.[2] || `미수수수료_${label}.xlsx`);
         downloadBlob(await res.blob(), filename);
         return;
       }
@@ -523,9 +597,11 @@ export default function ArrearsPageClient() {
                 ? '엑셀 저장 중…'
                 : selectedCount
                   ? `공문 엑셀 (${selectedCount})`
-                  : manager
-                    ? `${manager} 공문 엑셀`
-                    : '담당자별 공문 엑셀'}
+                  : managers.length === 1
+                    ? `${managers[0]} 공문 엑셀`
+                    : managers.length > 1
+                      ? `공문 엑셀 (${managers.length}명)`
+                      : '담당자별 공문 엑셀'}
             </button>
             <button
               type="button"
@@ -603,66 +679,212 @@ export default function ArrearsPageClient() {
           ) : null}
         </div>
 
+        {canManage && selectedCount > 0 ? (
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3 shadow-sm">
+            <p className="w-full text-xs font-semibold text-violet-900">
+              선택 {selectedCount}건 일괄 변경
+            </p>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              담당
+              <select
+                className={`${portalInput} min-w-[7rem] py-2`}
+                value={bulkFieldManager}
+                onChange={e => setBulkFieldManager(e.target.value)}
+                disabled={bulkFieldBusy}
+              >
+                <option value="">변경 안 함</option>
+                {ARREARS_MANAGER_NAMES.map(n => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+                {managerFilterOptions
+                  .filter(n => !(ARREARS_MANAGER_NAMES as readonly string[]).includes(n))
+                  .map(n => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              관리
+              <select
+                className={`${portalInput} min-w-[7rem] py-2`}
+                value={bulkFieldCategory}
+                onChange={e => setBulkFieldCategory(e.target.value)}
+                disabled={bulkFieldBusy}
+              >
+                <option value="__keep__">변경 안 함</option>
+                <option value="">미분류</option>
+                {ARREARS_MGMT_CATEGORIES.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={`${portalBtnPrimary} py-2`}
+              disabled={
+                bulkFieldBusy ||
+                (bulkFieldManager === '' && bulkFieldCategory === '__keep__')
+              }
+              onClick={() => void applyBulkFields()}
+            >
+              {bulkFieldBusy ? '적용 중…' : '선택 건에 적용'}
+            </button>
+            <button
+              type="button"
+              className={`${portalBtnSecondary} py-2`}
+              disabled={bulkFieldBusy}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              선택 해제
+            </button>
+          </div>
+        ) : null}
+
         {totals.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {totals.map(t => (
+            {totals.map(t => {
+              const name = t.managerName;
+              const selectable = name && name !== '(미지정)';
+              const selected = selectable && managers.includes(name);
+              return (
               <button
-                key={t.managerName}
+                key={name}
                 type="button"
-                onClick={() =>
-                  setManager(m =>
-                    m === t.managerName && t.managerName !== '(미지정)'
-                      ? ''
-                      : t.managerName === '(미지정)'
-                        ? ''
-                        : t.managerName,
-                  )
-                }
+                onClick={() => {
+                  if (!selectable) return;
+                  setManagers(prev =>
+                    prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name],
+                  );
+                }}
                 className={`rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors ${
-                  manager === t.managerName
+                  selected
                     ? 'border-blue-400 bg-blue-50 text-blue-800'
                     : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                 }`}
               >
-                {t.managerName} · {formatArrearsWon(t.balance)} ({t.count})
+                {name} · {formatArrearsWon(t.balance)} ({t.count})
               </button>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-            담당
-            <select
-              className={`${portalInput} min-w-[7rem] py-2`}
-              value={manager}
-              onChange={e => setManager(e.target.value)}
-            >
-              <option value="">전체</option>
-              {managerFilterOptions.map(n => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-            관리분류
-            <select
-              className={`${portalInput} min-w-[7rem] py-2`}
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-            >
-              <option value="all">전체</option>
-              <option value="">미분류</option>
-              {ARREARS_MGMT_CATEGORIES.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+        <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex min-w-[12rem] flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-600">담당 (다중선택)</span>
+              {managers.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+                  onClick={() => setManagers([])}
+                >
+                  전체
+                </button>
+              ) : null}
+            </div>
+            <div className="flex max-w-md flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+              {[
+                ...ARREARS_MANAGER_NAMES,
+                ...managerFilterOptions.filter(
+                  n => !(ARREARS_MANAGER_NAMES as readonly string[]).includes(n),
+                ),
+              ].map(n => {
+                const on = managers.includes(n);
+                return (
+                  <label
+                    key={n}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      on
+                        ? 'border-blue-400 bg-blue-50 text-blue-900'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={on}
+                      onChange={() =>
+                        setManagers(prev =>
+                          prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n],
+                        )
+                      }
+                    />
+                    {n}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex min-w-[14rem] flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-600">관리분류 (다중선택)</span>
+              {categories.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+                  onClick={() => setCategories([])}
+                >
+                  전체
+                </button>
+              ) : null}
+            </div>
+            <div className="flex max-w-lg flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+              <label
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                  categories.includes('')
+                    ? 'border-slate-500 bg-slate-100 text-slate-900'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300"
+                  checked={categories.includes('')}
+                  onChange={() =>
+                    setCategories(prev =>
+                      prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''],
+                    )
+                  }
+                />
+                미분류
+              </label>
+              {ARREARS_MGMT_CATEGORIES.map(c => {
+                const on = categories.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${arrearsCategoryChipClass(c.id)} ${
+                      on ? 'ring-2 ring-slate-500 ring-offset-1' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={on}
+                      onChange={() =>
+                        setCategories(prev =>
+                          prev.includes(c.id)
+                            ? prev.filter(x => x !== c.id)
+                            : [...prev, c.id],
+                        )
+                      }
+                    />
+                    {c.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 pt-5 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={showZero}
@@ -671,7 +893,7 @@ export default function ArrearsPageClient() {
             />
             0원인것도 보기
           </label>
-          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 pt-5 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={churnedOnly}
@@ -691,28 +913,11 @@ export default function ArrearsPageClient() {
           </label>
           <button
             type="button"
-            className={`${portalBtnSecondary} py-2`}
+            className={`${portalBtnSecondary} mt-4 py-2`}
             onClick={() => void load('full')}
           >
             새로고침
           </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-          <span className="font-semibold text-slate-500">관리색</span>
-          {ARREARS_MGMT_CATEGORIES.map(c => (
-            <span
-              key={c.id}
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 font-medium ${arrearsCategoryChipClass(c.id)}`}
-            >
-              {c.label}
-            </span>
-          ))}
-          {canManage ? (
-            <span className="ml-auto text-[11px] text-slate-500">
-              잔액 클릭 → CMS · 행 「더빌」버튼으로 청구
-            </span>
-          ) : null}
         </div>
 
         {error ? <div className={portalAlertError}>{error}</div> : null}
@@ -848,26 +1053,12 @@ export default function ArrearsPageClient() {
                           title="CMS 입금 반영"
                           disabled={savingId === row.id}
                           onClick={() => openManual('cms', row.id)}
-                          className={`rounded px-1.5 py-0.5 tabular-nums font-semibold underline-offset-2 hover:underline ${
-                            row.balance > 0
-                              ? 'text-rose-800'
-                              : row.balance < 0
-                                ? 'text-sky-800'
-                                : 'text-slate-600'
-                          }`}
+                          className="rounded px-1.5 py-0.5 tabular-nums font-semibold text-slate-900 underline-offset-2 hover:underline"
                         >
                           {formatArrearsWon(row.balance)}
                         </button>
                       ) : (
-                        <span
-                          className={`tabular-nums font-semibold ${
-                            row.balance > 0
-                              ? 'text-rose-800'
-                              : row.balance < 0
-                                ? 'text-sky-800'
-                                : 'text-slate-600'
-                          }`}
-                        >
+                        <span className="tabular-nums font-semibold text-slate-900">
                           {formatArrearsWon(row.balance)}
                         </span>
                       )}

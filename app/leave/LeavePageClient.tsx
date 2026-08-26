@@ -14,7 +14,7 @@ import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { canReviewLeaveRequest, canDeleteCancelledLeave } from '@/lib/leaveAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
-type Tab = 'balances' | 'mine' | 'pending';
+type Tab = 'balances' | 'mine';
 
 function formatNum(n: number): string {
   return (Math.round(n * 10000) / 10000).toString();
@@ -22,16 +22,16 @@ function formatNum(n: number): string {
 
 export default function LeavePageClient() {
   const nowYear = new Date().getFullYear();
-  const [tab, setTab] = useState<Tab>('balances');
+  const [tab, setTab] = useState<Tab>('mine');
   const [year, setYear] = useState(nowYear);
   const [balances, setBalances] = useState<LeaveBalanceDto[]>([]);
   const [canManage, setCanManage] = useState(false);
+  const [viewerName, setViewerName] = useState('');
   const [canApprove, setCanApprove] = useState(false);
   const [canViewAll, setCanViewAll] = useState(false);
   const [mine, setMine] = useState<LeaveRequestDto[]>([]);
   const [statusMembers, setStatusMembers] = useState<string[]>([]);
   const [memberFilter, setMemberFilter] = useState('');
-  const [pending, setPending] = useState<LeaveRequestDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editBalance, setEditBalance] = useState<LeaveBalanceDto | null>(null);
@@ -44,6 +44,7 @@ export default function LeavePageClient() {
     if (!res.ok) throw new Error((data as { error?: string }).error || '잔고 조회 실패');
     setBalances((data as { items: LeaveBalanceDto[] }).items || []);
     setCanManage(!!(data as { canManage?: boolean }).canManage);
+    setViewerName((data as { viewerName?: string }).viewerName || '');
   }, [year]);
 
   const loadMine = useCallback(async () => {
@@ -71,18 +72,6 @@ export default function LeavePageClient() {
     if (members?.length) setStatusMembers(members);
   }, [year, memberFilter]);
 
-  const loadPending = useCallback(async () => {
-    const res = await fetchWithTimeout(`/api/leave/requests?pending=1&year=${year}`, { cache: 'no-store' }, 15_000);
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 403) {
-      setPending([]);
-      return;
-    }
-    if (!res.ok) throw new Error((data as { error?: string }).error || '결재 조회 실패');
-    setPending((data as { items: LeaveRequestDto[] }).items || []);
-    setCanApprove(true);
-  }, [year]);
-
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -90,16 +79,8 @@ export default function LeavePageClient() {
 
     void (async () => {
       try {
-        const results = await Promise.allSettled([
-          loadBalances(),
-          loadMine(),
-          loadPending(),
-        ]);
+        const results = await Promise.allSettled([loadBalances(), loadMine()]);
         if (cancelled) return;
-        const failed = results.find(
-          (r): r is PromiseRejectedResult => r.status === 'rejected',
-        );
-        // 결재 API 실패는 무시(권한), 잔고/내 신청 실패만 표시
         if (results[0].status === 'rejected') {
           setError(
             results[0].reason instanceof Error
@@ -112,8 +93,6 @@ export default function LeavePageClient() {
               ? results[1].reason.message
               : '신청 목록 불러오기 실패',
           );
-        } else if (failed && results[2].status === 'rejected') {
-          /* pending optional */
         }
       } catch (e) {
         if (!cancelled) {
@@ -127,28 +106,35 @@ export default function LeavePageClient() {
     return () => {
       cancelled = true;
     };
-  }, [loadBalances, loadMine, loadPending]);
+  }, [loadBalances, loadMine]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      await Promise.allSettled([loadBalances(), loadMine(), loadPending()]);
+      await Promise.allSettled([loadBalances(), loadMine()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : '불러오기 실패');
     } finally {
       setLoading(false);
     }
-  }, [loadBalances, loadMine, loadPending]);
+  }, [loadBalances, loadMine]);
 
-  const tabs = useMemo(() => {
-    const list: { id: Tab; label: string }[] = [
-      { id: 'balances', label: '연차 잔고' },
-      { id: 'mine', label: '휴가현황' },
-    ];
-    if (canApprove) list.push({ id: 'pending', label: `결재 대기 (${pending.length})` });
+  const tabs = useMemo((): { id: Tab; label: string }[] => {
+    const list: { id: Tab; label: string }[] = [];
+    if (canManage) list.push({ id: 'balances', label: '연차 잔고' });
+    list.push({ id: 'mine', label: '휴가현황' });
     return list;
-  }, [canApprove, pending.length]);
+  }, [canManage]);
+
+  const myBalance = useMemo(() => {
+    if (!viewerName) return null;
+    return balances.find(b => managerNamesMatch(b.memberName, viewerName)) ?? null;
+  }, [balances, viewerName]);
+
+  useEffect(() => {
+    if (!canManage && tab === 'balances') setTab('mine');
+  }, [canManage, tab]);
 
   return (
     <PortalPageShell bare>
@@ -160,9 +146,9 @@ export default function LeavePageClient() {
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
-              결재됩니다. 최종 승인 시 연차 사용·캘린더 반영. 결재 대기 중에는 바로 취소할 수
-              있고, 이미 승인된 휴가는 취소 요청 후 인디가 승인해야 취소됩니다(팀장 단계 없음).
-              잔고 전체 조회·수정은 인디·페리만 가능합니다.
+              결재됩니다. 최종 승인 시 연차 사용·캘린더 반영. 본인 연차 잔고는 휴가현황 상단에
+              표시되고, 전직원 연차 잔고·수정은 인디·페리만 가능합니다. 결재 알림은 홈 To Do의
+              휴가 결재에 표시됩니다.
             </p>
             </div>
           </div>
@@ -192,6 +178,7 @@ export default function LeavePageClient() {
           </div>
         </div>
 
+        {tabs.length > 1 && (
         <div className="flex w-fit rounded-lg border border-slate-200 p-0.5 text-sm font-semibold">
           {tabs.map(t => (
             <button
@@ -206,18 +193,20 @@ export default function LeavePageClient() {
             </button>
           ))}
         </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {loading ? (
           <p className="py-10 text-center text-sm text-slate-500">불러오는 중…</p>
-        ) : tab === 'balances' ? (
+        ) : tab === 'balances' && canManage ? (
           <BalancesTable
             items={balances}
             canManage={canManage}
             onEdit={row => setEditBalance({ ...row })}
           />
-        ) : tab === 'mine' ? (
+        ) : (
           <div className="space-y-3">
+            {myBalance && <MyBalanceSummary balance={myBalance} year={year} />}
             {canViewAll && (
               <div className="flex flex-wrap items-center gap-2">
                 <label className="text-xs font-semibold text-slate-600">
@@ -247,12 +236,6 @@ export default function LeavePageClient() {
               empty="신청 내역이 없습니다."
             />
           </div>
-        ) : (
-          <RequestTable
-            items={pending}
-            onOpen={setDetail}
-            empty="대기 중인 결재가 없습니다."
-          />
         )}
       </div>
 
@@ -308,6 +291,40 @@ export default function LeavePageClient() {
         )}
       </CenterModal>
     </PortalPageShell>
+  );
+}
+
+function MyBalanceSummary({ balance, year }: { balance: LeaveBalanceDto; year: number }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-bold text-slate-900">내 연차 잔고 · {year}년</p>
+        <p className="text-xs text-slate-500">{balance.memberName}</p>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">잔여</p>
+          <p className="text-lg font-bold tabular-nums text-[#1e3a8a]">
+            {formatNum(balance.remainingDays)}
+            <span className="ml-0.5 text-xs font-semibold text-slate-500">일</span>
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">휴가 일수</p>
+          <p className="font-semibold tabular-nums text-slate-800">{formatNum(balance.totalDays)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">사용</p>
+          <p className="font-semibold tabular-nums text-slate-800">{formatNum(balance.usedDays)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">신청중</p>
+          <p className="font-semibold tabular-nums text-amber-800">
+            {formatNum(balance.pendingDays ?? 0)}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

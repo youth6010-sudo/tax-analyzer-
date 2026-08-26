@@ -24,8 +24,9 @@ import {
   VAT_REPORT_TOKENS,
   PAYMENT_NOTICE_TOKENS,
   emptyNoticeTemplateStore,
+  globalDefaultScenarioKey,
+  resolveNoticeTemplateScenario,
   type NoticeTemplateStore,
-  type TemplateScenario,
   type TemplateSource,
 } from './_lib/template';
 import {
@@ -641,17 +642,14 @@ export default function NoticeGeneratorPage() {
 
   const effectivePayrollByUs = inClientMode ? clientPayrollByUs : localPayrollByUs;
 
-  // 현재 활성 시나리오: 원천세는 급여대장 작성 여부로 자료요청/신고안내 분기
-  const scenario: TemplateScenario = !isWithholding
-    ? 'general'
-    : effectivePayrollByUs
-      ? 'withholding_filing'
-      : 'withholding_request';
+  // 현재 활성 시나리오: 세목별 안내문 + 원천세는 급여대장 작성 여부로 자료요청/신고안내 분기
+  const scenario = resolveNoticeTemplateScenario(taxType, effectivePayrollByUs);
+  const guideDefaultKey = globalDefaultScenarioKey(scenario);
 
   const canEditGlobalDefault =
     (sessionUser?.loginId ?? '').trim().toLowerCase() === 'ria' && Boolean(sessionUser?.adminMode);
 
-  const scenarioDefaultHtml = globalDefaults[scenario];
+  const scenarioDefaultHtml = globalDefaults[guideDefaultKey];
 
   const noticeSource: TemplateSource = templateStore.sources[scenario] ?? 'default';
   const noticeCustomHtml = templateStore.templates[scenario] ?? '';
@@ -669,8 +667,9 @@ export default function NoticeGeneratorPage() {
       ? vatReportCustomHtml
       : globalDefaults.vatReport;
 
-  const paymentNoticeSource: TemplateSource = templateStore.paymentNoticeSource ?? 'default';
-  const paymentNoticeCustomHtml = templateStore.paymentNoticeTemplate ?? '';
+  const paymentNoticeSource: TemplateSource =
+    templateStore.paymentNoticeSources?.[taxType] ?? 'default';
+  const paymentNoticeCustomHtml = templateStore.paymentNoticeTemplates?.[taxType] ?? '';
   const hasPaymentNoticeCustom = Boolean(paymentNoticeCustomHtml.trim());
 
   const activePaymentNoticeTemplate =
@@ -698,7 +697,7 @@ export default function NoticeGeneratorPage() {
     if (source === 'custom' && !prev.templates[scenario]?.trim()) {
       next.templates = {
         ...prev.templates,
-        [scenario]: globalDefaultsRef.current[scenario],
+        [scenario]: globalDefaultsRef.current[guideDefaultKey],
       };
     }
     patchTemplateStore(next);
@@ -728,7 +727,7 @@ export default function NoticeGeneratorPage() {
 
   const handleGlobalDefaultChange = (html: string) => {
     setGlobalDefaults(prev => {
-      const next = { ...prev, [scenario]: html };
+      const next = { ...prev, [guideDefaultKey]: html };
       globalDefaultsRef.current = next;
       return next;
     });
@@ -820,8 +819,8 @@ export default function NoticeGeneratorPage() {
     const prev = templateStoreRef.current;
     const next: NoticeTemplateStore = {
       ...prev,
-      paymentNoticeTemplate: html,
-      paymentNoticeSource: 'custom',
+      paymentNoticeTemplates: { ...prev.paymentNoticeTemplates, [taxType]: html },
+      paymentNoticeSources: { ...prev.paymentNoticeSources, [taxType]: 'custom' },
     };
     patchTemplateStore(next);
     markTemplateDirty('payment');
@@ -831,11 +830,14 @@ export default function NoticeGeneratorPage() {
     const prev = templateStoreRef.current;
     const next: NoticeTemplateStore = {
       ...prev,
-      paymentNoticeSource: source,
-      paymentNoticeTemplate:
-        source === 'custom' && !prev.paymentNoticeTemplate?.trim()
-          ? globalDefaultsRef.current.paymentNotice
-          : prev.paymentNoticeTemplate,
+      paymentNoticeSources: { ...prev.paymentNoticeSources, [taxType]: source },
+      paymentNoticeTemplates: {
+        ...prev.paymentNoticeTemplates,
+        [taxType]:
+          source === 'custom' && !prev.paymentNoticeTemplates?.[taxType]?.trim()
+            ? globalDefaultsRef.current.paymentNotice
+            : prev.paymentNoticeTemplates?.[taxType],
+      },
     };
     patchTemplateStore(next);
     markTemplateDirty('payment');
@@ -847,15 +849,15 @@ export default function NoticeGeneratorPage() {
     const nextHtml =
       incoming !== undefined && incoming.trim()
         ? incoming
-        : (prev.paymentNoticeTemplate ?? '');
+        : (prev.paymentNoticeTemplates?.[taxType] ?? '');
     if (!nextHtml.trim()) {
       setPaymentTemplateSaveState('error');
       return;
     }
     const next: NoticeTemplateStore = {
       ...prev,
-      paymentNoticeTemplate: nextHtml,
-      paymentNoticeSource: 'custom',
+      paymentNoticeTemplates: { ...prev.paymentNoticeTemplates, [taxType]: nextHtml },
+      paymentNoticeSources: { ...prev.paymentNoticeSources, [taxType]: 'custom' },
     };
     patchTemplateStore(next);
     void persistTemplateStore(next);
@@ -1259,6 +1261,7 @@ export default function NoticeGeneratorPage() {
                 onDefaultChange={handleGlobalDefaultChange}
                 onDefaultSave={() => void persistGlobalDefaults()}
                 defaultSaveState={defaultSaveState}
+                hint="선택한 세목 전용 안내문 서식입니다. 다른 세목과 따로 저장됩니다."
               />
               )}
               {isVat && !vatNoticeOnly && (
@@ -1282,7 +1285,7 @@ export default function NoticeGeneratorPage() {
                 />
               )}
               <TemplateEditor
-                key="payment-notice-template"
+                key={`payment-notice-${taxType}`}
                 html={paymentNoticeCustomHtml}
                 onChange={handlePaymentNoticeTemplateChange}
                 source={paymentNoticeSource}
@@ -1290,10 +1293,10 @@ export default function NoticeGeneratorPage() {
                 onSave={handlePaymentNoticeTemplateSave}
                 hasCustomSaved={hasPaymentNoticeCustom}
                 saveState={paymentTemplateSaveState}
-                title="신고 결과 안내 서식 (납부세액)"
+                title={`신고 결과 안내 서식 (납부세액) · ${TAX_TYPE_META[taxType].name}`}
                 defaultHtml={globalDefaults.paymentNotice}
                 tokens={PAYMENT_NOTICE_TOKENS}
-                hint="납부·환급·분납 안내 문구 서식입니다."
+                hint="선택한 세목 전용입니다. 다른 세목 서식과 따로 저장됩니다."
                 canEditDefault={canEditGlobalDefault}
                 onDefaultChange={handlePaymentGlobalDefaultChange}
                 onDefaultSave={() => void persistGlobalDefaults()}

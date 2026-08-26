@@ -9,14 +9,33 @@ export const runtime = 'nodejs';
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
 
+/** manager=인디&manager=블루 또는 manager=인디,블루 */
+function parseMultiParam(sp: URLSearchParams, key: string): string[] {
+  const all = sp.getAll(key).flatMap(v => v.split(',')).map(s => s.trim());
+  return [...new Set(all.filter(Boolean))];
+}
+
+/** category=recovery,none — none/__none__ 은 미분류('') */
+function parseCategoryParams(sp: URLSearchParams): string[] | undefined {
+  const raw = sp.getAll('category').flatMap(v => v.split(','));
+  if (raw.length === 0) return undefined;
+  if (raw.some(v => v.trim() === 'all') && raw.length === 1) return undefined;
+  const out: string[] = [];
+  for (const v of raw) {
+    const t = v.trim();
+    if (!t || t === 'all') continue;
+    if (t === 'none' || t === '__none__') out.push('');
+    else out.push(t);
+  }
+  return out.length ? [...new Set(out)] : undefined;
+}
+
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
     const sp = new URL(req.url).searchParams;
-    const manager = sp.get('manager')?.trim() || undefined;
-    const categoryParam = sp.get('category');
-    const category =
-      categoryParam == null || categoryParam === 'all' ? undefined : categoryParam;
+    const managers = parseMultiParam(sp, 'manager');
+    const categories = parseCategoryParams(sp);
     const q = sp.get('q')?.trim() || undefined;
     const nonzero = sp.get('nonzero') === '1' || sp.get('nonzero') === 'true';
     const minBalanceRaw = sp.get('minBalance');
@@ -58,8 +77,8 @@ export async function GET(req: Request) {
     }
 
     const result = await listArrearsEntries({
-      manager,
-      category,
+      managers: managers.length ? managers : undefined,
+      categories,
       q,
       nonzero: nonzero || undefined,
       minBalance: Number.isFinite(minBalance) ? minBalance : undefined,

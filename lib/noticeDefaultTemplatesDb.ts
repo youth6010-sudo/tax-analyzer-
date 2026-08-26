@@ -85,5 +85,8 @@ export function scenarioDefaultFromGlobal(
   defaults: NoticeGlobalDefaults,
   scenario: TemplateScenario,
 ): string {
-  return defaults[scenario];
+  if (scenario === 'withholding_request' || scenario === 'withholding_filing') {
+    return defaults[scenario];
+  }
+  return defaults.general;
 }

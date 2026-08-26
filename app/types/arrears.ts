@@ -174,19 +174,21 @@ export function arrearsCategoryLabel(id: string): string {
 }
 
 /**
- * 현황표 엑셀 배경색에 맞춤 (26.07.27 시트 기준)
- * 채권회수 #ffcc99 / 악성 #ffcc00 / 장기·일시·CMS #ffff00 / 미분류 흰색
+ * 현황표 행 배경 (연한 톤 통일)
+ * 채권회수: 연한 빨강 / 악성: 연한 주황 / 장기: 연한 노랑 / 일시: 연한 연두 / CMS: 연회색 / 미분류: 없음
  */
 export function arrearsCategoryRowClass(id: string): string {
   switch (id) {
     case 'recovery':
-      return 'bg-[#ffcc99]';
+      return 'bg-[#fecaca]';
     case 'bad':
-      return 'bg-[#ffcc00]';
+      return 'bg-[#fed7aa]';
     case 'long':
+      return 'bg-[#fef08a]';
     case 'temp':
+      return 'bg-[#bbf7d0]';
     case 'cms':
-      return 'bg-[#ffff00]';
+      return 'bg-[#e5e7eb]';
     default:
       return 'bg-white';
   }
@@ -195,13 +197,15 @@ export function arrearsCategoryRowClass(id: string): string {
 export function arrearsCategoryChipClass(id: string): string {
   switch (id) {
     case 'recovery':
-      return 'bg-[#ffcc99] text-slate-900 border-[#e6a86a]';
+      return 'bg-[#fecaca] text-slate-900 border-[#f87171]';
     case 'bad':
-      return 'bg-[#ffcc00] text-slate-900 border-[#d4a800]';
+      return 'bg-[#fed7aa] text-slate-900 border-[#fb923c]';
     case 'long':
+      return 'bg-[#fef08a] text-slate-900 border-[#eab308]';
     case 'temp':
+      return 'bg-[#bbf7d0] text-slate-900 border-[#4ade80]';
     case 'cms':
-      return 'bg-[#ffff00] text-slate-900 border-[#d4d400]';
+      return 'bg-[#e5e7eb] text-slate-800 border-[#9ca3af]';
     default:
       return 'bg-slate-100 text-slate-600 border-slate-200';
   }

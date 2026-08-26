@@ -59,7 +59,7 @@ function GachaPageContent() {
 
   const subtitle =
     tab === 'manager'
-      ? '담당자 후보를 넣고 가챠로 한 명 뽑기'
+      ? '가챠 또는 승부차기로 담당자 뽑기'
       : db?.officeLabel
         ? `${db.officeLabel} · 캡슐 뽑기 = 오늘 점심`
         : '캡슐 뽑기 = 오늘 점심';

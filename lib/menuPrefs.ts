@@ -2,12 +2,28 @@
 
 import { TAX_MENU } from '@/app/config/taxTypes';
 
+export type AcceptNewClientsPrefs = {
+  individual: boolean;
+  corporate: boolean;
+};
+
 export type UserMenuPrefs = {
   groupOrder?: string[];
   hiddenGroupIds?: string[];
   itemOrderByGroup?: Record<string, string[]>;
   hiddenHrefs?: string[];
+  /** 신규 수임(개인/법인) 추가 수신 가능 */
+  acceptNewClients?: AcceptNewClientsPrefs;
 };
+
+export function normalizeAcceptNewClients(raw: unknown): AcceptNewClientsPrefs | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  return {
+    individual: o.individual === true,
+    corporate: o.corporate === true,
+  };
+}
 
 export type ResolvedMenuItem = {
   label: string;
@@ -48,11 +64,14 @@ export function normalizeMenuPrefs(raw: unknown): UserMenuPrefs {
     }
   }
 
+  const acceptNewClients = normalizeAcceptNewClients(o.acceptNewClients);
+
   return {
     ...(groupOrder?.length ? { groupOrder } : {}),
     ...(hiddenGroupIds?.length ? { hiddenGroupIds } : {}),
     ...(hiddenHrefs?.length ? { hiddenHrefs } : {}),
     ...(itemOrderByGroup && Object.keys(itemOrderByGroup).length ? { itemOrderByGroup } : {}),
+    ...(acceptNewClients ? { acceptNewClients } : {}),
   };
 }
 

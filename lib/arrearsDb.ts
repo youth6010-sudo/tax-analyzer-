@@ -5,6 +5,16 @@ import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
+import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
+
+/** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
+const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
+
+/** 미수 잔액 ≥ 월 기장료×2 이면 일시 후보 */
+export function shouldAutoTempByMonthlyFee(balance: number, monthlyFee: number): boolean {
+  if (!(monthlyFee > 0)) return false;
+  return balance >= monthlyFee * 2;
+}
 
 function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
   return {
@@ -152,6 +162,49 @@ async function attachChurnFlags(items: ArrearsEntryDto[]): Promise<ArrearsEntryD
   });
 }
 
+/**
+ * 수임처 월 기장료(공급가)의 2배 이상 미수이면 관리분류「일시」로 자동 지정.
+ * 채권회수·악성·장기·CMS는 수동 값 유지.
+ */
+async function syncTempCategoryByMonthlyFee(
+  items: ArrearsEntryDto[],
+): Promise<ArrearsEntryDto[]> {
+  if (!items.length) return items;
+  const clientIds = [
+    ...new Set(items.map(i => i.clientId).filter((id): id is string => Boolean(id))),
+  ];
+  if (!clientIds.length) return items;
+
+  const db = getDb();
+  const rows = await db
+    .select({ id: clients.id, intakeData: clients.intakeData })
+    .from(clients)
+    .where(inArray(clients.id, clientIds));
+  const feeByClient = new Map<string, number>();
+  for (const r of rows) {
+    feeByClient.set(r.id, monthlyBookkeepingFeeFromIntake(r.intakeData));
+  }
+
+  const toTemp: string[] = [];
+  const next = items.map(item => {
+    if (!item.clientId) return item;
+    const fee = feeByClient.get(item.clientId) ?? 0;
+    if (!shouldAutoTempByMonthlyFee(item.balance, fee)) return item;
+    if (ARREARS_CATEGORY_LOCK.has(item.mgmtCategory)) return item;
+    if (item.mgmtCategory === 'temp') return item;
+    toTemp.push(item.id);
+    return { ...item, mgmtCategory: 'temp' as ArrearsMgmtCategory };
+  });
+
+  if (toTemp.length > 0) {
+    await db
+      .update(arrearsEntries)
+      .set({ mgmtCategory: 'temp', updatedAt: new Date() })
+      .where(inArray(arrearsEntries.id, toTemp));
+  }
+  return next;
+}
+
 function normalizeCompanyName(name: string): string {
   return name.replace(/\s+/g, '').trim().toLowerCase();
 }
@@ -215,8 +268,14 @@ export function matchClientForArrears(
 }
 
 export interface ListArrearsFilters {
+  /** @deprecated managers 사용 */
   manager?: string;
+  /** 담당자 다중 필터 (비어 있으면 전체) */
+  managers?: string[];
+  /** @deprecated categories 사용 */
   category?: string;
+  /** 관리분류 다중 필터. '' = 미분류. 비어 있으면 전체 */
+  categories?: string[];
   q?: string;
   /** true면 잔액 ≠ 0 */
   nonzero?: boolean;
@@ -242,11 +301,24 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   const db = getDb();
   const conditions: SQL[] = [];
 
-  if (filters.manager) {
-    conditions.push(eq(arrearsEntries.managerName, filters.manager.trim()));
+  const managerFilter = [
+    ...(filters.managers ?? []),
+    ...(filters.manager?.trim() ? [filters.manager.trim()] : []),
+  ].filter((n, i, arr) => arr.indexOf(n) === i);
+  if (managerFilter.length === 1) {
+    conditions.push(eq(arrearsEntries.managerName, managerFilter[0]));
+  } else if (managerFilter.length > 1) {
+    conditions.push(or(...managerFilter.map(n => eq(arrearsEntries.managerName, n)))!);
   }
-  if (filters.category !== undefined && filters.category !== 'all') {
-    conditions.push(eq(arrearsEntries.mgmtCategory, filters.category));
+
+  const categoryFilter = [
+    ...(filters.categories ?? []),
+    ...(filters.category !== undefined && filters.category !== 'all' ? [filters.category] : []),
+  ].filter((n, i, arr) => arr.indexOf(n) === i);
+  if (categoryFilter.length === 1) {
+    conditions.push(eq(arrearsEntries.mgmtCategory, categoryFilter[0]));
+  } else if (categoryFilter.length > 1) {
+    conditions.push(or(...categoryFilter.map(c => eq(arrearsEntries.mgmtCategory, c)))!);
   }
   if (filters.nonzero) {
     conditions.push(ne(arrearsEntries.balance, 0));
@@ -300,9 +372,10 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   const withReasons = await attachReasonSummaries(rows.map(toDto));
   const withOpens = await attachLineOpenBalances(withReasons);
   const withChurn = await attachChurnFlags(withOpens);
+  const withTemp = await syncTempCategoryByMonthlyFee(withChurn);
   let items = filters.churnedOnly
-    ? withChurn.filter(i => i.isChurned)
-    : withChurn;
+    ? withTemp.filter(i => i.isChurned)
+    : withTemp;
   if (filters.mismatchOnly) {
     items = items.filter(i => i.balanceDiffKind === 'mismatch');
   }
@@ -406,7 +479,17 @@ export async function patchArrearsEntry(
     .where(eq(arrearsEntries.id, id))
     .returning();
 
-  return toDto(row);
+  let dto = toDto(row);
+  const balanceTouched =
+    patch.balanceAction === 'pay' ||
+    patch.balanceAction === 'charge' ||
+    patch.balance !== undefined;
+  // 잔액 변경 시·분류를 이번 요청에서 수동 지정하지 않은 경우 일시 자동분류
+  if (balanceTouched && patch.mgmtCategory === undefined) {
+    const synced = await syncTempCategoryByMonthlyFee([dto]);
+    dto = synced[0] ?? dto;
+  }
+  return dto;
 }
 
 export type LedgerImportPreviewRow = LedgerArrearsRow & {

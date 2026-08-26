@@ -53,10 +53,7 @@ export const TAX_MENU = [
   {
     id: 'fun',
     label: '뽑기',
-    items: [
-      { label: '가챠머신', href: '/gacha' },
-      { label: '담당자 뽑기', href: '/gacha?tab=manager' },
-    ],
+    items: [{ label: '가챠머신', href: '/gacha' }],
   },
   {
     id: 'admin',

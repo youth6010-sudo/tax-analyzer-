@@ -265,6 +265,17 @@ async function resolveDisplayNameForNick(nick: string): Promise<string> {
   return nick;
 }
 
+/** 인디 최종 처리 후: 신청자 + (팀장 경유 시) 팀장에게 결과 알림 */
+function leaveFinalResultRecipients(existing: {
+  applicantName: string;
+  teamLeadReviewedBy?: string | null;
+}): string[] {
+  const names = [existing.applicantName];
+  const lead = (existing.teamLeadReviewedBy || '').trim();
+  if (lead) names.push(lead);
+  return names;
+}
+
 async function notifyLeaveRecipients(
   leaveRequestId: string,
   actorName: string,
@@ -658,7 +669,7 @@ export async function reviewLeaveCancelRequest(
       id,
       reviewerName,
       `휴가 취소 승인 · ${summary}`,
-      [existing.applicantName],
+      leaveFinalResultRecipients(existing),
     );
     return toRequestDto(row);
   }
@@ -679,7 +690,7 @@ export async function reviewLeaveCancelRequest(
     id,
     reviewerName,
     `휴가 취소 반려 · ${summary}${note ? ` (${note})` : ''}`,
-    [existing.applicantName],
+    leaveFinalResultRecipients(existing),
   );
   return toRequestDto(row);
 }
@@ -798,7 +809,7 @@ export async function reviewLeaveRequest(
     id,
     reviewerName,
     decision === 'approved' ? `휴가 승인 · ${summary}` : `휴가 반려 · ${summary}`,
-    [existing.applicantName],
+    leaveFinalResultRecipients(existing),
   );
   return toRequestDto(row);
 }

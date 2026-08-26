@@ -86,7 +86,7 @@ export function vatNoticeInstallmentDates(due: Date, secondHalf: boolean): Date[
 }
 
 export const DEFAULT_CORP_INTERIM_FILING_NOTE =
-  "상반기 가결산 결과 결손이 발생하였습니다. 해당 결과로 신고 시 수반되는 세무적 리스크를 고려하여, '직전 사업연도 기준'으로 신고를 마쳤습니다.";
+  "상반기 가결산 결과 결손이 발생하였습니다. 가결산 기준으로 신고할 경우의 세무상 리스크를 고려하여, '직전 사업연도 기준'으로 신고를 완료하였습니다.";
 
 export const DEFAULT_CORP_INTERIM_AMOUNT_NOTE = '직전 사업연도 법인세의 50%';
 
@@ -118,32 +118,36 @@ function buildCorpInterimNoticeBody(
   }
 
   const parts: string[] = [
-    line(`📋${year}년 법인세 중간예납 납부 안내`),
+    line(`<b style="font-size:15px;">📋${year}년 법인세 중간예납 납부 안내</b>`),
     blank(),
     line(
       `${month}월 법인세 중간예납 신고·납부 기간을 맞아 관련 내용을 다음과 같이 안내해 드립니다.`,
     ),
     blank(),
-    line('1. 법인세 중간예납 납부 안내'),
-    line(`납부 기한: ${escapeHtml(dueText)}`),
-    line(`납부 세액: ${escapeHtml(amountLine)}`),
-    line(`신고 방식: ${escapeHtml(filingNote)}`),
-    line('조치 사항: 첨부된 납부서를 확인하시어 기한 내에 납부해 주시기 바랍니다.'),
+    line('<b>1. 법인세 중간예납 납부 안내</b>'),
+    line(`<b>납부 기한:</b> ${escapeHtml(dueText)}`),
+    line(`<b>납부 세액:</b> ${escapeHtml(amountLine)}`),
+    line(`<b>신고 방식:</b> ${escapeHtml(filingNote)}`),
+    line(
+      '<b>유의사항:</b> 첨부된 납부서를 확인하신 뒤 기한 내에 납부해 주시기 바랍니다.',
+    ),
   ];
 
   if (followup) {
     parts.push(
       blank(),
-      line('2. 통장 내역 추가 확인 요청'),
+      line('<b>2. 통장 내역 추가 확인 요청</b>'),
       line(
         '보내주신 통장 내역을 검토한 결과, 정확한 처리를 위해 추가로 확인이 필요한 사항이 있어 별첨으로 정리해 드립니다.',
       ),
-      line(`회신 기한: ${escapeHtml(replyText)}`),
-      line("회신 방법: 첨부 파일의 '비고/답변란'을 작성하여 증빙과 함께 회신 부탁드립니다."),
+      line(`<b>회신 기한:</b> ${escapeHtml(replyText)}`),
+      line(
+        "<b>회신 방법:</b> 첨부 파일의 '비고/답변란'을 작성하여 증빙과 함께 회신 부탁드립니다.",
+      ),
     );
   }
 
-  parts.push(blank(), blank(), line('첨부 파일:'), line('법인세 중간예납 납부서 1부'));
+  parts.push(blank(), blank(), line('<b>첨부 파일:</b>'), line('법인세 중간예납 납부서 1부'));
   if (followup) {
     parts.push(line(`${year}년 상반기 추가 확인 요청 리스트 1부`));
   }

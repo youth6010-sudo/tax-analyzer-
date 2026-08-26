@@ -236,12 +236,27 @@ export default function HomeTasksPanel() {
     () => companyEvents.filter(e => !e.myCheckoff).length,
     [companyEvents],
   );
+  const leavePendingIds = useMemo(
+    () => new Set(leavePending.map(i => i.id)),
+    [leavePending],
+  );
+
+  /** 결재 대기 목록에 이미 있는 「요청」알림은 중복 표시하지 않음 */
+  const leaveNotifsVisible = useMemo(
+    () =>
+      leaveNotifs.filter(n => {
+        if (!leavePendingIds.has(n.leaveRequestId)) return true;
+        return !n.title.includes('요청');
+      }),
+    [leaveNotifs, leavePendingIds],
+  );
+
   const totalPending =
     personalPending +
     companyPending +
     clientTasks.length +
     leavePending.length +
-    leaveNotifs.length;
+    leaveNotifsVisible.length;
 
   const handleShowCompletedChange = (show: boolean) => {
     setShowCompleted(show);
@@ -308,18 +323,8 @@ export default function HomeTasksPanel() {
       const leaveNotifRes = await fetchWithTimeout('/api/leave/notifications', {}, 10_000);
       if (leaveNotifRes.ok) {
         const payload = (await leaveNotifRes.json()) as { items?: LeaveNotificationDto[] };
-        // 신청자용 처리 완료 알림만 (결재/취소 요청은 대기 목록으로 충분)
-        const items = (payload.items || []).filter(n => {
-          const t = n.title;
-          if (t.includes('요청')) return false;
-          return (
-            t.includes('휴가 승인') ||
-            t.includes('휴가 반려') ||
-            t.includes('휴가 취소 승인') ||
-            t.includes('휴가 취소 반려')
-          );
-        });
-        setLeaveNotifs(items);
+        // 승인 대기(요청) + 최종 승인/반려 등 본인 수신 알림 전부 표시
+        setLeaveNotifs(payload.items || []);
       } else {
         setLeaveNotifs([]);
       }
@@ -485,6 +490,35 @@ export default function HomeTasksPanel() {
     setLeaveReviewNote('');
     setLeaveReviewError('');
     setLeaveReviewBusy(false);
+  };
+
+  const isLeaveActionRequestNotif = (n: LeaveNotificationDto) => n.title.includes('요청');
+
+  const openLeaveReviewFromNotif = async (n: LeaveNotificationDto) => {
+    setLeaveReviewError('');
+    try {
+      const res = await fetch(`/api/leave/requests/${encodeURIComponent(n.leaveRequestId)}`);
+      const data = (await res.json().catch(() => ({}))) as {
+        item?: LeaveRequestDto;
+        error?: string;
+      };
+      if (!res.ok || !data.item) {
+        setLeaveReviewError(data.error || '휴가 신청을 불러오지 못했습니다.');
+        return;
+      }
+      openLeaveReview(data.item);
+    } catch {
+      setLeaveReviewError('휴가 신청을 불러오지 못했습니다.');
+    }
+  };
+
+  const dismissLeaveNotif = async (n: LeaveNotificationDto) => {
+    await fetch('/api/leave/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: n.id }),
+    });
+    setLeaveNotifs(prev => prev.filter(x => x.id !== n.id));
   };
 
   const submitLeaveReview = async (action: 'approve' | 'reject') => {
@@ -762,43 +796,51 @@ export default function HomeTasksPanel() {
                 )}
               </SectionCard>
 
-            {(canApproveLeaveUi || leaveNotifs.length > 0) && (
+            {(canApproveLeaveUi || leaveNotifsVisible.length > 0) && (
               <SectionCard
                 title="휴가 결재"
-                count={leavePending.length + leaveNotifs.length}
+                count={leavePending.length + leaveNotifsVisible.length}
                 open={sections.leave}
                 onToggle={() => toggleSection('leave')}
               >
-                {leavePending.length === 0 && leaveNotifs.length === 0 ? (
+                {leavePending.length === 0 && leaveNotifsVisible.length === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {leaveNotifs.map(n => (
+                    {leaveNotifsVisible.map(n => {
+                      const isRequest = isLeaveActionRequestNotif(n);
+                      return (
                       <li
                         key={n.id}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-sm shadow-sm"
+                        className={
+                          isRequest
+                            ? 'rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-sm shadow-sm'
+                            : 'rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-sm shadow-sm'
+                        }
                       >
                         <p className="font-semibold text-slate-800">{n.title}</p>
                         <p className="mt-0.5 text-[11px] text-slate-500">
-                          {n.actorName} · 처리 완료
+                          {n.actorName}
+                          {isRequest ? ' · 결재 필요' : ' · 처리 완료'}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void (async () => {
-                                await fetch('/api/leave/notifications', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ id: n.id }),
-                                });
-                                setLeaveNotifs(prev => prev.filter(x => x.id !== n.id));
-                              })();
-                            }}
-                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
-                          >
-                            확인
-                          </button>
+                          {isRequest ? (
+                            <button
+                              type="button"
+                              onClick={() => void openLeaveReviewFromNotif(n)}
+                              className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                            >
+                              승인 / 반려
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void dismissLeaveNotif(n)}
+                              className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                            >
+                              확인
+                            </button>
+                          )}
                           <Link
                             href="/leave"
                             className="text-[11px] font-semibold text-emerald-700 underline-offset-2 hover:underline"
@@ -807,7 +849,8 @@ export default function HomeTasksPanel() {
                           </Link>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                     {leavePending.map(item => (
                       <li
                         key={item.id}
