@@ -127,6 +127,14 @@ export function linesForCurrentLetterCycle<T extends { amount: number; paidAmoun
   return lines.slice(lastZero + 1);
 }
 
+/** 0원 청산 후 재개 이력이 있어 「이전 내역」을 숨길 수 있는지 */
+export function hasPriorClosedLetterCycle<T extends { amount: number; paidAmount: number }>(
+  lines: T[],
+): boolean {
+  if (lines.length < 2) return false;
+  return linesForCurrentLetterCycle(lines).length < lines.length;
+}
+
 /** asOfDate(YYYY-MM-DD) → 공문 일자 표기 2026.07.27 */
 export function formatArrearsLetterDate(asOfOrLetter: string): string {
   const s = (asOfOrLetter || '').trim();

@@ -341,18 +341,8 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
     conditions.push(or(...categoryFilter.map(c => eq(arrearsEntries.mgmtCategory, c)))!);
   }
   if (filters.nonzero) {
-    // 잔액 0이어도 입력해 둔 공문·원장 내역이 있으면 목록에 유지 (예: 하나비 등)
-    conditions.push(
-      or(
-        ne(arrearsEntries.balance, 0),
-        exists(
-          db
-            .select({ id: arrearsLetterLines.id })
-            .from(arrearsLetterLines)
-            .where(eq(arrearsLetterLines.arrearsEntryId, arrearsEntries.id)),
-        ),
-      )!,
-    );
+    // 「0원인것도 보기」 OFF → 잔액 ≠ 0만
+    conditions.push(ne(arrearsEntries.balance, 0));
   } else if (filters.minBalance != null && Number.isFinite(filters.minBalance)) {
     conditions.push(gte(arrearsEntries.balance, Math.round(filters.minBalance)));
   }

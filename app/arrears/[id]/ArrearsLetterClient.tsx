@@ -18,7 +18,9 @@ import {
   formatArrearsLetterDate,
   formatArrearsPaidDateKo,
   formatArrearsWon,
+  hasPriorClosedLetterCycle,
   letterRunningBalances,
+  linesForCurrentLetterCycle,
   todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
@@ -74,6 +76,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
   const [manualBusy, setManualBusy] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  /** false=전체 내역(기본), true=0원 청산 이전 구간 숨김(조회·인쇄) */
+  const [excludePriorZero, setExcludePriorZero] = useState(false);
   /** 연결필요(letter:) → 원장 거래처 연결 */
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkMsg, setLinkMsg] = useState('');
@@ -130,10 +134,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     };
   }, [load]);
 
-  // 상세·인쇄는 입력된 전체 공문 이력 표시.
-  // (사이클 절단은 엑셀/일괄 출력용 linesForCurrentLetterCycle 에서만)
-  const viewLines = lines;
-  const running = useMemo(() => letterRunningBalances(lines), [lines]);
+  // 조회·인쇄: 기본 전체. 「0원 이전내역 제외」면 현재 사이클만.
+  // 수정 모드는 항상 전체 이력(editLines).
+  const canExcludePrior = useMemo(() => hasPriorClosedLetterCycle(lines), [lines]);
+  const viewLines = useMemo(() => {
+    if (!excludePriorZero || !canExcludePrior) return lines;
+    return linesForCurrentLetterCycle(lines);
+  }, [lines, excludePriorZero, canExcludePrior]);
+  const running = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
+  const viewLetterBalance = running.length ? running[running.length - 1]! : 0;
   const totalAmount = useMemo(
     () => viewLines.reduce((s, l) => s + l.amount, 0),
     [viewLines],
@@ -432,6 +441,20 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               </>
             ) : (
               <>
+                {canExcludePrior ? (
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-slate-600"
+                    title="기본은 전체 내역. 켜면 0원으로 끝난 이전 구간을 숨기고 그대로 인쇄합니다."
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={excludePriorZero}
+                      onChange={e => setExcludePriorZero(e.target.checked)}
+                    />
+                    0원 이전내역 제외
+                  </label>
+                ) : null}
                 {canManage ? (
                   <button
                     type="button"
@@ -860,7 +883,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     </td>
                     <td className="border border-[#222] px-2 py-1.5" />
                     <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
-                      {formatArrearsWon(letterBalance)}
+                      {formatArrearsWon(viewLetterBalance)}
                     </td>
                   </tr>
                   <tr className="font-semibold">
@@ -871,7 +894,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                       미수 수수료
                     </td>
                     <td className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5 text-right tabular-nums text-slate-900">
-                      {formatArrearsWon(letterBalance)}
+                      {formatArrearsWon(viewLetterBalance)}
                     </td>
                   </tr>
                 </tbody>
