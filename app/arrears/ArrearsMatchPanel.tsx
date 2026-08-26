@@ -187,7 +187,7 @@ export default function ArrearsMatchPanel({ onLinked, onClose }: Props) {
 
       <div className="space-y-3 border-t border-violet-100 px-3 py-3">
         {!data?.canLink ? (
-          <p className="text-[11px] text-slate-500">연결은 찰리만 가능합니다.</p>
+          <p className="text-[11px] text-slate-500">연결 권한이 없습니다.</p>
         ) : null}
 
         {msg ? <p className="text-xs text-emerald-800">{msg}</p> : null}

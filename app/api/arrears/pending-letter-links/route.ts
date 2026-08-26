@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
-import { canUseCharlieFeatures } from '@/lib/masterAccess';
 import { buildDbPendingLetterLinks } from '@/lib/arrearsRestart';
 import { handleApiError } from '@/lib/apiError';
 
@@ -22,7 +21,7 @@ export async function GET() {
       {
         mode: 'db',
         ...review,
-        canLink: canUseCharlieFeatures(user),
+        canLink: true,
       },
       NO_STORE,
     );

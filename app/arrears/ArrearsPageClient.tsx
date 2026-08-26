@@ -65,6 +65,28 @@ type BulkPreview = {
 
 type ChargeMode = 'bookkeeping' | 'adjustment' | 'backfill';
 
+const ARREARS_LIST_UI_KEY = 'arrears-list-ui-v1';
+
+type ArrearsListUiPersist = {
+  editMode?: boolean;
+  q?: string;
+  managers?: string[];
+  categories?: string[];
+  showZero?: boolean;
+  churnedOnly?: boolean;
+};
+
+function readArrearsListUi(): ArrearsListUiPersist {
+  try {
+    const raw = sessionStorage.getItem(ARREARS_LIST_UI_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as ArrearsListUiPersist;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function defaultYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -85,7 +107,7 @@ export default function ArrearsPageClient() {
   const [canExportList, setCanExportList] = useState(false);
   /** 로그인 사용자 표시명 — 일반 담당은 본인만 필터 가능 */
   const [viewerName, setViewerName] = useState('');
-  /** 인디 등 관리자: 기본은 담당자 화면과 동일, 켤 때만 수정 UI */
+  /** 인디 등 관리자: 기본은 담당자 화면과 동일, 켤 때만 수정 UI — 탭 세션 유지 */
   const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,6 +124,8 @@ export default function ArrearsPageClient() {
   const [churnedOnly, setChurnedOnly] = useState(false);
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
+  /** sessionStorage 복원 전에는 목록 요청하지 않음 */
+  const [uiReady, setUiReady] = useState(false);
 
   const [manualOpen, setManualOpen] = useState(false);
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
@@ -131,6 +155,37 @@ export default function ArrearsPageClient() {
   const [bulkFieldManager, setBulkFieldManager] = useState('');
   const [bulkFieldCategory, setBulkFieldCategory] = useState('__keep__');
   const [bulkFieldBusy, setBulkFieldBusy] = useState(false);
+
+  useEffect(() => {
+    const saved = readArrearsListUi();
+    if (saved.editMode) setEditMode(true);
+    if (typeof saved.q === 'string' && saved.q) {
+      setQ(saved.q);
+      setQDebounced(saved.q.trim());
+    }
+    if (Array.isArray(saved.managers)) setManagers(saved.managers.filter(Boolean));
+    if (Array.isArray(saved.categories)) setCategories(saved.categories);
+    if (typeof saved.showZero === 'boolean') setShowZero(saved.showZero);
+    if (typeof saved.churnedOnly === 'boolean') setChurnedOnly(saved.churnedOnly);
+    setUiReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!uiReady) return;
+    try {
+      const payload: ArrearsListUiPersist = {
+        editMode,
+        q,
+        managers,
+        categories,
+        showZero,
+        churnedOnly,
+      };
+      sessionStorage.setItem(ARREARS_LIST_UI_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore quota */
+    }
+  }, [uiReady, editMode, q, managers, categories, showZero, churnedOnly]);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -181,10 +236,12 @@ export default function ArrearsPageClient() {
   );
 
   useEffect(() => {
+    if (!uiReady) return;
     void load('full');
-  }, [load]);
+  }, [load, uiReady]);
 
   useEffect(() => {
+    if (!uiReady) return;
     const soft = () => {
       if (document.visibilityState === 'visible') void load('soft');
     };
@@ -194,7 +251,7 @@ export default function ArrearsPageClient() {
       document.removeEventListener('visibilitychange', soft);
       window.clearInterval(id);
     };
-  }, [load]);
+  }, [load, uiReady]);
 
   const patchRow = useCallback(
     async (

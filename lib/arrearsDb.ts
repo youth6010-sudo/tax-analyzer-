@@ -4,6 +4,7 @@ import { arrearsEntries, arrearsLetterLines, clients } from '@/db/schema';
 import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '@/app/types/arrears';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
+import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
 
@@ -570,7 +571,16 @@ export async function previewLedgerImport(
   let newCount = 0;
   const rows: LedgerImportPreviewRow[] = [];
 
-  for (const r of ledgerRows) {
+  for (const raw of ledgerRows) {
+    const r: LedgerArrearsRow = {
+      ...raw,
+      balance: normalizeLedgerBalanceSign({
+        carryIn: raw.carryIn,
+        debit: raw.debit,
+        credit: raw.credit,
+        balance: raw.balance,
+      }),
+    };
     const client = matchClientForArrears(index, r.businessNo, r.companyName);
     const prev = existingByCode.get(r.externalCode);
     const isNew = !prev;
@@ -638,7 +648,16 @@ export async function upsertLedgerImport(
   const now = new Date();
   const actor = actorName.trim() || '';
 
-  for (const r of ledgerRows) {
+  for (const raw of ledgerRows) {
+    const r: LedgerArrearsRow = {
+      ...raw,
+      balance: normalizeLedgerBalanceSign({
+        carryIn: raw.carryIn,
+        debit: raw.debit,
+        credit: raw.credit,
+        balance: raw.balance,
+      }),
+    };
     const client = matchClientForArrears(index, r.businessNo, r.companyName);
     if (client) matched += 1;
     else unmatched += 1;

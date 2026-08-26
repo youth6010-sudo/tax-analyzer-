@@ -33,6 +33,16 @@ function cellMoney(v) {
   const n = Number(String(v).replace(/,/g, '').replace(/\s/g, ''));
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
+/** 대변잔액이 잔액 열에 양수로 온 경우 부호 복원 */
+function signedBal(carry, debit, credit, balance) {
+  const c = Math.round(carry) || 0;
+  const d = Math.round(debit) || 0;
+  const cr = Math.round(credit) || 0;
+  const b = Math.round(balance) || 0;
+  const computed = c + d - cr;
+  if (computed < 0 && b > 0 && b === Math.abs(computed)) return computed;
+  return b;
+}
 function normalizeHeader(h) {
   return String(h ?? '').replace(/\s+/g, '').trim();
 }
@@ -96,15 +106,19 @@ for (let r = headerIdx + 1; r < rows.length; r++) {
   const name = cellStr(row[iName]);
   if (!code && !name) continue;
   if (!/^\d{3,}$/.test(code)) continue;
+  const carry = iCarry >= 0 ? cellMoney(row[iCarry]) : 0;
+  const debit = iDebit >= 0 ? cellMoney(row[iDebit]) : 0;
+  const credit = iCredit >= 0 ? cellMoney(row[iCredit]) : 0;
+  const balRaw = iBal >= 0 ? cellMoney(row[iBal]) : 0;
   parsed.push({
     code,
     name,
     biz: cellStr(row[iBiz]).replace(/\D/g, ''),
     rep: iRep >= 0 ? cellStr(row[iRep]) : '',
-    carry: iCarry >= 0 ? cellMoney(row[iCarry]) : 0,
-    debit: iDebit >= 0 ? cellMoney(row[iDebit]) : 0,
-    credit: iCredit >= 0 ? cellMoney(row[iCredit]) : 0,
-    bal: iBal >= 0 ? cellMoney(row[iBal]) : 0,
+    carry,
+    debit,
+    credit,
+    bal: signedBal(carry, debit, credit, balRaw),
   });
 }
 

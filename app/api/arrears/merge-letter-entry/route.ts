@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { canUseCharlieFeatures } from '@/lib/masterAccess';
+import { canManageArrears } from '@/lib/arrearsAccess';
 import { mergeLetterEntryIntoCodedEntry } from '@/lib/arrearsRestart';
 import { handleApiError } from '@/lib/apiError';
 
@@ -8,13 +8,13 @@ export const runtime = 'nodejs';
 
 const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
 
-/** 찰리: 연결필요 공문 행 → 코드 있는 원장 행으로 즉시 이동 */
+/** 연결필요 공문 행 → 코드 있는 원장 행으로 즉시 이동 (미수 관리자) */
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    if (!canUseCharlieFeatures(user)) {
+    if (!canManageArrears(user)) {
       return NextResponse.json(
-        { error: '공문·원장 연결은 찰리만 할 수 있습니다.' },
+        { error: '공문·원장 연결은 인디·찰리·리아(관리자)만 할 수 있습니다.' },
         { status: 403 },
       );
     }
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const result = await mergeLetterEntryIntoCodedEntry({
       letterEntryId,
       targetEntryId,
-      actorName: user.name?.trim() || '찰리',
+      actorName: user.name?.trim() || user.loginId || 'admin',
     });
 
     return NextResponse.json(result, NO_STORE);

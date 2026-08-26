@@ -25,6 +25,27 @@ function cellMoney(v: unknown): number {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+/**
+ * 세무사랑 등 원장 엑셀은 대변잔액(선수금·과납)을 잔액 열에 양수로 넣는 경우가 있음.
+ * 전기이월+차변−대변이 음수인데 잔액열만 그 절댓값이면 부호를 복원한다.
+ */
+export function normalizeLedgerBalanceSign(opts: {
+  carryIn: number;
+  debit: number;
+  credit: number;
+  balance: number;
+}): number {
+  const carryIn = Math.round(opts.carryIn) || 0;
+  const debit = Math.round(opts.debit) || 0;
+  const credit = Math.round(opts.credit) || 0;
+  const balance = Math.round(opts.balance) || 0;
+  const computed = carryIn + debit - credit;
+  if (computed < 0 && balance > 0 && balance === Math.abs(computed)) {
+    return computed;
+  }
+  return balance;
+}
+
 function normalizeHeader(h: unknown): string {
   return String(h ?? '')
     .replace(/\s+/g, '')
@@ -97,15 +118,25 @@ export function parseLedgerArrearsWorkbook(buffer: ArrayBuffer | Buffer): Ledger
     // 합계/빈 행 스킵
     if (/합계|계$|총계/.test(companyName)) continue;
 
+    const carryIn = iCarry >= 0 ? cellMoney(row[iCarry]) : 0;
+    const debit = iDebit >= 0 ? cellMoney(row[iDebit]) : 0;
+    const credit = iCredit >= 0 ? cellMoney(row[iCredit]) : 0;
+    const rawBalance = cellMoney(row[iBalance]);
+
     out.push({
       externalCode,
       companyName,
       businessNo: iBiz >= 0 ? cellStr(row[iBiz]) : '',
       representative: iRep >= 0 ? cellStr(row[iRep]) : '',
-      carryIn: iCarry >= 0 ? cellMoney(row[iCarry]) : 0,
-      debit: iDebit >= 0 ? cellMoney(row[iDebit]) : 0,
-      credit: iCredit >= 0 ? cellMoney(row[iCredit]) : 0,
-      balance: cellMoney(row[iBalance]),
+      carryIn,
+      debit,
+      credit,
+      balance: normalizeLedgerBalanceSign({
+        carryIn,
+        debit,
+        credit,
+        balance: rawBalance,
+      }),
     });
   }
 

@@ -74,6 +74,20 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
   const [manualBusy, setManualBusy] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  /** 연결필요(letter:) → 원장 거래처 연결 */
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkMsg, setLinkMsg] = useState('');
+  const [linkPickId, setLinkPickId] = useState('');
+  const [linkPickQ, setLinkPickQ] = useState('');
+  const [linkSuggestions, setLinkSuggestions] = useState<
+    Array<{ entryId: string; externalCode: string; companyName: string; balance: number; score: number }>
+  >([]);
+  const [linkPickEntries, setLinkPickEntries] = useState<
+    Array<{ entryId: string; externalCode: string; companyName: string; balance: number; managerName: string }>
+  >([]);
+  const [linkLoaded, setLinkLoaded] = useState(false);
+
+  const needsLedgerLink = !!item?.externalCode.startsWith('letter:');
 
   const load = useCallback(async () => {
     const res = await fetchWithTimeout(`/api/arrears/${id}`, { cache: 'no-store' }, 20_000);
@@ -133,12 +147,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     if (!canManage) return;
     setEditLines(toEditLines(lines));
     setEditing(true);
+    setLinkLoaded(false);
+    setLinkMsg('');
     router.replace(`/arrears/${id}?edit=1`, { scroll: false });
   };
 
   const cancelEdit = () => {
     setEditing(false);
     setEditLines([]);
+    setLinkLoaded(false);
     router.replace(`/arrears/${id}`, { scroll: false });
   };
 
@@ -231,6 +248,107 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       setError(e instanceof Error ? e.message : '맞춤 실패');
     } finally {
       setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!editing || !needsLedgerLink || linkLoaded) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/arrears/pending-letter-links', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || '연결 목록 조회 실패');
+        if (cancelled) return;
+        const picks = (
+          (data as {
+            pickEntries?: Array<{
+              entryId: string;
+              externalCode: string;
+              companyName: string;
+              balance: number;
+              managerName: string;
+            }>;
+          }).pickEntries ?? []
+        );
+        setLinkPickEntries(picks);
+        const row = (
+          (data as {
+            needsLink?: Array<{
+              entryId: string;
+              suggestions: Array<{
+                externalCode: string;
+                companyName: string;
+                balance: number;
+                score: number;
+              }>;
+            }>;
+          }).needsLink ?? []
+        ).find(r => r.entryId === id);
+        const sugg = (row?.suggestions ?? [])
+          .map(s => {
+            const target = picks.find(p => p.externalCode === s.externalCode);
+            if (!target) return null;
+            return {
+              entryId: target.entryId,
+              externalCode: s.externalCode,
+              companyName: s.companyName,
+              balance: s.balance,
+              score: s.score,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => Boolean(x));
+        setLinkSuggestions(sugg);
+        setLinkLoaded(true);
+      } catch (e) {
+        if (!cancelled) {
+          setLinkMsg(e instanceof Error ? e.message : '연결 목록 조회 실패');
+          setLinkLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editing, needsLedgerLink, linkLoaded, id]);
+
+  const filteredLinkPicks = useMemo(() => {
+    const qq = linkPickQ.trim().toLowerCase();
+    if (!qq) return linkPickEntries;
+    return linkPickEntries.filter(
+      p =>
+        p.companyName.toLowerCase().includes(qq) ||
+        p.externalCode.toLowerCase().includes(qq),
+    );
+  }, [linkPickEntries, linkPickQ]);
+
+  const mergeToLedger = async (targetEntryId: string, targetName: string, targetCode: string) => {
+    if (!item) return;
+    if (
+      !window.confirm(
+        `공문 «${item.companyName}» → 원장 «${targetName}» (${targetCode})\n` +
+          `공문 상세를 옮기고 이 연결필요 행은 삭제합니다. 잔액은 원장 잔액을 유지합니다.`,
+      )
+    ) {
+      return;
+    }
+    setLinkBusy(true);
+    setLinkMsg('');
+    setError('');
+    try {
+      const res = await fetch('/api/arrears/merge-letter-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ letterEntryId: id, targetEntryId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '거래처 연결 실패');
+      setLinkMsg(`연결됨 → ${targetName}`);
+      router.replace(`/arrears/${targetEntryId}?edit=1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '거래처 연결 실패');
+    } finally {
+      setLinkBusy(false);
     }
   };
 
@@ -383,6 +501,98 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 )}
               </div>
             ) : null}
+
+            {needsLedgerLink ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-amber-950">
+                    거래처 연결
+                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                      연결필요
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-amber-900/80">
+                    코드 있는 원장 업체에 붙이면 공문 내역이 옮겨집니다.
+                  </p>
+                </div>
+                {linkMsg ? <p className="text-xs text-emerald-800">{linkMsg}</p> : null}
+                {!linkLoaded ? (
+                  <p className="text-xs text-slate-500">후보 불러오는 중…</p>
+                ) : (
+                  <>
+                    {linkSuggestions.length > 0 ? (
+                      <ul className="space-y-1.5">
+                        {linkSuggestions.map(s => (
+                          <li
+                            key={s.entryId}
+                            className="flex flex-wrap items-center gap-2 rounded border border-amber-100 bg-white px-2 py-1.5 text-xs"
+                          >
+                            <span className="font-medium text-slate-900">
+                              {s.companyName}
+                              <span className="ml-1 font-mono text-[10px] text-slate-400">
+                                {s.externalCode}
+                              </span>
+                            </span>
+                            <span className="text-slate-500">
+                              원장 {formatArrearsWon(s.balance)}
+                            </span>
+                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-900">
+                              유사 {Math.round(s.score * 100)}%
+                            </span>
+                            <button
+                              type="button"
+                              className={`${portalBtnPrimary} ml-auto py-0.5 text-[11px]`}
+                              disabled={linkBusy}
+                              onClick={() =>
+                                void mergeToLedger(s.entryId, s.companyName, s.externalCode)
+                              }
+                            >
+                              {linkBusy ? '연결 중…' : '이 업체에 연결'}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500">유사 상호 후보가 없습니다. 아래에서 직접 고르세요.</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 border-t border-amber-100 pt-2">
+                      <input
+                        className={`${portalInput} max-w-[12rem] py-1 text-xs`}
+                        placeholder="원장 상호·코드 필터"
+                        value={linkPickQ}
+                        onChange={e => setLinkPickQ(e.target.value)}
+                      />
+                      <select
+                        className={`${portalInput} min-w-[12rem] flex-1 py-1 text-xs`}
+                        value={linkPickId}
+                        onChange={e => setLinkPickId(e.target.value)}
+                      >
+                        <option value="">코드 있는 업체에서 고르기…</option>
+                        {filteredLinkPicks.map(p => (
+                          <option key={p.entryId} value={p.entryId}>
+                            {p.companyName} ({p.externalCode}) · {formatArrearsWon(p.balance)}
+                            {p.managerName ? ` · ${p.managerName}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className={portalBtnSecondary}
+                        disabled={!linkPickId || linkBusy}
+                        onClick={() => {
+                          const ent = linkPickEntries.find(p => p.entryId === linkPickId);
+                          if (!ent) return;
+                          void mergeToLedger(ent.entryId, ent.companyName, ent.externalCode);
+                        }}
+                      >
+                        선택 연결
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+
             <label className="flex max-w-xs flex-col gap-1 text-xs font-medium text-slate-600">
               공문 일자
               <input
