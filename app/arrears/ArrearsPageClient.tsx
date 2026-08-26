@@ -23,6 +23,7 @@ import {
   type ArrearsManagerTotal,
 } from '@/app/types/arrears';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 import ArrearsManualEntryModal, {
   type ManualChannel,
 } from '@/app/arrears/ArrearsManualEntryModal';
@@ -79,6 +80,10 @@ export default function ArrearsPageClient() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [asOfDate, setAsOfDate] = useState('');
   const [canManage, setCanManage] = useState(false);
+  /** 로그인 사용자 표시명 — 일반 담당은 본인만 필터 가능 */
+  const [viewerName, setViewerName] = useState('');
+  /** 인디 등 관리자: 기본은 담당자 화면과 동일, 켤 때만 수정 UI */
+  const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -148,6 +153,7 @@ export default function ArrearsPageClient() {
         setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
         setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
         setCanManage(!!(data as { canManage?: boolean }).canManage);
+        setViewerName((data as { viewerName?: string }).viewerName?.trim() || '');
       } catch (e) {
         if (mode === 'full') {
           setError(e instanceof Error ? e.message : '불러오기 실패');
@@ -348,6 +354,23 @@ export default function ArrearsPageClient() {
     }
     return [...set];
   }, [totals]);
+
+  /** 인디·찰리·리아(관리자)만 다른 담당 선택 가능. 그 외는 본인만 */
+
+  useEffect(() => {
+    if (canManage || !viewerName) return;
+    setManagers(prev => {
+      const next = prev.filter(n => managerNamesMatch(n, viewerName));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [canManage, viewerName]);
+
+  const toggleManagerFilter = (name: string) => {
+    if (!canManage && !managerNamesMatch(name, viewerName)) return;
+    setManagers(prev =>
+      prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name],
+    );
+  };
 
   const selectedCount = selectedIds.size;
   const selectedSum = useMemo(() => {
@@ -559,14 +582,30 @@ export default function ArrearsPageClient() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              잔액·최근 입금은 원장/상세 PDF 기준. 공문은 과거·누적 미수 확인용(전부 유지).
-              세금계산서는 PDF에 없는 분만 보충.
-              로컬 재구성:{' '}
-              <code className="rounded bg-slate-100 px-1">npx tsx scripts/rebuild-arrears-stack.ts --apply</code>
+              잔액·최근 입금은 원장/상세 PDF 기준. 공문 출력·엑셀은 잔액 0원(전액 회수) 이후
+              신규 미수부터만 포함합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canManage ? (
+              <button
+                type="button"
+                className={`${portalBtnSecondary} ${editMode ? 'border-amber-400 bg-amber-50 text-amber-950' : ''}`}
+                onClick={() => {
+                  setEditMode(v => {
+                    if (v) {
+                      setMatchOpen(false);
+                      setFeeImportOpen(false);
+                    }
+                    return !v;
+                  });
+                }}
+                title="켜면 담당·분류·더빌 등 수정 도구가 표시됩니다"
+              >
+                {editMode ? '수정 모드 끄기' : '수정 모드'}
+              </button>
+            ) : null}
+            {editMode ? (
               <button
                 type="button"
                 className={`${portalBtnSecondary} ${matchOpen ? 'border-violet-400 bg-violet-50 text-violet-900' : ''}`}
@@ -576,7 +615,7 @@ export default function ArrearsPageClient() {
                 {matchOpen ? '연결필요 닫기' : '연결필요'}
               </button>
             ) : null}
-            {canManage ? (
+            {editMode ? (
               <button
                 type="button"
                 className={`${portalBtnSecondary} ${feeImportOpen ? 'border-emerald-400 bg-emerald-50 text-emerald-900' : ''}`}
@@ -612,7 +651,7 @@ export default function ArrearsPageClient() {
             >
               일괄 청구서{selectedCount ? ` (${selectedCount})` : ''}
             </button>
-            {canManage ? (
+            {editMode ? (
               <>
               <button type="button" className={portalBtnSecondary} onClick={() => openBulk('bookkeeping')}>
                 월 기장료
@@ -650,14 +689,14 @@ export default function ArrearsPageClient() {
           </div>
         </div>
 
-        {canManage && matchOpen ? (
+        {editMode && matchOpen ? (
           <ArrearsMatchPanel
             onLinked={() => void load('full')}
             onClose={() => setMatchOpen(false)}
           />
         ) : null}
 
-        {canManage && feeImportOpen ? (
+        {editMode && feeImportOpen ? (
           <ArrearsFeeEventsImport
             onApplied={() => void load('full')}
             onClose={() => setFeeImportOpen(false)}
@@ -679,7 +718,7 @@ export default function ArrearsPageClient() {
           ) : null}
         </div>
 
-        {canManage && selectedCount > 0 ? (
+        {editMode && selectedCount > 0 ? (
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3 shadow-sm">
             <p className="w-full text-xs font-semibold text-violet-900">
               선택 {selectedCount}건 일괄 변경
@@ -750,22 +789,26 @@ export default function ArrearsPageClient() {
           <div className="flex flex-wrap gap-2">
             {totals.map(t => {
               const name = t.managerName;
-              const selectable = name && name !== '(미지정)';
+              const selectable =
+                !!name &&
+                name !== '(미지정)' &&
+                (canManage || managerNamesMatch(name, viewerName));
               const selected = selectable && managers.includes(name);
               return (
               <button
                 key={name}
                 type="button"
+                disabled={!selectable}
                 onClick={() => {
                   if (!selectable) return;
-                  setManagers(prev =>
-                    prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name],
-                  );
+                  toggleManagerFilter(name);
                 }}
                 className={`rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors ${
                   selected
                     ? 'border-blue-400 bg-blue-50 text-blue-800'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    : selectable
+                      ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      : 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
                 }`}
               >
                 {name} · {formatArrearsWon(t.balance)} ({t.count})
@@ -775,11 +818,11 @@ export default function ArrearsPageClient() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex min-w-[12rem] flex-col gap-1.5">
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex min-w-[12rem] flex-col gap-1.5 self-start">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">담당 (다중선택)</span>
-              {managers.length > 0 ? (
+              {canManage && managers.length > 0 ? (
                 <button
                   type="button"
                   className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
@@ -796,25 +839,31 @@ export default function ArrearsPageClient() {
                   n => !(ARREARS_MANAGER_NAMES as readonly string[]).includes(n),
                 ),
               ].map(n => {
+                const own = managerNamesMatch(n, viewerName);
+                const locked = !canManage && !own;
                 const on = managers.includes(n);
                 return (
                   <label
                     key={n}
-                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                      on
-                        ? 'border-blue-400 bg-blue-50 text-blue-900'
-                        : 'border-slate-200 bg-white text-slate-700'
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      locked
+                        ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
+                        : on
+                          ? 'cursor-pointer border-blue-400 bg-blue-50 text-blue-900'
+                          : 'cursor-pointer border-slate-200 bg-white text-slate-700'
                     }`}
+                    title={
+                      locked
+                        ? '본인 담당만 선택할 수 있습니다'
+                        : undefined
+                    }
                   >
                     <input
                       type="checkbox"
                       className="rounded border-slate-300"
                       checked={on}
-                      onChange={() =>
-                        setManagers(prev =>
-                          prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n],
-                        )
-                      }
+                      disabled={locked}
+                      onChange={() => toggleManagerFilter(n)}
                     />
                     {n}
                   </label>
@@ -823,7 +872,7 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <div className="flex min-w-[14rem] flex-col gap-1.5">
+          <div className="flex min-w-[14rem] flex-col gap-1.5 self-start">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">관리분류 (다중선택)</span>
               {categories.length > 0 ? (
@@ -884,25 +933,28 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <label className="flex items-center gap-2 pt-5 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={showZero}
-              onChange={e => setShowZero(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            0원인것도 보기
-          </label>
-          <label className="flex items-center gap-2 pt-5 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={churnedOnly}
-              onChange={e => setChurnedOnly(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            유출만
-          </label>
-          <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
+          <div className="flex flex-col justify-end gap-1.5 pb-0.5 text-sm text-slate-700">
+            <label className="flex items-center gap-2 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showZero}
+                onChange={e => setShowZero(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              0원인것도 보기
+            </label>
+            <label className="flex items-center gap-2 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={churnedOnly}
+                onChange={e => setChurnedOnly(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              유출만
+            </label>
+          </div>
+
+          <label className="flex min-w-[10rem] max-w-xs flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
             검색
             <input
               className={`${portalInput} py-2`}
@@ -913,7 +965,7 @@ export default function ArrearsPageClient() {
           </label>
           <button
             type="button"
-            className={`${portalBtnSecondary} mt-4 py-2`}
+            className={`${portalBtnSecondary} py-2`}
             onClick={() => void load('full')}
           >
             새로고침
@@ -943,7 +995,7 @@ export default function ArrearsPageClient() {
                 <th className="px-3 py-2.5 whitespace-nowrap">담당</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">관리</th>
                 <th className="px-3 py-2.5 min-w-[8rem]">메모</th>
-                {canManage ? (
+                {editMode ? (
                   <th className="px-3 py-2.5 whitespace-nowrap print:hidden">입력</th>
                 ) : null}
               </tr>
@@ -951,13 +1003,13 @@ export default function ArrearsPageClient() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={canManage ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={editMode ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     불러오는 중…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={editMode ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
                     {!showZero ? ' 「0원인것도 보기」를 켜 보세요.' : ''}
                   </td>
@@ -997,11 +1049,11 @@ export default function ArrearsPageClient() {
                       <div className="flex flex-col gap-0.5">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Link
-                            href={`/arrears/${row.id}`}
+                            href={editMode ? `/arrears/${row.id}?edit=1` : `/arrears/${row.id}`}
                             className={`text-blue-800 underline-offset-2 hover:underline ${
                               row.isChurned ? 'line-through decoration-red-300/80 text-slate-500' : ''
                             }`}
-                            title="미수 내역"
+                            title={editMode ? '미수 내역 수정' : '미수 내역'}
                           >
                             {row.companyName}
                           </Link>
@@ -1047,7 +1099,7 @@ export default function ArrearsPageClient() {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {canManage ? (
+                      {editMode ? (
                         <button
                           type="button"
                           title="CMS 입금 반영"
@@ -1069,7 +1121,7 @@ export default function ArrearsPageClient() {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      {canManage ? (
+                      {editMode ? (
                         <select
                           className={`${portalInput} py-1 text-xs min-w-[5.5rem] bg-white/80`}
                           value={row.managerName}
@@ -1091,7 +1143,7 @@ export default function ArrearsPageClient() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {canManage ? (
+                      {editMode ? (
                         <select
                           className={`${portalInput} py-1 text-xs min-w-[6rem] bg-white/80 ${arrearsCategoryChipClass(row.mgmtCategory)}`}
                           value={row.mgmtCategory}
@@ -1118,7 +1170,7 @@ export default function ArrearsPageClient() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {canManage ? (
+                      {editMode ? (
                         <input
                           className={`${portalInput} py-1 text-xs w-full min-w-[8rem] bg-white/80`}
                           defaultValue={row.memo}
@@ -1136,7 +1188,7 @@ export default function ArrearsPageClient() {
                         <span className="text-slate-600 text-xs">{row.memo || '—'}</span>
                       )}
                     </td>
-                    {canManage ? (
+                    {editMode ? (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex gap-1">
                           <button

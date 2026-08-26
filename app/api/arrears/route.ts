@@ -63,6 +63,8 @@ export async function GET(req: Request) {
       ? undefined
       : getManagerMatchNames(user.name?.trim() || '');
 
+    const viewerName = user.name?.trim() || '';
+
     if (!canManage && (!managerNames || managerNames.length === 0)) {
       return NextResponse.json(
         {
@@ -71,6 +73,7 @@ export async function GET(req: Request) {
           totalBalance: 0,
           asOfDate: '',
           canManage: false,
+          viewerName,
         },
         NO_STORE,
       );
@@ -89,7 +92,7 @@ export async function GET(req: Request) {
       churnedOnly: churnedOnly || undefined,
     });
 
-    return NextResponse.json({ ...result, canManage }, NO_STORE);
+    return NextResponse.json({ ...result, canManage, viewerName }, NO_STORE);
   } catch (e) {
     return handleApiError(e);
   }

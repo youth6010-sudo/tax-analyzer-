@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import {
   portalAlertError,
@@ -18,6 +19,7 @@ import {
   formatArrearsPaidDateKo,
   formatArrearsWon,
   letterRunningBalances,
+  linesForCurrentLetterCycle,
   todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
@@ -56,6 +58,8 @@ function parseWon(s: string): number {
 }
 
 export default function ArrearsLetterClient({ id }: { id: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [item, setItem] = useState<ArrearsEntryDto | null>(null);
   const [lines, setLines] = useState<ArrearsLetterLineDto[]>([]);
   const [letterBalance, setLetterBalance] = useState(0);
@@ -63,7 +67,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [letterDate, setLetterDate] = useState('');
   const [saving, setSaving] = useState(false);
@@ -86,7 +90,16 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     setLetterDate(
       formatArrearsLetterDate(it.letterDate || it.asOfDate || ''),
     );
-  }, [id]);
+    const wantEdit = searchParams.get('edit') === '1';
+    const allowEdit = !!(data as { canManage?: boolean }).canManage;
+    if (wantEdit && allowEdit) {
+      setEditLines(toEditLines(ls));
+      setEditing(true);
+    } else if (wantEdit && !allowEdit) {
+      setEditing(false);
+      router.replace(`/arrears/${id}`, { scroll: false });
+    }
+  }, [id, router, searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,28 +117,33 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     };
   }, [load]);
 
-  const displayLines = editing ? null : lines;
+  const displayLines = editing ? null : linesForCurrentLetterCycle(lines);
   const running = useMemo(
     () => letterRunningBalances(displayLines || lines),
     [displayLines, lines],
   );
+  const viewLines = displayLines ?? lines;
   const totalAmount = useMemo(
-    () => lines.reduce((s, l) => s + l.amount, 0),
-    [lines],
+    () => viewLines.reduce((s, l) => s + l.amount, 0),
+    [viewLines],
   );
   const totalPaid = useMemo(
-    () => lines.reduce((s, l) => s + l.paidAmount, 0),
-    [lines],
+    () => viewLines.reduce((s, l) => s + l.paidAmount, 0),
+    [viewLines],
   );
+  const archivedLineCount = editing ? 0 : Math.max(0, lines.length - viewLines.length);
 
   const startEdit = () => {
+    if (!canManage) return;
     setEditLines(toEditLines(lines));
     setEditing(true);
+    router.replace(`/arrears/${id}?edit=1`, { scroll: false });
   };
 
   const cancelEdit = () => {
     setEditing(false);
     setEditLines([]);
+    router.replace(`/arrears/${id}`, { scroll: false });
   };
 
   const saveEdit = async () => {
@@ -160,6 +178,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       setBalanceDiff((data as { balanceDiff?: number }).balanceDiff ?? 0);
       setEditing(false);
       setEditLines([]);
+      router.replace(`/arrears/${id}`, { scroll: false });
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
     } finally {
@@ -257,50 +276,22 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             <p className="mt-0.5 text-xs text-slate-500">
               {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
-              {lines.length > 0 ? (
-                <>
-                  {' '}
-                  · 내역합계 {formatArrearsWon(letterBalance)}원
-                  {balanceDiff !== 0 ? (
-                    <span className="ml-1 font-semibold text-amber-800">
-                      (차이 {formatArrearsWon(balanceDiff)})
-                    </span>
-                  ) : null}
-                </>
-              ) : item.balance !== 0 ? (
-                <span className="ml-1 text-slate-600">· 원장만(장기미수, 공문·내역 없음)</span>
-              ) : null}
             </p>
-            <p className="mt-1 text-[11px] text-slate-400">
-              내역 출처: 공문(누적 이력) · ledger/payment(원장상세 PDF) · tax(PDF 없을 때 보완)
-            </p>
+            {editing ? (
+              <p className="mt-1 text-[11px] text-slate-400">
+                내역 출처: 공문 · ledger/payment · tax. 편집 시 전체 이력 표시.
+                {balanceDiff !== 0 ? (
+                  <span className="ml-1 font-semibold text-amber-800">
+                    내역합계 {formatArrearsWon(letterBalance)}원 (차이{' '}
+                    {formatArrearsWon(balanceDiff)})
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canManage && !editing ? (
+            {editing ? (
               <>
-                <button
-                  type="button"
-                  className={portalBtnPrimary}
-                  onClick={() => {
-                    setManualChannel('thebill');
-                    setManualOpen(true);
-                  }}
-                >
-                  더빌
-                </button>
-                <button
-                  type="button"
-                  className={portalBtnSecondary}
-                  onClick={() => {
-                    setManualChannel('cms');
-                    setManualOpen(true);
-                  }}
-                >
-                  CMS
-                </button>
-                <button type="button" className={portalBtnSecondary} onClick={startEdit}>
-                  내역 편집
-                </button>
                 <a
                   href={`/api/arrears/${id}/export`}
                   className={portalBtnSecondary}
@@ -308,10 +299,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 >
                   공문 엑셀
                 </a>
-              </>
-            ) : null}
-            {editing ? (
-              <>
                 <button
                   type="button"
                   className={portalBtnSecondary}
@@ -330,24 +317,59 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </button>
               </>
             ) : (
-              <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
-                인쇄
-              </button>
+              <>
+                {canManage ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-slate-400 underline-offset-2 hover:underline"
+                    onClick={startEdit}
+                  >
+                    수정
+                  </button>
+                ) : null}
+                <button type="button" className={portalBtnPrimary} onClick={() => window.print()}>
+                  인쇄
+                </button>
+              </>
             )}
           </div>
         </div>
 
-        {canManage && !editing ? (
-          <div className="print:hidden">
-            <button
-              type="button"
-              className="text-[11px] font-medium text-slate-400 underline-offset-2 hover:underline"
-              onClick={() => setShowAdvanced(v => !v)}
-            >
-              {showAdvanced ? '고급 접기' : '고급…'}
-            </button>
+        {error ? <div className={`${portalAlertError} print:hidden`}>{error}</div> : null}
+
+        {editing ? (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:hidden">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={portalBtnPrimary}
+                onClick={() => {
+                  setManualChannel('thebill');
+                  setManualOpen(true);
+                }}
+              >
+                더빌
+              </button>
+              <button
+                type="button"
+                className={portalBtnSecondary}
+                onClick={() => {
+                  setManualChannel('cms');
+                  setManualOpen(true);
+                }}
+              >
+                CMS
+              </button>
+              <button
+                type="button"
+                className="text-[11px] font-medium text-slate-400 underline-offset-2 hover:underline"
+                onClick={() => setShowAdvanced(v => !v)}
+              >
+                {showAdvanced ? '고급 접기' : '고급…'}
+              </button>
+            </div>
             {showAdvanced ? (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {balanceDiff !== 0 && lines.length > 0 ? (
                   <button
                     type="button"
@@ -365,13 +387,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 )}
               </div>
             ) : null}
-          </div>
-        ) : null}
-
-        {error ? <div className={`${portalAlertError} print:hidden`}>{error}</div> : null}
-
-        {editing ? (
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:hidden">
             <label className="flex max-w-xs flex-col gap-1 text-xs font-medium text-slate-600">
               공문 일자
               <input
@@ -540,6 +555,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           </div>
         ) : null}
 
+        {!editing ? (
+        <>
         {/* 공문 본문 — 엑셀 「미수수수료 안내」양식 */}
         <article className="arrears-letter mx-auto w-full max-w-[720px] rounded-xl border border-slate-200 bg-white px-8 py-10 text-black shadow-sm print:max-w-none print:rounded-none print:border-0 print:px-0 print:py-0 print:shadow-none">
           <div className="arrears-letter-brand flex flex-col items-center gap-1">
@@ -585,10 +602,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             1. 미수 수수료 안내
           </p>
 
-          {lines.length === 0 ? (
+          {viewLines.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500 print:hidden">
-              등록된 미수 내역이 없습니다.
-              {canManage ? ' 「더빌」로 청구 사유를 남기거나 「내역 편집」으로 입력하세요.' : ''}
+              {lines.length > 0
+                ? '현재 미수 구간 내역이 없습니다. (이전 회수 완료 구간은 편집에서 확인)'
+                : `등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
             </p>
           ) : (
             <div className="mt-2 overflow-x-auto">
@@ -609,7 +627,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {lines.map((l, i) => (
+                  {viewLines.map((l, i) => (
                     <tr key={l.id}>
                       <td className="border border-[#222] px-2 py-1 text-slate-900">
                         {l.description}
@@ -685,6 +703,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               수임처 카드 열기
             </Link>
           </p>
+        ) : null}
+        </>
         ) : null}
       </div>
 

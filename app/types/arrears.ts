@@ -101,6 +101,24 @@ export function letterRunningBalances(
   });
 }
 
+/**
+ * 전액 회수(누적 잔액 0) 이후의 신규 미수 사이클만.
+ * 공문 출력·엑셀용 — 편집/원장대사에는 전체 이력을 유지.
+ */
+export function linesForCurrentLetterCycle<T extends { amount: number; paidAmount: number }>(
+  lines: T[],
+): T[] {
+  if (!lines.length) return lines;
+  const running = letterRunningBalances(lines);
+  let lastZero = -1;
+  for (let i = 0; i < running.length; i++) {
+    if (running[i] === 0) lastZero = i;
+  }
+  if (lastZero < 0) return lines;
+  if (lastZero >= lines.length - 1) return [];
+  return lines.slice(lastZero + 1);
+}
+
 /** asOfDate(YYYY-MM-DD) → 공문 일자 표기 2026.07.27 */
 export function formatArrearsLetterDate(asOfOrLetter: string): string {
   const s = (asOfOrLetter || '').trim();

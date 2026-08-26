@@ -30,10 +30,17 @@ export const LEAVE_TEAM_MEMBER_TO_LEAD: ReadonlyArray<{
 /**
  * 연차 최종 결재(승인·반려)·취소 요청 승인 — 인디만
  * (리아 관리자·찰리는 포함하지 않음)
+ * 인디는 연차 잔고·휴가 신청 대상이 아님 (결재만).
  */
 export function canApproveLeaveFinal(user: UserLike): boolean {
   if (!user) return false;
   return loginIdOf(user) === 'indie';
+}
+
+/** 휴가 신청 가능 — 최종 결재자(인디) 제외 */
+export function canApplyLeave(user: UserLike): boolean {
+  if (!user) return false;
+  return !canApproveLeaveFinal(user);
 }
 
 /** @deprecated — canApproveLeaveFinal 사용. 하위 호환 */
@@ -73,6 +80,9 @@ export function initialLeaveApprovalStep(applicantName: string): LeaveApprovalSt
 /** 특정 건에 대해 지금 승인/반려 가능한지 */
 export function canReviewLeaveRequest(user: UserLike, item: LeaveRequestDto): boolean {
   if (!user) return false;
+  const name = user.name?.trim() || '';
+  // 본인 신청은 결재 불가
+  if (name && managerNamesMatch(name, item.applicantName)) return false;
   if (item.status === 'cancel_requested') {
     return canApproveLeaveFinal(user);
   }
@@ -82,7 +92,6 @@ export function canReviewLeaveRequest(user: UserLike, item: LeaveRequestDto): bo
     const lead = resolveLeaveTeamLeadForApplicant(item.applicantName);
     if (!lead) return false;
     const login = loginIdOf(user);
-    const name = user.name?.trim() || '';
     const mapping = LEAVE_TEAM_MEMBER_TO_LEAD.find(t => managerNamesMatch(t.lead, lead));
     if (mapping && mapping.leadLoginId === login) return true;
     return managerNamesMatch(name, lead);

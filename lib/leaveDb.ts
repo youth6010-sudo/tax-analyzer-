@@ -282,7 +282,16 @@ async function notifyLeaveRecipients(
   title: string,
   recipientNames: string[],
 ) {
-  const unique = [...new Set(recipientNames.map(n => n.trim()).filter(Boolean))];
+  const isRequest = title.includes('요청');
+  const unique = [
+    ...new Set(
+      recipientNames
+        .map(n => n.trim())
+        .filter(Boolean)
+        // 본인이 올린 결재 요청 알림은 신청자에게 보내지 않음
+        .filter(n => !(isRequest && managerNamesMatch(n, actorName))),
+    ),
+  ];
   if (unique.length === 0) return;
   const db = getDb();
   await db.insert(leaveNotifications).values(
@@ -814,7 +823,7 @@ export async function reviewLeaveRequest(
   return toRequestDto(row);
 }
 
-/** 결재자별로 대기 중인 건만 */
+/** 결재자별로 대기 중인 건만 (본인 신청 제외) */
 export async function listPendingLeaveForApprover(
   user: { loginId?: string | null; name?: string | null },
   year?: number,
@@ -825,13 +834,17 @@ export async function listPendingLeaveForApprover(
   const name = (user.name ?? '').trim();
   const asUser = { loginId: login, name };
 
+  const notOwn = (i: LeaveRequestDto) => !name || !managerNamesMatch(i.applicantName, name);
+
   if (canApproveLeaveFinal(asUser)) {
-    const finalPending = pending.filter(i => (i.approvalStep || 'final') === 'final');
-    return [...cancelRequested, ...finalPending];
+    const finalPending = pending.filter(
+      i => (i.approvalStep || 'final') === 'final' && notOwn(i),
+    );
+    return [...cancelRequested.filter(notOwn), ...finalPending];
   }
   if (isLeaveTeamLead(asUser)) {
-    // 취소 요청은 인디만 — 팀장 대기열에 넣지 않음
     return pending.filter(i => {
+      if (!notOwn(i)) return false;
       if ((i.approvalStep || 'final') !== 'team_lead') return false;
       const lead = resolveLeaveTeamLeadForApplicant(i.applicantName);
       if (!lead) return false;
@@ -841,6 +854,21 @@ export async function listPendingLeaveForApprover(
     });
   }
   return [];
+}
+
+/** 내가 신청해 아직 처리 중인 건 (신청중·취소 신청중) */
+export async function listMyInFlightLeaveRequests(
+  applicantName: string,
+  year?: number,
+): Promise<LeaveRequestDto[]> {
+  const name = applicantName.trim();
+  if (!name) return [];
+  const aliases = getManagerMatchNames(name);
+  const rows = await listLeaveRequests({
+    status: ['pending', 'cancel_requested'],
+    year,
+  });
+  return rows.filter(i => aliases.some(a => managerNamesMatch(a, i.applicantName)));
 }
 
 /** 캘린더용 — 승인된 휴가 (담당자 필터). 취소 요청 중도 포함(인디 승인 전) */

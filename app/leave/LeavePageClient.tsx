@@ -11,7 +11,7 @@ import {
   leaveStatusLabel,
 } from '@/app/types/leave';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
-import { canReviewLeaveRequest, canDeleteCancelledLeave } from '@/lib/leaveAccess';
+import { canReviewLeaveRequest, canDeleteCancelledLeave, canApplyLeave } from '@/lib/leaveAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 type Tab = 'balances' | 'mine';
@@ -29,6 +29,7 @@ export default function LeavePageClient() {
   const [viewerName, setViewerName] = useState('');
   const [canApprove, setCanApprove] = useState(false);
   const [canViewAll, setCanViewAll] = useState(false);
+  const [canApply, setCanApply] = useState(true);
   const [mine, setMine] = useState<LeaveRequestDto[]>([]);
   const [statusMembers, setStatusMembers] = useState<string[]>([]);
   const [memberFilter, setMemberFilter] = useState('');
@@ -79,6 +80,16 @@ export default function LeavePageClient() {
 
     void (async () => {
       try {
+        const meRes = await fetchWithTimeout('/api/auth/me', {}, 10_000);
+        if (meRes.ok) {
+          const me = (await meRes.json()) as {
+            user?: { name?: string; loginId?: string; role?: string | null; adminMode?: boolean | null };
+          };
+          if (!cancelled && me.user) {
+            setCanApply(canApplyLeave({ loginId: me.user.loginId, name: me.user.name }));
+            if (me.user.name) setViewerName(me.user.name.trim());
+          }
+        }
         const results = await Promise.allSettled([loadBalances(), loadMine()]);
         if (cancelled) return;
         if (results[0].status === 'rejected') {
@@ -128,9 +139,10 @@ export default function LeavePageClient() {
   }, [canManage]);
 
   const myBalance = useMemo(() => {
-    if (!viewerName) return null;
+    // 인디(결재권자)는 연차 잔고·신청 대상 아님
+    if (!canApply || !viewerName) return null;
     return balances.find(b => managerNamesMatch(b.memberName, viewerName)) ?? null;
-  }, [balances, viewerName]);
+  }, [balances, viewerName, canApply]);
 
   useEffect(() => {
     if (!canManage && tab === 'balances') setTab('mine');
@@ -146,9 +158,9 @@ export default function LeavePageClient() {
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
-              결재됩니다. 최종 승인 시 연차 사용·캘린더 반영. 본인 연차 잔고는 휴가현황 상단에
-              표시되고, 전직원 연차 잔고·수정은 인디·페리만 가능합니다. 결재 알림은 홈 To Do의
-              휴가 결재에 표시됩니다.
+              결재됩니다. 인디는 결재권자로 연차 잔고·신청 대상이 아닙니다. 최종 승인 시 연차
+              사용·캘린더 반영. 본인 연차 잔고는 휴가현황 상단에 표시되고, 전직원 연차 잔고·수정은
+              인디·페리만 가능합니다. 결재 알림은 홈 To Do의 휴가 결재에 표시됩니다.
             </p>
             </div>
           </div>
@@ -168,13 +180,15 @@ export default function LeavePageClient() {
             >
               ›
             </button>
-            <button
-              type="button"
-              onClick={() => setApplyOpen(true)}
-              className={portalBtnPrimary + ' text-xs py-1.5'}
-            >
-              휴가 신청
-            </button>
+            {canApply && (
+              <button
+                type="button"
+                onClick={() => setApplyOpen(true)}
+                className={portalBtnPrimary + ' text-xs py-1.5'}
+              >
+                휴가 신청
+              </button>
+            )}
           </div>
         </div>
 
@@ -258,7 +272,7 @@ export default function LeavePageClient() {
       </CenterModal>
 
       <CenterModal
-        open={applyOpen}
+        open={applyOpen && canApply}
         title="휴가 신청"
         description="연차 또는 오전/오후 반차를 신청합니다."
         onClose={() => setApplyOpen(false)}

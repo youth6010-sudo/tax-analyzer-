@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import {
+  canApplyLeave,
   canViewAllLeaveRequests,
   canViewLeavePendingQueue,
 } from '@/lib/leaveAccess';
 import {
   createLeaveRequest,
   listLeaveRequests,
+  listMyInFlightLeaveRequests,
   listPendingLeaveForApprover,
 } from '@/lib/leaveDb';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
@@ -31,6 +33,12 @@ export async function GET(req: Request) {
       }
       const items = await listPendingLeaveForApprover(user, year);
       return NextResponse.json({ items, canApprove: true, canViewAll });
+    }
+
+    /** 내가 올린 신청중·취소신청중 — 홈 To Do「신청중」표시용 */
+    if (url.searchParams.get('inflight') === '1') {
+      const items = await listMyInFlightLeaveRequests(user.name, year);
+      return NextResponse.json({ items, canApprove, canViewAll });
     }
 
     // 인디: 전체 현황 (담당자 필터 선택 가능)
@@ -77,6 +85,12 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
+    if (!canApplyLeave(user)) {
+      return NextResponse.json(
+        { error: '인디(결재권자)는 연차 신청 대상이 아닙니다.' },
+        { status: 403 },
+      );
+    }
     const body = (await req.json()) as {
       title?: string;
       body?: string;

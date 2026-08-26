@@ -186,6 +186,7 @@ export default function HomeTasksPanel() {
   const [companyMonth, setCompanyMonth] = useState<{ year: number; month: number } | null>(null);
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [leavePending, setLeavePending] = useState<LeaveRequestDto[]>([]);
+  const [leaveMineInflight, setLeaveMineInflight] = useState<LeaveRequestDto[]>([]);
   const [leaveNotifs, setLeaveNotifs] = useState<LeaveNotificationDto[]>([]);
   const [canApproveLeaveUi, setCanApproveLeaveUi] = useState(false);
   const [leaveReview, setLeaveReview] = useState<LeaveRequestDto | null>(null);
@@ -240,23 +241,38 @@ export default function HomeTasksPanel() {
     () => new Set(leavePending.map(i => i.id)),
     [leavePending],
   );
+  const leaveMineIds = useMemo(
+    () => new Set(leaveMineInflight.map(i => i.id)),
+    [leaveMineInflight],
+  );
 
-  /** 결재 대기 목록에 이미 있는 「요청」알림은 중복 표시하지 않음 */
+  /**
+   * 알림:
+   * - 「요청」은 결재자용(승인/반려) — 본인이 올린 요청 알림은 숨김
+   * - 승인/반려 결과 알림은 신청자 「확인」용
+   * - 결재 대기·내 신청중 카드와 중복되는 요청 알림은 숨김
+   */
   const leaveNotifsVisible = useMemo(
     () =>
       leaveNotifs.filter(n => {
-        if (!leavePendingIds.has(n.leaveRequestId)) return true;
-        return !n.title.includes('요청');
+        if (currentUser && n.title.includes('요청') && managerNamesMatch(n.actorName, currentUser)) {
+          return false;
+        }
+        if (leavePendingIds.has(n.leaveRequestId) && n.title.includes('요청')) return false;
+        if (leaveMineIds.has(n.leaveRequestId) && n.title.includes('요청')) return false;
+        return true;
       }),
-    [leaveNotifs, leavePendingIds],
+    [leaveNotifs, leavePendingIds, leaveMineIds, currentUser],
   );
+
+  const leaveSectionCount =
+    leavePending.length + leaveMineInflight.length + leaveNotifsVisible.length;
 
   const totalPending =
     personalPending +
     companyPending +
     clientTasks.length +
-    leavePending.length +
-    leaveNotifsVisible.length;
+    leaveSectionCount;
 
   const handleShowCompletedChange = (show: boolean) => {
     setShowCompleted(show);
@@ -320,10 +336,17 @@ export default function HomeTasksPanel() {
         setCanApproveLeaveUi(false);
       }
 
+      const leaveMineRes = await fetchWithTimeout('/api/leave/requests?inflight=1', {}, 10_000);
+      if (leaveMineRes.ok) {
+        const payload = (await leaveMineRes.json()) as { items?: LeaveRequestDto[] };
+        setLeaveMineInflight(payload.items || []);
+      } else {
+        setLeaveMineInflight([]);
+      }
+
       const leaveNotifRes = await fetchWithTimeout('/api/leave/notifications', {}, 10_000);
       if (leaveNotifRes.ok) {
         const payload = (await leaveNotifRes.json()) as { items?: LeaveNotificationDto[] };
-        // 승인 대기(요청) + 최종 승인/반려 등 본인 수신 알림 전부 표시
         setLeaveNotifs(payload.items || []);
       } else {
         setLeaveNotifs([]);
@@ -384,6 +407,26 @@ export default function HomeTasksPanel() {
       window.removeEventListener('focus', onFocus);
     };
   }, [refresh, showCompleted]);
+
+  /** 본인이 올린 결재 요청 알림(잘못 수신)은 읽음 처리 */
+  useEffect(() => {
+    if (!currentUser || leaveNotifs.length === 0) return;
+    const junk = leaveNotifs.filter(
+      n => n.title.includes('요청') && managerNamesMatch(n.actorName, currentUser),
+    );
+    if (junk.length === 0) return;
+    const junkIds = new Set(junk.map(n => n.id));
+    setLeaveNotifs(prev => prev.filter(n => !junkIds.has(n.id)));
+    void Promise.all(
+      junk.map(n =>
+        fetch('/api/leave/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: n.id }),
+        }).catch(() => null),
+      ),
+    );
+  }, [currentUser, leaveNotifs]);
 
   const routedVisible = useMemo(() => routedOpen, [routedOpen]);
   const routedSharedById = useMemo(
@@ -796,17 +839,56 @@ export default function HomeTasksPanel() {
                 )}
               </SectionCard>
 
-            {(canApproveLeaveUi || leaveNotifsVisible.length > 0) && (
+            {(canApproveLeaveUi ||
+              leaveMineInflight.length > 0 ||
+              leaveNotifsVisible.length > 0) && (
               <SectionCard
                 title="휴가 결재"
-                count={leavePending.length + leaveNotifsVisible.length}
+                count={leaveSectionCount}
                 open={sections.leave}
                 onToggle={() => toggleSection('leave')}
               >
-                {leavePending.length === 0 && leaveNotifsVisible.length === 0 ? (
+                {leaveSectionCount === 0 ? (
                   <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
                 ) : (
                   <ul className="space-y-1.5">
+                    {leaveMineInflight.map(item => (
+                      <li
+                        key={`mine-${item.id}`}
+                        className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-semibold text-slate-800">내 신청</p>
+                          <span className="rounded bg-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-950">
+                            {item.status === 'cancel_requested' ? '취소 신청중' : '신청중'}
+                          </span>
+                          <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                            {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
+                          </span>
+                          <span className="text-[11px] font-semibold text-teal-800">{item.days}일</span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          {item.startDate}
+                          {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
+                          {item.title ? ` · ${item.title}` : ''}
+                        </p>
+                        <p className="mt-1 text-[11px] text-amber-800/80">
+                          {item.status === 'cancel_requested'
+                            ? '인디 취소 결재 대기 중'
+                            : item.approvalStep === 'team_lead'
+                              ? '팀장 승인 대기 중'
+                              : '인디 승인 대기 중'}
+                        </p>
+                        <div className="mt-2">
+                          <Link
+                            href="/leave"
+                            className="text-[11px] font-semibold text-amber-800 underline-offset-2 hover:underline"
+                          >
+                            휴가관리
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
                     {leaveNotifsVisible.map(n => {
                       const isRequest = isLeaveActionRequestNotif(n);
                       return (

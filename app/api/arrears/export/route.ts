@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { listArrearsEntries } from '@/lib/arrearsDb';
 import { listLetterLines } from '@/lib/arrearsLetterDb';
+import { linesForCurrentLetterCycle } from '@/app/types/arrears';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { ARREARS_MANAGER_NAMES } from '@/app/types/arrears';
 import {
@@ -21,7 +22,8 @@ async function sheetsForEntries(entries: EntryLike[]): Promise<ArrearsLetterExpo
   const sheets: ArrearsLetterExportSheet[] = [];
   for (const item of entries) {
     if (item.balance === 0) continue;
-    const lines = await listLetterLines(item.id);
+    const allLines = await listLetterLines(item.id);
+    const lines = linesForCurrentLetterCycle(allLines);
     if (!lines.length) continue;
     sheets.push({
       companyName: item.companyName,

@@ -9,6 +9,7 @@ import {
   formatArrearsPaidDateKo,
   letterBalanceFromLines,
   letterRunningBalances,
+  linesForCurrentLetterCycle,
 } from '@/app/types/arrears';
 
 export const ARREARS_LETTER_ORG = 'Youth tax Management Corporation';
@@ -104,7 +105,7 @@ function appendArrearsLetterSheet(
 ): void {
   const company = letterCompanyDisplayName(sheet.companyName || '');
   const letterDate = formatArrearsLetterDate(sheet.letterDate || '');
-  const lines = sheet.lines || [];
+  const lines = linesForCurrentLetterCycle(sheet.lines || []);
   const running = letterRunningBalances(lines);
   const totalAmount = lines.reduce((s, l) => s + Math.round(l.amount || 0), 0);
   const totalPaid = lines.reduce((s, l) => s + Math.round(l.paidAmount || 0), 0);
