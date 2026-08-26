@@ -32,7 +32,7 @@ import HomeCalendarProgress from '@/app/components/dashboard/HomeCalendarProgres
 import { canCreateCompanyEvent } from '@/lib/calendarAccess';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 import type { LeaveNotificationDto, LeaveRequestDto } from '@/app/types/leave';
-import { formatLeaveKindLabel, leaveStatusLabel } from '@/app/types/leave';
+import { formatLeaveKindLabel, isLeaveActionRequestTitle, leaveStatusLabel } from '@/app/types/leave';
 
 const TYPE_LABEL: Record<DashboardTask['type'], string> = {
   consultation_draft: '상담',
@@ -248,18 +248,26 @@ export default function HomeTasksPanel() {
 
   /**
    * 알림:
-   * - 「요청」은 결재자용(승인/반려) — 본인이 올린 요청 알림은 숨김
-   * - 승인/반려 결과 알림은 신청자 「확인」용
-   * - 결재 대기·내 신청중 카드와 중복되는 요청 알림은 숨김
+   * - 결재 요청: 결재자만 승인/반려 (대기 카드와 중복되면 숨김)
+   * - 처리 완료: 신청자 「확인」으로 알림만 닫기
+   * - 신청 본인에게 온 요청 알림은 숨김
    */
   const leaveNotifsVisible = useMemo(
     () =>
       leaveNotifs.filter(n => {
-        if (currentUser && n.title.includes('요청') && managerNamesMatch(n.actorName, currentUser)) {
+        if (
+          currentUser &&
+          isLeaveActionRequestTitle(n.title) &&
+          managerNamesMatch(n.actorName, currentUser)
+        ) {
           return false;
         }
-        if (leavePendingIds.has(n.leaveRequestId) && n.title.includes('요청')) return false;
-        if (leaveMineIds.has(n.leaveRequestId) && n.title.includes('요청')) return false;
+        if (leavePendingIds.has(n.leaveRequestId) && isLeaveActionRequestTitle(n.title)) {
+          return false;
+        }
+        if (leaveMineIds.has(n.leaveRequestId) && isLeaveActionRequestTitle(n.title)) {
+          return false;
+        }
         return true;
       }),
     [leaveNotifs, leavePendingIds, leaveMineIds, currentUser],
@@ -408,11 +416,21 @@ export default function HomeTasksPanel() {
     };
   }, [refresh, showCompleted]);
 
+  /** 신청중이면 주기적으로 갱신 — 승인 후 「확인」으로 바뀌게 */
+  useEffect(() => {
+    if (leaveMineInflight.length === 0) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refresh(showCompleted);
+    }, 20_000);
+    return () => window.clearInterval(id);
+  }, [leaveMineInflight.length, refresh, showCompleted]);
+
   /** 본인이 올린 결재 요청 알림(잘못 수신)은 읽음 처리 */
   useEffect(() => {
     if (!currentUser || leaveNotifs.length === 0) return;
     const junk = leaveNotifs.filter(
-      n => n.title.includes('요청') && managerNamesMatch(n.actorName, currentUser),
+      n =>
+        isLeaveActionRequestTitle(n.title) && managerNamesMatch(n.actorName, currentUser),
     );
     if (junk.length === 0) return;
     const junkIds = new Set(junk.map(n => n.id));
@@ -535,7 +553,9 @@ export default function HomeTasksPanel() {
     setLeaveReviewBusy(false);
   };
 
-  const isLeaveActionRequestNotif = (n: LeaveNotificationDto) => n.title.includes('요청');
+  const isLeaveActionRequestNotif = (n: LeaveNotificationDto) =>
+    /* 결재 권한 없는 사람(신청자 등)에게는 승인/반려 버튼 절대 노출 안 함 → 확인만 */
+    canApproveLeaveUi && isLeaveActionRequestTitle(n.title);
 
   const openLeaveReviewFromNotif = async (n: LeaveNotificationDto) => {
     setLeaveReviewError('');
@@ -874,10 +894,10 @@ export default function HomeTasksPanel() {
                         </p>
                         <p className="mt-1 text-[11px] text-amber-800/80">
                           {item.status === 'cancel_requested'
-                            ? '인디 취소 결재 대기 중'
+                            ? '인디 취소 결재 대기 중 · 처리되면 확인으로 바뀝니다'
                             : item.approvalStep === 'team_lead'
-                              ? '팀장 승인 대기 중'
-                              : '인디 승인 대기 중'}
+                              ? '팀장 승인 대기 중 · 처리되면 확인으로 바뀝니다'
+                              : '인디 승인 대기 중 · 처리되면 확인으로 바뀝니다'}
                         </p>
                         <div className="mt-2">
                           <Link

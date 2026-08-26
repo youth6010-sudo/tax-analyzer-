@@ -397,7 +397,7 @@ export default function ManagerGachaGame() {
         <p className="mt-2 text-sm text-indigo-100/90 leading-relaxed">
           {mode === 'gacha'
             ? '후보를 고르고 가챠머신으로 한 명을 뽑아요'
-            : '신규수신 ON 인원끼리 승부차기 · 당첨자가 담당'}
+            : '수임가능 ON 인원끼리 승부차기 · 당첨자가 담당'}
         </p>
       </div>
 
@@ -559,11 +559,11 @@ export default function ManagerGachaGame() {
             </div>
             <div>
               <p className="text-xs font-semibold text-indigo-200/80 mb-2">
-                수신 ON 후보 ({shootoutPool.length}명)
+                수임가능 ON 후보 ({shootoutPool.length}명)
               </p>
               {shootoutPool.length === 0 ? (
                 <p className="text-sm text-amber-200/90">
-                  수임처 목록에서 해당 유형 신규수신을 ON한 담당자가 없습니다.
+                  수임처 목록에서 해당 유형 수임가능을 ON한 담당자가 없습니다.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -599,7 +599,7 @@ export default function ManagerGachaGame() {
                 ⚽ 승부차기 시작
               </button>
               <p className="text-xs text-indigo-200/70">
-                대시보드·수임처 목록의 신규수신 ON 인원만 참가합니다
+                대시보드·수임처 목록의 수임가능 ON 인원만 참가합니다
               </p>
             </div>
           )}

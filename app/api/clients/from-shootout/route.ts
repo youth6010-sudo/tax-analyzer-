@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const ok = entity === 'corporate' ? accept.corporate : accept.individual;
     if (!ok) {
       return NextResponse.json(
-        { error: '당첨 담당자가 해당 유형 신규수신을 받지 않습니다.' },
+        { error: '당첨 담당자가 해당 유형 수임가능 상태가 아닙니다.' },
         { status: 400 },
       );
     }

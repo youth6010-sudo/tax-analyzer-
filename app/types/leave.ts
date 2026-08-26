@@ -97,3 +97,28 @@ export function leaveStatusLabel(
   }
   return status;
 }
+
+/** 결재 액션이 필요한 알림 제목 접두어 (신청 제목에 '요청'이 있어도 결과 알림과 구분) */
+export const LEAVE_ACTION_REQUEST_TITLE_PREFIXES = [
+  '팀장 승인 요청',
+  '휴가 결재 요청',
+  '최종 결재 요청',
+  '휴가 취소 요청',
+] as const;
+
+/** 처리 완료(신청자·팀장 확인용) 알림 */
+export function isLeaveResultNotifTitle(title: string): boolean {
+  const t = title.trim();
+  return (
+    t.startsWith('휴가 승인') ||
+    t.startsWith('휴가 반려') ||
+    t.startsWith('휴가 취소 승인') ||
+    t.startsWith('휴가 취소 반려')
+  );
+}
+
+export function isLeaveActionRequestTitle(title: string): boolean {
+  const t = title.trim();
+  if (isLeaveResultNotifTitle(t)) return false;
+  return LEAVE_ACTION_REQUEST_TITLE_PREFIXES.some(p => t.startsWith(p));
+}

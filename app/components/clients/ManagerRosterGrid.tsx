@@ -550,7 +550,7 @@ function AcceptChip({
     return (
       <span
         className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${cls}`}
-        title={`신규 ${label} 수신 ${on ? '가능' : '불가'} (본인만 변경)`}
+        title={`${label} 수임가능 ${on ? 'ON' : 'OFF'} (본인만 변경)`}
       >
         {text}
       </span>
@@ -559,7 +559,7 @@ function AcceptChip({
   return (
     <button
       type="button"
-      title={`클릭: 신규 ${label} 수신 ${on ? '끄기' : '켜기'}`}
+      title={`클릭: ${label} 수임가능 ${on ? '끄기' : '켜기'}`}
       onClick={e => {
         e.preventDefault();
         e.stopPropagation();
@@ -648,7 +648,7 @@ function ManagerSection({
               )}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="text-[9px] font-semibold text-slate-400">신규수신</span>
+              <span className="text-[9px] font-semibold text-slate-400">수임가능</span>
               <AcceptChip
                 label="개인"
                 on={acceptIndividual}

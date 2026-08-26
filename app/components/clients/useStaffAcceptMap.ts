@@ -35,11 +35,10 @@ function lookup(map: AcceptMap, managerName: string): AcceptEntry | undefined {
   return undefined;
 }
 
-/** presence 기반 담당자별 신규수신 ON/OFF (닉네임·실명 모두 키) */
+/** presence 기반 담당자별 수임가능 ON/OFF (닉네임·실명 모두 키) */
 export function useStaffAcceptMap() {
   const [byName, setByName] = useState<AcceptMap>({});
   const [loaded, setLoaded] = useState(false);
-  const [canProxy, setCanProxy] = useState(false);
   const [selfName, setSelfName] = useState<string | null>(null);
   const [selfUserId, setSelfUserId] = useState<string | null>(null);
 
@@ -66,7 +65,6 @@ export function useStaffAcceptMap() {
       .then(data => {
         if (data?.user?.name) setSelfName(String(data.user.name).trim());
         if (data?.user?.id) setSelfUserId(String(data.user.id));
-        if (data?.isDeveloper) setCanProxy(true);
       })
       .catch(() => {});
   }, [refresh]);
@@ -119,11 +117,10 @@ export function useStaffAcceptMap() {
 
   const canToggle = useCallback(
     (managerName: string) => {
-      if (canProxy) return true;
       if (!selfName) return false;
       return managerNamesMatch(selfName, managerName);
     },
-    [selfName, canProxy],
+    [selfName],
   );
 
   const toggle = useCallback(
@@ -131,13 +128,12 @@ export function useStaffAcceptMap() {
       if (!canToggle(managerName)) return;
 
       const prev = getAccept(managerName);
-      const isSelf = !!selfName && managerNamesMatch(selfName, managerName);
       const nextIndividual =
         kind === 'individual' ? !prev.acceptIndividual : prev.acceptIndividual;
       const nextCorporate = kind === 'corporate' ? !prev.acceptCorporate : prev.acceptCorporate;
 
       const optimistic: AcceptEntry = {
-        userId: prev.userId ?? (isSelf ? selfUserId : null),
+        userId: prev.userId ?? selfUserId,
         acceptIndividual: nextIndividual,
         acceptCorporate: nextCorporate,
       };
@@ -146,7 +142,7 @@ export function useStaffAcceptMap() {
         for (const alias of getManagerMatchNames(managerName)) {
           next[alias] = optimistic;
         }
-        if (selfName && isSelf) {
+        if (selfName) {
           for (const alias of getManagerMatchNames(selfName)) {
             next[alias] = optimistic;
           }
@@ -155,18 +151,14 @@ export function useStaffAcceptMap() {
       });
 
       try {
-        const body: Record<string, unknown> = {
-          individual: nextIndividual,
-          corporate: nextCorporate,
-        };
-        if (!isSelf && prev.userId) {
-          body.userId = prev.userId;
-        }
         const res = await fetch('/api/auth/me/accept-clients', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            individual: nextIndividual,
+            corporate: nextCorporate,
+          }),
         });
         if (!res.ok) {
           await refresh();

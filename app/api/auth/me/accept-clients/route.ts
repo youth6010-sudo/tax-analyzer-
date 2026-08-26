@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { requireUser } from '@/lib/auth';
-import { getDb } from '@/db';
-import { users } from '@/db/schema';
-import { isDeveloperAdmin } from '@/lib/masterAccess';
 import { getUserMenuPrefs, patchAcceptNewClients } from '@/lib/menuPrefsDb';
 
-/** 본인(또는 찰리·리아 관리자 대리) 신규수임 수신 ON/OFF */
+/** 본인만 수임가능(개인/법인) ON/OFF — 대리 수정 불가 */
 export async function GET() {
   try {
     const user = await requireUser();
@@ -35,20 +31,11 @@ export async function PATCH(req: Request) {
     const targetUserId =
       typeof body.userId === 'string' && body.userId.trim() ? body.userId.trim() : user.id;
 
-    if (targetUserId !== user.id && !isDeveloperAdmin(user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     if (targetUserId !== user.id) {
-      const db = getDb();
-      const [row] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.id, targetUserId))
-        .limit(1);
-      if (!row) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
+      return NextResponse.json(
+        { error: '수임가능 설정은 본인만 변경할 수 있습니다.' },
+        { status: 403 },
+      );
     }
 
     const flags: { individual?: boolean; corporate?: boolean } = {};
@@ -61,13 +48,13 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'individual or corporate required' }, { status: 400 });
     }
 
-    const prefs = await patchAcceptNewClients(targetUserId, flags);
+    const prefs = await patchAcceptNewClients(user.id, flags);
     const accept = prefs.acceptNewClients ?? { individual: false, corporate: false };
     return NextResponse.json({
       prefs,
       acceptIndividual: accept.individual,
       acceptCorporate: accept.corporate,
-      userId: targetUserId,
+      userId: user.id,
     });
   } catch (e) {
     if (e instanceof Error && e.message === 'UNAUTHORIZED') {

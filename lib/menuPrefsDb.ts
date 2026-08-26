@@ -21,7 +21,7 @@ export async function getUserMenuPrefs(userId: string): Promise<UserMenuPrefs> {
 }
 
 /**
- * 메뉴 편집 저장 시 acceptNewClients가 빠지면 기존 수신 설정을 유지.
+ * 메뉴 편집 저장 시 acceptNewClients가 빠지면 기존 수임가능 설정을 유지.
  * `replace: true`면 전체 교체(리셋).
  */
 export async function setUserMenuPrefs(

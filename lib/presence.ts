@@ -14,9 +14,9 @@ export type PresenceStaffDto = {
   name: string;
   online: boolean;
   lastSeenAt: string | null;
-  /** 개인 신규수임 추가 수신 */
+  /** 개인 수임가능 */
   acceptIndividual: boolean;
-  /** 법인 신규수임 추가 수신 */
+  /** 법인 수임가능 */
   acceptCorporate: boolean;
 };
 

@@ -10,6 +10,7 @@ import type {
   LeaveRequestDto,
   LeaveRequestStatus,
 } from '@/app/types/leave';
+import { isLeaveActionRequestTitle } from '@/app/types/leave';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 import { DATA_VIEWER_LOGIN_IDS } from '@/lib/masterAccess';
 import {
@@ -282,7 +283,7 @@ async function notifyLeaveRecipients(
   title: string,
   recipientNames: string[],
 ) {
-  const isRequest = title.includes('요청');
+  const isRequest = isLeaveActionRequestTitle(title);
   const unique = [
     ...new Set(
       recipientNames

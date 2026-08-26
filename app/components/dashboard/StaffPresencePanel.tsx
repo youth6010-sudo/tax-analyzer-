@@ -8,7 +8,6 @@ export default function StaffPresencePanel() {
   const [staff, setStaff] = useState<PresenceStaffDto[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selfName, setSelfName] = useState<string | null>(null);
-  const [canProxy, setCanProxy] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const applyPayload = useCallback((data: { staff?: PresenceStaffDto[] }) => {
@@ -21,7 +20,6 @@ export default function StaffPresencePanel() {
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.user?.name) setSelfName(String(data.user.name).trim());
-        if (data?.isDeveloper) setCanProxy(true);
       })
       .catch(() => {});
   }, []);
@@ -78,11 +76,10 @@ export default function StaffPresencePanel() {
 
   const canEdit = useCallback(
     (name: string) => {
-      if (canProxy) return true;
       if (!selfName) return false;
       return managerNamesMatch(selfName, name);
     },
-    [selfName, canProxy],
+    [selfName],
   );
 
   const toggleAccept = useCallback(
@@ -90,7 +87,6 @@ export default function StaffPresencePanel() {
       if (!canEdit(s.name) || savingId) return;
       const nextIndividual = kind === 'individual' ? !s.acceptIndividual : s.acceptIndividual;
       const nextCorporate = kind === 'corporate' ? !s.acceptCorporate : s.acceptCorporate;
-      const isSelf = !!selfName && managerNamesMatch(selfName, s.name);
 
       setStaff(prev =>
         prev.map(row =>
@@ -101,16 +97,14 @@ export default function StaffPresencePanel() {
       );
       setSavingId(s.id);
       try {
-        const body: Record<string, unknown> = {
-          individual: nextIndividual,
-          corporate: nextCorporate,
-        };
-        if (!isSelf) body.userId = s.id;
         const res = await fetch('/api/auth/me/accept-clients', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            individual: nextIndividual,
+            corporate: nextCorporate,
+          }),
         });
         if (!res.ok) {
           const poll = await fetch('/api/presence', { credentials: 'same-origin' });
@@ -125,7 +119,7 @@ export default function StaffPresencePanel() {
         setSavingId(null);
       }
     },
-    [canEdit, savingId, selfName, applyPayload],
+    [canEdit, savingId, applyPayload],
   );
 
   const onlineCount = staff.filter(s => s.online).length;
@@ -136,7 +130,7 @@ export default function StaffPresencePanel() {
       aria-label="직원 접속 상태"
     >
       <div className="flex items-baseline justify-between gap-2 px-2">
-        <p className="text-[11px] font-bold tracking-wide text-slate-400">직원 · 신규수신</p>
+        <p className="text-[11px] font-bold tracking-wide text-slate-400">직원 · 수임가능</p>
         {loaded ? (
           <p className="text-[10px] font-medium text-slate-400">
             {onlineCount}/{staff.length} 접속
@@ -221,7 +215,7 @@ function AcceptMini({
     return (
       <span
         className={`rounded border px-1 py-px text-[9px] font-bold ${cls}`}
-        title={`${title} 신규수신 ${on ? 'ON' : 'OFF'}`}
+        title={`${title} 수임가능 ${on ? 'ON' : 'OFF'}`}
       >
         {label}
       </span>
@@ -231,7 +225,7 @@ function AcceptMini({
     <button
       type="button"
       disabled={disabled}
-      title={`클릭: ${title} 신규수신 ${on ? 'OFF' : 'ON'}`}
+      title={`클릭: ${title} 수임가능 ${on ? 'OFF' : 'ON'}`}
       onClick={onClick}
       className={`rounded border px-1 py-px text-[9px] font-bold hover:ring-1 hover:ring-blue-300 disabled:opacity-50 ${cls}`}
     >

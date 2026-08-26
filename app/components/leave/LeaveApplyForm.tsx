@@ -35,9 +35,9 @@ export function buildLeaveTitleDraft(
   halfSlot: LeaveHalfSlot,
 ): string {
   if (leaveKind === 'half') {
-    return halfSlot === 'pm' ? '오후 반차 승인 요청' : '오전 반차 승인 요청';
+    return halfSlot === 'pm' ? '오후 반차' : '오전 반차';
   }
-  return '연차 승인 요청';
+  return '연차';
 }
 
 export default function LeaveApplyForm({

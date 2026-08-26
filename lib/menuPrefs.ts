@@ -12,7 +12,7 @@ export type UserMenuPrefs = {
   hiddenGroupIds?: string[];
   itemOrderByGroup?: Record<string, string[]>;
   hiddenHrefs?: string[];
-  /** 신규 수임(개인/법인) 추가 수신 가능 */
+  /** 수임가능(개인/법인) — 본인만 토글 */
   acceptNewClients?: AcceptNewClientsPrefs;
 };
 
