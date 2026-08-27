@@ -11,6 +11,7 @@ import {
   letterRunningBalances,
   linesForCurrentLetterCycle,
 } from '@/app/types/arrears';
+import { formatArrearsPaidDateOffice } from '@/lib/arrearsLineLabel';
 
 export const ARREARS_LETTER_ORG = 'Youth tax Management Corporation';
 export const ARREARS_LETTER_BANK = '부산은행 113-2016-5229-07 세무법인 청년들';
@@ -64,9 +65,9 @@ export function letterCompanyDisplayName(name: string): string {
     .trim();
 }
 
-/** 사무실 엑셀 지급일시: `2월3일` (공백 없음) */
+/** 사무실 엑셀 지급일시: `2월3일` (공백 없음). YYYYMMDD·한국어 모두 수용 */
 export function formatLetterPaidDateExcel(raw: string | number | Date | null | undefined): string {
-  const s = formatArrearsPaidDateKo(raw);
+  const s = formatArrearsPaidDateOffice(raw) || formatArrearsPaidDateKo(raw);
   if (!s) return '';
   return s.replace(/(\d+)\s*월\s*(\d+)\s*일/, '$1월$2일');
 }

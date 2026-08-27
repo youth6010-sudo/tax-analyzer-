@@ -164,6 +164,10 @@ export function formatArrearsPaidDateKo(raw: string | number | Date | null | und
   const s = String(raw).replace(/\s+/g, ' ').trim();
   if (!s) return '';
 
+  // 20260116 → 1월 16일 (공문/엑셀용)
+  const ymd8 = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (ymd8) return `${Number(ymd8[2])}월 ${Number(ymd8[3])}일`;
+
   // 이미 한국어: 07월 02일 / 7월 2일
   const ko = s.match(/^0?(\d{1,2})\s*월\s*0?(\d{1,2})\s*일$/);
   if (ko) return `${Number(ko[1])}월 ${Number(ko[2])}일`;

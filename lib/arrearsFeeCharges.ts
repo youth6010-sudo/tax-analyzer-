@@ -30,12 +30,12 @@ export function adjustmentFeeFromIntake(
   return sum > 0 ? sum : 0;
 }
 
-/** 2026 → 26년 조정료 */
+/** 2026 → 2026년 조정료 */
 export function adjustmentDescriptionForYear(year: number): string {
   if (!Number.isFinite(year) || year < 2000 || year > 2100) {
     throw new Error('year는 2000~2100 사이여야 합니다.');
   }
-  return `${String(year).slice(2)}년 조정료`;
+  return `${year}년 조정료`;
 }
 
 function parseYear(raw: string | undefined): number {

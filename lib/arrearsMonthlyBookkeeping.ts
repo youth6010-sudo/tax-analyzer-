@@ -37,13 +37,13 @@ function normalizeCompanyName(name: string): string {
   return name.replace(/\s+/g, '').trim().toLowerCase();
 }
 
-/** 2026-08 → 26년 8월 기장료 */
+/** 2026-08 → 2026년 8월 기장료 */
 export function bookkeepingDescriptionForMonth(yearMonth: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(yearMonth.trim());
   if (!m) throw new Error('yearMonth는 YYYY-MM 형식이어야 합니다.');
-  const yy = m[1].slice(2);
+  const year = m[1];
   const month = String(Number(m[2]));
-  return `${yy}년 ${month}월 기장료`;
+  return `${year}년 ${month}월 기장료`;
 }
 
 export function monthlyBookkeepingFeeFromIntake(

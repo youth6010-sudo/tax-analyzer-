@@ -7,6 +7,7 @@ import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
+import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -105,7 +106,14 @@ async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsE
   return items.map(item => {
     const charges = chargesByEntry.get(item.id);
     if (charges?.length) {
-      return { ...item, reasonSummary: charges.join(' · ') };
+      const asOf = item.letterDate || item.asOfDate;
+      const formatted = charges.map((desc, i) =>
+        formatArrearsChargeLabel(desc, {
+          asOfDate: asOf,
+          prevDescription: i > 0 ? charges[i - 1] : undefined,
+        }),
+      );
+      return { ...item, reasonSummary: formatted.join(' · ') };
     }
     const memo = (item.memo || '').trim();
     return { ...item, reasonSummary: memo || '—' };

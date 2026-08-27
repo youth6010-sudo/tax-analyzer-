@@ -8,7 +8,8 @@ import type {
   ArrearsLetterLineSource,
   ArrearsMgmtCategory,
 } from '@/app/types/arrears';
-import { letterBalanceFromLines, formatArrearsPaidDateKo } from '@/app/types/arrears';
+import { letterBalanceFromLines } from '@/app/types/arrears';
+import { formatArrearsPaidYmd, paidDateMatchKey } from '@/lib/arrearsLineLabel';
 import type { ParsedLetterLine, ParsedLetterSheet } from '@/lib/arrearsLetterParse';
 import { letterLinesBalance } from '@/lib/arrearsLetterParse';
 import type { ParsedFeeEvent } from '@/lib/arrearsFeeEventParse';
@@ -29,7 +30,12 @@ import {
 export type { BalanceDiffKind };
 export { classifyBalanceDiff };
 
-function toLineDto(row: typeof arrearsLetterLines.$inferSelect): ArrearsLetterLineDto {
+function toLineDto(
+  row: typeof arrearsLetterLines.$inferSelect,
+  asOfDate?: string | null,
+): ArrearsLetterLineDto {
+  const rawPaid = String(row.paidDate || '').trim();
+  const ymd = formatArrearsPaidYmd(rawPaid, { asOfDate });
   return {
     id: row.id,
     arrearsEntryId: row.arrearsEntryId,
@@ -37,7 +43,7 @@ function toLineDto(row: typeof arrearsLetterLines.$inferSelect): ArrearsLetterLi
     description: row.description,
     amount: row.amount,
     paidAmount: row.paidAmount,
-    paidDate: formatArrearsPaidDateKo(row.paidDate),
+    paidDate: /^\d{8}$/.test(ymd) ? ymd : rawPaid,
     source: (row.source || 'manual') as ArrearsLetterLineSource,
   };
 }
@@ -85,12 +91,21 @@ function softKey(s: string): string {
 
 export async function listLetterLines(entryId: string): Promise<ArrearsLetterLineDto[]> {
   const db = getDb();
+  const [ent] = await db
+    .select({
+      asOfDate: arrearsEntries.asOfDate,
+      letterDate: arrearsEntries.letterDate,
+    })
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.id, entryId))
+    .limit(1);
+  const asOf = ent?.letterDate || ent?.asOfDate || null;
   const rows = await db
     .select()
     .from(arrearsLetterLines)
     .where(eq(arrearsLetterLines.arrearsEntryId, entryId))
     .orderBy(asc(arrearsLetterLines.sortOrder), asc(arrearsLetterLines.createdAt));
-  return rows.map(toLineDto);
+  return rows.map(r => toLineDto(r, asOf));
 }
 
 export async function getArrearsLetterDetail(id: string): Promise<{
@@ -132,12 +147,13 @@ export async function replaceLetterLines(
 
   const now = new Date();
   const actor = actorName.trim() || '';
+  const asOf = opts?.letterDate || existing.letterDate || existing.asOfDate || null;
   const normalized = lines
     .map((l, i) => ({
       description: String(l.description || '').trim(),
       amount: Math.round(Number(l.amount) || 0),
       paidAmount: Math.round(Number(l.paidAmount) || 0),
-      paidDate: formatArrearsPaidDateKo(String(l.paidDate || '').trim()),
+      paidDate: formatArrearsPaidYmd(String(l.paidDate || '').trim(), { asOfDate: asOf }),
       source: (l.source || 'manual') as ArrearsLetterLineSource,
       sortOrder: i,
     }))
@@ -919,6 +935,8 @@ export async function applyLedgerDetailTxs(
       id: arrearsEntries.id,
       externalCode: arrearsEntries.externalCode,
       balance: arrearsEntries.balance,
+      asOfDate: arrearsEntries.asOfDate,
+      letterDate: arrearsEntries.letterDate,
     })
     .from(arrearsEntries);
   const byCode = new Map(entries.map(e => [e.externalCode, e]));
@@ -992,6 +1010,8 @@ export async function applyLedgerDetailTxs(
     const payKeyRemain = new Map<string, number>();
     /** 공문에 입금액만 있고 일자가 비어 있으면 PDF 동액 크레딧(취소·입금) 1건으로 흡수 */
     const undatedPayRemain = new Map<number, number>();
+    const asOfForPay = ent.letterDate || ent.asOfDate || null;
+    const payDateKey = (pd: string) => paidDateMatchKey(pd, { asOfDate: asOfForPay });
     const bumpPay = (key: string, n = 1) => {
       payKeyRemain.set(key, (payKeyRemain.get(key) || 0) + n);
     };
@@ -999,7 +1019,7 @@ export async function applyLedgerDetailTxs(
       const p = Math.round(l.paidAmount) || 0;
       if (p <= 0) continue;
       const pd = String(l.paidDate || '').trim();
-      if (pd) bumpPay(`${p}|${pd}`);
+      if (pd) bumpPay(`${p}|${payDateKey(pd)}`);
       else undatedPayRemain.set(p, (undatedPayRemain.get(p) || 0) + 1);
     }
     // 공문에 기장·기타를 같은 날 각각 입금 처리한 경우, 합산액도 PDF 입금 중복으로 본다
@@ -1008,16 +1028,16 @@ export async function applyLedgerDetailTxs(
       const pd = String(l.paidDate || '').trim();
       const p = Math.round(l.paidAmount) || 0;
       if (!pd || p <= 0) continue;
-      paidSumByDate.set(pd, (paidSumByDate.get(pd) || 0) + p);
+      const dk = payDateKey(pd);
+      paidSumByDate.set(dk, (paidSumByDate.get(dk) || 0) + p);
     }
-    for (const [pd, sum] of paidSumByDate) {
+    for (const [dk, sum] of paidSumByDate) {
       // 개별 합과 동일하면 이미 bump된 키와 중복 카운트되므로, 구성 건이 2개 이상일 때만
-      const parts = existing.filter(
-        l =>
-          String(l.paidDate || '').trim() === pd &&
-          (Math.round(l.paidAmount) || 0) > 0,
-      );
-      if (parts.length >= 2 && sum > 0) bumpPay(`${sum}|${pd}`);
+      const parts = existing.filter(l => {
+        const pd = String(l.paidDate || '').trim();
+        return pd && payDateKey(pd) === dk && (Math.round(l.paidAmount) || 0) > 0;
+      });
+      if (parts.length >= 2 && sum > 0) bumpPay(`${sum}|${dk}`);
     }
 
     const additions: Array<{
@@ -1069,7 +1089,7 @@ export async function applyLedgerDetailTxs(
         debitApplied += 1;
       } else {
         const paidDate = ledgerDetailPaidDateLabel(tx.eventDate);
-        const key = `${amt}|${paidDate}`;
+        const key = `${amt}|${payDateKey(paidDate)}`;
         const remain = payKeyRemain.get(key) || 0;
         if (remain > 0) {
           payKeyRemain.set(key, remain - 1);

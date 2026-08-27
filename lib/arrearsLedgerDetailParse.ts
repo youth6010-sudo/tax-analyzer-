@@ -62,13 +62,16 @@ export function parseLedgerDetailPdf(filePath: string): LedgerDetailParseResult 
   };
 }
 
-/** 지급일 표시 — 공문 형식과 맞춤 (예: 1월 16일) */
+/** 지급일 저장·표시 — YYYYMMDD (예: 20260116) */
 export function ledgerDetailPaidDateLabel(isoDate: string): string {
   const m = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return isoDate;
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  return `${month}월 ${day}일`;
+  if (!m) {
+    // 이미 YMD면 유지, 그 외는 그대로
+    const s = String(isoDate || '').trim();
+    if (/^\d{8}$/.test(s)) return s;
+    return s;
+  }
+  return `${m[1]}${m[2]}${m[3]}`;
 }
 
 /**

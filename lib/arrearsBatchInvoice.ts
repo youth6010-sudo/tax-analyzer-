@@ -4,6 +4,7 @@
 import { inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines } from '@/db/schema';
+import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
 
 export type BatchInvoiceRow = {
   entryId: string;
@@ -91,7 +92,15 @@ export async function buildBatchInvoiceRows(entryIds: string[]): Promise<BatchIn
     const e = byId.get(id);
     if (!e) continue;
     const charges = chargeDescsByEntry.get(id) ?? [];
-    const reasonSummary = charges.join(' · ') || (e.memo || '').trim() || '—';
+    const asOf = e.letterDate || e.asOfDate;
+    const formattedCharges = charges.map((desc, i) =>
+      formatArrearsChargeLabel(desc, {
+        asOfDate: asOf,
+        prevDescription: i > 0 ? charges[i - 1] : undefined,
+      }),
+    );
+    const reasonSummary =
+      formattedCharges.join(' · ') || (e.memo || '').trim() || '—';
     const remark = remarkFromDescriptions(descsByEntry.get(id) ?? [], reasonSummary);
     rows.push({
       entryId: e.id,
