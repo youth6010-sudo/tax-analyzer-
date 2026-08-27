@@ -1,5 +1,5 @@
 {
-  "_README": "이 파일은 형식 예시입니다(실제 비밀값 아님). 이 JSON을 한 줄로 만들어 Vercel 환경변수 YOUTH_IDS_JSON 에 넣고, 로컬은 .env.local 에 동일 키로 넣으세요. owner 가 없으면 공용(전원 표시), owner 닉네임(블루/다야/리아/윈터/페리/인디/찰리)이 있으면 해당 사용자에게만 보입니다. secret:true 인 필드는 기본 가림 + '보기' 토글.",
+  "_README": "형식 예시(비밀값 아님). 초기값은 Vercel YOUTH_IDS_JSON 또는 포털 /youth-ids 편집(DB app_config.youth_ids 우선). owner 없으면 공용, 있으면 해당 닉네임(+전체보기 권한자). secret:true 는 기본 가림.",
   "categories": [
     {
       "id": "accounts",

@@ -1,7 +1,7 @@
 # 부산지점 수임처 포털 — 기능·성능 설명문
 
 > 대상: 팀 내 기능 소개·운영 설명용  
-> 최종 갱신: 2026-06-22
+> 최종 갱신: 2026-08-27
 
 ---
 
@@ -10,7 +10,7 @@
 **부산지점 수임처 포털(tax-analyzer)** 은 Excel·더존·TP에서 관리하던 수임처·유입·유출·수수료 정보를 **한곳에서 조회·수정**할 수 있게 만든 내부 웹 앱입니다.
 
 - **배포 주소**: https://tax-analyzer-seven.vercel.app
-- **기술 스택**: Next.js(App Router) + PostgreSQL + Vercel
+- **기술 스택**: Next.js 16 (App Router) + **Supabase Postgres (서울 pooler)** + Vercel (`icn1`)
 - **사용자**: 직원 PIN 로그인 (4자리), 관리자(admin) 추가 권한
 
 핵심 가치는 다음 세 가지입니다.
@@ -236,10 +236,12 @@ Excel 「유입관리」「유입프로세스」 시트와 연동된 CRM 화면�
 
 | 항목 | 구현 |
 |------|------|
-| 인증 | 4자리 PIN + bcrypt, iron-session 쿠키 (14일) |
-| 미들웨어 | 비로그인 → `/login`, API 401 |
-| Rate limit | 로그인 시도 제한 |
-| 수임처 ACL | admin 전체 / staff는 담당자명·배정 ID 일치 시만 |
+| 인증 | 4자리 PIN + bcrypt, iron-session 쿠키 (1일) |
+| Proxy (`proxy.ts`) | 페이지: 비로그인 → `/login`. **API는 통과** — 각 라우트의 `requireUser` / cron Bearer가 인증 |
+| Rate limit | 로그인 5회/분 — `app_config`에 카운터 저장 (서버리스 인스턴스 공유) |
+| 수임처 ACL | 전체조회(개발자·인디) / staff는 담당자명·배정 ID 일치 시만 수정 |
+| 청년들 ID | 회사 IP allowlist + 서버에서 owner 필터. 전체보기는 데이터 조회 권한만 |
+| Cron | 프로덕션에서 `CRON_SECRET` Bearer 필수 |
 | Admin API | `requireAdmin` — fee-link, backup, orphan, 일부 삭제 |
 
 ---
@@ -247,19 +249,26 @@ Excel 「유입관리」「유입프로세스」 시트와 연동된 CRM 화면�
 ## 6. API 구조 요약
 
 ```
-/api/auth/*          로그인·세션·PIN
+/api/auth/*          로그인·세션·PIN·메뉴설정
 /api/portal/*        bootstrap, search-index
-/api/clients/*       목록·검색·상세·수수료·연락처·유입
-/api/clients/[id]/fee-changes   수수료 이력
+/api/clients/*       목록·검색·상세·수수료·연락처·유입·국세청
 /api/intake/*        유입 문의·프로세스
 /api/churn/*         유출
 /api/consultation/*  상담 draft
-/api/admin/*         fee-pending, orphan, backup
+/api/arrears/*       미수 원장·공문·엑셀
+/api/calendar/*      일정·개인 체크리스트
+/api/leave/*         휴가
+/api/youth-ids       회사 계정·계좌 (IP+로그인, owner 필터)
+/api/health/db       로그인 후 SELECT 1
+/api/infra/status    인프라 배지 + 실제 DB 핑
+/api/cron/nts-refresh  주간 국세청 상태 (CRON_SECRET)
+/api/admin/*         fee-pending, orphan, backup, storage
 /api/dashboard/tasks 할 일
 /api/lunch/requests  맛집 요청 (admin)
 ```
 
-공통: `requireUser()` → `assertCanAccessClient()` → Drizzle → JSON 응답
+공통: `requireUser()` → (필요 시) `assertCanAccessClient()` → Drizzle → JSON 응답
+API 미인증은 미들웨어가 아니라 **라우트**에서 401을 낸다.
 
 ---
 

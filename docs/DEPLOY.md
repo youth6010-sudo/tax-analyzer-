@@ -1,6 +1,6 @@
 # 배포 가이드 (웹 공개)
 
-이 프로젝트는 **Next.js 16 App Router** + **Neon Postgres** 기반 **부산지점 수임처 포털**입니다.
+이 프로젝트는 **Next.js 16 App Router** + **Supabase Postgres (서울 `ap-northeast-2` pooler)** 기반 **부산지점 수임처 포털**입니다. 프로덕션: https://tax-analyzer-seven.vercel.app
 
 ## 1) Vercel (권장)
 
@@ -8,13 +8,25 @@
 2. **Root Directory**: 저장소 구조에 맞게 `tax-analyzer` 또는 비워 둡니다.
 3. Framework Preset: **Next.js**
 4. **Node 버전**: 20.x 이상
+5. **리전**: `vercel.json`의 `icn1` (서울)
 
 ### 필수 환경 변수
 
 | 변수 | 설명 |
 |------|------|
-| `DATABASE_URL` | **Neon Postgres** 연결 문자열 (풀러 URL 권장). 로컬 `.env.local`과 Vercel Production이 **동일 URL**이어야 데이터가 같습니다. |
+| `DATABASE_URL` | **Supabase Seoul pooler** 연결 문자열. 로컬 `.env.local`과 Vercel Production이 **동일 URL**이어야 데이터가 같습니다. |
 | `SESSION_SECRET` | 32자 이상 랜덤 문자열 (iron-session 쿠키 서명) |
+| `CRON_SECRET` | 주간 국세청 cron (`/api/cron/nts-refresh`). Vercel Production에서는 **필수**(미설정 시 cron 거부). |
+
+### 권장 환경 변수
+
+| 변수 | 설명 |
+|------|------|
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Storage(우편물 사진) |
+| `YOUTH_IDS_ALLOWED_IPS` | 청년들 ID 회사 공인 IP (쉼표 구분). Production에서 비어 있으면 **전원 차단** |
+| `YOUTH_IDS_JSON` | 청년들 ID 초기값(JSON). 포털에서 편집하면 DB `app_config.youth_ids`가 우선 |
+| `BLUEHOLE_ENC_KEY` | 블루홀 비밀번호 AES 키 (64자리 hex) |
+| `NTS_SERVICE_KEY` | 국세청 사업자상태 API |
 
 Vercel 프로젝트 → **Settings → Environment Variables**에 Production/Preview 모두 설정합니다.
 

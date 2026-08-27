@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import type { SessionData } from '@/lib/session';
-import { getSessionOptionsForEdge } from '@/lib/session';
+import { getSessionOptions } from '@/lib/session';
 import {
   assertYouthIdsIpAllowed,
   isYouthIdsPath,
@@ -29,14 +29,14 @@ function youthIdsForbiddenResponse(): NextResponse {
   });
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublic(pathname)) {
     return NextResponse.next();
   }
 
-  // API는 각 라우트의 requireUser/CRON_SECRET이 인증 — Edge에서 iron-session 이중 해독 생략
+  // API는 각 라우트의 requireUser/CRON_SECRET이 인증 — 세션 이중 해독 생략
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
@@ -45,7 +45,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: 'SESSION_SECRET not configured' }, { status: 503 });
   }
 
-  // 쿠키 없으면 복호화 없이 로그인으로 (익명 페이지 요청 비용 절감)
   const cookieName = 'busan_portal_session';
   if (!request.cookies.get(cookieName)?.value) {
     const loginUrl = new URL('/login', request.url);
@@ -55,7 +54,7 @@ export async function middleware(request: NextRequest) {
 
   try {
     const response = NextResponse.next();
-    const session = await getIronSession<SessionData>(request, response, getSessionOptionsForEdge());
+    const session = await getIronSession<SessionData>(request, response, getSessionOptions());
 
     if (!session.user) {
       const loginUrl = new URL('/login', request.url);
@@ -77,10 +76,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * 정적 자산·Next 내부 경로는 미들웨어 자체를 건너뛴다.
-     * API는 위에서 early-return 하지만 matcher에 포함해도 세션 해독은 하지 않음.
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:ico|png|jpg|jpeg|svg|webp|gif|woff2?|css|js|map)$).*)',
   ],
 };

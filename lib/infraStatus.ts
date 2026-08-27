@@ -1,6 +1,9 @@
 /**
  * 런타임 인프라 상태 (비밀값 미포함) — UI 칩·관리자 안내용
  */
+import { sql } from 'drizzle-orm';
+import { getDb } from '@/db';
+
 export type InfraStatus = {
   provider: 'supabase' | 'neon' | 'other';
   region: string;
@@ -96,6 +99,17 @@ export function getInfraStatus(): InfraStatus {
     storageConfigured,
     databaseReady,
   };
+}
+
+/** 실제 DB 연결 확인 (`SELECT 1`). 실패해도 throw하지 않음. */
+export async function probeDatabaseReady(): Promise<boolean> {
+  try {
+    const db = getDb();
+    await db.execute(sql`SELECT 1`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveSupabaseUrl(): string | null {

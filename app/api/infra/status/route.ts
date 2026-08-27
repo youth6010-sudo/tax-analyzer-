@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { getInfraStatus } from '@/lib/infraStatus';
+import { getInfraStatus, probeDatabaseReady } from '@/lib/infraStatus';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -11,7 +11,9 @@ const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
 export async function GET() {
   try {
     await requireUser();
-    return NextResponse.json({ ok: true, ...getInfraStatus() }, NO_STORE);
+    const status = getInfraStatus();
+    const databaseReady = await probeDatabaseReady();
+    return NextResponse.json({ ok: true, ...status, databaseReady }, NO_STORE);
   } catch (e) {
     return handleApiError(e);
   }

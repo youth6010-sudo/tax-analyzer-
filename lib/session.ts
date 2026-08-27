@@ -34,7 +34,7 @@ export function getSessionOptions(): SessionOptions {
   };
 }
 
-/** Edge middleware용 (password만) */
+/** Node proxy.ts용 (기존 Edge middleware 별칭) */
 export function getSessionOptionsForEdge(): SessionOptions {
   return getSessionOptions();
 }

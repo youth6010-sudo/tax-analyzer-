@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '아이디와 4자리 PIN을 입력해 주세요.' }, { status: 400 });
     }
 
-    const rate = checkRateLimit(`login:${loginId}`);
+    const rate = await checkRateLimit(`login:${loginId}`);
     if (!rate.ok) {
       return NextResponse.json(
         { error: `로그인 시도가 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.` },
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '아이디 또는 PIN이 올바르지 않습니다.' }, { status: 401 });
     }
 
-    clearRateLimit(`login:${loginId}`);
+    await clearRateLimit(`login:${loginId}`);
 
     const adminMode =
       isAlwaysAdminModeLogin(loginId) ||
