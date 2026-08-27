@@ -965,7 +965,10 @@ export async function applyLedgerDetailTxs(
       continue;
     }
 
-    const chargeKeys = new Set<string>();
+    const chargeKeyRemain = new Map<string, number>();
+    const bumpCharge = (key: string, n = 1) => {
+      chargeKeyRemain.set(key, (chargeKeyRemain.get(key) || 0) + n);
+    };
     /** 일자 없는「부가세|금액」— PDF 첫 번째 동액 부가세만 흡수하고, 이후 월은 추가 */
     const undatedVatRemain = new Map<string, number>();
     for (let i = 0; i < existing.length; i++) {
@@ -974,7 +977,7 @@ export async function applyLedgerDetailTxs(
       const prev = i > 0 ? existing[i - 1].description : '';
       const desc = inheritYearForMonthFeeDesc(l.description, prev);
       const key = ledgerDetailChargeDedupKey(desc, l.amount);
-      chargeKeys.add(key);
+      bumpCharge(key);
       if (/^부가세\|/.test(key)) {
         undatedVatRemain.set(key, (undatedVatRemain.get(key) || 0) + 1);
       }
@@ -983,7 +986,7 @@ export async function applyLedgerDetailTxs(
     for (const l of existing) {
       if (l.source !== 'letter' || Math.round(l.amount) <= 0) continue;
       if (!isLetterCorpFeeDescription(l.description)) continue;
-      chargeKeys.add(`법인조정|${Math.round(l.amount)}`);
+      bumpCharge(`법인조정|${Math.round(l.amount)}`);
     }
     /** 동일 금액·일자 입금이 여러 건일 수 있음(우리펌프카 7/24 220만×2) → 건수 차감 */
     const payKeyRemain = new Map<string, number>();
@@ -1036,7 +1039,9 @@ export async function applyLedgerDetailTxs(
           continue;
         }
         const key = ledgerDetailChargeDedupKey(desc, amt, tx.eventDate);
-        if (chargeKeys.has(key)) {
+        const remain = chargeKeyRemain.get(key) || 0;
+        if (remain > 0) {
+          chargeKeyRemain.set(key, remain - 1);
           skippedDup += 1;
           continue;
         }
@@ -1051,11 +1056,9 @@ export async function applyLedgerDetailTxs(
             undatedVat,
             (undatedVatRemain.get(undatedVat) || 0) - 1,
           );
-          chargeKeys.add(key);
           skippedDup += 1;
           continue;
         }
-        chargeKeys.add(key);
         additions.push({
           description: desc,
           amount: amt,

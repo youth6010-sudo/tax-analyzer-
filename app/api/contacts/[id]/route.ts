@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth';
+import { handleApiError } from '@/lib/apiError';
 import { getContactById, updateContact } from '../../../utils/contactsData';
 import type { BusinessEntityType, ContactUpdatePayload, ServiceType } from '../../../types/contact';
 import { BUSINESS_ENTITY_TYPES, SERVICE_TYPES } from '../../../types/contact';
@@ -51,10 +53,15 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  const contact = getContactById(id);
-  if (!contact) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  return NextResponse.json(contact);
+  try {
+    await requireUser();
+    const { id } = await params;
+    const contact = getContactById(id);
+    if (!contact) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json(contact);
+  } catch (e) {
+    return handleApiError(e);
+  }
 }
 
 export async function PATCH(
@@ -62,6 +69,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser();
     const { id } = await params;
     const body = await req.json();
     const payload = parsePayload(body);
@@ -69,6 +77,7 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'UNKNOWN';
+    if (msg === 'UNAUTHORIZED' || msg === 'FORBIDDEN') return handleApiError(e);
     if (msg === 'NOT_FOUND') return NextResponse.json({ error: 'not found' }, { status: 404 });
     if (msg === 'COMPANY_NAME_REQUIRED') {
       return NextResponse.json({ error: '업체명은 필수입니다.' }, { status: 400 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { portalEmptyState, portalInput } from '@/app/components/portal/uiClasses';
 import type { YouthIdCategory, YouthIdEntry } from '@/lib/youthIds';
 import { newYouthIdCategoryId } from '@/lib/youthIds';
@@ -11,6 +11,8 @@ type Props = {
   me: string;
   configured: boolean;
   staffNames: string[];
+  canViewAll: boolean;
+  canEditAll: boolean;
 };
 
 const PRIORITY_IDS = [
@@ -65,38 +67,78 @@ function entryMatches(e: YouthIdEntry, q: string): boolean {
   return e.fields.some(f => f.label.toLowerCase().includes(q) || f.value.toLowerCase().includes(q));
 }
 
-export default function YouthIdsBoard({ categories: initial, me, configured, staffNames }: Props) {
+export default function YouthIdsBoard({
+  categories: initial,
+  me,
+  configured,
+  staffNames,
+  canViewAll,
+  canEditAll,
+}: Props) {
   const [categories, setCategories] = useState(initial);
   const [query, setQuery] = useState('');
   const [viewAll, setViewAll] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingView, setLoadingView] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ catId: string; entry?: YouthIdEntry | null } | null>(null);
 
   const q = query.trim().toLowerCase();
 
-  const persist = useCallback(async (next: YouthIdCategory[]) => {
-    setSaving(true);
+  const fetchView = useCallback(async (all: boolean) => {
+    setLoadingView(true);
     setSaveError(null);
     try {
-      const res = await fetch('/api/youth-ids', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ categories: next }),
-      });
+      const qs = all ? '?view=all' : '';
+      const res = await fetch(`/api/youth-ids${qs}`);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || '저장 실패');
-      setCategories(data.doc?.categories ?? next);
+      if (!res.ok) throw new Error(data.error || '불러오기 실패');
+      setCategories(data.categories ?? []);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : '저장 실패');
-      throw e;
+      setSaveError(e instanceof Error ? e.message : '불러오기 실패');
+      if (all) setViewAll(false);
     } finally {
-      setSaving(false);
+      setLoadingView(false);
     }
   }, []);
 
+  useEffect(() => {
+    setCategories(initial);
+  }, [initial]);
+
+  const persist = useCallback(
+    async (next: YouthIdCategory[]) => {
+      const prev = categories;
+      setSaving(true);
+      setSaveError(null);
+      setCategories(next);
+      try {
+        const qs = viewAll && canViewAll ? '?view=all' : '';
+        const res = await fetch(`/api/youth-ids${qs}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categories: next }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || '저장 실패');
+        setCategories(data.doc?.categories ?? next);
+      } catch (e) {
+        setCategories(prev);
+        setSaveError(e instanceof Error ? e.message : '저장 실패');
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [categories, viewAll, canViewAll],
+  );
+
   const upsertEntry = async (catId: string, entry: YouthIdEntry) => {
+    if (!canEditAll && entry.owner && entry.owner !== me) {
+      setSaveError('본인 또는 공용 항목만 수정할 수 있습니다.');
+      return;
+    }
     const next = categories.map(cat => {
       if (cat.id !== catId) return cat;
       const idx = cat.entries.findIndex(e => e.id === entry.id);
@@ -106,18 +148,21 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
           : [...cat.entries, entry];
       return { ...cat, entries };
     });
-    setCategories(next);
     await persist(next);
   };
 
   const deleteEntry = async (catId: string, entryId: string) => {
+    const target = categories.find(c => c.id === catId)?.entries.find(e => e.id === entryId);
+    if (!canEditAll && target?.owner && target.owner !== me) {
+      setSaveError('본인 또는 공용 항목만 삭제할 수 있습니다.');
+      return;
+    }
     if (!window.confirm('이 항목을 삭제할까요?')) return;
     const next = categories.map(cat =>
       cat.id === catId
         ? { ...cat, entries: cat.entries.filter(e => e.id !== entryId) }
         : cat,
     );
-    setCategories(next);
     await persist(next);
   };
 
@@ -128,19 +173,24 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
       ...categories,
       { id: newYouthIdCategoryId(label), label: label.trim(), entries: [] },
     ];
-    setCategories(next);
     await persist(next);
+  };
+
+  const toggleViewAll = () => {
+    if (!canViewAll) return;
+    const next = !viewAll;
+    setViewAll(next);
+    void fetchView(next);
   };
 
   const sections = useMemo(() => {
     return categories
       .map(cat => {
-        const scoped = viewAll ? cat.entries : cat.entries.filter(e => !e.owner || e.owner === me);
-        const entries = q ? scoped.filter(e => entryMatches(e, q)) : scoped;
+        const entries = q ? cat.entries.filter(e => entryMatches(e, q)) : cat.entries;
         return { ...cat, entries };
       })
       .filter(cat => cat.entries.length > 0 || editMode);
-  }, [categories, viewAll, me, q, editMode]);
+  }, [categories, q, editMode]);
 
   const { left, right } = useMemo(() => {
     const l = PRIORITY_IDS.map(id => sections.find(c => c.id === id)).filter(
@@ -184,17 +234,20 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
           placeholder="항목·ID·메모 검색…"
           className={`${portalInput} !py-1.5 w-full sm:w-64`}
         />
-        <button
-          type="button"
-          onClick={() => setViewAll(v => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-            viewAll
-              ? 'border-blue-400 bg-blue-50 text-blue-700'
-              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          {viewAll ? '전체보기 ✓' : '전체보기'}
-        </button>
+        {canViewAll ? (
+          <button
+            type="button"
+            disabled={loadingView}
+            onClick={toggleViewAll}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+              viewAll
+                ? 'border-blue-400 bg-blue-50 text-blue-700'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {viewAll ? '전체보기 ✓' : '전체보기'}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setEditMode(v => !v)}
@@ -217,8 +270,8 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
           </button>
         ) : null}
         <span className="ml-auto text-xs text-slate-500">
-          {saving ? (
-            '저장 중…'
+          {saving || loadingView ? (
+            saving ? '저장 중…' : '불러오는 중…'
           ) : viewAll ? (
             <>전 직원 계정·자료 모두 표시 · {total}건</>
           ) : (
@@ -245,6 +298,7 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
                 me={me}
                 align
                 editMode={editMode}
+                canEditAll={canEditAll}
                 onAdd={() => setModal({ catId: cat.id })}
                 onEdit={e => setModal({ catId: cat.id, entry: e })}
                 onDelete={entryId => void deleteEntry(cat.id, entryId)}
@@ -258,6 +312,7 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
                 cat={cat}
                 me={me}
                 editMode={editMode}
+                canEditAll={canEditAll}
                 onAdd={() => setModal({ catId: cat.id })}
                 onEdit={e => setModal({ catId: cat.id, entry: e })}
                 onDelete={entryId => void deleteEntry(cat.id, entryId)}
@@ -271,8 +326,10 @@ export default function YouthIdsBoard({ categories: initial, me, configured, sta
         <YouthIdEntryModal
           open
           categoryLabel={modalCat.label}
-          staffNames={staffNames}
+          staffNames={canEditAll ? staffNames : [me]}
           initial={modal.entry}
+          lockOwnerToMe={!canEditAll}
+          me={me}
           onClose={() => setModal(null)}
           onSave={entry => {
             void upsertEntry(modal.catId, entry).catch(() => {});
@@ -292,6 +349,7 @@ function SectionTable({
   me,
   align = false,
   editMode,
+  canEditAll,
   onAdd,
   onEdit,
   onDelete,
@@ -300,6 +358,7 @@ function SectionTable({
   me: string;
   align?: boolean;
   editMode: boolean;
+  canEditAll: boolean;
   onAdd: () => void;
   onEdit: (e: YouthIdEntry) => void;
   onDelete: (entryId: string) => void;
@@ -350,6 +409,7 @@ function SectionTable({
             <tbody>
               {cat.entries.map(e => {
                 const mine = e.owner === me;
+                const canEditRow = canEditAll || !e.owner || e.owner === me;
                 return (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td
@@ -370,24 +430,37 @@ function SectionTable({
                     {cols.map(col => {
                       const f = e.fields.find(x => x.label === col);
                       const s = idStyle(col);
-                      return <ValueCell key={col} value={f?.value ?? ''} style={s} />;
+                      return (
+                        <ValueCell
+                          key={col}
+                          value={f?.value ?? ''}
+                          secret={!!f?.secret}
+                          style={s}
+                        />
+                      );
                     })}
                     {editMode ? (
                       <td className="whitespace-nowrap px-2 py-1 align-top">
-                        <button
-                          type="button"
-                          className="mr-1 text-[11px] font-semibold text-blue-700 hover:underline"
-                          onClick={() => onEdit(e)}
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          className="text-[11px] font-semibold text-red-600 hover:underline"
-                          onClick={() => onDelete(e.id)}
-                        >
-                          삭제
-                        </button>
+                        {canEditRow ? (
+                          <>
+                            <button
+                              type="button"
+                              className="mr-1 text-[11px] font-semibold text-blue-700 hover:underline"
+                              onClick={() => onEdit(e)}
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[11px] font-semibold text-red-600 hover:underline"
+                              onClick={() => onDelete(e.id)}
+                            >
+                              삭제
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">읽기전용</span>
+                        )}
                       </td>
                     ) : null}
                   </tr>
@@ -401,8 +474,17 @@ function SectionTable({
   );
 }
 
-function ValueCell({ value, style }: { value: string; style?: CSSProperties }) {
+function ValueCell({
+  value,
+  secret = false,
+  style,
+}: {
+  value: string;
+  secret?: boolean;
+  style?: CSSProperties;
+}) {
   const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const copy = async () => {
     if (!value) return;
     try {
@@ -413,16 +495,32 @@ function ValueCell({ value, style }: { value: string; style?: CSSProperties }) {
       /* clipboard unavailable */
     }
   };
+  const masked = secret && !revealed;
   return (
     <td
       style={style}
-      className={`cursor-pointer px-2 py-1 font-mono leading-tight transition-colors whitespace-nowrap ${
-        copied ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+      className={`px-2 py-1 font-mono leading-tight transition-colors whitespace-nowrap ${
+        copied ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
       }`}
-      title={value ? `${value} (클릭 복사)` : ''}
-      onClick={copy}
+      title={value ? (masked ? '클릭해 보기 · 더블클릭 복사' : `${value} (클릭 복사)`) : ''}
+      onClick={() => {
+        if (masked) {
+          setRevealed(true);
+          return;
+        }
+        void copy();
+      }}
+      onDoubleClick={() => void copy()}
     >
-      {value || <span className="text-slate-300">-</span>}
+      {value ? (
+        masked ? (
+          <span className="cursor-pointer tracking-widest text-slate-400">••••••</span>
+        ) : (
+          <span className="cursor-pointer hover:bg-slate-50">{value}</span>
+        )
+      ) : (
+        <span className="text-slate-300">-</span>
+      )}
     </td>
   );
 }

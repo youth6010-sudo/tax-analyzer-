@@ -46,4 +46,13 @@ next-env.d.ts
 
 .vercel
 
-.vercel
+# local scratch / PDF·불일치 덤프 (민감·대용량 — 커밋 금지)
+.tmp-*
+tmp-ledger-*
+tmp-*.json
+tmp-*.txt
+scripts/.*
+!scripts/.gitkeep
+scripts/__pycache__/
+*.pyc
+.cache/

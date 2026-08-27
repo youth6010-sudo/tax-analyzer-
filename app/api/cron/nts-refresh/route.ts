@@ -15,8 +15,8 @@ export const maxDuration = 300;
 
 function authorized(request: NextRequest): boolean {
   const secret = (process.env.CRON_SECRET || '').trim();
-  // 시크릿 미설정 시(예: 개발 환경) 게이트를 열어둔다.
-  if (!secret) return true;
+  // 프로덕션(Vercel)에서는 시크릿 필수. 로컬 개발만 미설정 시 개방.
+  if (!secret) return process.env.VERCEL !== '1';
   return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 

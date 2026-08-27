@@ -11,6 +11,9 @@ type Props = {
   categoryLabel: string;
   staffNames: string[];
   initial?: YouthIdEntry | null;
+  /** 일반 직원: 담당을 본인/공용만 */
+  lockOwnerToMe?: boolean;
+  me?: string;
   onClose: () => void;
   onSave: (entry: YouthIdEntry) => void;
 };
@@ -22,6 +25,8 @@ export default function YouthIdEntryModal({
   categoryLabel,
   staffNames,
   initial,
+  lockOwnerToMe = false,
+  me = '',
   onClose,
   onSave,
 }: Props) {
@@ -37,11 +42,16 @@ export default function YouthIdEntryModal({
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title ?? '');
-    setOwner(initial?.owner ?? '');
+    const initialOwner = initial?.owner ?? '';
+    if (lockOwnerToMe) {
+      setOwner(initialOwner === me ? me : initialOwner ? me : '');
+    } else {
+      setOwner(initialOwner);
+    }
     setUrl(initial?.url ?? '');
     setNote(initial?.note ?? '');
     setFields(initial?.fields?.length ? initial.fields.map(f => ({ ...f })) : [emptyField()]);
-  }, [open, initial]);
+  }, [open, initial, lockOwnerToMe, me]);
 
   if (!open || !mounted) return null;
 
@@ -55,10 +65,12 @@ export default function YouthIdEntryModal({
         secret: f.secret ? true : undefined,
       }))
       .filter(f => f.label);
+    let nextOwner = owner.trim() || null;
+    if (lockOwnerToMe && nextOwner && nextOwner !== me) nextOwner = me || null;
     onSave({
       id: initial?.id ?? newYouthIdEntryId(t),
       title: t,
-      owner: owner.trim() || null,
+      owner: nextOwner,
       url: url.trim() || undefined,
       note: note.trim() || undefined,
       fields: cleaned.length ? cleaned : [{ label: '메모', value: '' }],

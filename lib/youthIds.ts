@@ -55,14 +55,72 @@ export function loadYouthIds(): YouthIdDoc {
   }
 }
 
+function isVisibleEntry(e: YouthIdEntry, nickname: string): boolean {
+  return !e.owner || e.owner === nickname;
+}
+
 /** 로그인 사용자(닉네임) 기준 내 것 + 공용만 남기고, 빈 카테고리는 제거 */
 export function visibleForUser(doc: YouthIdDoc, nickname: string): YouthIdCategory[] {
   return doc.categories
     .map(cat => ({
       ...cat,
-      entries: (cat.entries ?? []).filter(e => !e.owner || e.owner === nickname),
+      entries: (cat.entries ?? []).filter(e => isVisibleEntry(e, nickname)),
     }))
     .filter(cat => cat.entries.length > 0);
+}
+
+/**
+ * 일반 직원 PUT: 타인 owner 항목은 유지하고, 본인·공용만 incoming으로 교체.
+ * 전체 편집 권한(canEditAll)이면 incoming 그대로 저장.
+ */
+export function mergeYouthIdDocForUser(
+  existing: YouthIdDoc,
+  incoming: YouthIdDoc,
+  nickname: string,
+  canEditAll: boolean,
+): YouthIdDoc {
+  if (canEditAll) return incoming;
+
+  const incomingById = new Map(incoming.categories.map(c => [c.id, c]));
+  const result: YouthIdCategory[] = [];
+  const seen = new Set<string>();
+
+  for (const cat of existing.categories) {
+    seen.add(cat.id);
+    const inc = incomingById.get(cat.id);
+    const others = (cat.entries ?? []).filter(e => !isVisibleEntry(e, nickname));
+    const nextVisible = (inc?.entries ?? [])
+      .filter(e => isVisibleEntry(e, nickname))
+      .map(e => ({
+        ...e,
+        // 타인으로 위장 불가
+        owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
+      }));
+    result.push({
+      id: cat.id,
+      label: inc?.label?.trim() || cat.label,
+      icon: inc?.icon ?? cat.icon,
+      entries: [...others, ...nextVisible],
+    });
+  }
+
+  for (const cat of incoming.categories) {
+    if (seen.has(cat.id)) continue;
+    const entries = (cat.entries ?? [])
+      .filter(e => isVisibleEntry(e, nickname))
+      .map(e => ({
+        ...e,
+        owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
+      }));
+    result.push({
+      id: cat.id,
+      label: cat.label,
+      icon: cat.icon,
+      entries,
+    });
+  }
+
+  return { categories: result };
 }
 
 export function isConfigured(): boolean {
