@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, ilike, inArray, isNull, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, like, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
 import type { ContactUpdatePayload, BusinessEntityType, ServiceType } from '@/app/types/contact';
@@ -32,6 +32,20 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
+/** 프로세스당 1회 — 과거 신고대리 전환 churned 복구 */
+let singoDaeriRepairOnce: Promise<number> | null = null;
+
+function ensureSingoDaeriChurnRepaired(): Promise<number> {
+  if (!singoDaeriRepairOnce) {
+    singoDaeriRepairOnce = repairSingoDaeriChurnConversions().catch(err => {
+      singoDaeriRepairOnce = null;
+      console.error('[repairSingoDaeriChurnConversions]', err);
+      return 0;
+    });
+  }
+  return singoDaeriRepairOnce;
+}
+
 /** intakeData.category — 구분·서비스와 맞춤 (신고만→신고대리, 기장→법인/개인) */
 function applySyncedCategory(
   intake: Record<string, unknown>,
@@ -64,6 +78,7 @@ export interface ClientListFilters {
 }
 
 export async function listClients(filters: ClientListFilters = {}) {
+  await ensureSingoDaeriChurnRepaired();
   const db = getDb();
   const conditions = [];
 
@@ -976,6 +991,61 @@ export async function churnClient(
   }
 
   return existing;
+}
+
+/**
+ * 과거 「신고대리 전환」유출: churned로만 남아 목록에서 사라진 건을
+ * active + 신고대리로 복구 (이력은 churn_records에 유지).
+ */
+export async function repairSingoDaeriChurnConversions(): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      clientId: churnRecords.clientId,
+      dataCleanup: churnRecords.dataCleanup,
+    })
+    .from(churnRecords)
+    .where(like(churnRecords.dataCleanup, '%신고대리 전환%'));
+
+  const clientIds = [
+    ...new Set(
+      rows
+        .filter(r => {
+          if (!r.clientId) return false;
+          const opts = parseCheckboxValue(r.dataCleanup || '', DATA_CLEANUP_OPTIONS);
+          return opts.includes('신고대리 전환') || (r.dataCleanup || '').includes('신고대리 전환');
+        })
+        .map(r => r.clientId as string),
+    ),
+  ];
+  if (!clientIds.length) return 0;
+
+  const targets = await db
+    .select()
+    .from(clients)
+    .where(and(inArray(clients.id, clientIds), eq(clients.status, 'churned')));
+
+  let fixed = 0;
+  for (const row of targets) {
+    const prevServices = (row.serviceTypes ?? []) as ServiceType[];
+    const nextServices: ServiceType[] = prevServices.filter(s => s !== 'bookkeeping');
+    if (!nextServices.includes('filing')) nextServices.push('filing');
+    const nextIntake = {
+      ...((row.intakeData as Record<string, unknown>) ?? {}),
+      category: SINGO_DAERI,
+    };
+    await db
+      .update(clients)
+      .set({
+        status: 'active',
+        serviceTypes: nextServices,
+        intakeData: nextIntake,
+        updatedAt: new Date(),
+      })
+      .where(eq(clients.id, row.id));
+    fixed += 1;
+  }
+  return fixed;
 }
 
 function clientClosureHintFromRow(row: {

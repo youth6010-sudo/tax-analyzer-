@@ -58,8 +58,8 @@ export function deriveMainCategoryFromEntityAndServices(
 
 /**
  * 저장용 대분류 동기화.
- * - 지주택·미사용: 유지
- * - 신고만(기장 없음) → 신고대리 (법인 entity여도)
+ * - 지주택: 유지
+ * - 신고만(기장 없음) → 신고대리 (법인·개인·미사용이어도)
  * - 기장 → 법인/개인 (entity 기준)
  * - 구분·서비스 모두 비움 → 개인/법인/신고대리 대분류도 비움
  */
@@ -69,17 +69,20 @@ export function syncMainCategory(
   serviceTypes: readonly string[] | undefined,
 ): string | null {
   const cur = currentCategory != null ? String(currentCategory).trim() : '';
-  if (cur === JISUTAEK_CATEGORY || cur === UNUSED_CATEGORY) return cur || null;
+  // 지주택만 서비스 분류보다 우선
+  if (cur === JISUTAEK_CATEGORY) return cur || null;
 
   const services = serviceTypes ?? [];
   const hasBookkeeping = services.includes('bookkeeping');
   const hasFiling = services.includes('filing');
   const derived = deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
 
-  // 신고만 → 신고대리 우선
+  // 신고만 → 신고대리 우선 (미사용·개인·법인 덮어씀)
   if (hasFiling && !hasBookkeeping) return SINGO_DAERI;
 
-  // 기장 → 법인/개인 분리
+  // 기장 → 법인/개인 분리 (미사용은 유지)
+  if (cur === UNUSED_CATEGORY) return cur;
+
   if (hasBookkeeping) {
     if (entityType === 'corporate') return '법인';
     if (entityType === 'individual' || entityType === 'nonBusiness') return '개인';
@@ -90,7 +93,6 @@ export function syncMainCategory(
   // 서비스 없이 구분만
   if (entityType === 'corporate') return '법인';
   if (entityType === 'individual' || entityType === 'nonBusiness') {
-    // 수동 신고대리(대분류만)는 유지
     if (cur === SINGO_DAERI) return SINGO_DAERI;
     return '개인';
   }
@@ -164,14 +166,18 @@ export const CANONICAL_CATEGORIES = new Set<string>(['개인', '법인', SINGO_D
 export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
-  if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY || s === SINGO_DAERI) return s || UNCategorized;
+
+  // 지주택은 서비스 분류보다 우선
+  if (s === JISUTAEK_CATEGORY) return s;
 
   const derived = deriveMainCategoryFromEntityAndServices(
     client.businessEntityType as BusinessEntityType | '',
     client.serviceTypes,
   );
-  // 서비스상 신고대리면 저장된 개인·법인보다 우선 표시
+  // 신고만(기장 없음) → 신고대리 (저장된 개인·법인·미사용보다 우선)
   if (derived === SINGO_DAERI) return SINGO_DAERI;
+
+  if (s === UNUSED_CATEGORY || s === SINGO_DAERI) return s || UNCategorized;
   // 저장된 개인·법인은 표시도 그대로
   if (s === '개인' || s === '법인') return s;
 
