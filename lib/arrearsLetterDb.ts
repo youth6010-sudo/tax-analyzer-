@@ -8,8 +8,8 @@ import type {
   ArrearsLetterLineSource,
   ArrearsMgmtCategory,
 } from '@/app/types/arrears';
-import { letterBalanceFromLines } from '@/app/types/arrears';
-import { formatArrearsPaidYmd, paidDateMatchKey } from '@/lib/arrearsLineLabel';
+import { letterBalanceFromLines, formatArrearsPaidDateKo } from '@/app/types/arrears';
+import { paidDateMatchKey } from '@/lib/arrearsLineLabel';
 import type { ParsedLetterLine, ParsedLetterSheet } from '@/lib/arrearsLetterParse';
 import { letterLinesBalance } from '@/lib/arrearsLetterParse';
 import type { ParsedFeeEvent } from '@/lib/arrearsFeeEventParse';
@@ -30,12 +30,7 @@ import {
 export type { BalanceDiffKind };
 export { classifyBalanceDiff };
 
-function toLineDto(
-  row: typeof arrearsLetterLines.$inferSelect,
-  asOfDate?: string | null,
-): ArrearsLetterLineDto {
-  const rawPaid = String(row.paidDate || '').trim();
-  const ymd = formatArrearsPaidYmd(rawPaid, { asOfDate });
+function toLineDto(row: typeof arrearsLetterLines.$inferSelect): ArrearsLetterLineDto {
   return {
     id: row.id,
     arrearsEntryId: row.arrearsEntryId,
@@ -43,7 +38,7 @@ function toLineDto(
     description: row.description,
     amount: row.amount,
     paidAmount: row.paidAmount,
-    paidDate: /^\d{8}$/.test(ymd) ? ymd : rawPaid,
+    paidDate: formatArrearsPaidDateKo(row.paidDate),
     source: (row.source || 'manual') as ArrearsLetterLineSource,
   };
 }
@@ -91,21 +86,12 @@ function softKey(s: string): string {
 
 export async function listLetterLines(entryId: string): Promise<ArrearsLetterLineDto[]> {
   const db = getDb();
-  const [ent] = await db
-    .select({
-      asOfDate: arrearsEntries.asOfDate,
-      letterDate: arrearsEntries.letterDate,
-    })
-    .from(arrearsEntries)
-    .where(eq(arrearsEntries.id, entryId))
-    .limit(1);
-  const asOf = ent?.letterDate || ent?.asOfDate || null;
   const rows = await db
     .select()
     .from(arrearsLetterLines)
     .where(eq(arrearsLetterLines.arrearsEntryId, entryId))
     .orderBy(asc(arrearsLetterLines.sortOrder), asc(arrearsLetterLines.createdAt));
-  return rows.map(r => toLineDto(r, asOf));
+  return rows.map(toLineDto);
 }
 
 export async function getArrearsLetterDetail(id: string): Promise<{
@@ -147,13 +133,12 @@ export async function replaceLetterLines(
 
   const now = new Date();
   const actor = actorName.trim() || '';
-  const asOf = opts?.letterDate || existing.letterDate || existing.asOfDate || null;
   const normalized = lines
     .map((l, i) => ({
       description: String(l.description || '').trim(),
       amount: Math.round(Number(l.amount) || 0),
       paidAmount: Math.round(Number(l.paidAmount) || 0),
-      paidDate: formatArrearsPaidYmd(String(l.paidDate || '').trim(), { asOfDate: asOf }),
+      paidDate: formatArrearsPaidDateKo(String(l.paidDate || '').trim()),
       source: (l.source || 'manual') as ArrearsLetterLineSource,
       sortOrder: i,
     }))

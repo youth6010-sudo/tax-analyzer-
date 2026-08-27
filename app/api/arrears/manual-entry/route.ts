@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { appendLetterLine } from '@/lib/arrearsLetterDb';
-import { formatArrearsPaidYmd, todayArrearsPaidYmd } from '@/lib/arrearsLineLabel';
+import { formatArrearsPaidDateKo, todayArrearsPaidDateKo } from '@/app/types/arrears';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -53,9 +53,7 @@ export async function POST(req: Request) {
     }
 
     const paidDateLabel =
-      formatArrearsPaidYmd(body.eventDate, {
-        asOfDate: existing.letterDate || existing.asOfDate,
-      }) || todayArrearsPaidYmd();
+      formatArrearsPaidDateKo(body.eventDate) || todayArrearsPaidDateKo();
     const actor = user.name || user.loginId || '';
 
     let description = rawDesc;

@@ -65,31 +65,52 @@ function resolveEntityAndCategory(
 
   const entityChanged = entity !== baseline.entity;
   const categoryChanged = category !== baseline.category;
+  const services = contactForm.serviceTypes ?? [];
+  const hasBookkeeping = services.includes('bookkeeping');
+  const hasFiling = services.includes('filing');
+  const filingOnly = hasFiling && !hasBookkeeping;
 
   if (entityChanged && !categoryChanged) {
-    if (entity === 'corporate') {
-      category = '법인';
-    } else if (entity === 'individual' || entity === 'nonBusiness') {
-      const services = contactForm.serviceTypes ?? [];
-      const hasBookkeeping = services.includes('bookkeeping');
-      const hasFiling = services.includes('filing');
-      category = hasFiling && !hasBookkeeping ? SINGO_DAERI : '개인';
-    }
-  } else if (categoryChanged && !entityChanged) {
-    const synced = businessEntityTypeForCategory(category);
-    if (synced) entity = synced;
-  } else if (categoryChanged && entityChanged) {
-    const synced = businessEntityTypeForCategory(category);
-    if (synced) {
-      entity = synced;
+    if (filingOnly) {
+      category = SINGO_DAERI;
     } else if (entity === 'corporate') {
       category = '법인';
-    } else if (category === '법인') {
-      const services = contactForm.serviceTypes ?? [];
-      const hasBookkeeping = services.includes('bookkeeping');
-      const hasFiling = services.includes('filing');
-      category = hasFiling && !hasBookkeeping ? SINGO_DAERI : '개인';
+    } else if (entity === 'individual' || entity === 'nonBusiness') {
+      category = '개인';
+    } else if (!entity) {
+      // 구분 재클릭 해제 → 대분류도 비움 (신고대리 수동값 제외는 sync가 처리)
+      if (category === '개인' || category === '법인' || category === SINGO_DAERI) {
+        category = '';
+      }
     }
+  } else if (categoryChanged && !entityChanged) {
+    // 신고대리는 entity를 지우지 않음 (법인·개인 유지 가능)
+    if (category !== SINGO_DAERI) {
+      const synced = businessEntityTypeForCategory(category);
+      if (synced) entity = synced;
+      if (!category && (baseline.category === '개인' || baseline.category === '법인' || baseline.category === SINGO_DAERI)) {
+        // 대분류 해제 시 구분도 비울 수 있게 둠 — entity는 유지(사용자가 구분에서 해제)
+      }
+    }
+  } else if (categoryChanged && entityChanged) {
+    if (filingOnly) {
+      category = SINGO_DAERI;
+    } else if (category === SINGO_DAERI) {
+      // entity는 사용자 선택 유지
+    } else {
+      const synced = businessEntityTypeForCategory(category);
+      if (synced) {
+        entity = synced;
+      } else if (entity === 'corporate') {
+        category = '법인';
+      } else if (entity === 'individual' || entity === 'nonBusiness') {
+        category = '개인';
+      } else if (!entity) {
+        category = '';
+      }
+    }
+  } else if (filingOnly) {
+    category = SINGO_DAERI;
   }
 
   return { entity, category };

@@ -1,11 +1,13 @@
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { churnRecords, clientContacts, clientFeeChanges, clientMeetings, clients, intakeInquiries, intakeProcesses, reportDeliveries, settlementVisits, users } from '@/db/schema';
-import type { ContactUpdatePayload } from '@/app/types/contact';
+import type { ContactUpdatePayload, BusinessEntityType, ServiceType } from '@/app/types/contact';
 import type { ChurnSummary, ClientFeeChange, ClientStatus } from '@/app/types/client';
 import {
   clientIndicatesBusinessClosure,
   normalizeChurnClosureFields,
+  parseCheckboxValue,
+  DATA_CLEANUP_OPTIONS,
   type ChurnClientClosureHint,
 } from '@/app/config/churnOptions';
 import { clientToListRecord, clientToRecord, listClientSelect, listClientSelectVat } from '@/lib/clientMapper';
@@ -16,8 +18,7 @@ import {
   dedupeClientsForChurnSearch,
   filterClientsForChurnRegistration,
 } from '@/app/utils/churnMatch';
-import { syncMainCategory } from '@/app/utils/clientsGrouping';
-import type { BusinessEntityType } from '@/app/types/contact';
+import { syncMainCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import {
   applyManagerToLinkedInquiries,
@@ -31,7 +32,7 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
-/** intakeData.category — 구분과 맞춤(법인↔개인), 빈 값만 기장 없을 때 신고대리 */
+/** intakeData.category — 구분·서비스와 맞춤 (신고만→신고대리, 기장→법인/개인) */
 function applySyncedCategory(
   intake: Record<string, unknown>,
   entityType: string | undefined,
@@ -43,8 +44,9 @@ function applySyncedCategory(
     serviceTypes,
   );
   if (synced == null) return intake;
-  if (String(intake.category ?? '').trim() === synced) return intake;
-  return { ...intake, category: synced };
+  const prev = String(intake.category ?? '').trim();
+  if (prev === synced) return intake;
+  return { ...intake, category: synced || null };
 }
 
 export interface ClientListFilters {
@@ -933,6 +935,36 @@ export async function churnClient(
     churnedAt,
     recordedByUserId,
   });
+
+  // 자료정리 「신고대리 전환」: 유출 이력은 남기고, 수임처는 active·신고대리로 유지
+  const cleanupOpts = parseCheckboxValue(dataCleanup, DATA_CLEANUP_OPTIONS);
+  const convertToSingoDaeri =
+    cleanupOpts.includes('신고대리 전환') || dataCleanup.includes('신고대리 전환');
+
+  if (convertToSingoDaeri) {
+    const prevServices = (existing.serviceTypes ?? []) as ServiceType[];
+    const nextServices: ServiceType[] = prevServices.filter(s => s !== 'bookkeeping');
+    if (!nextServices.includes('filing')) nextServices.push('filing');
+
+    const nextIntake = applySyncedCategory(
+      { ...(existing.intakeData ?? {}), category: SINGO_DAERI },
+      existing.businessEntityType || '',
+      nextServices,
+    );
+    nextIntake.category = SINGO_DAERI;
+
+    const [row] = await db
+      .update(clients)
+      .set({
+        status: 'active',
+        serviceTypes: nextServices,
+        intakeData: nextIntake,
+        updatedAt: new Date(),
+      })
+      .where(eq(clients.id, id))
+      .returning();
+    return clientToRecord(row);
+  }
 
   if (existing.status === 'active') {
     const [row] = await db

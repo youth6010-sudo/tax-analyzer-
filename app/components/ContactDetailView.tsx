@@ -372,29 +372,28 @@ export default function ContactDetailView({
               <>
             <CategorySection title="기업구분" compact={flat}>
               {isEditing ? (
-                <div className="flex flex-wrap gap-2">
-                  {BUSINESS_ENTITY_TYPES.map(t => {
-                    const checked = form.businessEntityType === t.id;
-                    return (
-                      <label
-                        key={t.id}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold cursor-pointer border transition-colors ${
-                          checked
-                            ? 'bg-slate-700 text-white border-slate-700'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="businessEntityType"
-                          checked={checked}
-                          onChange={() => setBusinessEntityType(t.id)}
-                          className="sr-only"
-                        />
-                        {t.label}
-                      </label>
-                    );
-                  })}
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {BUSINESS_ENTITY_TYPES.map(t => {
+                      const checked = form.businessEntityType === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setBusinessEntityType(t.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold border transition-colors ${
+                            checked
+                              ? 'bg-slate-700 text-white border-slate-700'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-slate-400'
+                          }`}
+                          aria-pressed={checked}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-400">같은 항목을 다시 누르면 해제됩니다</p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-1.5">

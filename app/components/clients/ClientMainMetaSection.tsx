@@ -181,23 +181,49 @@ export default function ClientMainMetaSection({
       {editing ? (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-            {MAIN_META_INTAKE_KEYS.map(key => (
+            {MAIN_META_INTAKE_KEYS.filter(key => key !== 'category').map(key => (
               <label key={key} className="flex min-w-[8rem] flex-1 items-center gap-1 text-[10px]">
                 <span className="shrink-0 font-semibold text-slate-500">{MAIN_META_LABELS[key]}</span>
                 <input
                   value={form.meta[key] ?? ''}
                   onChange={e => setForm(f => ({ ...f, meta: { ...f.meta, [key]: e.target.value } }))}
                   className={`${inputCls} flex-1`}
-                  list={key === 'category' ? 'client-main-category-options' : undefined}
                 />
               </label>
             ))}
           </div>
-          <datalist id="client-main-category-options">
-            {CLIENT_MAIN_CATEGORIES.map(cat => (
-              <option key={cat} value={cat} />
-            ))}
-          </datalist>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="shrink-0 text-[10px] font-semibold text-slate-500">
+              {MAIN_META_LABELS.category ?? '대분류'}
+            </span>
+            {CLIENT_MAIN_CATEGORIES.map(cat => {
+              const checked = (form.meta.category ?? '').trim() === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() =>
+                    setForm(f => ({
+                      ...f,
+                      meta: {
+                        ...f.meta,
+                        category: (f.meta.category ?? '').trim() === cat ? '' : cat,
+                      },
+                    }))
+                  }
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                    checked
+                      ? 'border-slate-700 bg-slate-700 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+            <span className="text-[10px] text-slate-400">같은 항목 다시 누르면 해제</span>
+          </div>
           <div className="flex flex-wrap gap-2 rounded-lg border border-slate-100 bg-slate-50/80 p-2">
             {TAX_FLAG_KEYS.map(key => {
               const checked = !!form.flags[key];

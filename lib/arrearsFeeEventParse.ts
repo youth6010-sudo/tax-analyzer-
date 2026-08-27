@@ -1,6 +1,5 @@
 import * as XLSX from 'xlsx';
 import { formatArrearsPaidDateKo } from '@/app/types/arrears';
-import { formatArrearsPaidYmd } from '@/lib/arrearsLineLabel';
 import {
   isTaxInvoiceIssuanceSheet,
   parseTaxInvoiceIssuanceWorkbook,
@@ -270,5 +269,5 @@ export function parseArrearsFeeEventsWorkbook(
 }
 
 export function feeEventPaidDateLabel(eventDate: string | number | Date): string {
-  return formatArrearsPaidYmd(eventDate);
+  return formatPaidDateLabel(eventDate);
 }

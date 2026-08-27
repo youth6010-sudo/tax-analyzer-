@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import CenterModal from '@/app/components/portal/CenterModal';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
-import { formatArrearsWon, type ArrearsEntryDto } from '@/app/types/arrears';
-import { todayArrearsPaidYmd } from '@/lib/arrearsLineLabel';
+import { formatArrearsWon, todayArrearsPaidDateKo, type ArrearsEntryDto } from '@/app/types/arrears';
 import { fmt } from '@/app/lib/taxAmountFmt';
 
 export type ManualChannel = 'thebill' | 'cms';
@@ -183,7 +182,7 @@ export default function ArrearsManualEntryModal({
             placeholder={
               channel === 'thebill'
                 ? '예: 6월 기장료, 추가 컨설팅'
-                : '비우면 CMS로 표시 · 오늘 ' + todayArrearsPaidYmd()
+                : '비우면 CMS로 표시 · 오늘 ' + todayArrearsPaidDateKo()
             }
             disabled={busy}
           />

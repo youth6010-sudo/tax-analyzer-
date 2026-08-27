@@ -37,32 +37,31 @@ function categoryFromEntityType(entityType: BusinessEntityType | '' | undefined)
 
 /**
  * 구분·서비스로 대분류 산출 (빈 대분류 자동 채움용).
- * - 법인 → 법인
- * - 개인·비사업자 + 신고 + 기장 미선택 → 신고대리
- * - 그 외 개인·비사업자 → 개인
+ * - 신고 + 기장 미선택 → 신고대리 (법인·개인 무관)
+ * - 기장(또는 신고 없이 구분만) → 법인 / 개인
  */
 export function deriveMainCategoryFromEntityAndServices(
   entityType: BusinessEntityType | '' | undefined,
   serviceTypes: readonly string[] | undefined,
 ): ClientMainCategory | null {
-  if (entityType === 'corporate') return '법인';
-  if (entityType !== 'individual' && entityType !== 'nonBusiness') return null;
-
   const services = serviceTypes ?? [];
   const hasBookkeeping = services.includes('bookkeeping');
   const hasFiling = services.includes('filing');
-  // 신고대리 = 기장 체크가 없을 때(신고만)
+
+  // 신고대리 = 기장 없이 신고만 (기업구분과 무관)
   if (hasFiling && !hasBookkeeping) return SINGO_DAERI;
-  return '개인';
+
+  if (entityType === 'corporate') return '법인';
+  if (entityType === 'individual' || entityType === 'nonBusiness') return '개인';
+  return null;
 }
 
 /**
  * 저장용 대분류 동기화.
  * - 지주택·미사용: 유지
- * - 구분(법인)이면 대분류도 법인 (지주택·미사용 제외)
- * - 구분(개인·비사업자)인데 대분류가 법인이면 → 개인/신고대리로 맞춤 (법인→개인 수정이 풀리지 않게)
- * - 명시 개인: 유지 / 신고대리: 기장 있으면 개인
- * - 빈·레거시만 자동 (기장 없으면 신고대리)
+ * - 신고만(기장 없음) → 신고대리 (법인 entity여도)
+ * - 기장 → 법인/개인 (entity 기준)
+ * - 구분·서비스 모두 비움 → 개인/법인/신고대리 대분류도 비움
  */
 export function syncMainCategory(
   currentCategory: unknown,
@@ -74,35 +73,37 @@ export function syncMainCategory(
 
   const services = serviceTypes ?? [];
   const hasBookkeeping = services.includes('bookkeeping');
+  const hasFiling = services.includes('filing');
   const derived = deriveMainCategoryFromEntityAndServices(entityType, serviceTypes);
 
-  // 구분이 법인이면 대분류도 법인
-  if (entityType === 'corporate') {
-    return '법인';
+  // 신고만 → 신고대리 우선
+  if (hasFiling && !hasBookkeeping) return SINGO_DAERI;
+
+  // 기장 → 법인/개인 분리
+  if (hasBookkeeping) {
+    if (entityType === 'corporate') return '법인';
+    if (entityType === 'individual' || entityType === 'nonBusiness') return '개인';
+    if (cur === '법인' || cur === '개인') return cur;
+    return derived ?? (cur || null);
   }
 
-  // 구분이 개인·비사업자인데 대분류가 법인이면 구분에 맞춤 (되돌아가기 방지)
-  if (
-    (entityType === 'individual' || entityType === 'nonBusiness') &&
-    cur === '법인'
-  ) {
-    return derived ?? '개인';
+  // 서비스 없이 구분만
+  if (entityType === 'corporate') return '법인';
+  if (entityType === 'individual' || entityType === 'nonBusiness') {
+    // 수동 신고대리(대분류만)는 유지
+    if (cur === SINGO_DAERI) return SINGO_DAERI;
+    return '개인';
   }
 
-  // 명시적 개인은 유지
-  if (cur === '개인') return '개인';
-
-  // 신고대리: 기장이 눌러지면 개인, 아니면 유지
-  if (cur === SINGO_DAERI) {
-    return hasBookkeeping ? '개인' : SINGO_DAERI;
+  // 구분·신고대리 유발 서비스 없음 → 주요 대분류 해제
+  if (!entityType) {
+    if (isLegacyOrEmptyCategory(cur)) return '';
+    if (cur === '개인' || cur === '법인' || cur === SINGO_DAERI) return '';
+    return cur || '';
   }
 
   if (!derived) return cur || null;
-
-  // 빈·레거시만 자동 (기장 미선택+신고 → 신고대리)
-  if (isLegacyOrEmptyCategory(cur)) {
-    return derived;
-  }
+  if (isLegacyOrEmptyCategory(cur)) return derived;
   return cur || derived;
 }
 
@@ -164,14 +165,17 @@ export function getClientCategory(client: ClientRecord): string {
   const raw = client.intakeData?.category;
   const s = raw != null ? String(raw).trim() : '';
   if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY || s === SINGO_DAERI) return s || UNCategorized;
-  // 저장된 개인·법인은 표시도 그대로 (신고대리로 덮지 않음)
-  if (s === '개인' || s === '법인') return s;
 
   const derived = deriveMainCategoryFromEntityAndServices(
     client.businessEntityType as BusinessEntityType | '',
     client.serviceTypes,
   );
-  // 빈·레거시만: 기장 미선택+신고 → 신고대리로 표시
+  // 서비스상 신고대리면 저장된 개인·법인보다 우선 표시
+  if (derived === SINGO_DAERI) return SINGO_DAERI;
+  // 저장된 개인·법인은 표시도 그대로
+  if (s === '개인' || s === '법인') return s;
+
+  // 빈·레거시만: 구분·서비스로 도출
   if (isLegacyOrEmptyCategory(s) && derived) return derived;
   if (s) return s;
   if (derived) return derived;

@@ -273,8 +273,7 @@ export function todayArrearsPaidYmd(now = new Date()): string {
 }
 
 /**
- * 입금 중복 비교 키 — `1월 16일` ↔ `20260116` 동일 취급
- * (연도 없는 한국어는 월·일만: `1|16`)
+ * 입금 중복 비교 키 — `1월 16일` ↔ `20260116` 동일 취급 (월·일만)
  */
 export function paidDateMatchKey(
   paidDate: string | number | Date | null | undefined,
@@ -282,16 +281,7 @@ export function paidDateMatchKey(
 ): string {
   const p = parsePaidParts(paidDate, ctx);
   if (!p) return String(paidDate ?? '').replace(/\s+/g, '').trim();
-  // 연도 있는 원문이면 풀 키, 한국어만이면 월일 (양쪽 asOf 달라도 매칭)
-  const raw = String(paidDate ?? '').trim();
-  if (/^\d{8}$/.test(raw) || /^\d{4}[-./]/.test(raw)) {
-    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
-  }
-  if (/월/.test(raw) || /^(\d{1,2})[./](\d{1,2})$/.test(raw)) {
-    // 한국어·월일만 — 연도 추론 포함해 ISO로 (asOf 동일 시 PDF YMD와 맞춤)
-    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
-  }
-  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+  return `${p.month}|${p.day}`;
 }
 
 /** 공문 엑셀용 `M월D일` — YMD/한국어 모두 수용 */

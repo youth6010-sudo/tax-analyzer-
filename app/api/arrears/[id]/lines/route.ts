@@ -8,7 +8,7 @@ import {
   replaceLetterLines,
 } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
-import { formatArrearsPaidYmd, todayArrearsPaidYmd } from '@/lib/arrearsLineLabel';
+import { formatArrearsPaidDateKo, todayArrearsPaidDateKo } from '@/app/types/arrears';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -116,9 +116,7 @@ export async function POST(req: Request, ctx: Ctx) {
     let description = String(body.description || '').trim();
     let amount = Math.round(Number(body.amount) || 0);
     let paidAmount = Math.round(Number(body.paidAmount) || 0);
-    let paidDate = formatArrearsPaidYmd(String(body.paidDate || '').trim(), {
-      asOfDate: existing.letterDate || existing.asOfDate,
-    });
+    let paidDate = formatArrearsPaidDateKo(String(body.paidDate || '').trim());
 
     if (body.action === 'charge') {
       if (!Number.isFinite(amount) || amount <= 0) {
@@ -134,7 +132,7 @@ export async function POST(req: Request, ctx: Ctx) {
       if (!description) description = '입금';
       amount = 0;
       paidAmount = payAmt;
-      if (!paidDate) paidDate = todayArrearsPaidYmd();
+      if (!paidDate) paidDate = todayArrearsPaidDateKo();
     } else {
       if (!description) {
         return NextResponse.json({ error: '내역을 입력해 주세요.' }, { status: 400 });

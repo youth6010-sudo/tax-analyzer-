@@ -21,15 +21,12 @@ import {
   hasPriorClosedLetterCycle,
   letterRunningBalances,
   linesForCurrentLetterCycle,
+  todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
   type ArrearsLetterLineInput,
 } from '@/app/types/arrears';
-import {
-  formatArrearsChargeLabel,
-  formatArrearsPaidYmd,
-  todayArrearsPaidYmd,
-} from '@/lib/arrearsLineLabel';
+import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
 import { fmt } from '@/app/lib/taxAmountFmt';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
@@ -56,7 +53,7 @@ function toEditLines(lines: ArrearsLetterLineDto[], asOf?: string | null): EditL
       }) || l.description,
     amount: l.amount ? formatArrearsWon(l.amount) : '',
     paidAmount: l.paidAmount ? formatArrearsWon(l.paidAmount) : '',
-    paidDate: formatArrearsPaidYmd(l.paidDate, { asOfDate: asOf }) || l.paidDate || '',
+    paidDate: formatArrearsPaidDateKo(l.paidDate) || l.paidDate || '',
     source: l.source,
   }));
 }
@@ -185,9 +182,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           description: l.description.trim(),
           amount: parseWon(l.amount),
           paidAmount: parseWon(l.paidAmount),
-          paidDate: formatArrearsPaidYmd(l.paidDate.trim(), {
-            asOfDate: letterDate || item?.letterDate || item?.asOfDate,
-          }),
+          paidDate: formatArrearsPaidDateKo(l.paidDate.trim()),
           source: l.source || 'manual',
         }))
         .filter(l => l.description || l.amount || l.paidAmount);
@@ -700,7 +695,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         <input
                           className={`${portalInput} py-1 text-xs w-28`}
                           value={l.paidDate}
-                          placeholder="예: 20260116"
+                          placeholder="예: 7월 2일"
                           onChange={e =>
                             setEditLines(prev =>
                               prev.map((x, i) =>
@@ -709,9 +704,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                             )
                           }
                           onBlur={e => {
-                            const next = formatArrearsPaidYmd(e.target.value, {
-                              asOfDate: letterDate || item?.letterDate || item?.asOfDate,
-                            });
+                            const next = formatArrearsPaidDateKo(e.target.value);
                             if (next !== e.target.value) {
                               setEditLines(prev =>
                                 prev.map((x, i) =>
@@ -769,7 +762,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                       description: '',
                       amount: '',
                       paidAmount: '',
-                      paidDate: todayArrearsPaidYmd(),
+                      paidDate: todayArrearsPaidDateKo(),
                       source: 'manual',
                     },
                   ])
@@ -784,13 +777,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                   setEditLines(prev =>
                     prev.map(x =>
                       parseWon(x.paidAmount) > 0 && !x.paidDate.trim()
-                        ? { ...x, paidDate: todayArrearsPaidYmd() }
-                        : {
-                            ...x,
-                            paidDate: formatArrearsPaidYmd(x.paidDate, {
-                              asOfDate: letterDate || item?.letterDate || item?.asOfDate,
-                            }),
-                          },
+                        ? { ...x, paidDate: todayArrearsPaidDateKo() }
+                        : { ...x, paidDate: formatArrearsPaidDateKo(x.paidDate) },
                     ),
                   )
                 }
@@ -879,8 +867,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         asOfDate: asOf,
                         prevDescription: prev,
                       }) || l.description;
-                    const portalPaid = formatArrearsPaidYmd(l.paidDate, { asOfDate: asOf });
-                    const officePaid = formatArrearsPaidDateKo(l.paidDate);
+                    const paidKo = formatArrearsPaidDateKo(l.paidDate);
                     return (
                     <tr key={l.id}>
                       <td className="border border-[#222] px-2 py-1 text-slate-900">
@@ -894,8 +881,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                         {l.paidAmount ? formatArrearsWon(l.paidAmount) : ''}
                       </td>
                       <td className="border border-[#222] px-2 py-1 text-center text-slate-800 whitespace-nowrap">
-                        <span className="print:hidden">{portalPaid || ''}</span>
-                        <span className="hidden print:inline">{officePaid || ''}</span>
+                        {paidKo || ''}
                       </td>
                       <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
                         {formatArrearsWon(running[i] ?? 0)}
