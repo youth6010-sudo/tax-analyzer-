@@ -22,6 +22,7 @@ import {
   inheritYearForMonthFeeDesc,
 } from '@/lib/arrearsLedgerDetailParse';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
+import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
 import {
   classifyBalanceDiff,
   type BalanceDiffKind,
@@ -44,7 +45,7 @@ function toLineDto(row: typeof arrearsLetterLines.$inferSelect): ArrearsLetterLi
 }
 
 function toEntryDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
-  return {
+  return applyArrearsManualBalance({
     id: row.id,
     clientId: row.clientId,
     externalCode: row.externalCode,
@@ -64,7 +65,7 @@ function toEntryDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     source: row.source,
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt ?? ''),
-  };
+  });
 }
 
 export function normCompanyName(s: string): string {

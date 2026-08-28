@@ -8,6 +8,11 @@ import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
 import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
+import {
+  applyArrearsManualBalance,
+  ARREARS_ALWAYS_LISTED_CODES,
+  isArrearsBalanceLocked,
+} from '@/lib/arrearsBalanceLock';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -19,7 +24,7 @@ export function shouldAutoTempByMonthlyFee(balance: number, monthlyFee: number):
 }
 
 function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
-  return {
+  return applyArrearsManualBalance({
     id: row.id,
     clientId: row.clientId,
     externalCode: row.externalCode,
@@ -40,7 +45,7 @@ function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt ?? ''),
     reasonSummary: '—',
-  };
+  });
 }
 
 async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<ArrearsEntryDto[]> {
@@ -349,8 +354,16 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
     conditions.push(or(...categoryFilter.map(c => eq(arrearsEntries.mgmtCategory, c)))!);
   }
   if (filters.nonzero) {
-    // 「0원인것도 보기」 OFF → 잔액 ≠ 0만
-    conditions.push(ne(arrearsEntries.balance, 0));
+    // 「0원인것도 보기」 OFF → 잔액 ≠ 0만 (수동 0원 고정 행은 예외)
+    const alwaysListed = [...ARREARS_ALWAYS_LISTED_CODES];
+    conditions.push(
+      alwaysListed.length
+        ? or(
+            ne(arrearsEntries.balance, 0),
+            inArray(arrearsEntries.externalCode, alwaysListed),
+          )!
+        : ne(arrearsEntries.balance, 0),
+    );
   } else if (filters.minBalance != null && Number.isFinite(filters.minBalance)) {
     conditions.push(gte(arrearsEntries.balance, Math.round(filters.minBalance)));
   }
@@ -662,6 +675,7 @@ export async function upsertLedgerImport(
 
     const prev = existingByCode.get(r.externalCode);
     if (prev) {
+      const balanceLocked = isArrearsBalanceLocked(r.externalCode);
       await db
         .update(arrearsEntries)
         .set({
@@ -669,12 +683,16 @@ export async function upsertLedgerImport(
           companyName: r.companyName || prev.companyName,
           businessNo: r.businessNo || prev.businessNo,
           representative: r.representative || prev.representative,
-          balance: r.balance,
-          carryIn: r.carryIn,
-          debit: r.debit,
-          credit: r.credit,
+          ...(balanceLocked
+            ? {}
+            : {
+                balance: r.balance,
+                carryIn: r.carryIn,
+                debit: r.debit,
+                credit: r.credit,
+                source: 'ledger' as const,
+              }),
           asOfDate,
-          source: 'ledger',
           updatedBy: actor,
           updatedAt: now,
           // managerName / mgmtCategory / cmsNote / memo — 원장에 없으므로 유지
