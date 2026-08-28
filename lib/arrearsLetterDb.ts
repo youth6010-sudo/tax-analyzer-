@@ -24,6 +24,10 @@ import {
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
 import {
+  ensureInactiveArrearsEntries,
+  isInactiveArrearsCode,
+} from '@/lib/arrearsInactiveSeed';
+import {
   classifyBalanceDiff,
   type BalanceDiffKind,
 } from '@/lib/arrearsBalanceDiff';
@@ -101,6 +105,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   letterBalance: number;
   balanceDiff: number;
 } | null> {
+  await ensureInactiveArrearsEntries();
   const item = await getArrearsEntryById(id);
   if (!item) return null;
   const lines = await listLetterLines(id);
@@ -131,6 +136,9 @@ export async function replaceLetterLines(
     .where(eq(arrearsEntries.id, entryId))
     .limit(1);
   if (!existing) throw new Error('NOT_FOUND');
+  if (isInactiveArrearsCode(existing.externalCode) && actorName !== 'inactive-arrears-seed') {
+    throw new Error('거래 중단 업체는 원장·공문 자동 반영 대상이 아닙니다.');
+  }
 
   const now = new Date();
   const actor = actorName.trim() || '';
@@ -241,6 +249,10 @@ export async function syncLetterDiffWithLedger(
   asOfDate: string,
   actorName: string,
 ): Promise<{ applied: boolean; diff: number }> {
+  const entry = await getArrearsEntryById(entryId);
+  if (entry && isInactiveArrearsCode(entry.externalCode)) {
+    return { applied: false, diff: 0 };
+  }
   const lines = await listLetterLines(entryId);
   const labelDate = asOfDate || new Date().toISOString().slice(0, 10);
   const bal = Math.round(ledgerBalance);
@@ -748,6 +760,8 @@ export async function applyFeeEvents(
   let nettedAmount = 0;
   let entryTouched = 0;
   for (const [entryId, additions] of byEntry) {
+    const entRow = await getArrearsEntryById(entryId);
+    if (entRow && isInactiveArrearsCode(entRow.externalCode)) continue;
     const existing = await listLetterLines(entryId);
     const seen = new Set(
       existing.map(
@@ -941,6 +955,7 @@ export async function applyLedgerDetailTxs(
       unmatchedCode += 1;
       continue;
     }
+    if (isInactiveArrearsCode(ent.externalCode)) continue;
     if (!co.txs.length) continue;
 
     const existing = await listLetterLines(ent.id);

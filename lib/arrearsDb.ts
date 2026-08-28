@@ -13,6 +13,7 @@ import {
   ARREARS_ALWAYS_LISTED_CODES,
   isArrearsBalanceLocked,
 } from '@/lib/arrearsBalanceLock';
+import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -72,11 +73,13 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   return items.map(item => {
     const linesOpen = openBy.get(item.id) ?? 0;
     const balanceDiff = Math.round(item.balance) - linesOpen;
-    const balanceDiffKind = classifyBalanceDiff({
-      ledgerBalance: item.balance,
-      linesOpen,
-      hasLetter: letterBy.get(item.id) === true,
-    });
+    const balanceDiffKind = isArrearsBalanceLocked(item.externalCode)
+      ? 'ok'
+      : classifyBalanceDiff({
+          ledgerBalance: item.balance,
+          linesOpen,
+          hasLetter: letterBy.get(item.id) === true,
+        });
     return { ...item, linesOpen, balanceDiff, balanceDiffKind };
   });
 }
@@ -331,6 +334,7 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   totalBalance: number;
   asOfDate: string;
 }> {
+  await ensureInactiveArrearsEntries();
   const db = getDb();
   const conditions: SQL[] = [];
 
@@ -483,6 +487,16 @@ export async function patchArrearsEntry(
   const db = getDb();
   const [existing] = await db.select().from(arrearsEntries).where(eq(arrearsEntries.id, id)).limit(1);
   if (!existing) throw new Error('NOT_FOUND');
+
+  const balanceLocked = isArrearsBalanceLocked(existing.externalCode);
+  if (
+    balanceLocked &&
+    (patch.balanceAction === 'pay' ||
+      patch.balanceAction === 'charge' ||
+      patch.balance !== undefined)
+  ) {
+    throw new Error('거래 중단 업체는 잔액을 변경할 수 없습니다.');
+  }
 
   const updates: Partial<typeof arrearsEntries.$inferInsert> = {
     updatedBy: actorName.trim() || '',

@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "exportedAt": "2026-08-28T00:23:47.932Z",
+  "entries": [
+    {
+      "externalCode": "00183",
+      "companyName": "오프라인",
+      "balance": 0,
+      "letterDate": "2026.07.27",
+      "lines": [
+        {
+          "description": "2020년 5월 조정수수료",
+          "amount": 605000,
+          "paidAmount": 605000,
+          "paidDate": "23년 6월16일"
+        },
+        {
+          "description": "2021년 5월 조정수수료",
+          "amount": 694999,
+          "paidAmount": 195000,
+          "paidDate": "23년 6월16일"
+        },
+        {
+          "description": "2022년 5월 조정수수료",
+          "amount": 825000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "2023년 5월 조정수수료",
+          "amount": 770000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "2023년 6월 기장료",
+          "amount": 110000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 1000000,
+          "paidDate": "2023년 6월 30일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 110000,
+          "paidDate": "2023년 11월 30일"
+        }
+      ]
+    },
+    {
+      "externalCode": "00199",
+      "companyName": "하나비",
+      "balance": 207301,
+      "letterDate": "2026.07.27",
+      "lines": [
+        {
+          "description": "15년 조정수수료",
+          "amount": 385000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "16년 조정수수료",
+          "amount": 385000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "17년 조정수수료",
+          "amount": 385000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "18년 조정수수료",
+          "amount": 440000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "17년 1월 ~ 19년 12월",
+          "amount": 3960000,
+          "paidAmount": 0,
+          "paidDate": "110,000*36"
+        },
+        {
+          "description": "19년 조정수수료",
+          "amount": 550000,
+          "paidAmount": 550000,
+          "paidDate": "20년 6월3일"
+        },
+        {
+          "description": "20년 1월 ~ 12월",
+          "amount": 1320000,
+          "paidAmount": 0,
+          "paidDate": "110,000*12"
+        },
+        {
+          "description": "20년 조정수수료",
+          "amount": 495000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "21년 1월 ~ 12월",
+          "amount": 1320000,
+          "paidAmount": 0,
+          "paidDate": "110,000*12"
+        },
+        {
+          "description": "21년 조정수수료",
+          "amount": 528000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "22년 1월 ~ 10월",
+          "amount": 1100000,
+          "paidAmount": 0,
+          "paidDate": "110,000*10"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 2000000,
+          "paidDate": "22년 6월3일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 2000000,
+          "paidDate": "22년 11월14일"
+        },
+        {
+          "description": "22년 조정수수료",
+          "amount": 495000,
+          "paidAmount": 0,
+          "paidDate": ""
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 2000000,
+          "paidDate": "23년 6월5일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 4813000,
+          "paidDate": "2023년 9월 15일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 2000000,
+          "paidDate": "2023년 9월 20일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 2000000,
+          "paidDate": "2023년 10월 6일"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": -4813000,
+          "paidDate": "2023년 12월 4일"
+        }
+      ]
+    }
+  ]
+}

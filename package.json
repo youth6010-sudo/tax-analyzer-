@@ -41,6 +41,7 @@
     "db:ensure-arrears": "node scripts/ensure-arrears.mjs",
     "db:ensure-arrears-letter-lines": "node scripts/ensure-arrears-letter-lines.mjs",
     "db:ensure-arrears-letter-ledger-links": "node scripts/ensure-arrears-letter-ledger-links.mjs",
+    "db:fix-inactive-arrears": "node scripts/fix-offline-hanabi-balances.mjs",
     "db:import-arrears-status": "node scripts/import-arrears-status.mjs",
     "db:import-arrears-gongmun": "node scripts/import-arrears-gongmun.mjs",
     "db:import-arrears-letter-lines": "node scripts/import-arrears-letter-lines.mjs",
