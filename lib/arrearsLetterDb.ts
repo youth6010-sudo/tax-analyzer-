@@ -26,6 +26,7 @@ import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,
   isInactiveArrearsCode,
+  isInactiveArrearsCompanyName,
 } from '@/lib/arrearsInactiveSeed';
 import {
   classifyBalanceDiff,
@@ -335,7 +336,16 @@ function findEntryByCompanyName<
   const key = softKey(sheetName);
   if (!key) return null;
   const hits = entries.filter(e => softKey(e.companyName) === key);
-  return hits.length === 1 ? hits[0]! : null;
+  if (!hits.length) return null;
+  if (hits.length === 1) return hits[0]!;
+
+  const inactive = hits.filter(e => isInactiveArrearsCode(e.externalCode));
+  if (inactive.length === 1) return inactive[0]!;
+
+  const coded = hits.filter(e => !e.externalCode.startsWith('letter:'));
+  if (coded.length === 1) return coded[0]!;
+
+  return null;
 }
 
 export type LetterImportPreviewSheet = {
@@ -436,7 +446,10 @@ export async function upsertLetterImport(
 
   for (const sheet of sheets) {
     let hit = findEntryByCompanyName(all, sheet.companyName);
-    if (!hit && opts?.unmatchedCreate) {
+    if (!hit && isInactiveArrearsCompanyName(sheet.companyName)) {
+      hit = all.find(e => isInactiveArrearsCode(e.externalCode)) ?? null;
+    }
+    if (!hit && opts?.unmatchedCreate && !isInactiveArrearsCompanyName(sheet.companyName)) {
       const code = `letter:${normCompanyName(sheet.companyName) || Date.now()}`;
       const [row] = await db
         .insert(arrearsEntries)
@@ -473,6 +486,11 @@ export async function upsertLetterImport(
     }
 
     if (!hit) {
+      skipped += 1;
+      continue;
+    }
+
+    if (isInactiveArrearsCode(hit.externalCode)) {
       skipped += 1;
       continue;
     }

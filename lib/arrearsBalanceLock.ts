@@ -10,6 +10,12 @@ export const ARREARS_MANUAL_BALANCE_BY_CODE: Readonly<Record<string, number>> = 
 /** 잔액 0이어도 목록에 항상 표시 (공문 조회용) */
 export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
 
+/** 공문 임포트 시 letter: 중복 코드 (정규화 상호) */
+export const ARREARS_LETTER_DUP_CODE_BY_CANONICAL: Readonly<Record<string, string>> = {
+  '00183': 'letter:오프라인',
+  '00199': 'letter:하나비',
+};
+
 export function getArrearsManualBalance(externalCode: string): number | undefined {
   return ARREARS_MANUAL_BALANCE_BY_CODE[externalCode.trim()];
 }

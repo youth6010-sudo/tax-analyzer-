@@ -1,8 +1,12 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray, or } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines } from '@/db/schema';
 import inactiveSeed from '@/data/arrears-inactive-seed.json';
-import { getArrearsManualBalance, isArrearsBalanceLocked } from '@/lib/arrearsBalanceLock';
+import {
+  ARREARS_LETTER_DUP_CODE_BY_CANONICAL,
+  getArrearsManualBalance,
+  isArrearsBalanceLocked,
+} from '@/lib/arrearsBalanceLock';
 
 type SeedLine = {
   description: string;
@@ -108,24 +112,102 @@ async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
     .where(eq(arrearsEntries.id, entryId));
 }
 
+async function removeDuplicateInactiveEntries(seed: SeedEntry, canonicalId: string): Promise<number> {
+  const db = getDb();
+  const letterDup = ARREARS_LETTER_DUP_CODE_BY_CANONICAL[seed.externalCode];
+  const dupCodes = [seed.externalCode, letterDup].filter(Boolean) as string[];
+
+  const candidates = await db
+    .select({ id: arrearsEntries.id, externalCode: arrearsEntries.externalCode })
+    .from(arrearsEntries)
+    .where(
+      or(
+        eq(arrearsEntries.companyName, seed.companyName),
+        inArray(arrearsEntries.externalCode, dupCodes),
+      )!,
+    );
+
+  let removed = 0;
+  for (const row of candidates) {
+    if (row.id === canonicalId) continue;
+    await db.delete(arrearsEntries).where(eq(arrearsEntries.id, row.id));
+    removed += 1;
+  }
+  return removed;
+}
+
+async function resolveCanonicalEntry(seed: SeedEntry): Promise<string | null> {
+  const db = getDb();
+  const letterDup = ARREARS_LETTER_DUP_CODE_BY_CANONICAL[seed.externalCode];
+
+  const [byCode] = await db
+    .select({ id: arrearsEntries.id })
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.externalCode, seed.externalCode))
+    .limit(1);
+  if (byCode) return byCode.id;
+
+  const byName = await db
+    .select({ id: arrearsEntries.id, externalCode: arrearsEntries.externalCode })
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.companyName, seed.companyName));
+
+  const coded = byName.filter(r => !r.externalCode.startsWith('letter:'));
+  if (coded.length === 1) return coded[0]!.id;
+
+  if (letterDup) {
+    const [byLetter] = await db
+      .select({ id: arrearsEntries.id })
+      .from(arrearsEntries)
+      .where(eq(arrearsEntries.externalCode, letterDup))
+      .limit(1);
+    if (byLetter) {
+      await db
+        .update(arrearsEntries)
+        .set({
+          externalCode: seed.externalCode,
+          updatedBy: 'inactive-arrears-seed',
+          updatedAt: new Date(),
+        })
+        .where(eq(arrearsEntries.id, byLetter.id));
+      return byLetter.id;
+    }
+  }
+
+  return byName[0]?.id ?? null;
+}
+
 async function runEnsure(): Promise<void> {
   const db = getDb();
-  const rows = await db
-    .select({
-      id: arrearsEntries.id,
-      externalCode: arrearsEntries.externalCode,
-      balance: arrearsEntries.balance,
-    })
-    .from(arrearsEntries)
-    .where(inArray(arrearsEntries.externalCode, SEED_CODES));
-
-  const byCode = new Map(rows.map(r => [r.externalCode, r]));
 
   for (const seed of SEED_ENTRIES) {
-    const row = byCode.get(seed.externalCode);
+    const canonicalId = await resolveCanonicalEntry(seed);
+    if (!canonicalId) continue;
+
+    await removeDuplicateInactiveEntries(seed, canonicalId);
+
+    const [row] = await db
+      .select({
+        id: arrearsEntries.id,
+        externalCode: arrearsEntries.externalCode,
+        balance: arrearsEntries.balance,
+      })
+      .from(arrearsEntries)
+      .where(eq(arrearsEntries.id, canonicalId))
+      .limit(1);
     if (!row) continue;
-    if (!(await entryNeedsFix(row.id, seed, row.balance))) continue;
-    await applySeedEntry(seed, row.id);
+    if (row.externalCode !== seed.externalCode) {
+      await db
+        .update(arrearsEntries)
+        .set({
+          externalCode: seed.externalCode,
+          updatedBy: 'inactive-arrears-seed',
+          updatedAt: new Date(),
+        })
+        .where(eq(arrearsEntries.id, canonicalId));
+    }
+    if (!(await entryNeedsFix(canonicalId, seed, row.balance))) continue;
+    await applySeedEntry(seed, canonicalId);
   }
 }
 
@@ -154,4 +236,9 @@ export function isInactiveArrearsCode(externalCode: string): boolean {
 
 export function inactiveArrearsSeedCodes(): string[] {
   return [...SEED_CODES];
+}
+
+export function isInactiveArrearsCompanyName(companyName: string): boolean {
+  const name = companyName.trim();
+  return SEED_ENTRIES.some(e => e.companyName === name);
 }
