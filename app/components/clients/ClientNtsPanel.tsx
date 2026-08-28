@@ -11,8 +11,10 @@ import {
 } from '../portal/uiClasses';
 import {
   formatNtsDate,
+  getNtsTaxTypeMismatch,
   isNtsAlert,
   ntsBadgeClass,
+  normalizeClientTaxKind,
   normalizeNtsTaxType,
   ntsStatusLabel,
   ntsTaxTypeBadgeClass,
@@ -35,6 +37,7 @@ export default function ClientNtsPanel({
   representative,
   canEdit,
   openDatePrefill = '',
+  clientTaxKind = '',
   initialNts = null,
   suppressChurnPrompt = false,
 }: {
@@ -43,6 +46,8 @@ export default function ClientNtsPanel({
   representative?: string;
   canEdit: boolean;
   openDatePrefill?: string;
+  /** intakeData.taxKind — 수임처 과세유형과 국세청 비교용 */
+  clientTaxKind?: string;
   initialNts?: NtsStatusView | null;
   suppressChurnPrompt?: boolean;
 }) {
@@ -102,6 +107,8 @@ export default function ClientNtsPanel({
   const restingAcked = nts?.statusCode === '02' && nts.alertAckedCode === '02';
   const showPrompt = alert && !suppressChurnPrompt && !restingAcked;
   const taxLabel = nts ? normalizeNtsTaxType(nts.taxType) : '';
+  const clientTaxLabel = normalizeClientTaxKind(clientTaxKind);
+  const taxMismatch = nts ? getNtsTaxTypeMismatch(clientTaxKind, nts.taxType) : null;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3.5">
@@ -128,7 +135,12 @@ export default function ClientNtsPanel({
               <span
                 className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${ntsTaxTypeBadgeClass(taxLabel)}`}
               >
-                {taxLabel}
+                국세청 {taxLabel}
+              </span>
+            )}
+            {clientTaxLabel && (
+              <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                수임처 {clientTaxLabel}
               </span>
             )}
             {nts.closedDate && (
@@ -139,6 +151,12 @@ export default function ClientNtsPanel({
             <p className="text-[11px] text-gray-400">
               조회: {new Date(nts.checkedAt).toLocaleString('ko-KR')}
             </p>
+          )}
+          {taxMismatch && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs leading-relaxed text-orange-950">
+              <b>과세유형 불일치</b> — 수임처「{taxMismatch.clientLabel}」 vs 국세청「{taxMismatch.ntsLabel}」.
+              더존 과세유형 또는 국세청 조회 결과를 확인하세요.
+            </div>
           )}
           {showPrompt && nts.statusCode === '02' ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-950">

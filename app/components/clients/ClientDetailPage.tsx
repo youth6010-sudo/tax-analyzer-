@@ -22,7 +22,7 @@ import ClientMainMetaSection from '@/app/components/clients/ClientMainMetaSectio
 import ClientMaterialsSection from '@/app/components/clients/ClientMaterialsSection';
 import ClientBizNoDuplicatesPanel from '@/app/components/clients/ClientBizNoDuplicatesPanel';
 import ClientBlueholeCompact from '@/app/components/clients/ClientBlueholeCompact';
-import ClientNtsCompact from '@/app/components/clients/ClientNtsCompact';
+import ClientNtsPanel from '@/app/components/clients/ClientNtsPanel';
 import { portalBtnPrimary, portalBtnSecondary } from '@/app/components/portal/uiClasses';
 
 function Section({
@@ -308,15 +308,20 @@ export default function ClientDetailPage({
           </Section>
 
           <Section title="연동 현황" accent="emerald">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <ClientBlueholeCompact clientId={client.id} companyName={client.companyName} />
-              <ClientNtsCompact
-                clientId={client.id}
-                businessNumber={client.businessNo}
-                initialNts={client.nts ?? null}
-                suppressChurnPrompt={suppressChurnPrompt}
-              />
-            </div>
+            <ClientBlueholeCompact clientId={client.id} companyName={client.companyName} />
+          </Section>
+
+          <Section title="국세청" accent="amber">
+            <ClientNtsPanel
+              clientId={client.id}
+              businessNumber={client.businessNo}
+              representative={client.representative}
+              canEdit={canEdit}
+              openDatePrefill={String(intakeData.openDate ?? '')}
+              clientTaxKind={String(intakeData.taxKind ?? '')}
+              initialNts={client.nts ?? null}
+              suppressChurnPrompt={suppressChurnPrompt}
+            />
           </Section>
 
           <Section title="필요자료 · 특이사항" accent="blue">

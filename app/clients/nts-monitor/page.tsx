@@ -11,7 +11,15 @@ import {
   portalCard,
 } from '../../components/portal/uiClasses';
 import type { ClientRecord, ChurnRecordView, NtsStatusCache } from '../../types/client';
-import { formatNtsDate, ntsBadgeClass, ntsStatusLabel } from '@/app/utils/ntsStatus';
+import {
+  formatNtsDate,
+  getNtsTaxTypeMismatch,
+  ntsBadgeClass,
+  normalizeClientTaxKind,
+  normalizeNtsTaxType,
+  ntsStatusLabel,
+  ntsTaxTypeBadgeClass,
+} from '@/app/utils/ntsStatus';
 import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import {
   getPortalChurnRecords,
@@ -114,14 +122,31 @@ export default function NtsMonitorPage() {
     }
   }, [clients, mineOnly]);
 
-  const { flagged, closedCount, restingCount, uncheckedCount, lastCheckedAt } = useMemo(() => {
+  const { flagged, closedCount, restingCount, uncheckedCount, mismatchCount, lastCheckedAt, allRows } =
+    useMemo(() => {
     const flaggedList: Array<{ client: ClientRecord; nts: NtsStatusCache }> = [];
+    const rows: Array<{
+      client: ClientRecord;
+      nts: NtsStatusCache | null;
+      taxLabel: string;
+      clientTaxLabel: string;
+      mismatch: boolean;
+    }> = [];
     let closed = 0;
     let resting = 0;
     let unchecked = 0;
+    let mismatch = 0;
     let last = 0;
     for (const c of clients) {
       const nts = effectiveNts(c, override);
+      const taxLabel = nts?.taxType ? normalizeNtsTaxType(nts.taxType) : '';
+      const clientTaxKind = String(c.intakeData?.taxKind ?? '');
+      const clientTaxLabel = normalizeClientTaxKind(clientTaxKind);
+      const hasMismatch = !!(nts && getNtsTaxTypeMismatch(clientTaxKind, nts.taxType));
+      if (hasMismatch) mismatch += 1;
+
+      rows.push({ client: c, nts, taxLabel, clientTaxLabel, mismatch: hasMismatch });
+
       if (!nts || !nts.checkedAt) {
         unchecked += 1;
         continue;
@@ -143,7 +168,9 @@ export default function NtsMonitorPage() {
         else resting += 1;
       }
     }
-    // 폐업(03) 먼저, 그다음 휴업(02), 각 그룹 내 상호순
+    rows.sort((a, b) =>
+      (a.client.companyName || '').localeCompare(b.client.companyName || '', 'ko'),
+    );
     flaggedList.sort((a, b) => {
       if (a.nts.statusCode !== b.nts.statusCode) return a.nts.statusCode === '03' ? -1 : 1;
       return (a.client.companyName || '').localeCompare(b.client.companyName || '', 'ko');
@@ -153,7 +180,9 @@ export default function NtsMonitorPage() {
       closedCount: closed,
       restingCount: resting,
       uncheckedCount: unchecked,
+      mismatchCount: mismatch,
       lastCheckedAt: last ? new Date(last) : null,
+      allRows: rows,
     };
   }, [clients, override, churnRecords]);
 
@@ -161,13 +190,14 @@ export default function NtsMonitorPage() {
     <PortalPageShell>
       <PortalPageHeader
         title="폐업·휴업 점검"
-        description="국세청 사업자상태로 폐업·휴업 거래처를 모아 봅니다. 매주 월요일 자동 점검됩니다."
+        description="국세청 사업자상태·과세유형으로 폐업·휴업·과세유형 불일치를 모아 봅니다. 매주 월요일 자동 점검됩니다."
       />
 
       <div className={`${portalCard} mb-4 flex flex-wrap items-center gap-3 p-4`}>
         <div className="flex flex-wrap gap-2">
           <StatPill label="폐업" count={closedCount} tone="red" />
           <StatPill label="휴업" count={restingCount} tone="amber" />
+          <StatPill label="과세유형 불일치" count={mismatchCount} tone="orange" />
           <StatPill label="미점검" count={uncheckedCount} tone="slate" />
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-3">
@@ -237,6 +267,7 @@ export default function NtsMonitorPage() {
                     client.representative,
                     client.businessNo,
                     nts.closedDate ? `폐업일 ${formatNtsDate(nts.closedDate)}` : '',
+                    nts.taxType ? `국세청 ${normalizeNtsTaxType(nts.taxType)}` : '',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -297,6 +328,94 @@ export default function NtsMonitorPage() {
         </ul>
       )}
 
+      {ready && allRows.length > 0 && (
+        <div className={`${portalCard} mt-6 overflow-hidden`}>
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="text-sm font-bold text-slate-800">점검 결과</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              사업자상태·국세청 과세유형·수임처 과세유형을 한눈에 봅니다.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-500">
+                  <th className="px-3 py-2">상호</th>
+                  <th className="px-3 py-2">담당</th>
+                  <th className="px-3 py-2">사업자상태</th>
+                  <th className="px-3 py-2">국세청 과세</th>
+                  <th className="px-3 py-2">수임처 과세</th>
+                  <th className="px-3 py-2">비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allRows.map(({ client, nts, taxLabel, clientTaxLabel, mismatch }) => (
+                  <tr
+                    key={client.id}
+                    className={[
+                      'border-b border-slate-50 last:border-b-0',
+                      mismatch ? 'bg-orange-50/50' : '',
+                    ].join(' ')}
+                  >
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/clients/${client.id}`}
+                        className="font-semibold text-slate-800 hover:text-blue-700 hover:underline"
+                      >
+                        {client.companyName || '(이름 없음)'}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{client.manager || '—'}</td>
+                    <td className="px-3 py-2">
+                      {nts?.checkedAt ? (
+                        <span
+                          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ntsBadgeClass(
+                            nts.statusCode,
+                          )}`}
+                        >
+                          {ntsStatusLabel(nts)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">미점검</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {taxLabel ? (
+                        <span
+                          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ntsTaxTypeBadgeClass(taxLabel)}`}
+                        >
+                          {taxLabel}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {clientTaxLabel ? (
+                        <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                          {clientTaxLabel}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500">
+                      {mismatch ? (
+                        <span className="font-semibold text-orange-700">과세유형 불일치</span>
+                      ) : nts?.checkedAt ? (
+                        new Date(nts.checkedAt).toLocaleDateString('ko-KR')
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <p className={`${portalAlertInfo} mt-5`}>
         자동 점검은 매주 월요일 오전 9시에 전체 거래처를 대상으로 실행됩니다. 배지가 오래됐다면 “지금 다시 점검”으로
         즉시 갱신할 수 있습니다.
@@ -305,13 +424,23 @@ export default function NtsMonitorPage() {
   );
 }
 
-function StatPill({ label, count, tone }: { label: string; count: number; tone: 'red' | 'amber' | 'slate' }) {
+function StatPill({
+  label,
+  count,
+  tone,
+}: {
+  label: string;
+  count: number;
+  tone: 'red' | 'amber' | 'orange' | 'slate';
+}) {
   const toneClass =
     tone === 'red'
       ? 'border-red-200 bg-red-50 text-red-700'
       : tone === 'amber'
         ? 'border-amber-200 bg-amber-50 text-amber-800'
-        : 'border-slate-200 bg-slate-50 text-slate-600';
+        : tone === 'orange'
+          ? 'border-orange-200 bg-orange-50 text-orange-800'
+          : 'border-slate-200 bg-slate-50 text-slate-600';
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${toneClass}`}>
       {label}

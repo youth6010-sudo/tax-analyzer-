@@ -71,3 +71,24 @@ export function ntsTaxTypeBadgeClass(label: string): string {
       return 'border-slate-200 bg-slate-50 text-slate-600';
   }
 }
+
+/** 수임처 intakeData.taxKind(더존 과세유형) → 간이/일반/면세 */
+export function normalizeClientTaxKind(raw: string): '' | '간이' | '일반' | '면세' {
+  const k = String(raw || '').replace(/\s/g, '');
+  if (!k) return '';
+  if (/간이/.test(k)) return '간이';
+  if (/면세/.test(k) && !/과세/.test(k)) return '면세';
+  if (/일반|과세/.test(k)) return '일반';
+  return '';
+}
+
+/** 수임처 과세유형 vs 국세청 과세유형 불일치 */
+export function getNtsTaxTypeMismatch(
+  clientTaxKind: string,
+  ntsTaxType: string,
+): { clientLabel: string; ntsLabel: string } | null {
+  const clientNorm = normalizeClientTaxKind(clientTaxKind);
+  const ntsNorm = normalizeNtsTaxType(ntsTaxType);
+  if (!clientNorm || !ntsNorm || clientNorm === ntsNorm) return null;
+  return { clientLabel: clientNorm, ntsLabel: ntsNorm };
+}
