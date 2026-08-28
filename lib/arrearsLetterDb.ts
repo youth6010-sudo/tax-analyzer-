@@ -606,30 +606,6 @@ export async function previewLedgerLetterDiffs(
   return { letterDiffCount, sample };
 }
 
-export async function applyLedgerLetterDiffsForCodes(
-  ledgerRows: Array<{ externalCode: string; balance: number }>,
-  asOfDate: string,
-  actorName: string,
-): Promise<{ applied: number }> {
-  const db = getDb();
-  const entries = await db
-    .select({
-      id: arrearsEntries.id,
-      externalCode: arrearsEntries.externalCode,
-    })
-    .from(arrearsEntries);
-  const byCode = new Map(entries.map(e => [e.externalCode, e]));
-
-  let applied = 0;
-  for (const r of ledgerRows) {
-    const ent = byCode.get(r.externalCode);
-    if (!ent) continue;
-    const result = await syncLetterDiffWithLedger(ent.id, r.balance, asOfDate, actorName);
-    if (result.applied) applied += 1;
-  }
-  return { applied };
-}
-
 export type FeeEventPreviewRow = ParsedFeeEvent & {
   matched: boolean;
   entryId: string | null;
