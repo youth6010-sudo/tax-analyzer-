@@ -118,19 +118,15 @@ function isLegacyOrEmptyCategory(s: string): boolean {
  * 표시용 getClientCategory()와 달리 필터·집계에만 사용한다.
  */
 export function getClientCategoryForFilter(client: ClientRecord): ClientMainCategory | null {
-  const s = getClientCategory(client);
+  const board = getMainBoardCategory(client);
+  if (board) return board;
 
+  const s = getClientCategory(client);
   if ((CLIENT_MAIN_CATEGORIES as readonly string[]).includes(s)) {
     return s as ClientMainCategory;
   }
-
   if (s === NON_BUSINESS_CATEGORY) return '개인';
-
-  if (s !== UNCategorized && s && !LEGACY_EMPTY_CATEGORY_ALIASES.has(s)) {
-    return null;
-  }
-
-  return categoryFromEntityType(client.businessEntityType);
+  return null;
 }
 
 function isAllCategoryFiltersSelected(filters: readonly string[]): boolean {
@@ -170,10 +166,16 @@ export function getClientCategory(client: ClientRecord): string {
   // 지주택은 서비스 분류보다 우선
   if (s === JISUTAEK_CATEGORY) return s;
 
-  const derived = deriveMainCategoryFromEntityAndServices(
-    client.businessEntityType as BusinessEntityType | '',
-    client.serviceTypes,
-  );
+  const entity = (client.businessEntityType || '') as BusinessEntityType | '';
+  const services = client.serviceTypes ?? [];
+  const hasEntity = !!entity;
+  const hasFilingOrBookkeeping =
+    services.includes('filing') || services.includes('bookkeeping');
+
+  // 대분류·구분·기장/신고 모두 없음
+  if (!s && !hasEntity && !hasFilingOrBookkeeping) return UNCategorized;
+
+  const derived = deriveMainCategoryFromEntityAndServices(entity, services);
   // 신고만(기장 없음) → 신고대리 (저장된 개인·법인·미사용보다 우선)
   if (derived === SINGO_DAERI) return SINGO_DAERI;
 
@@ -186,6 +188,32 @@ export function getClientCategory(client: ClientRecord): string {
   if (s) return s;
   if (derived) return derived;
   return UNCategorized;
+}
+
+/**
+ * 메인보드·담당자 열 분류.
+ * 개인/법인/신고대리/지주택/미사용 또는 null — null이면 주요 열에 넣지 않음.
+ */
+export function getMainBoardCategory(client: ClientRecord): ClientMainCategory | null {
+  const raw = client.intakeData?.category;
+  const s = raw != null ? String(raw).trim() : '';
+
+  if (s === JISUTAEK_CATEGORY || s === UNUSED_CATEGORY) return s;
+  if (s === '개인' || s === '법인' || s === SINGO_DAERI) return s;
+
+  const entity = (client.businessEntityType || '') as BusinessEntityType | '';
+  const services = client.serviceTypes ?? [];
+  const hasEntity = !!entity;
+  const hasFilingOrBookkeeping =
+    services.includes('filing') || services.includes('bookkeeping');
+
+  if (!s && !hasEntity && !hasFilingOrBookkeeping) return null;
+
+  const derived = deriveMainCategoryFromEntityAndServices(entity, services);
+  if (derived) return derived;
+
+  if (s === NON_BUSINESS_CATEGORY) return '개인';
+  return null;
 }
 
 export type OtherCategoryGroup = {
@@ -204,16 +232,7 @@ export function splitManagerClientsByCategory(clients: ClientRecord[]): {
   const otherMap = new Map<string, ClientRecord[]>();
 
   for (const c of clients) {
-    const raw = getClientCategory(c);
-    let filterCat: ClientMainCategory | null = null;
-
-    if ((CLIENT_MAIN_CATEGORIES as readonly string[]).includes(raw)) {
-      filterCat = raw as ClientMainCategory;
-    } else if (raw === NON_BUSINESS_CATEGORY) {
-      filterCat = '개인';
-    } else if (raw === UNCategorized || !raw || LEGACY_EMPTY_CATEGORY_ALIASES.has(raw)) {
-      filterCat = categoryFromEntityType(c.businessEntityType);
-    }
+    const filterCat = getMainBoardCategory(c);
 
     if (filterCat === '개인') {
       personal.push(c);
@@ -227,6 +246,10 @@ export function splitManagerClientsByCategory(clients: ClientRecord[]): {
       const arr = otherMap.get(filterCat) ?? [];
       arr.push(c);
       otherMap.set(filterCat, arr);
+    } else if (filterCat === null) {
+      const arr = otherMap.get(UNCategorized) ?? [];
+      arr.push(c);
+      otherMap.set(UNCategorized, arr);
     } else {
       const cat = getClientCategory(c);
       const arr = otherMap.get(cat) ?? [];

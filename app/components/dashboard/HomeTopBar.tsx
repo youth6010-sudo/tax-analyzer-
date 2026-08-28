@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ClientRecord } from '@/app/types/client';
-import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { getMainBoardCategory } from '@/app/utils/clientsGrouping';
 import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 import TaxFilterBar from './TaxFilterBar';
 
@@ -17,11 +17,8 @@ export default function HomeTopBar({ userName }: { userName: string }) {
     return subscribePortal(() => setClients(getPortalClients()));
   }, []);
 
-  const corporate = clients.filter(c => getClientCategory(c) === '법인').length;
-  const personal = clients.filter(c => {
-    const cat = getClientCategory(c);
-    return cat !== '법인' && cat !== SINGO_DAERI && cat !== '지주택';
-  }).length;
+  const corporate = clients.filter(c => getMainBoardCategory(c) === '법인').length;
+  const personal = clients.filter(c => getMainBoardCategory(c) === '개인').length;
   const mainTotal = corporate + personal;
 
   return (

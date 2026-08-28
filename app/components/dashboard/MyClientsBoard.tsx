@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
-import { getClientCategory, getClientDouzoneCode, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { getClientDouzoneCode, getMainBoardCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import {
   formatClientClosureDate,
   getClientClosureKind,
@@ -449,11 +449,11 @@ export default function MyClientsBoard() {
         closure.push(c);
         continue;
       }
-      const cat = getClientCategory(c);
+      const cat = getMainBoardCategory(c);
       if (cat === '법인') corp.push(c);
       else if (cat === SINGO_DAERI) singo.push(c);
       else if (cat === '지주택') jisu.push(c);
-      else pers.push(c);
+      else if (cat === '개인') pers.push(c);
     }
     const order = (a: ClientRecord, b: ClientRecord) => {
       const rank = (c: ClientRecord) => {

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { ClientRecord } from '@/app/types/client';
 import { portalCard, portalEmptyState } from '@/app/components/portal/uiClasses';
-import { getClientCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { getMainBoardCategory } from '@/app/utils/clientsGrouping';
 import { getPortalClients, hydratePortal, subscribePortal } from '@/app/utils/portalStore';
 
 export default function HomeWelcomeSection({ userName }: { userName: string }) {
@@ -19,11 +19,8 @@ export default function HomeWelcomeSection({ userName }: { userName: string }) {
   }, []);
 
   // 법인 / 개인 — 신고대리·지주택은 합계에서 제외
-  const corporate = clients.filter(c => getClientCategory(c) === '법인').length;
-  const personal = clients.filter(c => {
-    const cat = getClientCategory(c);
-    return cat !== '법인' && cat !== SINGO_DAERI && cat !== '지주택';
-  }).length;
+  const corporate = clients.filter(c => getMainBoardCategory(c) === '법인').length;
+  const personal = clients.filter(c => getMainBoardCategory(c) === '개인').length;
   const mainTotal = corporate + personal;
 
   return (

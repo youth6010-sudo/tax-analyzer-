@@ -20,6 +20,7 @@ import {
 } from '@/app/utils/churnMatch';
 import { syncMainCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import {
   applyManagerToLinkedInquiries,
   nextManagerAfterChange,
@@ -32,26 +33,14 @@ export type ClientPatch = ContactUpdatePayload & {
   program?: string;
 };
 
-/** 프로세스당 1회 — 과거 신고대리 전환 churned 복구 */
-let singoDaeriRepairOnce: Promise<number> | null = null;
-
-function ensureSingoDaeriChurnRepaired(): Promise<number> {
-  if (!singoDaeriRepairOnce) {
-    singoDaeriRepairOnce = repairSingoDaeriChurnConversions().catch(err => {
-      singoDaeriRepairOnce = null;
-      console.error('[repairSingoDaeriChurnConversions]', err);
-      return 0;
-    });
-  }
-  return singoDaeriRepairOnce;
-}
-
 /** intakeData.category — 구분·서비스와 맞춤 (신고만→신고대리, 기장→법인/개인) */
 function applySyncedCategory(
   intake: Record<string, unknown>,
   entityType: string | undefined,
   serviceTypes: readonly string[] | undefined,
+  opts?: { syncCategory?: boolean },
 ): Record<string, unknown> {
+  if (opts?.syncCategory === false) return intake;
   const synced = syncMainCategory(
     intake.category,
     (entityType || '') as BusinessEntityType | '',
@@ -78,7 +67,6 @@ export interface ClientListFilters {
 }
 
 export async function listClients(filters: ClientListFilters = {}) {
-  await ensureSingoDaeriChurnRepaired();
   const db = getDb();
   const conditions = [];
 
@@ -537,7 +525,22 @@ export async function updateClientIntake(
 
   let mergedIntake = { ...(existing.intakeData ?? {}), ...(data.intakeData ?? {}) };
   if (patch.mobilePhone !== undefined) mergedIntake.mobilePhone = patch.mobilePhone.trim();
-  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
+  const prevCategory = String(existing.intakeData?.category ?? '').trim();
+  const nextCategory =
+    mergedIntake.category != null ? String(mergedIntake.category).trim() : prevCategory;
+  const entityChanged =
+    patch.businessEntityType !== undefined &&
+    (patch.businessEntityType || '') !== (existing.businessEntityType || '');
+  const servicesChanged =
+    patch.serviceTypes !== undefined &&
+    JSON.stringify(patch.serviceTypes) !== JSON.stringify(existing.serviceTypes ?? []);
+  const categoryChanged =
+    data.intakeData != null &&
+    'category' in data.intakeData &&
+    nextCategory !== prevCategory;
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices, {
+    syncCategory: entityChanged || servicesChanged || categoryChanged,
+  });
 
   let nextAssignedUserId = existing.assignedUserId;
   if (patch.manager !== undefined) {
@@ -620,7 +623,20 @@ export async function updateClient(
   if (payload.mobilePhone !== undefined) {
     mergedIntake.mobilePhone = payload.mobilePhone.trim();
   }
-  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices);
+  const prevCategory = String(existing.intakeData?.category ?? '').trim();
+  const nextCategory =
+    mergedIntake.category != null ? String(mergedIntake.category).trim() : prevCategory;
+  const entityChanged = nextEntity !== (existing.businessEntityType || '');
+  const servicesChanged =
+    JSON.stringify(payload.serviceTypes ?? []) !==
+    JSON.stringify(existing.serviceTypes ?? []);
+  const categoryChanged =
+    payload.intakeData != null &&
+    'category' in payload.intakeData &&
+    nextCategory !== prevCategory;
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, nextServices, {
+    syncCategory: entityChanged || servicesChanged || categoryChanged,
+  });
 
   // 담당자 변경 시 assignedUserId도 맞춤 — 안 맞으면 mine=1에 이전 담당 대시보드에 남음
   let nextAssignedUserId = existing.assignedUserId;
@@ -694,7 +710,19 @@ export async function updateClientDetail(
       : existing.businessEntityType || '';
 
   let mergedIntake = mergeIntakeDataPatch(existing.intakeData, patch.intakeData);
-  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, existing.serviceTypes);
+  const prevCategory = String(existing.intakeData?.category ?? '').trim();
+  const nextCategory =
+    mergedIntake.category != null ? String(mergedIntake.category).trim() : prevCategory;
+  const entityChanged =
+    patch.businessEntityType !== undefined &&
+    (patch.businessEntityType || '') !== (existing.businessEntityType || '');
+  const categoryChanged =
+    patch.intakeData != null &&
+    'category' in patch.intakeData &&
+    nextCategory !== prevCategory;
+  mergedIntake = applySyncedCategory(mergedIntake, nextEntity, existing.serviceTypes, {
+    syncCategory: entityChanged || categoryChanged,
+  });
 
   const [row] = await db
     .update(clients)
@@ -996,8 +1024,13 @@ export async function churnClient(
 /**
  * 과거 「신고대리 전환」유출: churned로만 남아 목록에서 사라진 건을
  * active + 신고대리로 복구 (이력은 churn_records에 유지).
+ * app_config에 1회 완료 기록 — 배포마다 재실행하지 않음.
  */
 export async function repairSingoDaeriChurnConversions(): Promise<number> {
+  const REPAIR_KEY = 'client_classification_repair_v1';
+  const done = await getAppConfig<{ appliedAt?: string; fixed?: number }>(REPAIR_KEY);
+  if (done?.appliedAt) return 0;
+
   const db = getDb();
   const rows = await db
     .select({
@@ -1018,7 +1051,14 @@ export async function repairSingoDaeriChurnConversions(): Promise<number> {
         .map(r => r.clientId as string),
     ),
   ];
-  if (!clientIds.length) return 0;
+  if (!clientIds.length) {
+    await setAppConfig(REPAIR_KEY, {
+      appliedAt: new Date().toISOString(),
+      fixed: 0,
+      note: 'no matching churn client ids',
+    });
+    return 0;
+  }
 
   const targets = await db
     .select()
@@ -1045,6 +1085,10 @@ export async function repairSingoDaeriChurnConversions(): Promise<number> {
       .where(eq(clients.id, row.id));
     fixed += 1;
   }
+  await setAppConfig(REPAIR_KEY, {
+    appliedAt: new Date().toISOString(),
+    fixed,
+  });
   return fixed;
 }
 
