@@ -6,8 +6,10 @@
 // 인증: Vercel Cron 은 CRON_SECRET 이 설정돼 있으면
 //   Authorization: Bearer <CRON_SECRET> 헤더를 자동으로 붙여 호출한다.
 import { NextRequest, NextResponse } from 'next/server';
-import { listActiveClientBusinessNos, setClientNtsStatus } from '@/lib/clientsDb';
+import { listClients, setClientNtsStatus } from '@/lib/clientsDb';
 import { checkStatus, digits10, isNtsConfigured } from '@/lib/nts';
+import { clientExcludedFromNtsMonitor } from '@/app/utils/ntsMonitor';
+import { hasPlaceholderBizNo } from '@/app/utils/filingCheck';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,7 +34,10 @@ export async function GET(request: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    const clients = await listActiveClientBusinessNos();
+    const all = await listClients({ includeChurned: false });
+    const clients = all
+      .filter(c => !clientExcludedFromNtsMonitor(c) && !hasPlaceholderBizNo(c))
+      .map(c => ({ id: c.id, businessNo: c.businessNo || '' }));
     if (clients.length === 0) {
       return NextResponse.json({ ok: true, scanned: 0, updated: 0, closed: 0 });
     }

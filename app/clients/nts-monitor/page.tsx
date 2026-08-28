@@ -14,14 +14,17 @@ import {
 import type { ClientRecord, ChurnRecordView, NtsStatusCache } from '../../types/client';
 import {
   formatNtsDate,
-  getNtsTaxTypeMismatch,
   ntsBadgeClass,
   normalizeClientTaxKind,
   normalizeNtsTaxType,
   ntsStatusLabel,
   ntsTaxTypeBadgeClass,
 } from '@/app/utils/ntsStatus';
-import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
+import {
+  classifyNtsMonitorRow,
+  clientExcludedFromNtsMonitor,
+  type NtsMonitorRowKind,
+} from '@/app/utils/ntsMonitor';
 import {
   getPortalChurnRecords,
   hydratePortal,
@@ -46,36 +49,15 @@ type NtsRow = {
   taxLabel: string;
   clientTaxLabel: string;
   mismatch: boolean;
-  kind: 'closed' | 'resting' | 'mismatch' | 'unchecked' | 'ok';
+  kind: NtsMonitorRowKind;
   needsAction: boolean;
 };
-
-function isClosedCode(code: string): boolean {
-  return code === '02' || code === '03';
-}
 
 function effectiveNts(c: ClientRecord, override: Record<string, NtsStatusCache>): NtsStatusCache | null {
   return override[c.id] ?? c.nts ?? null;
 }
 
-function rowKind(
-  client: ClientRecord,
-  nts: NtsStatusCache | null,
-  mismatch: boolean,
-  churnRecords: ChurnRecordView[],
-): NtsRow['kind'] {
-  if (!nts?.checkedAt) return 'unchecked';
-  if (nts.statusCode === '03') return 'closed';
-  if (nts.statusCode === '02') {
-    const merged = { ...client, nts };
-    if (clientNeedsNtsAttention(merged, churnRecords)) return 'resting';
-    return 'ok';
-  }
-  if (mismatch) return 'mismatch';
-  return 'ok';
-}
-
-const KIND_RANK: Record<NtsRow['kind'], number> = {
+const KIND_RANK: Record<NtsMonitorRowKind, number> = {
   closed: 0,
   resting: 1,
   mismatch: 2,
@@ -152,11 +134,12 @@ export default function NtsMonitorPage() {
   }, []);
 
   const runCheck = useCallback(async () => {
-    if (clients.length === 0) return;
+    const targets = clients.filter(c => !clientExcludedFromNtsMonitor(c));
+    if (targets.length === 0) return;
     setChecking(true);
     setError('');
     try {
-      const ids = clients.map(c => c.id);
+      const ids = targets.map(c => c.id);
       const res = await fetch('/api/clients/nts/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,6 +172,11 @@ export default function NtsMonitorPage() {
     }
   }, [clients, mineOnly]);
 
+  const eligibleClients = useMemo(
+    () => clients.filter(c => !clientExcludedFromNtsMonitor(c)),
+    [clients],
+  );
+
   const { rows, closedCount, restingCount, uncheckedCount, mismatchCount, attentionCount, lastCheckedAt } =
     useMemo(() => {
       const all: NtsRow[] = [];
@@ -199,15 +187,16 @@ export default function NtsMonitorPage() {
       let attention = 0;
       let last = 0;
 
-      for (const c of clients) {
+      for (const c of eligibleClients) {
         const nts = effectiveNts(c, override);
         const taxLabel = nts?.taxType ? normalizeNtsTaxType(nts.taxType) : '';
         const clientTaxKind = String(c.intakeData?.taxKind ?? '');
         const clientTaxLabel = normalizeClientTaxKind(clientTaxKind);
-        const hasMismatch = !!(nts && getNtsTaxTypeMismatch(clientTaxKind, nts.taxType));
-        const kind = rowKind(c, nts, hasMismatch, churnRecords);
-        const needsAction =
-          kind === 'closed' || kind === 'resting' || (kind === 'unchecked' && !!c.businessNo?.replace(/\D/g, ''));
+        const { kind, mismatch: hasMismatch, needsAction } = classifyNtsMonitorRow(
+          c,
+          nts,
+          churnRecords,
+        );
 
         if (kind === 'closed') closed += 1;
         if (kind === 'resting') resting += 1;
@@ -246,7 +235,7 @@ export default function NtsMonitorPage() {
         attentionCount: attention,
         lastCheckedAt: last ? new Date(last) : null,
       };
-    }, [clients, override, churnRecords]);
+    }, [eligibleClients, override, churnRecords]);
 
   const filteredRows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -268,7 +257,7 @@ export default function NtsMonitorPage() {
         case 'closed':
           return row.kind === 'closed' || row.kind === 'resting';
         case 'mismatch':
-          return row.mismatch;
+          return row.kind === 'mismatch';
         case 'unchecked':
           return row.kind === 'unchecked';
         case 'all':
@@ -282,7 +271,7 @@ export default function NtsMonitorPage() {
     <PortalPageShell>
       <PortalPageHeader
         title="폐업·휴업 점검"
-        description="국세청 사업자상태·과세유형을 점검합니다. 매주 월요일 자동 점검됩니다."
+        description="기장 대상(개인·법인)의 국세청 사업자상태·과세유형을 점검합니다. 신고대리·지주택·비사업자·유출 수임처는 제외됩니다."
       />
 
       <div className={`${portalCard} mb-4 flex flex-wrap items-center gap-3 p-4`}>
@@ -339,7 +328,7 @@ export default function NtsMonitorPage() {
           <button
             type="button"
             onClick={runCheck}
-            disabled={checking || !ready || clients.length === 0}
+            disabled={checking || !ready || eligibleClients.length === 0}
             className={portalBtnPrimary}
           >
             {checking ? '점검 중…' : '지금 다시 점검'}
@@ -434,8 +423,8 @@ export default function NtsMonitorPage() {
       </div>
 
       <p className={`${portalAlertInfo} mt-5`}>
-        자동 점검은 매주 월요일 오전 9시에 실행됩니다. 과세유형은 국세청 조회값과 수임처(더존) 과세유형을
-        비교합니다.
+        자동 점검은 매주 월요일 오전 9시에 실행됩니다. 신고대리·지주택·비사업자·미사용·유출(또는 유출 이력) 수임처는
+        목록에 포함하지 않습니다.
       </p>
     </PortalPageShell>
   );
