@@ -476,7 +476,7 @@ function SectionTable({
 
 function ValueCell({
   value,
-  secret = false,
+  secret: _secret = false,
   style,
 }: {
   value: string;
@@ -484,7 +484,6 @@ function ValueCell({
   style?: CSSProperties;
 }) {
   const [copied, setCopied] = useState(false);
-  const [revealed, setRevealed] = useState(false);
   const copy = async () => {
     if (!value) return;
     try {
@@ -495,29 +494,17 @@ function ValueCell({
       /* clipboard unavailable */
     }
   };
-  const masked = secret && !revealed;
   return (
     <td
       style={style}
       className={`px-2 py-1 font-mono leading-tight transition-colors whitespace-nowrap ${
         copied ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
       }`}
-      title={value ? (masked ? '클릭해 보기 · 더블클릭 복사' : `${value} (클릭 복사)`) : ''}
-      onClick={() => {
-        if (masked) {
-          setRevealed(true);
-          return;
-        }
-        void copy();
-      }}
-      onDoubleClick={() => void copy()}
+      title={value ? `${value} (클릭 복사)` : ''}
+      onClick={() => void copy()}
     >
       {value ? (
-        masked ? (
-          <span className="cursor-pointer tracking-widest text-slate-400">••••••</span>
-        ) : (
-          <span className="cursor-pointer hover:bg-slate-50">{value}</span>
-        )
+        <span className="cursor-pointer hover:bg-slate-50">{value}</span>
       ) : (
         <span className="text-slate-300">-</span>
       )}
