@@ -9,6 +9,7 @@ import {
   portalBtnPrimary,
   portalBtnSecondary,
   portalCard,
+  portalInput,
 } from '../../components/portal/uiClasses';
 import type { ClientRecord, ChurnRecordView, NtsStatusCache } from '../../types/client';
 import {
@@ -37,6 +38,18 @@ interface BatchResult {
   checkedAt?: string;
 }
 
+type ViewFilter = 'attention' | 'closed' | 'mismatch' | 'unchecked' | 'all';
+
+type NtsRow = {
+  client: ClientRecord;
+  nts: NtsStatusCache | null;
+  taxLabel: string;
+  clientTaxLabel: string;
+  mismatch: boolean;
+  kind: 'closed' | 'resting' | 'mismatch' | 'unchecked' | 'ok';
+  needsAction: boolean;
+};
+
 function isClosedCode(code: string): boolean {
   return code === '02' || code === '03';
 }
@@ -44,6 +57,39 @@ function isClosedCode(code: string): boolean {
 function effectiveNts(c: ClientRecord, override: Record<string, NtsStatusCache>): NtsStatusCache | null {
   return override[c.id] ?? c.nts ?? null;
 }
+
+function rowKind(
+  client: ClientRecord,
+  nts: NtsStatusCache | null,
+  mismatch: boolean,
+  churnRecords: ChurnRecordView[],
+): NtsRow['kind'] {
+  if (!nts?.checkedAt) return 'unchecked';
+  if (nts.statusCode === '03') return 'closed';
+  if (nts.statusCode === '02') {
+    const merged = { ...client, nts };
+    if (clientNeedsNtsAttention(merged, churnRecords)) return 'resting';
+    return 'ok';
+  }
+  if (mismatch) return 'mismatch';
+  return 'ok';
+}
+
+const KIND_RANK: Record<NtsRow['kind'], number> = {
+  closed: 0,
+  resting: 1,
+  mismatch: 2,
+  unchecked: 3,
+  ok: 4,
+};
+
+const FILTER_LABELS: Record<ViewFilter, string> = {
+  attention: '주의 필요',
+  closed: '폐업·휴업',
+  mismatch: '과세 불일치',
+  unchecked: '미점검',
+  all: '전체',
+};
 
 export default function NtsMonitorPage() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -53,6 +99,8 @@ export default function NtsMonitorPage() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [churnRecords, setChurnRecords] = useState<ChurnRecordView[]>(() => getPortalChurnRecords());
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('attention');
+  const [q, setQ] = useState('');
 
   const load = useCallback(async (mine: boolean) => {
     setReady(false);
@@ -81,6 +129,25 @@ export default function NtsMonitorPage() {
     return subscribePortal(() => {
       const portal = getPortalChurnRecords();
       if (portal.length > 0) setChurnRecords(portal);
+    });
+  }, []);
+
+  const ackResting = useCallback(async (clientId: string) => {
+    const res = await fetch(`/api/clients/${clientId}/nts-ack`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '확인 실패');
+    const now = new Date().toISOString();
+    setClients(prev =>
+      prev.map(c =>
+        c.id === clientId && c.nts
+          ? { ...c, nts: { ...c.nts, alertAckedAt: now, alertAckedCode: '02' } }
+          : c,
+      ),
+    );
+    setOverride(prev => {
+      const cur = prev[clientId];
+      if (!cur) return prev;
+      return { ...prev, [clientId]: { ...cur, alertAckedAt: now, alertAckedCode: '02' } };
     });
   }, []);
 
@@ -122,83 +189,139 @@ export default function NtsMonitorPage() {
     }
   }, [clients, mineOnly]);
 
-  const { flagged, closedCount, restingCount, uncheckedCount, mismatchCount, lastCheckedAt, allRows } =
+  const { rows, closedCount, restingCount, uncheckedCount, mismatchCount, attentionCount, lastCheckedAt } =
     useMemo(() => {
-    const flaggedList: Array<{ client: ClientRecord; nts: NtsStatusCache }> = [];
-    const rows: Array<{
-      client: ClientRecord;
-      nts: NtsStatusCache | null;
-      taxLabel: string;
-      clientTaxLabel: string;
-      mismatch: boolean;
-    }> = [];
-    let closed = 0;
-    let resting = 0;
-    let unchecked = 0;
-    let mismatch = 0;
-    let last = 0;
-    for (const c of clients) {
-      const nts = effectiveNts(c, override);
-      const taxLabel = nts?.taxType ? normalizeNtsTaxType(nts.taxType) : '';
-      const clientTaxKind = String(c.intakeData?.taxKind ?? '');
-      const clientTaxLabel = normalizeClientTaxKind(clientTaxKind);
-      const hasMismatch = !!(nts && getNtsTaxTypeMismatch(clientTaxKind, nts.taxType));
-      if (hasMismatch) mismatch += 1;
+      const all: NtsRow[] = [];
+      let closed = 0;
+      let resting = 0;
+      let unchecked = 0;
+      let mismatch = 0;
+      let attention = 0;
+      let last = 0;
 
-      rows.push({ client: c, nts, taxLabel, clientTaxLabel, mismatch: hasMismatch });
+      for (const c of clients) {
+        const nts = effectiveNts(c, override);
+        const taxLabel = nts?.taxType ? normalizeNtsTaxType(nts.taxType) : '';
+        const clientTaxKind = String(c.intakeData?.taxKind ?? '');
+        const clientTaxLabel = normalizeClientTaxKind(clientTaxKind);
+        const hasMismatch = !!(nts && getNtsTaxTypeMismatch(clientTaxKind, nts.taxType));
+        const kind = rowKind(c, nts, hasMismatch, churnRecords);
+        const needsAction =
+          kind === 'closed' || kind === 'resting' || (kind === 'unchecked' && !!c.businessNo?.replace(/\D/g, ''));
 
-      if (!nts || !nts.checkedAt) {
-        unchecked += 1;
-        continue;
+        if (kind === 'closed') closed += 1;
+        if (kind === 'resting') resting += 1;
+        if (kind === 'unchecked') unchecked += 1;
+        if (kind === 'mismatch') mismatch += 1;
+        if (kind !== 'ok') attention += 1;
+
+        if (nts?.checkedAt) {
+          const t = Date.parse(nts.checkedAt) || 0;
+          if (t > last) last = t;
+        }
+
+        all.push({
+          client: c,
+          nts,
+          taxLabel,
+          clientTaxLabel,
+          mismatch: hasMismatch,
+          kind,
+          needsAction,
+        });
       }
-      const t = Date.parse(nts.checkedAt) || 0;
-      if (t > last) last = t;
-      if (isClosedCode(nts.statusCode)) {
-        const merged = {
-          ...c,
-          nts: {
-            ...nts,
-            alertAckedAt: nts.alertAckedAt ?? c.nts?.alertAckedAt,
-            alertAckedCode: nts.alertAckedCode ?? c.nts?.alertAckedCode ?? '',
-          },
-        };
-        if (!clientNeedsNtsAttention(merged, churnRecords)) continue;
-        flaggedList.push({ client: merged, nts: merged.nts! });
-        if (nts.statusCode === '03') closed += 1;
-        else resting += 1;
+
+      all.sort((a, b) => {
+        const dr = KIND_RANK[a.kind] - KIND_RANK[b.kind];
+        if (dr !== 0) return dr;
+        return (a.client.companyName || '').localeCompare(b.client.companyName || '', 'ko');
+      });
+
+      return {
+        rows: all,
+        closedCount: closed,
+        restingCount: resting,
+        uncheckedCount: unchecked,
+        mismatchCount: mismatch,
+        attentionCount: attention,
+        lastCheckedAt: last ? new Date(last) : null,
+      };
+    }, [clients, override, churnRecords]);
+
+  const filteredRows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter(row => {
+      if (needle) {
+        const hay = [
+          row.client.companyName,
+          row.client.manager,
+          row.client.representative,
+          row.client.businessNo,
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(needle)) return false;
       }
-    }
-    rows.sort((a, b) =>
-      (a.client.companyName || '').localeCompare(b.client.companyName || '', 'ko'),
-    );
-    flaggedList.sort((a, b) => {
-      if (a.nts.statusCode !== b.nts.statusCode) return a.nts.statusCode === '03' ? -1 : 1;
-      return (a.client.companyName || '').localeCompare(b.client.companyName || '', 'ko');
+      switch (viewFilter) {
+        case 'attention':
+          return row.kind !== 'ok';
+        case 'closed':
+          return row.kind === 'closed' || row.kind === 'resting';
+        case 'mismatch':
+          return row.mismatch;
+        case 'unchecked':
+          return row.kind === 'unchecked';
+        case 'all':
+        default:
+          return true;
+      }
     });
-    return {
-      flagged: flaggedList,
-      closedCount: closed,
-      restingCount: resting,
-      uncheckedCount: unchecked,
-      mismatchCount: mismatch,
-      lastCheckedAt: last ? new Date(last) : null,
-      allRows: rows,
-    };
-  }, [clients, override, churnRecords]);
+  }, [rows, viewFilter, q]);
 
   return (
     <PortalPageShell>
       <PortalPageHeader
         title="폐업·휴업 점검"
-        description="국세청 사업자상태·과세유형으로 폐업·휴업·과세유형 불일치를 모아 봅니다. 매주 월요일 자동 점검됩니다."
+        description="국세청 사업자상태·과세유형을 점검합니다. 매주 월요일 자동 점검됩니다."
       />
 
       <div className={`${portalCard} mb-4 flex flex-wrap items-center gap-3 p-4`}>
         <div className="flex flex-wrap gap-2">
-          <StatPill label="폐업" count={closedCount} tone="red" />
-          <StatPill label="휴업" count={restingCount} tone="amber" />
-          <StatPill label="과세유형 불일치" count={mismatchCount} tone="orange" />
-          <StatPill label="미점검" count={uncheckedCount} tone="slate" />
+          <StatPill
+            label="주의 필요"
+            count={attentionCount}
+            tone="orange"
+            active={viewFilter === 'attention'}
+            onClick={() => setViewFilter('attention')}
+          />
+          <StatPill
+            label="폐업"
+            count={closedCount}
+            tone="red"
+            active={viewFilter === 'closed'}
+            onClick={() => setViewFilter('closed')}
+          />
+          <StatPill
+            label="휴업"
+            count={restingCount}
+            tone="amber"
+            active={viewFilter === 'closed'}
+            onClick={() => setViewFilter('closed')}
+          />
+          <StatPill
+            label="과세 불일치"
+            count={mismatchCount}
+            tone="orange"
+            active={viewFilter === 'mismatch'}
+            onClick={() => setViewFilter('mismatch')}
+          />
+          <StatPill
+            label="미점검"
+            count={uncheckedCount}
+            tone="slate"
+            active={viewFilter === 'unchecked'}
+            onClick={() => setViewFilter('unchecked')}
+          />
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-3">
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
@@ -232,195 +355,223 @@ export default function NtsMonitorPage() {
         </p>
       )}
 
-      {!ready ? (
-        <p className="portal-meta py-10 text-center">불러오는 중…</p>
-      ) : flagged.length === 0 ? (
-        <div className={`${portalCard} p-8 text-center`}>
-          <p className="text-sm font-semibold text-slate-700">현재 폐업·휴업으로 확인된 거래처가 없습니다.</p>
-          {uncheckedCount > 0 && (
-            <p className="mt-1 text-xs text-slate-400">
-              아직 점검되지 않은 거래처가 {uncheckedCount}곳 있습니다. “지금 다시 점검”으로 즉시 확인할 수 있습니다.
-            </p>
-          )}
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {flagged.map(({ client, nts }) => (
-            <li key={client.id} className={`${portalCard} flex flex-wrap items-center gap-3 p-3.5`}>
-              <span
-                className={`inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-xs font-bold ${ntsBadgeClass(
-                  nts.statusCode,
-                )}`}
+      <div className={`${portalCard} overflow-hidden`}>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
+          <div className="flex flex-wrap gap-1">
+            {(Object.keys(FILTER_LABELS) as ViewFilter[]).map(key => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setViewFilter(key)}
+                className={[
+                  'rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors',
+                  viewFilter === key
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                ].join(' ')}
               >
-                {ntsStatusLabel(nts)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/clients/${client.id}`}
-                  className="block truncate text-sm font-bold text-slate-800 hover:text-blue-700 hover:underline"
-                >
-                  {client.companyName || '(이름 없음)'}
-                </Link>
-                <p className="truncate text-xs text-slate-500">
-                  {[
-                    client.manager,
-                    client.representative,
-                    client.businessNo,
-                    nts.closedDate ? `폐업일 ${formatNtsDate(nts.closedDate)}` : '',
-                    nts.taxType ? `국세청 ${normalizeNtsTaxType(nts.taxType)}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              </div>
-              {nts.statusCode === '02' ? (
+                {FILTER_LABELS[key]}
+                {key === 'attention' && attentionCount > 0 ? ` (${attentionCount})` : ''}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="상호·담당·사업자번호 검색"
+            className={`${portalInput} ml-auto min-w-[10rem] max-w-xs text-xs`}
+          />
+        </div>
+
+        {!ready ? (
+          <p className="portal-meta py-12 text-center">불러오는 중…</p>
+        ) : filteredRows.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-sm font-semibold text-slate-700">
+              {viewFilter === 'attention'
+                ? '주의가 필요한 거래처가 없습니다.'
+                : `${FILTER_LABELS[viewFilter]} 항목이 없습니다.`}
+            </p>
+            {viewFilter === 'attention' && uncheckedCount > 0 && (
+              <p className="mt-1 text-xs text-slate-400">
+                미점검 {uncheckedCount}곳 —{' '}
                 <button
                   type="button"
-                  className={`${portalBtnSecondary} shrink-0`}
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`/api/clients/${client.id}/nts-ack`, { method: 'POST' });
-                      const data = await res.json().catch(() => ({}));
-                      if (!res.ok) throw new Error(data.error || '확인 실패');
-                      setClients(prev =>
-                        prev.map(c =>
-                          c.id === client.id && c.nts
-                            ? {
-                                ...c,
-                                nts: {
-                                  ...c.nts,
-                                  alertAckedAt: new Date().toISOString(),
-                                  alertAckedCode: '02',
-                                },
-                              }
-                            : c,
-                        ),
-                      );
-                      setOverride(prev => {
-                        const cur = prev[client.id] ?? client.nts;
-                        if (!cur) return prev;
-                        return {
-                          ...prev,
-                          [client.id]: {
-                            ...cur,
-                            alertAckedAt: new Date().toISOString(),
-                            alertAckedCode: '02',
-                          },
-                        };
-                      });
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : '확인 실패');
-                    }
-                  }}
+                  className="font-semibold text-blue-600 hover:underline"
+                  onClick={() => setViewFilter('unchecked')}
                 >
-                  확인
+                  미점검 목록 보기
                 </button>
-              ) : (
-                <Link
-                  href={`/clients/churn?prefillClientId=${client.id}`}
-                  className={`${portalBtnSecondary} shrink-0`}
-                >
-                  유출 등록 →
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {ready && allRows.length > 0 && (
-        <div className={`${portalCard} mt-6 overflow-hidden`}>
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-bold text-slate-800">점검 결과</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              사업자상태·국세청 과세유형·수임처 과세유형을 한눈에 봅니다.
-            </p>
+              </p>
+            )}
           </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-xs">
+            <table className="w-full min-w-[520px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-500">
-                  <th className="px-3 py-2">상호</th>
-                  <th className="px-3 py-2">담당</th>
-                  <th className="px-3 py-2">사업자상태</th>
-                  <th className="px-3 py-2">국세청 과세</th>
-                  <th className="px-3 py-2">수임처 과세</th>
-                  <th className="px-3 py-2">비고</th>
+                <tr className="border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="px-4 py-2.5 font-semibold normal-case">거래처</th>
+                  <th className="px-3 py-2.5 w-24">상태</th>
+                  <th className="px-3 py-2.5 w-36">과세유형</th>
+                  <th className="px-4 py-2.5 w-28 text-right">조치</th>
                 </tr>
               </thead>
-              <tbody>
-                {allRows.map(({ client, nts, taxLabel, clientTaxLabel, mismatch }) => (
-                  <tr
-                    key={client.id}
-                    className={[
-                      'border-b border-slate-50 last:border-b-0',
-                      mismatch ? 'bg-orange-50/50' : '',
-                    ].join(' ')}
-                  >
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/clients/${client.id}`}
-                        className="font-semibold text-slate-800 hover:text-blue-700 hover:underline"
-                      >
-                        {client.companyName || '(이름 없음)'}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{client.manager || '—'}</td>
-                    <td className="px-3 py-2">
-                      {nts?.checkedAt ? (
-                        <span
-                          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ntsBadgeClass(
-                            nts.statusCode,
-                          )}`}
-                        >
-                          {ntsStatusLabel(nts)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">미점검</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {taxLabel ? (
-                        <span
-                          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ntsTaxTypeBadgeClass(taxLabel)}`}
-                        >
-                          {taxLabel}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {clientTaxLabel ? (
-                        <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                          {clientTaxLabel}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-slate-500">
-                      {mismatch ? (
-                        <span className="font-semibold text-orange-700">과세유형 불일치</span>
-                      ) : nts?.checkedAt ? (
-                        new Date(nts.checkedAt).toLocaleDateString('ko-KR')
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
+              <tbody className="divide-y divide-slate-50">
+                {filteredRows.map(row => (
+                  <ResultRow key={row.client.id} row={row} onAckResting={ackResting} onError={setError} />
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+
+        {ready && filteredRows.length > 0 && (
+          <p className="border-t border-slate-50 px-4 py-2 text-[11px] text-slate-400">
+            {filteredRows.length}건 표시 · 전체 {rows.length}건
+          </p>
+        )}
+      </div>
 
       <p className={`${portalAlertInfo} mt-5`}>
-        자동 점검은 매주 월요일 오전 9시에 전체 거래처를 대상으로 실행됩니다. 배지가 오래됐다면 “지금 다시 점검”으로
-        즉시 갱신할 수 있습니다.
+        자동 점검은 매주 월요일 오전 9시에 실행됩니다. 과세유형은 국세청 조회값과 수임처(더존) 과세유형을
+        비교합니다.
       </p>
     </PortalPageShell>
+  );
+}
+
+function ResultRow({
+  row,
+  onAckResting,
+  onError,
+}: {
+  row: NtsRow;
+  onAckResting: (clientId: string) => Promise<void>;
+  onError: (msg: string) => void;
+}) {
+  const { client, nts, taxLabel, clientTaxLabel, mismatch, kind } = row;
+  const [acking, setAcking] = useState(false);
+
+  const rowBg =
+    kind === 'closed'
+      ? 'bg-red-50/40'
+      : kind === 'resting'
+        ? 'bg-amber-50/30'
+        : mismatch
+          ? 'bg-orange-50/30'
+          : '';
+
+  return (
+    <tr className={rowBg}>
+      <td className="px-4 py-2.5">
+        <Link
+          href={`/clients/${client.id}`}
+          className="block text-sm font-semibold text-slate-800 hover:text-blue-700 hover:underline"
+        >
+          {client.companyName || '(이름 없음)'}
+        </Link>
+        <p className="mt-0.5 text-[11px] text-slate-400">
+          {[client.manager, client.businessNo].filter(Boolean).join(' · ') || '—'}
+        </p>
+      </td>
+      <td className="px-3 py-2.5 align-top">
+        {nts?.checkedAt ? (
+          <div className="space-y-0.5">
+            <span
+              className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${ntsBadgeClass(
+                nts.statusCode,
+              )}`}
+            >
+              {ntsStatusLabel(nts)}
+            </span>
+            {nts.closedDate && (
+              <p className="text-[10px] text-slate-400">{formatNtsDate(nts.closedDate)}</p>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">미점검</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 align-top">
+        <TaxCompareCell ntsLabel={taxLabel} clientLabel={clientTaxLabel} mismatch={mismatch} />
+      </td>
+      <td className="px-4 py-2.5 align-top text-right">
+        {kind === 'resting' ? (
+          <button
+            type="button"
+            disabled={acking}
+            className={`${portalBtnSecondary} text-xs`}
+            onClick={async () => {
+              setAcking(true);
+              try {
+                await onAckResting(client.id);
+              } catch (e) {
+                onError(e instanceof Error ? e.message : '확인 실패');
+              } finally {
+                setAcking(false);
+              }
+            }}
+          >
+            {acking ? '…' : '확인'}
+          </button>
+        ) : kind === 'closed' ? (
+          <Link href={`/clients/churn?prefillClientId=${client.id}`} className={`${portalBtnSecondary} text-xs`}>
+            유출
+          </Link>
+        ) : mismatch ? (
+          <Link href={`/clients/${client.id}`} className={`${portalBtnSecondary} text-xs`}>
+            상세
+          </Link>
+        ) : null}
+      </td>
+    </tr>
+  );
+}
+
+function TaxCompareCell({
+  ntsLabel,
+  clientLabel,
+  mismatch,
+}: {
+  ntsLabel: string;
+  clientLabel: string;
+  mismatch: boolean;
+}) {
+  if (!ntsLabel && !clientLabel) {
+    return <span className="text-xs text-slate-300">—</span>;
+  }
+  if (ntsLabel && clientLabel && ntsLabel === clientLabel && !mismatch) {
+    return (
+      <span
+        className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${ntsTaxTypeBadgeClass(ntsLabel)}`}
+      >
+        {ntsLabel}
+      </span>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      {ntsLabel ? (
+        <div className="flex items-center gap-1">
+          <span className="w-9 shrink-0 text-[10px] text-slate-400">국세청</span>
+          <span
+            className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ntsTaxTypeBadgeClass(ntsLabel)}`}
+          >
+            {ntsLabel}
+          </span>
+        </div>
+      ) : null}
+      {clientLabel ? (
+        <div className="flex items-center gap-1">
+          <span className="w-9 shrink-0 text-[10px] text-slate-400">수임처</span>
+          <span className="inline-flex rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+            {clientLabel}
+          </span>
+        </div>
+      ) : null}
+      {mismatch && <p className="text-[10px] font-semibold text-orange-600">불일치</p>}
+    </div>
   );
 }
 
@@ -428,10 +579,14 @@ function StatPill({
   label,
   count,
   tone,
+  active,
+  onClick,
 }: {
   label: string;
   count: number;
   tone: 'red' | 'amber' | 'orange' | 'slate';
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const toneClass =
     tone === 'red'
@@ -441,10 +596,20 @@ function StatPill({
         : tone === 'orange'
           ? 'border-orange-200 bg-orange-50 text-orange-800'
           : 'border-slate-200 bg-slate-50 text-slate-600';
+  const Tag = onClick ? 'button' : 'span';
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${toneClass}`}>
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={[
+        'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-shadow',
+        toneClass,
+        onClick ? 'cursor-pointer hover:shadow-sm' : '',
+        active ? 'ring-2 ring-slate-400 ring-offset-1' : '',
+      ].join(' ')}
+    >
       {label}
       <span className="tabular-nums">{count}</span>
-    </span>
+    </Tag>
   );
 }
