@@ -427,9 +427,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
             </p>
-            {balanceDiff !== 0 ? (
+            {balanceDiff !== 0 && item?.source !== 'status' ? (
               <p className="mt-1 text-[11px] font-semibold text-amber-800">
                 내역합계 {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
+              </p>
+            ) : null}
+            {item?.source === 'status' ? (
+              <p className="mt-1 text-[11px] text-slate-500">
+                잔액은 거래처(잔액)현황표 기준 · {item.asOfDate || '—'} 이전은 공문, 이후는 거래처별 상세 반영
               </p>
             ) : null}
             {editing ? (

@@ -262,6 +262,11 @@ export async function syncLetterDiffWithLedger(
     return { applied: false, diff: 0 };
   }
   const lines = await listLetterLines(entryId);
+  const hasLetter = lines.some(l => l.source === 'letter');
+  if (hasLetter) {
+    const open = letterBalanceFromLines(lines);
+    return { applied: false, diff: Math.round(ledgerBalance) - open };
+  }
   const labelDate = asOfDate || new Date().toISOString().slice(0, 10);
   const bal = Math.round(ledgerBalance);
 

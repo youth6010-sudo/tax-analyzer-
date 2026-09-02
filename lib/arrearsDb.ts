@@ -74,13 +74,14 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   return items.map(item => {
     const linesOpen = openBy.get(item.id) ?? 0;
     const balanceDiff = Math.round(item.balance) - linesOpen;
-    const balanceDiffKind = isArrearsBalanceLocked(item.externalCode)
-      ? 'ok'
-      : classifyBalanceDiff({
-          ledgerBalance: item.balance,
-          linesOpen,
-          hasLetter: letterBy.get(item.id) === true,
-        });
+    const balanceDiffKind =
+      item.source === 'status' || isArrearsBalanceLocked(item.externalCode)
+        ? 'ok'
+        : classifyBalanceDiff({
+            ledgerBalance: item.balance,
+            linesOpen,
+            hasLetter: letterBy.get(item.id) === true,
+          });
     return { ...item, linesOpen, balanceDiff, balanceDiffKind };
   });
 }

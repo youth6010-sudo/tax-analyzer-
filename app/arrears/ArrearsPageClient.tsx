@@ -29,6 +29,7 @@ import ArrearsManualEntryModal, {
 } from '@/app/arrears/ArrearsManualEntryModal';
 import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
 import ArrearsFeeEventsImport from '@/app/arrears/ArrearsFeeEventsImport';
+import ArrearsBaselineImport from '@/app/arrears/ArrearsBaselineImport';
 import { toArrearsListExportItem } from '@/lib/arrearsListExportShared';
 
 type BulkRow = {
@@ -116,6 +117,7 @@ export default function ArrearsPageClient() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [matchOpen, setMatchOpen] = useState(false);
   const [feeImportOpen, setFeeImportOpen] = useState(false);
+  const [baselineImportOpen, setBaselineImportOpen] = useState(false);
 
   const [managers, setManagers] = useState<string[]>([]);
   /** 선택된 관리분류 id. '' = 미분류. 빈 배열 = 전체 */
@@ -839,6 +841,16 @@ export default function ArrearsPageClient() {
                 {feeImportOpen ? '세금계산서 닫기' : '세금계산서'}
               </button>
             ) : null}
+            {editMode ? (
+              <button
+                type="button"
+                className={`${portalBtnSecondary} ${baselineImportOpen ? 'border-amber-400 bg-amber-50 text-amber-900' : ''}`}
+                onClick={() => setBaselineImportOpen(o => !o)}
+                title="현황표(총 잔액) · 거래처별 상세(이후 내역)"
+              >
+                {baselineImportOpen ? '기준 파일 닫기' : '기준 파일'}
+              </button>
+            ) : null}
             <button
               type="button"
               className={portalBtnSecondary}
@@ -917,6 +929,13 @@ export default function ArrearsPageClient() {
           />
         ) : null}
 
+        {editMode && baselineImportOpen ? (
+          <ArrearsBaselineImport
+            onApplied={() => void load('full')}
+            onClose={() => setBaselineImportOpen(false)}
+          />
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-800">
             기준일 {asOfDate || '—'}
@@ -927,7 +946,7 @@ export default function ArrearsPageClient() {
               <span className="ml-1 text-[11px] font-medium text-amber-800/80">(화면 필터)</span>
             ) : null}
           </span>
-          {totalLinesOpenDiff !== 0 ? (
+          {editMode && totalLinesOpenDiff !== 0 ? (
             <span
               className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-900 tabular-nums"
               title="원장 잔액 합계와 공문·원장 내역 합계가 다른 업체가 있습니다"
