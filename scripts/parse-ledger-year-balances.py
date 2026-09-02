@@ -11,6 +11,8 @@ import re
 import sys
 from pathlib import Path
 
+from pdf_page_text import iter_pdf_page_texts
+
 try:
     from pypdf import PdfReader
 except ImportError:
@@ -39,7 +41,7 @@ def extract_year(text: str, fallback: int | None = None) -> int | None:
 
 
 def parse_pdf(path: Path) -> dict:
-    reader = PdfReader(str(path))
+    page_texts = iter_pdf_page_texts(path)
     # code -> {companyName, year, openingCarry, endingDebit, endingCredit, endingBalance}
     by_code: dict[str, dict] = {}
     year_guess: int | None = None
@@ -50,8 +52,7 @@ def parse_pdf(path: Path) -> dict:
 
     current: dict | None = None
 
-    for page in reader.pages:
-        text = page.extract_text() or ""
+    for text in page_texts:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         y = extract_year(text, year_guess)
         if y:

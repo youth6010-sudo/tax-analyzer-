@@ -118,8 +118,17 @@ async function main() {
   }
 
   const asOfDate = (() => {
-    const m = path.basename(pdfPath).match(/20(\d{2})(\d{2})(\d{2})/);
+    if (process.argv[3] && /^\d{4}-\d{2}-\d{2}$/.test(process.argv[3])) {
+      return process.argv[3];
+    }
+    const base = path.basename(pdfPath);
+    const m = base.match(/20(\d{2})(\d{2})(\d{2})/);
     if (m) return `20${m[1]}-${m[2]}-${m[3]}`;
+    const ko = base.match(/(\d{1,2})월\s*(\d{1,2})일/);
+    if (ko) {
+      const year = new Date().getFullYear();
+      return `${year}-${ko[1].padStart(2, '0')}-${ko[2].padStart(2, '0')}`;
+    }
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   })();
@@ -132,10 +141,11 @@ async function main() {
     `parse companies=${detail.companyCount} txs=${detail.txCount} debit=${detail.debitCount} credit=${detail.creditCount}`,
   );
 
-  const applied = await applyLedgerDetailTxs(detail.companies, 'pdf-20260824');
+  const actor = `pdf-${asOfDate.replace(/-/g, '')}`;
+  const applied = await applyLedgerDetailTxs(detail.companies, actor);
   console.log('detail apply', applied);
 
-  const bal = await syncBalancesFromPdfEnding(pdfPath, asOfDate, 'pdf-20260824');
+  const bal = await syncBalancesFromPdfEnding(pdfPath, asOfDate, actor);
   console.log('balance sync', bal);
 
   const mm = await listLedgerBalanceMismatches();

@@ -10,6 +10,8 @@ import re
 import sys
 from pathlib import Path
 
+from pdf_page_text import iter_pdf_page_texts
+
 try:
     from pypdf import PdfReader
 except ImportError:
@@ -404,14 +406,13 @@ def main() -> None:
             print(text)
         sys.exit(1)
 
-    reader = PdfReader(str(path))
+    page_texts = iter_pdf_page_texts(path)
     year_guess = 2026
     fm = re.search(r"(20\d{2})", path.name)
     if fm:
         year_guess = int(fm.group(1))
     by_code: dict[str, dict] = {}
-    for page in reader.pages:
-        text = page.extract_text() or ""
+    for text in page_texts:
         ym = re.search(r"(20\d{2})\.01\.01", text.replace(" ", ""))
         year = int(ym.group(1)) if ym else year_guess
         parsed = parse_page_text(text, year=year)
