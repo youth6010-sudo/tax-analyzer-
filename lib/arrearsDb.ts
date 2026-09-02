@@ -115,7 +115,10 @@ async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsE
   return items.map(item => {
     const charges = chargesByEntry.get(item.id);
     if (charges?.length) {
-      const asOf = item.letterDate || item.asOfDate;
+      if (isArrearsBalanceLocked(item.externalCode)) {
+        return { ...item, reasonSummary: charges.join(' · ') };
+      }
+      const asOf = item.asOfDate || item.letterDate;
       const formatted = charges.map((desc, i) =>
         formatArrearsChargeLabel(desc, {
           asOfDate: asOf,

@@ -76,6 +76,9 @@ async function entryNeedsFix(
 
   if (lines.length !== seed.lines.length) return true;
   if (lines.some(l => l.source !== 'letter')) return true;
+  if (lines.some(l => /^전기이월/.test(String(l.description || '').replace(/\s+/g, '')))) {
+    return true;
+  }
   return dbLinesFingerprint(lines) !== seedLinesFingerprint(seed.lines);
 }
 

@@ -44,14 +44,25 @@ type EditLine = {
   source: ArrearsLetterLineDto['source'];
 };
 
+function linePortalDescription(
+  l: ArrearsLetterLineDto,
+  ctx: { asOfDate?: string | null; prevDescription?: string | null },
+): string {
+  // 엑셀 공문(source=letter)은 원문 그대로 — 전기이월·연도 추론 라벨 변환 금지
+  if (l.source === 'letter') return l.description;
+  return formatArrearsChargeLabel(l.description, ctx) || l.description;
+}
+
 function toEditLines(lines: ArrearsLetterLineDto[], asOf?: string | null): EditLine[] {
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
     description:
-      formatArrearsChargeLabel(l.description, {
-        asOfDate: asOf,
-        prevDescription: i > 0 ? lines[i - 1]?.description : undefined,
-      }) || l.description,
+      l.source === 'letter'
+        ? l.description
+        : linePortalDescription(l, {
+            asOfDate: asOf,
+            prevDescription: i > 0 ? lines[i - 1]?.description : undefined,
+          }),
     amount: l.amount ? formatArrearsWon(l.amount) : '',
     paidAmount: l.paidAmount ? formatArrearsWon(l.paidAmount) : '',
     paidDate: formatArrearsPaidDateKo(l.paidDate) || l.paidDate || '',
@@ -871,13 +882,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </thead>
                 <tbody>
                   {viewLines.map((l, i) => {
-                    const asOf = chargeLabelAsOf;
                     const prev = i > 0 ? viewLines[i - 1]?.description : undefined;
-                    const portalDesc =
-                      formatArrearsChargeLabel(l.description, {
-                        asOfDate: asOf,
-                        prevDescription: prev,
-                      }) || l.description;
+                    const portalDesc = linePortalDescription(l, {
+                      asOfDate: chargeLabelAsOf,
+                      prevDescription: prev,
+                    });
                     const paidKo = formatArrearsPaidDateKo(l.paidDate);
                     return (
                     <tr key={l.id}>
