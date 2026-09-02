@@ -101,6 +101,7 @@ export default function ArrearsPageClient() {
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
   const [totals, setTotals] = useState<ArrearsManagerTotal[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
+  const [totalLinesOpen, setTotalLinesOpen] = useState(0);
   const [asOfDate, setAsOfDate] = useState('');
   const [canManage, setCanManage] = useState(false);
   /** 총미수 목록 엑셀 — 관리자·인디·찰리 */
@@ -220,6 +221,7 @@ export default function ArrearsPageClient() {
         setItems((data as { items: ArrearsEntryDto[] }).items || []);
         setTotals((data as { totalsByManager: ArrearsManagerTotal[] }).totalsByManager || []);
         setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
+        setTotalLinesOpen((data as { totalLinesOpen?: number }).totalLinesOpen || 0);
         setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
         setCanManage(!!(data as { canManage?: boolean }).canManage);
         setCanExportList(!!(data as { canExportList?: boolean }).canExportList);
@@ -537,6 +539,27 @@ export default function ArrearsPageClient() {
     }
     return s;
   }, [displayItems, selectedIds]);
+
+  const listFiltered =
+    filterCompanies.length > 0 ||
+    filterBalances.length > 0 ||
+    displayItems.length !== items.length;
+
+  const displayTotalBalance = useMemo(() => {
+    if (!listFiltered) return totalBalance;
+    let s = 0;
+    for (const row of displayItems) s += row.balance;
+    return s;
+  }, [listFiltered, totalBalance, displayItems]);
+
+  const displayTotalLinesOpen = useMemo(() => {
+    if (!listFiltered) return totalLinesOpen;
+    let s = 0;
+    for (const row of displayItems) s += row.linesOpen ?? row.balance;
+    return s;
+  }, [listFiltered, totalLinesOpen, displayItems]);
+
+  const totalLinesOpenDiff = displayTotalBalance - displayTotalLinesOpen;
 
   const allVisibleSelected =
     displayItems.length > 0 && displayItems.every(r => selectedIds.has(r.id));
@@ -899,8 +922,20 @@ export default function ArrearsPageClient() {
             기준일 {asOfDate || '—'}
           </span>
           <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-900 tabular-nums">
-            총미수 {formatArrearsWon(totalBalance)}원
+            총미수 {formatArrearsWon(displayTotalBalance)}원
+            {listFiltered ? (
+              <span className="ml-1 text-[11px] font-medium text-amber-800/80">(화면 필터)</span>
+            ) : null}
           </span>
+          {totalLinesOpenDiff !== 0 ? (
+            <span
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-900 tabular-nums"
+              title="원장 잔액 합계와 공문·원장 내역 합계가 다른 업체가 있습니다"
+            >
+              내역합계 {formatArrearsWon(displayTotalLinesOpen)}원 · 차{' '}
+              {formatArrearsWon(totalLinesOpenDiff)}
+            </span>
+          ) : null}
           <span className="text-xs text-slate-500">
             {displayItems.length === items.length
               ? `${items.length}건`

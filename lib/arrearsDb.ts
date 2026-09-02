@@ -336,6 +336,8 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   items: ArrearsEntryDto[];
   totalsByManager: ArrearsManagerTotal[];
   totalBalance: number;
+  /** 목록 내역 미결합 합계 (원장잔액과 다를 수 있음) */
+  totalLinesOpen: number;
   asOfDate: string;
 }> {
   await ensureInactiveArrearsEntries();
@@ -445,10 +447,12 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   }
   const totalMap = new Map<string, ArrearsManagerTotal>();
   let totalBalance = 0;
+  let totalLinesOpen = 0;
   let asOfDate = '';
 
   for (const item of items) {
     totalBalance += item.balance;
+    totalLinesOpen += item.linesOpen ?? item.balance;
     if (item.asOfDate && (!asOfDate || item.asOfDate > asOfDate)) {
       asOfDate = item.asOfDate;
     }
@@ -463,7 +467,7 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
 
   const globalAsOf = await getArrearsGlobalAsOfDate();
 
-  return { items, totalsByManager, totalBalance, asOfDate: globalAsOf || asOfDate };
+  return { items, totalsByManager, totalBalance, totalLinesOpen, asOfDate: globalAsOf || asOfDate };
 }
 
 export { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';

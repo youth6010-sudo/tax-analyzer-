@@ -962,17 +962,6 @@ export async function applyLedgerDetailTxs(
     const existing = await listLetterLines(ent.id);
     const hasLetter = existing.some(l => l.source === 'letter');
 
-    // 공문만으로 원장잔액이 이미 맞으면 PDF(전기이월·취소 포함) 추가 금지
-    if (hasLetter) {
-      const letterOpen = letterBalanceFromLines(
-        existing.filter(l => l.source === 'letter'),
-      );
-      if (letterOpen === Math.round(ent.balance)) {
-        skippedDup += 1;
-        continue;
-      }
-    }
-
     const pdfDebits = co.txs.filter(t => t.kind === 'debit').length;
     const pdfCredits = co.txs.filter(t => t.kind === 'credit').length;
     if (

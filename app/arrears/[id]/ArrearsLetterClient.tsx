@@ -427,15 +427,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
             </p>
+            {balanceDiff !== 0 ? (
+              <p className="mt-1 text-[11px] font-semibold text-amber-800">
+                내역합계 {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
+              </p>
+            ) : null}
             {editing ? (
               <p className="mt-1 text-[11px] text-slate-400">
                 내역 출처: 공문 · ledger/payment · tax. 편집 시 전체 이력 표시.
-                {balanceDiff !== 0 ? (
-                  <span className="ml-1 font-semibold text-amber-800">
-                    내역합계 {formatArrearsWon(letterBalance)}원 (차이{' '}
-                    {formatArrearsWon(balanceDiff)})
-                  </span>
-                ) : null}
               </p>
             ) : null}
           </div>

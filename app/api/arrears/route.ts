@@ -71,6 +71,7 @@ export async function GET(req: Request) {
           items: [],
           totalsByManager: [],
           totalBalance: 0,
+          totalLinesOpen: 0,
           asOfDate: '',
           canManage: false,
           canExportList: false,
