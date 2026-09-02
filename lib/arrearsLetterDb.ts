@@ -8,7 +8,7 @@ import type {
   ArrearsLetterLineSource,
   ArrearsMgmtCategory,
 } from '@/app/types/arrears';
-import { letterBalanceFromLines, formatArrearsPaidDateKo } from '@/app/types/arrears';
+import { letterBalanceFromLines, formatArrearsPaidDateKo, resolveArrearsLetterAsOfDate } from '@/app/types/arrears';
 import { paidDateMatchKey } from '@/lib/arrearsLineLabel';
 import type { ParsedLetterLine, ParsedLetterSheet } from '@/lib/arrearsLetterParse';
 import { letterLinesBalance } from '@/lib/arrearsLetterParse';
@@ -21,7 +21,7 @@ import {
   isLetterCorpFeeDescription,
   inheritYearForMonthFeeDesc,
 } from '@/lib/arrearsLedgerDetailParse';
-import { getArrearsEntryById } from '@/lib/arrearsDb';
+import { getArrearsEntryById, getArrearsGlobalAsOfDate } from '@/lib/arrearsDb';
 import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,
@@ -105,17 +105,23 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   lines: ArrearsLetterLineDto[];
   letterBalance: number;
   balanceDiff: number;
+  globalAsOfDate: string;
+  letterAsOfDate: string;
 } | null> {
   await ensureInactiveArrearsEntries();
   const item = await getArrearsEntryById(id);
   if (!item) return null;
   const lines = await listLetterLines(id);
   const letterBalance = letterBalanceFromLines(lines);
+  const globalAsOfDate = await getArrearsGlobalAsOfDate();
+  const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
   return {
     item,
     lines,
     letterBalance,
     balanceDiff: item.balance - letterBalance,
+    globalAsOfDate,
+    letterAsOfDate,
   };
 }
 

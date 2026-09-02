@@ -460,6 +460,15 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   return { items, totalsByManager, totalBalance, asOfDate };
 }
 
+/** 미수관리 목록 「기준일」 — 전체 entry asOfDate 최대값 */
+export async function getArrearsGlobalAsOfDate(): Promise<string> {
+  const db = getDb();
+  const [row] = await db
+    .select({ max: sql<string>`max(${arrearsEntries.asOfDate})` })
+    .from(arrearsEntries);
+  return String(row?.max || '').trim();
+}
+
 export async function getArrearsEntryById(id: string) {
   const db = getDb();
   const [row] = await db.select().from(arrearsEntries).where(eq(arrearsEntries.id, id)).limit(1);

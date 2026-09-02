@@ -80,7 +80,6 @@ async function entryNeedsFix(
 async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
   const db = getDb();
   const locked = getArrearsManualBalance(seed.externalCode)!;
-  const asOf = seed.letterDate.replace(/\./g, '-');
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
   for (let i = 0; i < seed.lines.length; i++) {
@@ -103,8 +102,6 @@ async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
       carryIn: locked,
       debit: 0,
       credit: 0,
-      letterDate: seed.letterDate,
-      asOfDate: asOf,
       source: 'letter',
       updatedBy: 'inactive-arrears-seed',
       updatedAt: new Date(),

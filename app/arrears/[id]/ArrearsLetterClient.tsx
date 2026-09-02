@@ -21,6 +21,7 @@ import {
   hasPriorClosedLetterCycle,
   letterRunningBalances,
   linesForCurrentLetterCycle,
+  resolveArrearsLetterAsOfDate,
   todayArrearsPaidDateKo,
   type ArrearsEntryDto,
   type ArrearsLetterLineDto,
@@ -76,6 +77,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [letterDate, setLetterDate] = useState('');
+  const [letterAsOfRaw, setLetterAsOfRaw] = useState('');
   const [saving, setSaving] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
@@ -109,13 +111,16 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     setLetterBalance((data as { letterBalance?: number }).letterBalance ?? 0);
     setBalanceDiff((data as { balanceDiff?: number }).balanceDiff ?? 0);
     setCanManage(!!(data as { canManage?: boolean }).canManage);
-    setLetterDate(
-      formatArrearsLetterDate(it.letterDate || it.asOfDate || ''),
-    );
+    const globalAsOf = (data as { globalAsOfDate?: string }).globalAsOfDate || '';
+    const letterAsOf =
+      (data as { letterAsOfDate?: string }).letterAsOfDate ||
+      resolveArrearsLetterAsOfDate(globalAsOf, it);
+    setLetterAsOfRaw(globalAsOf || it.asOfDate || it.letterDate || '');
+    setLetterDate(letterAsOf);
     const wantEdit = searchParams.get('edit') === '1';
     const allowEdit = !!(data as { canManage?: boolean }).canManage;
     if (wantEdit && allowEdit) {
-      setEditLines(toEditLines(ls, it.letterDate || it.asOfDate));
+      setEditLines(toEditLines(ls, globalAsOf || it.asOfDate || it.letterDate));
       setEditing(true);
     } else if (wantEdit && !allowEdit) {
       setEditing(false);
@@ -159,7 +164,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
   const startEdit = () => {
     if (!canManage) return;
-    setEditLines(toEditLines(lines, item?.letterDate || item?.asOfDate));
+    setEditLines(toEditLines(lines, letterAsOfRaw || item?.asOfDate || item?.letterDate));
     setEditing(true);
     setLinkLoaded(false);
     setLinkMsg('');
@@ -368,8 +373,13 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
   const companyLabel = item?.companyName || '';
   const letterDateLabel = formatArrearsLetterDate(
-    letterDate || item?.letterDate || item?.asOfDate || '',
+    letterDate ||
+      resolveArrearsLetterAsOfDate(letterAsOfRaw, {
+        asOfDate: item?.asOfDate,
+        letterDate: item?.letterDate,
+      }),
   );
+  const chargeLabelAsOf = letterAsOfRaw || item?.asOfDate || item?.letterDate || '';
 
   if (loading) {
     return (
@@ -860,7 +870,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </thead>
                 <tbody>
                   {viewLines.map((l, i) => {
-                    const asOf = item.letterDate || item.asOfDate;
+                    const asOf = chargeLabelAsOf;
                     const prev = i > 0 ? viewLines[i - 1]?.description : undefined;
                     const portalDesc =
                       formatArrearsChargeLabel(l.description, {

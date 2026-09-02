@@ -32,6 +32,8 @@ export async function GET(req: Request, ctx: Ctx) {
           lines: detail.lines,
           letterBalance: detail.letterBalance,
           balanceDiff: detail.balanceDiff,
+          globalAsOfDate: detail.globalAsOfDate,
+          letterAsOfDate: detail.letterAsOfDate,
           canManage: canManageArrears(user),
         },
         NO_STORE,

@@ -145,6 +145,14 @@ export function formatArrearsLetterDate(asOfOrLetter: string): string {
   return s;
 }
 
+/** 공문 작성일 — 미수관리 기준일 우선, 없으면 entry asOfDate → letterDate */
+export function resolveArrearsLetterAsOfDate(
+  globalAsOfDate: string,
+  item: { asOfDate?: string; letterDate?: string },
+): string {
+  return formatArrearsLetterDate(globalAsOfDate || item.asOfDate || item.letterDate || '');
+}
+
 /** 지급일시 → 엑셀 공문과 같은 `M월 D일` (이미 한국어면 공백만 정규화) */
 export function formatArrearsPaidDateKo(raw: string | number | Date | null | undefined): string {
   if (raw == null || raw === '') return '';

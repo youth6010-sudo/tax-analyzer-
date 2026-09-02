@@ -49,15 +49,12 @@ for (const t of seed.entries) {
       )
     `;
   }
-  const asOf = t.letterDate.replace(/\./g, '-');
   await sql`
     UPDATE arrears_entries SET
       balance = ${t.balance},
       carry_in = ${t.balance},
       debit = 0,
       credit = 0,
-      letter_date = ${t.letterDate},
-      as_of_date = ${asOf},
       source = 'letter',
       updated_by = 'fix-offline-hanabi-balances',
       updated_at = now()

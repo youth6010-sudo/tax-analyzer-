@@ -28,7 +28,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const wb = buildArrearsLetterWorkbook([
       {
         companyName: detail.item.companyName,
-        letterDate: detail.item.letterDate || detail.item.asOfDate || '',
+        letterDate: detail.letterAsOfDate,
         lines: detail.lines.map(l => ({
           description: l.description,
           amount: l.amount,
@@ -40,7 +40,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const buf = await workbookToBuffer(wb, 'xlsx');
     const filename = arrearsLetterExportFilename(
       detail.item.companyName || detail.item.managerName || '안내',
-      detail.item.letterDate || detail.item.asOfDate || '',
+      detail.letterAsOfDate,
       'xlsx',
     );
 
