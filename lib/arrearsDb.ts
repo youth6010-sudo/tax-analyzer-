@@ -14,6 +14,7 @@ import {
   isArrearsBalanceLocked,
 } from '@/lib/arrearsBalanceLock';
 import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
+import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -457,17 +458,12 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
 
   const totalsByManager = [...totalMap.values()].sort((a, b) => b.balance - a.balance);
 
-  return { items, totalsByManager, totalBalance, asOfDate };
+  const globalAsOf = await getArrearsGlobalAsOfDate();
+
+  return { items, totalsByManager, totalBalance, asOfDate: globalAsOf || asOfDate };
 }
 
-/** 미수관리 목록 「기준일」 — 전체 entry asOfDate 최대값 */
-export async function getArrearsGlobalAsOfDate(): Promise<string> {
-  const db = getDb();
-  const [row] = await db
-    .select({ max: sql<string>`max(${arrearsEntries.asOfDate})` })
-    .from(arrearsEntries);
-  return String(row?.max || '').trim();
-}
+export { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 
 export async function getArrearsEntryById(id: string) {
   const db = getDb();

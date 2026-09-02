@@ -115,12 +115,12 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     const letterAsOf =
       (data as { letterAsOfDate?: string }).letterAsOfDate ||
       resolveArrearsLetterAsOfDate(globalAsOf, it);
-    setLetterAsOfRaw(globalAsOf || it.asOfDate || it.letterDate || '');
+    setLetterAsOfRaw(globalAsOf || it.asOfDate || '');
     setLetterDate(letterAsOf);
     const wantEdit = searchParams.get('edit') === '1';
     const allowEdit = !!(data as { canManage?: boolean }).canManage;
     if (wantEdit && allowEdit) {
-      setEditLines(toEditLines(ls, globalAsOf || it.asOfDate || it.letterDate));
+      setEditLines(toEditLines(ls, globalAsOf || it.asOfDate));
       setEditing(true);
     } else if (wantEdit && !allowEdit) {
       setEditing(false);
@@ -164,7 +164,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
   const startEdit = () => {
     if (!canManage) return;
-    setEditLines(toEditLines(lines, letterAsOfRaw || item?.asOfDate || item?.letterDate));
+    setEditLines(toEditLines(lines, letterAsOfRaw || item?.asOfDate));
     setEditing(true);
     setLinkLoaded(false);
     setLinkMsg('');
@@ -372,14 +372,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   };
 
   const companyLabel = item?.companyName || '';
-  const letterDateLabel = formatArrearsLetterDate(
-    letterDate ||
-      resolveArrearsLetterAsOfDate(letterAsOfRaw, {
-        asOfDate: item?.asOfDate,
-        letterDate: item?.letterDate,
-      }),
-  );
-  const chargeLabelAsOf = letterAsOfRaw || item?.asOfDate || item?.letterDate || '';
+  const letterDateLabel = editing
+    ? formatArrearsLetterDate(letterDate)
+    : formatArrearsLetterDate(
+        resolveArrearsLetterAsOfDate(letterAsOfRaw, {
+          asOfDate: item?.asOfDate,
+          letterDate: '',
+        }),
+      );
+  const chargeLabelAsOf = letterAsOfRaw || item?.asOfDate || '';
 
   if (loading) {
     return (

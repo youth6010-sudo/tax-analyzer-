@@ -21,7 +21,8 @@ import {
   isLetterCorpFeeDescription,
   inheritYearForMonthFeeDesc,
 } from '@/lib/arrearsLedgerDetailParse';
-import { getArrearsEntryById, getArrearsGlobalAsOfDate } from '@/lib/arrearsDb';
+import { getArrearsEntryById } from '@/lib/arrearsDb';
+import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,

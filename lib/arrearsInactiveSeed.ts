@@ -7,6 +7,8 @@ import {
   getArrearsManualBalance,
   isArrearsBalanceLocked,
 } from '@/lib/arrearsBalanceLock';
+import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
+import { formatArrearsLetterDate } from '@/app/types/arrears';
 
 type SeedLine = {
   description: string;
@@ -77,6 +79,21 @@ async function entryNeedsFix(
   return dbLinesFingerprint(lines) !== seedLinesFingerprint(seed.lines);
 }
 
+async function syncInactiveEntryAsOf(entryId: string): Promise<void> {
+  const globalAsOf = await getArrearsGlobalAsOfDate();
+  if (!globalAsOf) return;
+  const db = getDb();
+  await db
+    .update(arrearsEntries)
+    .set({
+      asOfDate: globalAsOf,
+      letterDate: formatArrearsLetterDate(globalAsOf),
+      updatedBy: 'inactive-arrears-seed',
+      updatedAt: new Date(),
+    })
+    .where(eq(arrearsEntries.id, entryId));
+}
+
 async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
   const db = getDb();
   const locked = getArrearsManualBalance(seed.externalCode)!;
@@ -107,6 +124,8 @@ async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
       updatedAt: new Date(),
     })
     .where(eq(arrearsEntries.id, entryId));
+
+  await syncInactiveEntryAsOf(entryId);
 }
 
 async function removeDuplicateInactiveEntries(seed: SeedEntry, canonicalId: string): Promise<number> {
@@ -203,7 +222,10 @@ async function runEnsure(): Promise<void> {
         })
         .where(eq(arrearsEntries.id, canonicalId));
     }
-    if (!(await entryNeedsFix(canonicalId, seed, row.balance))) continue;
+    if (!(await entryNeedsFix(canonicalId, seed, row.balance))) {
+      await syncInactiveEntryAsOf(canonicalId);
+      continue;
+    }
     await applySeedEntry(seed, canonicalId);
   }
 }

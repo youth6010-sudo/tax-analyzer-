@@ -145,12 +145,12 @@ export function formatArrearsLetterDate(asOfOrLetter: string): string {
   return s;
 }
 
-/** 공문 작성일 — 미수관리 기준일 우선, 없으면 entry asOfDate → letterDate */
+/** 공문 작성일 — 미수관리 기준일(asOfDate)만 사용. 엑셀 letterDate는 표시에 쓰지 않음 */
 export function resolveArrearsLetterAsOfDate(
   globalAsOfDate: string,
   item: { asOfDate?: string; letterDate?: string },
 ): string {
-  return formatArrearsLetterDate(globalAsOfDate || item.asOfDate || item.letterDate || '');
+  return formatArrearsLetterDate(globalAsOfDate || item.asOfDate || '');
 }
 
 /** 지급일시 → 엑셀 공문과 같은 `M월 D일` (이미 한국어면 공백만 정규화) */
