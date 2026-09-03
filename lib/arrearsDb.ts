@@ -74,7 +74,7 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   return items.map(item => {
     const linesOpen = openBy.get(item.id) ?? 0;
     const balanceDiff = Math.round(item.balance) - linesOpen;
-    /** 현황표 잔액 ≠ 상세(공문) 내역합 → 불일치 (하나비·오프라인 포함) */
+  /** 현황표 잔액 ≠ 상세내역(공문+이후) 합 → 불일치 (하나비·오프라인 포함) */
     const balanceDiffKind = classifyBalanceDiff({
       ledgerBalance: item.balance,
       linesOpen,

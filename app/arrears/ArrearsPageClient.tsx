@@ -75,6 +75,7 @@ type ArrearsListUiPersist = {
   categories?: string[];
   showZero?: boolean;
   churnedOnly?: boolean;
+  mismatchOnly?: boolean;
 };
 
 function readArrearsListUi(): ArrearsListUiPersist {
@@ -125,6 +126,8 @@ export default function ArrearsPageClient() {
   /** false=잔액0 숨김(기본), true=0원도 보기 */
   const [showZero, setShowZero] = useState(false);
   const [churnedOnly, setChurnedOnly] = useState(false);
+  /** true면 현황표 잔액 ≠ 상세내역합(불일치)만 */
+  const [mismatchOnly, setMismatchOnly] = useState(false);
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
   /** sessionStorage 복원 전에는 목록 요청하지 않음 */
@@ -170,6 +173,7 @@ export default function ArrearsPageClient() {
     if (Array.isArray(saved.categories)) setCategories(saved.categories);
     if (typeof saved.showZero === 'boolean') setShowZero(saved.showZero);
     if (typeof saved.churnedOnly === 'boolean') setChurnedOnly(saved.churnedOnly);
+    if (typeof saved.mismatchOnly === 'boolean') setMismatchOnly(saved.mismatchOnly);
     setUiReady(true);
   }, []);
 
@@ -183,12 +187,13 @@ export default function ArrearsPageClient() {
         categories,
         showZero,
         churnedOnly,
+        mismatchOnly,
       };
       sessionStorage.setItem(ARREARS_LIST_UI_KEY, JSON.stringify(payload));
     } catch {
       /* ignore quota */
     }
-  }, [uiReady, editMode, q, managers, categories, showZero, churnedOnly]);
+  }, [uiReady, editMode, q, managers, categories, showZero, churnedOnly, mismatchOnly]);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -204,6 +209,7 @@ export default function ArrearsPageClient() {
       }
       if (!showZero) params.set('nonzero', '1');
       if (churnedOnly) params.set('churned', '1');
+      if (mismatchOnly) params.set('mismatch', '1');
       if (qDebounced) params.set('q', qDebounced);
 
       if (mode === 'full') {
@@ -236,7 +242,7 @@ export default function ArrearsPageClient() {
         if (mode === 'full') setLoading(false);
       }
     },
-    [managers, categories, showZero, churnedOnly, qDebounced],
+    [managers, categories, showZero, churnedOnly, mismatchOnly, qDebounced],
   );
 
   useEffect(() => {
@@ -1213,6 +1219,18 @@ export default function ArrearsPageClient() {
               />
               유출만
             </label>
+            <label
+              className="flex items-center gap-2 whitespace-nowrap"
+              title="현황표 잔액과 상세내역(공문+7/27 이후) 합이 다른 건만"
+            >
+              <input
+                type="checkbox"
+                checked={mismatchOnly}
+                onChange={e => setMismatchOnly(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              불일치만
+            </label>
           </div>
 
           <label className="flex min-w-[10rem] max-w-xs flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
@@ -1518,7 +1536,7 @@ export default function ArrearsPageClient() {
                           {row.balanceDiffKind === 'mismatch' ? (
                             <span
                               className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-                              title={`원장 ${formatArrearsWon(row.balance)} · 내역 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff ?? 0)}`}
+                              title={`현황표 ${formatArrearsWon(row.balance)} · 상세내역합 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff ?? 0)} (현황표↔거래처별 말잔이 같아도, 공문 과거내역 합과 다르면 표시)`}
                             >
                               불일치 {(row.balanceDiff ?? 0) > 0 ? '+' : ''}
                               {formatArrearsWon(row.balanceDiff ?? 0)}
