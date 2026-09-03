@@ -5,6 +5,7 @@ import {
   applyClientDetailImport,
   previewClientDetailImport,
 } from '@/lib/arrearsImportApply';
+import { assertArrearsUploadFilename } from '@/lib/arrearsImportFilenames';
 import { handleApiError } from '@/lib/apiError';
 
 export const runtime = 'nodejs';
@@ -22,6 +23,15 @@ export async function POST(req: Request) {
     const file = form.get('file');
     if (!(file instanceof File)) {
       return NextResponse.json({ error: '거래처별 현황 엑셀 파일을 선택해 주세요.' }, { status: 400 });
+    }
+
+    try {
+      assertArrearsUploadFilename(file.name || '', 'client_detail');
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : '파일명 오류' },
+        { status: 400 },
+      );
     }
 
     const confirm =

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { portalBtnPrimary, portalBtnSecondary, portalCard, portalInput } from '@/app/components/portal/uiClasses';
 import { formatArrearsWon } from '@/app/types/arrears';
+import { parseArrearsUploadFilename } from '@/lib/arrearsImportFilenames';
 
 type ImportConfig = {
   statusAsOfDate: string;
@@ -31,6 +32,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
     companyCount: number;
     txCount: number;
     cutoffDate: string;
+    skippedIndieHint?: string;
   } | null>(null);
   const [pendingStatusFile, setPendingStatusFile] = useState<File | null>(null);
   const [pendingDetailFile, setPendingDetailFile] = useState<File | null>(null);
@@ -66,7 +68,8 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '설정 저장 실패');
       setConfig(data as ImportConfig);
-      setMsg('기준일·cutoff 저장됨');
+      setMsg(`기준일 ${config.statusAsOfDate} 저장 · 목록 조회일이 이 날짜로 바뀝니다`);
+      onApplied?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : '설정 저장 실패');
     } finally {
@@ -75,6 +78,18 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
   };
 
   const uploadStatus = async (file: File, confirm: boolean) => {
+    const parsed = parseArrearsUploadFilename(file.name);
+    if (!parsed || parsed.kind !== 'status') {
+      setError(
+        '파일명이 「미수수수료 거래처(잔액)현황_날짜」형식이어야 합니다. 예: 미수수수료 거래처(잔액)현황_26.08.31.xls',
+      );
+      return;
+    }
+    // 파일명 날짜 → 기준일 자동 반영
+    if (parsed.asOfDate) {
+      setConfig(c => ({ ...c, statusAsOfDate: parsed.asOfDate }));
+    }
+
     setBusy(true);
     setError('');
     setMsg('');
@@ -85,7 +100,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('asOfDate', config.statusAsOfDate);
+      form.append('asOfDate', parsed.asOfDate || config.statusAsOfDate);
       if (confirm) form.append('confirm', '1');
       const res = await fetch('/api/arrears/import-status', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
@@ -97,7 +112,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
         setStatusPreview(null);
         setPendingStatusFile(null);
         setMsg(
-          `현황표 반영 · ${(data as { updated?: number }).updated ?? 0}건 갱신 · 총 ${formatArrearsWon((data as { totalBalance?: number }).totalBalance ?? 0)}원`,
+          `현황표 반영 · ${(data as { updated?: number }).updated ?? 0}건 · 총 ${formatArrearsWon((data as { totalBalance?: number }).totalBalance ?? 0)}원 · 기준 ${(data as { asOfDate?: string }).asOfDate}`,
         );
         onApplied?.();
       }
@@ -109,6 +124,14 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
   };
 
   const uploadDetail = async (file: File, confirm: boolean) => {
+    const parsed = parseArrearsUploadFilename(file.name);
+    if (!parsed || parsed.kind !== 'client_detail') {
+      setError(
+        '파일명이 「거래처별 현황_날짜」형식이어야 합니다. 예: 거래처별 현황_20260902.xlsx',
+      );
+      return;
+    }
+
     setBusy(true);
     setError('');
     setMsg('');
@@ -131,7 +154,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
         setDetailPreview(null);
         setPendingDetailFile(null);
         setMsg(
-          `거래처별 상세 반영 · ${(data as { applied?: number }).applied ?? 0}社 · 줄 ${(data as { linesAdded?: number }).linesAdded ?? 0}건 추가 (전기이월 덮어쓰기 없음)`,
+          `거래처별 현황 반영 · ${(data as { applied?: number }).applied ?? 0}社 · +${(data as { linesAdded?: number }).linesAdded ?? 0}줄 · 인디 스킵 ${(data as { skippedIndie?: number }).skippedIndie ?? 0}`,
         );
         onApplied?.();
       }
@@ -146,11 +169,15 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
     <div className={`${portalCard} space-y-4 p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-bold text-slate-900">미수 기준 파일 가져오기</h2>
+          <h2 className="text-sm font-bold text-slate-900">기준 파일 업로드 (수정 모드)</h2>
           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-            <strong>총 잔액</strong>은 「거래처(잔액)현황」 파일 기준입니다. 상세 내역은{' '}
-            <strong>{config.letterCutoffDate} 이전</strong> 공문(letter) 그대로 두고, 이후 변동만
-            「거래처별 현황」에서 추가합니다. 전기이월로 공문을 덮어쓰지 않습니다.
+            업로드는 아래 <strong>두 종류만</strong> 가능합니다. 날짜는 파일명에 맞춰 바뀝니다.
+            <br />
+            · <code className="rounded bg-slate-100 px-1">미수수수료 거래처(잔액)현황_26.08.31.xls</code> →
+            목록 잔액·담당·관리
+            <br />
+            · <code className="rounded bg-slate-100 px-1">거래처별 현황_20260902.xlsx</code> → cutoff 이후
+            상세 내역 (인디·하나비·오프라인 제외)
           </p>
         </div>
         {onClose ? (
@@ -162,7 +189,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-          현황표 기준일
+          기준일 (목록 조회일)
           <input
             className={portalInput}
             value={config.statusAsOfDate}
@@ -172,7 +199,7 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
           />
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-          공문 cutoff (이후 → 상세 파일)
+          공문 cutoff (이후 → 거래처별 현황)
           <input
             className={portalInput}
             value={config.letterCutoffDate}
@@ -186,8 +213,16 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
         기준일 저장
       </button>
 
+      <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-950">
+        담당 1인디 · 2블루 · 3다야 · 4윈터 · 5리아 · 6페리. 인디는 현황표 잔액 + 기존 공문 상세.
+        하나비·오프라인은 현황표≠공문이면 <strong>불일치</strong> 표시, 상세는 공문 유지.
+      </div>
+
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-        <p className="text-xs font-semibold text-slate-800">1. 거래처(잔액)현황 — 총미수·업체별 잔액</p>
+        <p className="text-xs font-semibold text-slate-800">
+          1. 미수수수료 거래처(잔액)현황_[날짜]
+        </p>
+        <p className="text-[11px] text-slate-500">총미수·업체별 잔액·관리분류(0~4). 파일명 날짜가 기준일이 됩니다.</p>
         <input
           type="file"
           accept=".xls,.xlsx"
@@ -228,8 +263,9 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
       </div>
 
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-        <p className="text-xs font-semibold text-slate-800">
-          2. 거래처별 현황 — {config.letterCutoffDate} 이후 내역만 추가
+        <p className="text-xs font-semibold text-slate-800">2. 거래처별 현황_[날짜]</p>
+        <p className="text-[11px] text-slate-500">
+          {config.letterCutoffDate} 이후 변동만 추가. 인디·하나비·오프라인은 반영하지 않습니다.
         </p>
         <input
           type="file"
@@ -245,6 +281,9 @@ export default function ArrearsBaselineImport({ onApplied, onClose }: Props) {
           <div className="text-xs text-slate-700">
             미리보기 · {detailPreview.companyCount}社 · 거래 {detailPreview.txCount}건 (cutoff{' '}
             {detailPreview.cutoffDate} 초과)
+            {detailPreview.skippedIndieHint ? (
+              <p className="mt-1 text-[11px] text-slate-500">{detailPreview.skippedIndieHint}</p>
+            ) : null}
             <div className="mt-2 flex gap-2">
               <button
                 type="button"

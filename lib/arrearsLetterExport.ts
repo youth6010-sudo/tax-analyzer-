@@ -36,6 +36,8 @@ export type ArrearsLetterExportSheet = {
   companyName: string;
   letterDate: string;
   lines: ArrearsLetterExportLine[];
+  /** 미수관리 목록 잔액(현황표). 있으면 「미수 수수료」·총액 잔액에 사용 */
+  entryBalance?: number;
 };
 
 /** Excel 시트명 안전화 (31자, 금지문자) */
@@ -110,7 +112,10 @@ function appendArrearsLetterSheet(
   const running = letterRunningBalances(lines);
   const totalAmount = lines.reduce((s, l) => s + Math.round(l.amount || 0), 0);
   const totalPaid = lines.reduce((s, l) => s + Math.round(l.paidAmount || 0), 0);
-  const balance = letterBalanceFromLines(lines);
+  const balance =
+    sheet.entryBalance != null && Number.isFinite(sheet.entryBalance)
+      ? Math.round(sheet.entryBalance)
+      : letterBalanceFromLines(lines);
 
   const name = safeExcelSheetName(sheet.companyName || company || '시트', usedNames);
   const ws = wb.addWorksheet(name, {
@@ -270,7 +275,10 @@ function appendArrearsLetterSheet(
       row.getCell(5).font = font;
       row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
     }
-    setBalance(row.getCell(6), running[i] ?? 0);
+    setBalance(
+      row.getCell(6),
+      i === lines.length - 1 ? balance : (running[i] ?? 0),
+    );
     row.getCell(6).font = font;
     r += 1;
   }

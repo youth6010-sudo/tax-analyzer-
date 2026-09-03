@@ -28,6 +28,7 @@ async function sheetsForEntries(entries: EntryLike[]): Promise<ArrearsLetterExpo
     sheets.push({
       companyName: item.companyName,
       letterDate: item.letterDate || item.asOfDate || '',
+      entryBalance: item.balance,
       lines: lines.map(l => ({
         description: l.description,
         amount: l.amount,

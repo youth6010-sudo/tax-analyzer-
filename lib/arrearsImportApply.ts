@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries } from '@/db/schema';
 import {
-  getArrearsManualBalance,
   isArrearsBalanceLocked,
+  isArrearsLetterProtected,
 } from '@/lib/arrearsBalanceLock';
 import {
   isAfterCutoff,
@@ -23,6 +23,7 @@ import {
   type ParsedStatusRow,
 } from '@/lib/arrearsStatusParse';
 import { isInactiveArrearsCode } from '@/lib/arrearsInactiveSeed';
+import { isIndieManagerName } from '@/lib/arrearsImportFilenames';
 import { listLetterLines, replaceLetterLines } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
 import { letterBalanceFromLines } from '@/app/types/arrears';
@@ -41,6 +42,7 @@ export type StatusImportResult = {
   updated: number;
   inserted: number;
   totalBalance: number;
+  categoryUpdated: number;
 };
 
 export type ClientDetailImportPreview = {
@@ -48,6 +50,7 @@ export type ClientDetailImportPreview = {
   cutoffDate: string;
   companyCount: number;
   txCount: number;
+  skippedIndieHint: string;
   sample: Array<{
     externalCode: string;
     companyName: string;
@@ -63,6 +66,7 @@ export type ClientDetailImportResult = {
   cutoffDate: string;
   applied: number;
   skippedInactive: number;
+  skippedIndie: number;
   skippedNoEntry: number;
   linesAdded: number;
 };
@@ -94,35 +98,47 @@ export async function applyStatusImport(
   const db = getDb();
   let updated = 0;
   let inserted = 0;
+  let categoryUpdated = 0;
 
   for (const row of parsed.rows) {
-    const locked = getArrearsManualBalance(row.externalCode);
-    const balance = locked !== undefined ? locked : row.balance;
+    // 잔액은 현황표 그대로 (하나비·오프라인 포함). 공문과 다르면 불일치 표시.
+    const balance = row.balance;
 
     const [prev] = await db
-      .select({ id: arrearsEntries.id })
+      .select({
+        id: arrearsEntries.id,
+        mgmtCategory: arrearsEntries.mgmtCategory,
+        managerName: arrearsEntries.managerName,
+        cmsNote: arrearsEntries.cmsNote,
+        memo: arrearsEntries.memo,
+      })
       .from(arrearsEntries)
       .where(eq(arrearsEntries.externalCode, row.externalCode))
       .limit(1);
 
     if (prev) {
+      const patch: Partial<typeof arrearsEntries.$inferInsert> = {
+        companyName: row.companyName,
+        balance,
+        carryIn: row.carryIn,
+        debit: row.debit,
+        credit: row.credit,
+        asOfDate: asOfIso,
+        source: 'status',
+        updatedBy: actorName,
+        updatedAt: new Date(),
+      };
+      if (row.managerName) patch.managerName = row.managerName;
+      if (row.mgmtCategory && row.mgmtCategory !== (prev.mgmtCategory || '')) {
+        patch.mgmtCategory = row.mgmtCategory;
+        categoryUpdated += 1;
+      }
+      if (row.cmsNote) patch.cmsNote = row.cmsNote;
+      if (row.memo) patch.memo = row.memo;
+
       await db
         .update(arrearsEntries)
-        .set({
-          companyName: row.companyName,
-          balance,
-          carryIn: locked !== undefined ? locked : row.carryIn,
-          debit: row.debit,
-          credit: row.credit,
-          managerName: row.managerName || undefined,
-          mgmtCategory: row.mgmtCategory,
-          cmsNote: row.cmsNote,
-          memo: row.memo,
-          asOfDate: asOfIso,
-          source: 'status',
-          updatedBy: actorName,
-          updatedAt: new Date(),
-        })
+        .set(patch)
         .where(eq(arrearsEntries.externalCode, row.externalCode));
       updated += 1;
     } else {
@@ -142,17 +158,20 @@ export async function applyStatusImport(
         updatedBy: actorName,
       });
       inserted += 1;
+      if (row.mgmtCategory) categoryUpdated += 1;
     }
   }
 
   writeArrearsImportConfig({ statusAsOfDate: asOfDate });
 
-  const totalBalance = parsed.rows.reduce(
-    (s, r) => s + (getArrearsManualBalance(r.externalCode) ?? r.balance),
-    0,
-  );
+  // 기준일: 현황표에 없는 업체(인디 등)도 동일 기준일로
+  await db
+    .update(arrearsEntries)
+    .set({ asOfDate: asOfIso, updatedBy: actorName, updatedAt: new Date() });
 
-  return { preview: false, asOfDate, updated, inserted, totalBalance };
+  const totalBalance = parsed.rows.reduce((s, r) => s + r.balance, 0);
+
+  return { preview: false, asOfDate, updated, inserted, totalBalance, categoryUpdated };
 }
 
 function groupTxByCode(txs: ParsedClientDetailTx[]): Map<string, ParsedClientDetailTx[]> {
@@ -180,6 +199,8 @@ export async function previewClientDetailImport(
     cutoffDate,
     companyCount: byCode.size,
     txCount: txs.length,
+    skippedIndieHint:
+      '인디 담당은 이 파일에 없으며, 잔액은 현황표·상세는 기존 공문을 사용합니다.',
     sample: txs.slice(0, 15).map(t => ({
       externalCode: t.externalCode,
       companyName: t.companyName,
@@ -209,11 +230,12 @@ export async function applyClientDetailImport(
 
   let applied = 0;
   let skippedInactive = 0;
+  let skippedIndie = 0;
   let skippedNoEntry = 0;
   let linesAdded = 0;
 
   for (const [code, codeTxs] of byCode) {
-    if (isInactiveArrearsCode(code)) {
+    if (isInactiveArrearsCode(code) || isArrearsLetterProtected(code)) {
       skippedInactive += 1;
       continue;
     }
@@ -225,6 +247,12 @@ export async function applyClientDetailImport(
       .limit(1);
     if (!entry) {
       skippedNoEntry += 1;
+      continue;
+    }
+
+    // 인디: 잔액은 현황표·상세는 기존 공문 — 거래처별 현황 반영 스킵
+    if (isIndieManagerName(entry.managerName)) {
+      skippedIndie += 1;
       continue;
     }
 
@@ -270,6 +298,7 @@ export async function applyClientDetailImport(
     cutoffDate,
     applied,
     skippedInactive,
+    skippedIndie,
     skippedNoEntry,
     linesAdded,
   };

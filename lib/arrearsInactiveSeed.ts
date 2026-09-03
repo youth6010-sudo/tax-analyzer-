@@ -4,8 +4,7 @@ import { arrearsEntries, arrearsLetterLines } from '@/db/schema';
 import inactiveSeed from '@/data/arrears-inactive-seed.json';
 import {
   ARREARS_LETTER_DUP_CODE_BY_CANONICAL,
-  getArrearsManualBalance,
-  isArrearsBalanceLocked,
+  isArrearsLetterProtected,
 } from '@/lib/arrearsBalanceLock';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import { formatArrearsLetterDate } from '@/app/types/arrears';
@@ -55,12 +54,9 @@ function dbLinesFingerprint(
 async function entryNeedsFix(
   entryId: string,
   seed: SeedEntry,
-  balance: number,
+  _balance: number,
 ): Promise<boolean> {
-  const locked = getArrearsManualBalance(seed.externalCode);
-  if (locked === undefined) return false;
-  if (Math.round(balance) !== locked) return true;
-
+  // 잔액은 현황표 기준 — 공문 줄만 시드와 맞는지 검사
   const db = getDb();
   const lines = await db
     .select({
@@ -99,7 +95,6 @@ async function syncInactiveEntryAsOf(entryId: string): Promise<void> {
 
 async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
   const db = getDb();
-  const locked = getArrearsManualBalance(seed.externalCode)!;
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
   for (let i = 0; i < seed.lines.length; i++) {
@@ -115,14 +110,10 @@ async function applySeedEntry(seed: SeedEntry, entryId: string): Promise<void> {
     });
   }
 
+  // 잔액은 현황표 유지 — 공문 줄만 복원
   await db
     .update(arrearsEntries)
     .set({
-      balance: locked,
-      carryIn: locked,
-      debit: 0,
-      credit: 0,
-      source: 'letter',
       updatedBy: 'inactive-arrears-seed',
       updatedAt: new Date(),
     })
@@ -253,7 +244,7 @@ export async function ensureInactiveArrearsEntries(): Promise<void> {
 }
 
 export function isInactiveArrearsCode(externalCode: string): boolean {
-  return isArrearsBalanceLocked(externalCode);
+  return isArrearsLetterProtected(externalCode);
 }
 
 export function inactiveArrearsSeedCodes(): string[] {

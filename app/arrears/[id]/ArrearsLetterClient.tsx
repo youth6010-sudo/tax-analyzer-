@@ -162,8 +162,18 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     if (!excludePriorZero || !canExcludePrior) return lines;
     return linesForCurrentLetterCycle(lines);
   }, [lines, excludePriorZero, canExcludePrior]);
-  const running = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
-  const viewLetterBalance = running.length ? running[running.length - 1]! : 0;
+  const runningRaw = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
+  const viewLetterBalance = runningRaw.length ? runningRaw[runningRaw.length - 1]! : 0;
+  /** 공문 「미수 수수료」·총액 잔액 = 미수관리 목록 잔액(현황표)과 동일 */
+  const feeBalance = item != null ? Math.round(item.balance) : viewLetterBalance;
+  /** 마지막 행 잔액도 목록 잔액과 맞춘다 */
+  const running = useMemo(() => {
+    if (!runningRaw.length) return runningRaw;
+    if (Math.round(viewLetterBalance) === feeBalance) return runningRaw;
+    const next = runningRaw.slice();
+    next[next.length - 1] = feeBalance;
+    return next;
+  }, [runningRaw, viewLetterBalance, feeBalance]);
   const totalAmount = useMemo(
     () => viewLines.reduce((s, l) => s + l.amount, 0),
     [viewLines],
@@ -427,12 +437,12 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
             </p>
-            {balanceDiff !== 0 && item?.source !== 'status' ? (
+            {balanceDiff !== 0 ? (
               <p className="mt-1 text-[11px] font-semibold text-amber-800">
-                내역합계 {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
+                현황표 잔액 {formatArrearsWon(item.balance)}원 · 내역합계{' '}
+                {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
               </p>
-            ) : null}
-            {item?.source === 'status' ? (
+            ) : item?.source === 'status' ? (
               <p className="mt-1 text-[11px] text-slate-500">
                 잔액은 거래처(잔액)현황표 기준 · {item.asOfDate || '—'} 이전은 공문, 이후는 거래처별 상세 반영
               </p>
@@ -923,7 +933,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     </td>
                     <td className="border border-[#222] px-2 py-1.5" />
                     <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
-                      {formatArrearsWon(viewLetterBalance)}
+                      {formatArrearsWon(feeBalance)}
                     </td>
                   </tr>
                   <tr className="font-semibold">
@@ -934,7 +944,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                       미수 수수료
                     </td>
                     <td className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5 text-right tabular-nums text-slate-900">
-                      {formatArrearsWon(viewLetterBalance)}
+                      {formatArrearsWon(feeBalance)}
                     </td>
                   </tr>
                 </tbody>

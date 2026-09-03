@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { ARREARS_MANAGER_CODE_MAP } from '@/lib/arrearsImportFilenames';
 
 export type ParsedStatusRow = {
   externalCode: string;
@@ -11,15 +12,6 @@ export type ParsedStatusRow = {
   credit: number;
   cmsNote: string;
   memo: string;
-};
-
-const MANAGER_MAP: Record<number, string> = {
-  1: '인디',
-  2: '블루',
-  3: '다야',
-  4: '윈터',
-  5: '리아',
-  6: '페리',
 };
 
 const CATEGORY_MAP: Record<number, string> = {
@@ -128,7 +120,7 @@ export function parseArrearsStatusWorkbook(
 
     const mgrRaw = row[iMgr];
     const mgrCode = typeof mgrRaw === 'number' ? mgrRaw : Number(cellStr(mgrRaw));
-    const managerName = MANAGER_MAP[mgrCode] || '';
+    const managerName = ARREARS_MANAGER_CODE_MAP[mgrCode] || '';
 
     const bFirst = balCols.length ? cellMoney(row[balCols[0]]) : 0;
     const bLast = balCols.length > 1 ? cellMoney(row[balCols[balCols.length - 1]]) : bFirst;
