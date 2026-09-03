@@ -215,8 +215,8 @@ export function clientDetailTxToLineInput(
 export function lineDedupKey(line: {
   description: string;
   amount: number;
-  paidAmount: number;
-  paidDate: string;
+  paidAmount?: number;
+  paidDate?: string;
 }): string {
-  return `${line.description}|${line.amount}|${line.paidAmount}|${line.paidDate}`;
+  return `${line.description}|${Math.round(line.amount)}|${Math.round(line.paidAmount || 0)}|${String(line.paidDate || '').trim()}`;
 }
