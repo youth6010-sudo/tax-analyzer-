@@ -1198,6 +1198,9 @@ export async function applyLedgerOnlyCarryIn(
 
   for (const m of items) {
     const existing = await listLetterLines(m.entryId);
+    // 공문(letter)이 있으면 전기이월로 덮지 않음 — 7/27 이전 공문 원문 유지
+    if (existing.some(l => l.source === 'letter')) continue;
+
     const keep = existing.filter(
       l => !(l.source === 'ledger' && /^전기이월/.test(l.description)),
     );
