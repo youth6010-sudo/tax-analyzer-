@@ -1536,7 +1536,7 @@ export default function ArrearsPageClient() {
                           {row.balanceDiffKind === 'mismatch' ? (
                             <span
                               className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-                              title={`현황표 ${formatArrearsWon(row.balance)} · 상세내역합 ${formatArrearsWon(row.linesOpen ?? 0)} · 차 ${formatArrearsWon(row.balanceDiff ?? 0)} (현황표↔거래처별 말잔이 같아도, 공문 과거내역 합과 다르면 표시)`}
+                              title={`현황표 ${formatArrearsWon(row.balance)} · 거래처별 말잔과 다를 때 표시 (공문 과거내역 합과 다른 것은 해당 없음)`}
                             >
                               불일치 {(row.balanceDiff ?? 0) > 0 ? '+' : ''}
                               {formatArrearsWon(row.balanceDiff ?? 0)}

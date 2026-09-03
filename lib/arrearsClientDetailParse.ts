@@ -80,13 +80,16 @@ function parseMdDate(md: string, year: number): string {
 function parseClientDetailSheet(
   sheet: XLSX.WorkSheet,
   sheetName: string,
-): ParsedClientDetailTx[] {
+): { txs: ParsedClientDetailTx[]; endingBalance: number | null; externalCode: string } {
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true }) as unknown[][];
   const meta = parseSheetMeta(rows);
-  if (!meta) return [];
+  if (!meta) {
+    return { txs: [], endingBalance: null, externalCode: '' };
+  }
 
   const txs: ParsedClientDetailTx[] = [];
   let lastDate = '';
+  let endingBalance: number | null = null;
 
   for (let i = 4; i < rows.length; i++) {
     const row = rows[i] ?? [];
@@ -94,6 +97,11 @@ function parseClientDetailSheet(
     const desc = cellStr(row[3]);
     const debit = cellMoney(row[5]);
     const credit = cellMoney(row[6]);
+    const balCell = row[7];
+    const hasBal =
+      balCell != null &&
+      balCell !== '' &&
+      Number.isFinite(typeof balCell === 'number' ? balCell : Number(String(balCell).replace(/,/g, '')));
 
     if (dateRaw && /^\d{2}-\d{2}$/.test(dateRaw)) {
       lastDate = parseMdDate(dateRaw, meta.periodYear);
@@ -109,15 +117,10 @@ function parseClientDetailSheet(
       debit,
       credit,
     });
+    if (hasBal) endingBalance = cellMoney(balCell);
   }
 
-  if (!txs.length && sheetName) {
-    const m = sheetName.match(/^\((\d{3,})\)(.+)$/);
-    if (m) {
-      return txs;
-    }
-  }
-  return txs;
+  return { txs, endingBalance, externalCode: meta.externalCode };
 }
 
 export function parseArrearsClientDetailWorkbook(buffer: Buffer): ParsedClientDetailTx[] {
@@ -126,9 +129,24 @@ export function parseArrearsClientDetailWorkbook(buffer: Buffer): ParsedClientDe
   for (const sheetName of wb.SheetNames) {
     const sheet = wb.Sheets[sheetName];
     if (!sheet) continue;
-    all.push(...parseClientDetailSheet(sheet, sheetName));
+    all.push(...parseClientDetailSheet(sheet, sheetName).txs);
   }
   return all;
+}
+
+/** 시트별 말잔 (거래처 코드 → 잔액) */
+export function parseArrearsClientDetailEndings(buffer: Buffer): Record<string, number> {
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const out: Record<string, number> = {};
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const { endingBalance, externalCode } = parseClientDetailSheet(sheet, sheetName);
+    if (externalCode && endingBalance != null) {
+      out[externalCode] = endingBalance;
+    }
+  }
+  return out;
 }
 
 /** 원장 적요 → 공문 형식 (2026년 7월, 26년 법인조정료 등) */

@@ -124,7 +124,8 @@ export function parseArrearsStatusWorkbook(
 
     const bFirst = balCols.length ? cellMoney(row[balCols[0]]) : 0;
     const bLast = balCols.length > 1 ? cellMoney(row[balCols[balCols.length - 1]]) : bFirst;
-    const balance = bLast !== 0 ? bLast : bFirst;
+    // 잔액 열이 여러 개면 마지막(당기 말잔) 사용 — 0원이어도 first로 대체하지 않음
+    const balance = balCols.length > 1 ? bLast : bFirst;
     out.push({
       externalCode,
       companyName,

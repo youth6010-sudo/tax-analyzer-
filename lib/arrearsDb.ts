@@ -6,6 +6,10 @@ import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
+import {
+  isArrearsExcelBalanceAligned,
+  readArrearsDetailEndings,
+} from '@/lib/arrearsDetailEndings';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
 import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
 import {
@@ -71,10 +75,29 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
     letterBy.set(s.arrearsEntryId, Boolean(s.hasLetter));
   }
 
+  const detailEndings = await readArrearsDetailEndings();
+
   return items.map(item => {
-    const linesOpen = openBy.get(item.id) ?? 0;
+    const rawOpen = openBy.get(item.id) ?? 0;
+    const excelAligned = isArrearsExcelBalanceAligned(
+      item.externalCode,
+      item.balance,
+      detailEndings,
+    );
+    /**
+     * 불일치 = 현황표 ≠ 거래처별 말잔.
+     * 공문 과거내역 합과 달라도, 엑셀 두 파일 말잔이 같으면 OK (7/27 이후만 덧붙인 구조).
+     */
+    if (excelAligned) {
+      return {
+        ...item,
+        linesOpen: Math.round(item.balance),
+        balanceDiff: 0,
+        balanceDiffKind: 'ok' as const,
+      };
+    }
+    const linesOpen = rawOpen;
     const balanceDiff = Math.round(item.balance) - linesOpen;
-  /** 현황표 잔액 ≠ 상세내역(공문+이후) 합 → 불일치 (하나비·오프라인 포함) */
     const balanceDiffKind = classifyBalanceDiff({
       ledgerBalance: item.balance,
       linesOpen,

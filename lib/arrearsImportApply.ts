@@ -15,9 +15,11 @@ import {
 import {
   clientDetailTxToLineInput,
   lineDedupKey,
+  parseArrearsClientDetailEndings,
   parseArrearsClientDetailWorkbook,
   type ParsedClientDetailTx,
 } from '@/lib/arrearsClientDetailParse';
+import { writeArrearsDetailEndings } from '@/lib/arrearsDetailEndings';
 import {
   parseArrearsStatusWorkbook,
   type ParsedStatusRow,
@@ -221,6 +223,9 @@ export async function applyClientDetailImport(
   const cfg = readArrearsImportConfig();
   const cutoffDate = normalizeDotDate(cutoffOverride) || cfg.letterCutoffDate;
   writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
+
+  // 거래처별 말잔 저장 — 현황표와 같으면 목록 「불일치」제외
+  await writeArrearsDetailEndings(parseArrearsClientDetailEndings(buffer));
 
   const txs = parseArrearsClientDetailWorkbook(buffer).filter(t =>
     isAfterCutoff(t.eventDate, cutoffDate),

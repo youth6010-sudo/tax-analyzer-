@@ -33,6 +33,7 @@ import {
   classifyBalanceDiff,
   type BalanceDiffKind,
 } from '@/lib/arrearsBalanceDiff';
+import { isArrearsExcelBalanceAligned, readArrearsDetailEndings } from '@/lib/arrearsDetailEndings';
 
 export type { BalanceDiffKind };
 export { classifyBalanceDiff };
@@ -116,11 +117,16 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   const letterBalance = letterBalanceFromLines(lines);
   const globalAsOfDate = await getArrearsGlobalAsOfDate();
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
+  const endings = await readArrearsDetailEndings();
+  // 현황표=거래처별 말잔이면 공문줄합과 달라도 불일치로 보지 않음
+  const balanceDiff = isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
+    ? 0
+    : item.balance - letterBalance;
   return {
     item,
     lines,
     letterBalance,
-    balanceDiff: item.balance - letterBalance,
+    balanceDiff,
     globalAsOfDate,
     letterAsOfDate,
   };
