@@ -17,8 +17,8 @@ for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
 }
 
 const statusPath =
-  'z:/10_미수관리/미수금 공문 - 26년/미수수수료 거래처(잔액)현황_26.08.31.xls';
-const detailPath = 'c:/Users/ADMIN/Downloads/거래처별 현황_20260902.xlsx';
+  'C:/Users/ADMIN/Downloads/미수수수료 거래처(잔액)현황_26.08.31.xlsx';
+const detailPath = 'C:/Users/ADMIN/Downloads/거래처별 현황_20260831.xlsx';
 
 for (const p of [statusPath, detailPath]) {
   if (!fs.existsSync(p)) {

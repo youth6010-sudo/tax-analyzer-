@@ -237,6 +237,14 @@ function parsePaidParts(
     };
   }
 
+  // 2026년 8월 14일 / 26년 8월14일
+  const koYear = s.match(/^(20\d{2}|\d{2})\s*년\s*0?(\d{1,2})\s*월\s*0?(\d{1,2})\s*일$/);
+  if (koYear) {
+    let year = Number(koYear[1]);
+    if (year < 100) year += 2000;
+    return { year, month: Number(koYear[2]), day: Number(koYear[3]) };
+  }
+
   // 1월 16일 / 1월16일
   const ko = s.match(/^0?(\d{1,2})\s*월\s*0?(\d{1,2})\s*일$/);
   if (ko) {

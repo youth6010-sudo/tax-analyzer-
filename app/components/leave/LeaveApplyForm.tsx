@@ -40,6 +40,14 @@ export function buildLeaveTitleDraft(
   return '연차';
 }
 
+type SubstituteOptions = {
+  defaultSubstitute: string | null;
+  defaultAvailable: boolean;
+  mustPickOther: boolean;
+  candidates: string[];
+  suggested: string;
+};
+
 export default function LeaveApplyForm({
   onCancel,
   onCreated,
@@ -55,6 +63,9 @@ export default function LeaveApplyForm({
   const [title, setTitle] = useState(() => buildLeaveTitleDraft('full', 'am'));
   const [body, setBody] = useState(() => buildLeaveBodyDraft('full', 'am', today, today));
   const [bodyDirty, setBodyDirty] = useState(false);
+  const [substituteName, setSubstituteName] = useState('');
+  const [subOpts, setSubOpts] = useState<SubstituteOptions | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -75,7 +86,41 @@ export default function LeaveApplyForm({
     }
   }, [leaveKind, halfSlot, startDate, endDate, bodyDirty]);
 
+  useEffect(() => {
+    const start = startDate;
+    const end = leaveKind === 'half' ? startDate : endDate;
+    if (!start || !end) return;
+    let cancelled = false;
+    setSubLoading(true);
+    void (async () => {
+      try {
+        const qs = new URLSearchParams({ startDate: start, endDate: end });
+        const res = await fetch(`/api/leave/substitute-options?${qs}`, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || '대체자 조회 실패');
+        if (cancelled) return;
+        const opts = data as SubstituteOptions;
+        setSubOpts(opts);
+        setSubstituteName(opts.suggested || '');
+      } catch (e) {
+        if (!cancelled) {
+          setSubOpts(null);
+          setError(e instanceof Error ? e.message : '대체자 조회 실패');
+        }
+      } finally {
+        if (!cancelled) setSubLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [startDate, endDate, leaveKind]);
+
   const submit = async () => {
+    if (!substituteName.trim()) {
+      setError('업무대체자를 지정해 주세요.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -89,6 +134,7 @@ export default function LeaveApplyForm({
           halfSlot: leaveKind === 'half' ? halfSlot : '',
           startDate,
           endDate: leaveKind === 'half' ? startDate : endDate,
+          substituteName,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -101,11 +147,14 @@ export default function LeaveApplyForm({
     }
   };
 
+  const canEditSubstitute = !subOpts?.defaultAvailable;
+
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-slate-500">
         팀원이면 팀장 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로 결재 요청됩니다.
-        최종 승인되면 캘린더에 표시됩니다.
+        업무대체자는 필수이며, 기본은 블루↔다야 · 페리↔윈터 · 리아↔찰리입니다. 기본 대체자도 같은
+        기간 연차면 다른 사람을 지정합니다.
       </p>
       <div className="flex flex-wrap gap-3 text-xs font-semibold text-slate-700">
         <label className="inline-flex items-center gap-1.5">
@@ -170,6 +219,40 @@ export default function LeaveApplyForm({
         </label>
       </div>
       <label className="block text-xs">
+        <span className="mb-1 block font-semibold text-slate-600">업무대체자</span>
+        {subLoading ? (
+          <p className="text-[11px] text-slate-400">대체자 확인 중…</p>
+        ) : (
+          <select
+            value={substituteName}
+            disabled={!canEditSubstitute && !!subOpts?.defaultSubstitute}
+            onChange={e => setSubstituteName(e.target.value)}
+            className={portalInput + ' w-full text-xs disabled:bg-slate-100'}
+          >
+            {!substituteName ? <option value="">선택</option> : null}
+            {(canEditSubstitute ? subOpts?.candidates || [] : [substituteName].filter(Boolean)).map(
+              name => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ),
+            )}
+          </select>
+        )}
+        {subOpts?.mustPickOther ? (
+          <p className="mt-1 text-[11px] font-semibold text-amber-800">
+            기본 대체자({subOpts.defaultSubstitute})도 같은 기간 연차입니다. 다른 사람을
+            지정해 주세요.
+          </p>
+        ) : subOpts?.defaultSubstitute ? (
+          <p className="mt-1 text-[11px] text-slate-500">
+            기본 대체자: {subOpts.defaultSubstitute}
+          </p>
+        ) : (
+          <p className="mt-1 text-[11px] text-slate-500">기본 페어가 없어 직접 선택합니다.</p>
+        )}
+      </label>
+      <label className="block text-xs">
         <span className="mb-1 block font-semibold text-slate-600">제목</span>
         <input
           value={title}
@@ -195,7 +278,7 @@ export default function LeaveApplyForm({
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={saving}
+          disabled={saving || subLoading || !substituteName}
           className={portalBtnPrimary + ' text-xs py-1.5'}
         >
           {saving ? '신청 중…' : '신청'}

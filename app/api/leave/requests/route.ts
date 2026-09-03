@@ -9,6 +9,7 @@ import {
   createLeaveRequest,
   listLeaveRequests,
   listMyInFlightLeaveRequests,
+  listMySubstituteDutiesOnDate,
   listPendingLeaveForApprover,
 } from '@/lib/leaveDb';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
@@ -33,6 +34,12 @@ export async function GET(req: Request) {
       }
       const items = await listPendingLeaveForApprover(user, year);
       return NextResponse.json({ items, canApprove: true, canViewAll });
+    }
+
+    /** 오늘 내가 업무대체자인 승인 휴가 — 홈 To Do「휴가 결재」 */
+    if (url.searchParams.get('substituteToday') === '1') {
+      const items = await listMySubstituteDutiesOnDate(user.name);
+      return NextResponse.json({ items, canApprove, canViewAll });
     }
 
     /** 내가 올린 신청중·취소신청중 — 홈 To Do「신청중」표시용 */
@@ -98,6 +105,7 @@ export async function POST(req: Request) {
       halfSlot?: LeaveHalfSlot | '';
       startDate?: string;
       endDate?: string;
+      substituteName?: string;
     };
     if (!body.startDate || !body.endDate) {
       return NextResponse.json({ error: '기간을 입력하세요.' }, { status: 400 });
@@ -110,6 +118,7 @@ export async function POST(req: Request) {
       halfSlot: body.halfSlot,
       startDate: body.startDate,
       endDate: leaveKind === 'half' ? body.startDate : body.endDate,
+      substituteName: body.substituteName || '',
     });
     return NextResponse.json({ item });
   } catch (e) {

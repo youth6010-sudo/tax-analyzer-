@@ -21,6 +21,10 @@ import {
   isLeaveTeamLead,
 } from '@/lib/leaveAccess';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
+import {
+  datesOverlap,
+  defaultLeaveSubstituteNick,
+} from '@/lib/leaveSubstitute';
 
 function parseDays(raw: string | number | null | undefined): number {
   const n = typeof raw === 'number' ? raw : Number(String(raw ?? '0').trim());
@@ -103,6 +107,7 @@ function toRequestDto(row: typeof leaveRequests.$inferSelect): LeaveRequestDto {
     cancelRequestNote: row.cancelRequestNote || '',
     cancelRequestedAt: row.cancelRequestedAt?.toISOString() ?? null,
     cancelRequestFromStatus: row.cancelRequestFromStatus || '',
+    substituteName: row.substituteName || '',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -496,6 +501,7 @@ export async function createLeaveRequest(
     halfSlot?: LeaveHalfSlot | '';
     startDate: string;
     endDate: string;
+    substituteName: string;
   },
 ): Promise<LeaveRequestDto> {
   const title = input.title.trim();
@@ -520,6 +526,13 @@ export async function createLeaveRequest(
     );
   }
 
+  const substituteName = await resolveAndValidateSubstitute(
+    applicantName,
+    input.substituteName,
+    input.startDate,
+    input.endDate,
+  );
+
   const approvalStep = initialLeaveApprovalStep(applicantName);
   const db = getDb();
   const [row] = await db
@@ -535,10 +548,11 @@ export async function createLeaveRequest(
       days: daysToText(days),
       status: 'pending',
       approvalStep,
+      substituteName,
     })
     .returning();
   const dto = toRequestDto(row);
-  const summary = `${applicantName} · ${title} (${dto.startDate}~${dto.endDate}, ${dto.days}일)`;
+  const summary = `${applicantName} · ${title} (${dto.startDate}~${dto.endDate}, ${dto.days}일) · 대체 ${substituteName}`;
 
   if (approvalStep === 'team_lead') {
     const leadNick = resolveLeaveTeamLeadForApplicant(applicantName);
@@ -555,6 +569,156 @@ export async function createLeaveRequest(
     );
   }
   return dto;
+}
+
+/** 기간이 겹치는 대기·승인·취소요청 중 휴가가 있는지 */
+export async function isMemberOnLeaveDuring(
+  memberName: string,
+  startDate: string,
+  endDate: string,
+  excludeRequestId?: string,
+): Promise<boolean> {
+  if (!memberName.trim()) return false;
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: leaveRequests.id,
+      applicantName: leaveRequests.applicantName,
+      startDate: leaveRequests.startDate,
+      endDate: leaveRequests.endDate,
+    })
+    .from(leaveRequests)
+    .where(
+      and(
+        inArray(leaveRequests.status, ['pending', 'approved', 'cancel_requested']),
+        lte(leaveRequests.startDate, endDate),
+        gte(leaveRequests.endDate, startDate),
+      ),
+    );
+  return rows.some(r => {
+    if (excludeRequestId && r.id === excludeRequestId) return false;
+    if (!managerNamesMatch(r.applicantName, memberName)) return false;
+    return datesOverlap(r.startDate, r.endDate, startDate, endDate);
+  });
+}
+
+export type LeaveSubstituteOptions = {
+  defaultSubstitute: string | null;
+  defaultAvailable: boolean;
+  /** 기본 대체자가 같은 기간 연차라 다른 사람 선택 필요 */
+  mustPickOther: boolean;
+  candidates: string[];
+  suggested: string;
+};
+
+export async function getLeaveSubstituteOptions(
+  applicantName: string,
+  startDate: string,
+  endDate: string,
+): Promise<LeaveSubstituteOptions> {
+  if (!parseIsoDate(startDate) || !parseIsoDate(endDate)) {
+    throw new Error('날짜 형식이 올바르지 않습니다.');
+  }
+  const year = Number(startDate.slice(0, 4));
+  const balances = await listLeaveBalances(year);
+  const team = await listCalendarTeamMembers();
+  const pool = [
+    ...new Set([
+      ...balances.map(b => b.memberName),
+      ...team,
+    ]),
+  ].filter(
+    n =>
+      n &&
+      !managerNamesMatch(n, applicantName) &&
+      !managerNamesMatch(n, '인디'),
+  );
+
+  const defaultNick = defaultLeaveSubstituteNick(applicantName);
+  let defaultSubstitute: string | null = null;
+  if (defaultNick) {
+    defaultSubstitute =
+      pool.find(n => managerNamesMatch(n, defaultNick)) || defaultNick;
+  }
+
+  const defaultOnLeave = defaultSubstitute
+    ? await isMemberOnLeaveDuring(defaultSubstitute, startDate, endDate)
+    : false;
+  const mustPickOther = !!defaultSubstitute && defaultOnLeave;
+  const defaultAvailable = !!defaultSubstitute && !defaultOnLeave;
+
+  const candidates = mustPickOther
+    ? pool.filter(n => !defaultSubstitute || !managerNamesMatch(n, defaultSubstitute))
+    : pool;
+
+  const suggested = defaultAvailable
+    ? defaultSubstitute!
+    : mustPickOther
+      ? candidates[0] || ''
+      : defaultSubstitute || candidates[0] || '';
+
+  return {
+    defaultSubstitute,
+    defaultAvailable,
+    mustPickOther,
+    candidates,
+    suggested,
+  };
+}
+
+async function resolveAndValidateSubstitute(
+  applicantName: string,
+  rawSubstitute: string,
+  startDate: string,
+  endDate: string,
+): Promise<string> {
+  const opts = await getLeaveSubstituteOptions(applicantName, startDate, endDate);
+  let name = (rawSubstitute || '').trim() || opts.suggested;
+  if (!name) throw new Error('업무대체자를 지정해 주세요.');
+  if (managerNamesMatch(name, applicantName)) {
+    throw new Error('본인은 업무대체자로 지정할 수 없습니다.');
+  }
+  if (opts.mustPickOther && opts.defaultSubstitute && managerNamesMatch(name, opts.defaultSubstitute)) {
+    throw new Error(
+      `${opts.defaultSubstitute}님도 같은 기간 연차입니다. 다른 업무대체자를 지정해 주세요.`,
+    );
+  }
+  // 기본 페어가 가능하면 기본으로 고정 (임의 변경 방지) — 둘 다 연차일 때만 다른 사람 선택
+  if (opts.defaultAvailable && opts.defaultSubstitute) {
+    name = opts.defaultSubstitute;
+  } else if (!opts.candidates.some(c => managerNamesMatch(c, name))) {
+    // 표시명 매칭 허용
+    const hit = opts.candidates.find(c => managerNamesMatch(c, name));
+    if (!hit && !(opts.defaultAvailable && opts.defaultSubstitute && managerNamesMatch(opts.defaultSubstitute, name))) {
+      throw new Error('선택할 수 없는 업무대체자입니다.');
+    }
+    if (hit) name = hit;
+  }
+  return name;
+}
+
+/** 오늘(또는 지정일) 내가 업무대체자인 승인 휴가 */
+export async function listMySubstituteDutiesOnDate(
+  substituteName: string,
+  onDate?: string,
+): Promise<LeaveRequestDto[]> {
+  const day = onDate || new Date().toISOString().slice(0, 10);
+  if (!substituteName.trim()) return [];
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(leaveRequests)
+    .where(
+      and(
+        inArray(leaveRequests.status, ['approved', 'cancel_requested']),
+        lte(leaveRequests.startDate, day),
+        gte(leaveRequests.endDate, day),
+      ),
+    )
+    .orderBy(asc(leaveRequests.startDate));
+  return rows
+    .filter(r => r.substituteName && managerNamesMatch(r.substituteName, substituteName))
+    .map(toRequestDto);
 }
 
 export async function cancelLeaveRequest(
@@ -821,6 +985,14 @@ export async function reviewLeaveRequest(
     decision === 'approved' ? `휴가 승인 · ${summary}` : `휴가 반려 · ${summary}`,
     leaveFinalResultRecipients(existing),
   );
+  if (decision === 'approved' && existing.substituteName?.trim()) {
+    await notifyLeaveRecipients(
+      id,
+      reviewerName,
+      `업무대체 지정 · ${existing.applicantName} 휴가 (${existing.startDate}${existing.endDate !== existing.startDate ? `~${existing.endDate}` : ''}) · 당일 휴가결재란에 표시됩니다`,
+      [existing.substituteName.trim()],
+    );
+  }
   return toRequestDto(row);
 }
 

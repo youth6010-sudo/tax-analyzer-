@@ -187,6 +187,7 @@ export default function HomeTasksPanel() {
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [leavePending, setLeavePending] = useState<LeaveRequestDto[]>([]);
   const [leaveMineInflight, setLeaveMineInflight] = useState<LeaveRequestDto[]>([]);
+  const [leaveSubstituteDuties, setLeaveSubstituteDuties] = useState<LeaveRequestDto[]>([]);
   const [leaveNotifs, setLeaveNotifs] = useState<LeaveNotificationDto[]>([]);
   const [canApproveLeaveUi, setCanApproveLeaveUi] = useState(false);
   const [leaveReview, setLeaveReview] = useState<LeaveRequestDto | null>(null);
@@ -274,7 +275,10 @@ export default function HomeTasksPanel() {
   );
 
   const leaveSectionCount =
-    leavePending.length + leaveMineInflight.length + leaveNotifsVisible.length;
+    leavePending.length +
+    leaveMineInflight.length +
+    leaveNotifsVisible.length +
+    leaveSubstituteDuties.length;
 
   const totalPending =
     personalPending +
@@ -350,6 +354,18 @@ export default function HomeTasksPanel() {
         setLeaveMineInflight(payload.items || []);
       } else {
         setLeaveMineInflight([]);
+      }
+
+      const leaveSubRes = await fetchWithTimeout(
+        '/api/leave/requests?substituteToday=1',
+        {},
+        10_000,
+      );
+      if (leaveSubRes.ok) {
+        const payload = (await leaveSubRes.json()) as { items?: LeaveRequestDto[] };
+        setLeaveSubstituteDuties(payload.items || []);
+      } else {
+        setLeaveSubstituteDuties([]);
       }
 
       const leaveNotifRes = await fetchWithTimeout('/api/leave/notifications', {}, 10_000);
@@ -861,7 +877,8 @@ export default function HomeTasksPanel() {
 
             {(canApproveLeaveUi ||
               leaveMineInflight.length > 0 ||
-              leaveNotifsVisible.length > 0) && (
+              leaveNotifsVisible.length > 0 ||
+              leaveSubstituteDuties.length > 0) && (
               <SectionCard
                 title="휴가 결재"
                 count={leaveSectionCount}
@@ -872,6 +889,39 @@ export default function HomeTasksPanel() {
                   <p className="py-3 text-center text-sm text-slate-400">결재 대기 없음</p>
                 ) : (
                   <ul className="space-y-1.5">
+                    {leaveSubstituteDuties.map(item => (
+                      <li
+                        key={`sub-${item.id}`}
+                        className="rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2.5 text-sm shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-semibold text-slate-800">업무대체</p>
+                          <span className="rounded bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-bold text-violet-950">
+                            오늘 대체자
+                          </span>
+                          <span className="rounded bg-teal-600/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                            {formatLeaveKindLabel(item.leaveKind, item.halfSlot)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-700">
+                          <span className="font-semibold">{item.applicantName}</span> 님 휴가 · 오늘
+                          업무를 대신합니다
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {item.startDate}
+                          {item.endDate !== item.startDate ? ` ~ ${item.endDate}` : ''}
+                          {item.title ? ` · ${item.title}` : ''}
+                        </p>
+                        <div className="mt-2">
+                          <Link
+                            href="/leave"
+                            className="text-[11px] font-semibold text-violet-800 underline-offset-2 hover:underline"
+                          >
+                            휴가관리
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
                     {leaveMineInflight.map(item => (
                       <li
                         key={`mine-${item.id}`}
@@ -1442,6 +1492,8 @@ export default function HomeTasksPanel() {
             <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1.5 text-xs">
               <dt className="font-semibold text-slate-500">신청자</dt>
               <dd className="font-semibold text-slate-900">{leaveReview.applicantName}</dd>
+              <dt className="font-semibold text-slate-500">업무대체</dt>
+              <dd className="font-semibold text-slate-900">{leaveReview.substituteName || '—'}</dd>
               <dt className="font-semibold text-slate-500">구분</dt>
               <dd>{formatLeaveKindLabel(leaveReview.leaveKind, leaveReview.halfSlot)}</dd>
               <dt className="font-semibold text-slate-500">제목</dt>

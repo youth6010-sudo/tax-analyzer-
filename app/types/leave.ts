@@ -55,6 +55,8 @@ export type LeaveRequestDto = {
   cancelRequestedAt: string | null;
   /** approved | pending */
   cancelRequestFromStatus: string;
+  /** 업무대체자 */
+  substituteName: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -113,7 +115,8 @@ export function isLeaveResultNotifTitle(title: string): boolean {
     t.startsWith('휴가 승인') ||
     t.startsWith('휴가 반려') ||
     t.startsWith('휴가 취소 승인') ||
-    t.startsWith('휴가 취소 반려')
+    t.startsWith('휴가 취소 반려') ||
+    t.startsWith('업무대체 지정')
   );
 }
 

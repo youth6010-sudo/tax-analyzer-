@@ -37,6 +37,7 @@
     "db:ensure-calendar-tables": "node scripts/ensure-calendar-tables.mjs",
     "db:ensure-personal-checklist-series": "node scripts/ensure-personal-checklist-series.mjs",
     "db:ensure-leave-tables": "node scripts/ensure-leave-tables.mjs",
+    "db:ensure-leave-substitute": "node scripts/ensure-leave-substitute.mjs",
     "db:ensure-duty-weeks": "node scripts/ensure-duty-weeks.mjs",
     "db:ensure-arrears": "node scripts/ensure-arrears.mjs",
     "db:ensure-arrears-letter-lines": "node scripts/ensure-arrears-letter-lines.mjs",

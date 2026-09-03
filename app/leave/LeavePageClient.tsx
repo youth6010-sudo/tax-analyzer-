@@ -158,9 +158,10 @@ export default function LeavePageClient() {
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
-              결재됩니다. 인디는 결재권자로 연차 잔고·신청 대상이 아닙니다. 최종 승인 시 연차
-              사용·캘린더 반영. 본인 연차 잔고는 휴가현황 상단에 표시되고, 전직원 연차 잔고·수정은
-              인디·페리만 가능합니다. 결재 알림은 홈 To Do의 휴가 결재에 표시됩니다.
+              결재됩니다. 휴가 신청 시 업무대체자 지정이 필수입니다(블루↔다야, 페리↔윈터, 리아↔찰리).
+              인디는 결재권자로 연차 잔고·신청 대상이 아닙니다. 최종 승인 시 연차 사용·캘린더 반영.
+              본인 연차 잔고는 휴가현황 상단에 표시되고, 전직원 연차 잔고·수정은 인디·페리만 가능합니다.
+              결재 알림·당일 업무대체는 홈 To Do의 휴가 결재에 표시됩니다.
             </p>
             </div>
           </div>
@@ -430,6 +431,7 @@ function RequestTable({
             <th className="px-3 py-2.5 font-semibold">구분</th>
             <th className="px-3 py-2.5 font-semibold">제목</th>
             <th className="px-3 py-2.5 font-semibold">작성자</th>
+            <th className="px-3 py-2.5 font-semibold">대체</th>
             <th className="px-3 py-2.5 font-semibold">일수</th>
           </tr>
         </thead>
@@ -458,6 +460,7 @@ function RequestTable({
                 <span className="line-clamp-1">{item.title}</span>
               </td>
               <td className="px-3 py-2.5 text-slate-600">{item.applicantName}</td>
+              <td className="px-3 py-2.5 text-slate-600">{item.substituteName || '—'}</td>
               <td className="px-3 py-2.5 tabular-nums">{formatNum(item.days)}</td>
             </tr>
           ))}
@@ -699,6 +702,8 @@ function LeaveDetailPanel({
         <dd>{formatLeaveKindLabel(item.leaveKind, item.halfSlot)}</dd>
         <dt className="font-semibold text-slate-500">작성자</dt>
         <dd>{item.applicantName}</dd>
+        <dt className="font-semibold text-slate-500">업무대체</dt>
+        <dd>{item.substituteName || '—'}</dd>
         <dt className="font-semibold text-slate-500">제목</dt>
         <dd className="font-semibold text-slate-900">{item.title}</dd>
         <dt className="font-semibold text-slate-500">기간</dt>

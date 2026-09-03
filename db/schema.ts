@@ -580,6 +580,8 @@ export const leaveRequests = pgTable('leave_requests', {
   cancelRequestedAt: timestamp('cancel_requested_at', { withTimezone: true }),
   /** approved | pending — 취소 요청 전 상태 (반려 시 복원) */
   cancelRequestFromStatus: text('cancel_request_from_status').notNull().default(''),
+  /** 업무대체자 (닉네임·표시명) */
+  substituteName: text('substitute_name').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
@@ -587,6 +589,7 @@ export const leaveRequests = pgTable('leave_requests', {
   index('leave_requests_status_idx').on(t.status),
   index('leave_requests_dates_idx').on(t.startDate, t.endDate),
   index('leave_requests_approval_step_idx').on(t.status, t.approvalStep),
+  index('leave_requests_substitute_idx').on(t.substituteName, t.status, t.startDate, t.endDate),
 ]);
 
 /** 휴가 신청 알림 (결재자·신청자) */

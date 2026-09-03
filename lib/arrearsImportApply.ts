@@ -225,12 +225,17 @@ export async function applyClientDetailImport(
   writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
 
   // 거래처별 말잔 저장 — 현황표와 같으면 목록 「불일치」제외
-  await writeArrearsDetailEndings(parseArrearsClientDetailEndings(buffer));
+  const endings = parseArrearsClientDetailEndings(buffer);
+  await writeArrearsDetailEndings(endings);
 
   const txs = parseArrearsClientDetailWorkbook(buffer).filter(t =>
     isAfterCutoff(t.eventDate, cutoffDate),
   );
   const byCode = groupTxByCode(txs);
+  // cutoff 이후 거래가 없어도 시트에 있는 업체는 방문 → 임의 추가된 7·8월 공문 줄 제거
+  for (const code of Object.keys(endings)) {
+    if (!byCode.has(code)) byCode.set(code, []);
+  }
   const db = getDb();
 
   let applied = 0;
