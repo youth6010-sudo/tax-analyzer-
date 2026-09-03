@@ -806,14 +806,25 @@ export default function ArrearsPageClient() {
             {canManage ? (
               <button
                 type="button"
+                className={`${portalBtnPrimary} ${baselineImportOpen ? 'ring-2 ring-amber-300 ring-offset-1' : ''}`}
+                onClick={() => setBaselineImportOpen(o => !o)}
+                title="미수수수료 거래처(잔액)현황 · 거래처별 현황 엑셀 업로드"
+              >
+                {baselineImportOpen ? '엑셀 업로드 닫기' : '엑셀 업로드'}
+              </button>
+            ) : null}
+            {canManage ? (
+              <button
+                type="button"
                 className={`${portalBtnSecondary} ${editMode ? 'border-amber-400 bg-amber-50 text-amber-950' : ''}`}
                 onClick={() => {
                   setEditMode(v => {
                     if (v) {
                       setMatchOpen(false);
                       setFeeImportOpen(false);
+                      return false;
                     }
-                    return !v;
+                    return true;
                   });
                 }}
                 title="켜면 담당·분류·더빌 등 수정 도구가 표시됩니다"
@@ -839,16 +850,6 @@ export default function ArrearsPageClient() {
                 title="세금계산서 발급 엑셀(품목) · CMS"
               >
                 {feeImportOpen ? '세금계산서 닫기' : '세금계산서'}
-              </button>
-            ) : null}
-            {editMode ? (
-              <button
-                type="button"
-                className={`${portalBtnSecondary} ${baselineImportOpen ? 'border-amber-400 bg-amber-50 text-amber-900' : ''}`}
-                onClick={() => setBaselineImportOpen(o => !o)}
-                title="현황표(총 잔액) · 거래처별 상세(이후 내역)"
-              >
-                {baselineImportOpen ? '기준 파일 닫기' : '기준 파일'}
               </button>
             ) : null}
             <button
@@ -929,7 +930,7 @@ export default function ArrearsPageClient() {
           />
         ) : null}
 
-        {editMode && baselineImportOpen ? (
+        {baselineImportOpen ? (
           <ArrearsBaselineImport
             onApplied={() => void load('full')}
             onClose={() => setBaselineImportOpen(false)}
