@@ -23,7 +23,11 @@ import {
 } from '@/lib/arrearsLedgerDetailParse';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
-import { applyArrearsManualBalance, shouldExcludeArrearsLetterDesc } from '@/lib/arrearsBalanceLock';
+import {
+  applyArrearsManualBalance,
+  getArrearsTransferPair,
+  isArrearsTransferSplitCode,
+} from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,
   isInactiveArrearsCode,
@@ -102,6 +106,21 @@ export async function listLetterLines(entryId: string): Promise<ArrearsLetterLin
   return rows.map(toLineDto);
 }
 
+export type ArrearsTransferGroupDto = {
+  label: string;
+  oldCode: string;
+  newCode: string;
+  sections: Array<{
+    entryId: string;
+    externalCode: string;
+    companyName: string;
+    balance: number;
+    lines: ArrearsLetterLineDto[];
+  }>;
+  /** 현황표 잔액 합 (구+신) — 공문 「미수 수수료」합계 */
+  combinedBalance: number;
+};
+
 export async function getArrearsLetterDetail(id: string): Promise<{
   item: ArrearsEntryDto;
   lines: ArrearsLetterLineDto[];
@@ -109,6 +128,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   balanceDiff: number;
   globalAsOfDate: string;
   letterAsOfDate: string;
+  transferGroup: ArrearsTransferGroupDto | null;
 } | null> {
   await ensureInactiveArrearsEntries();
   const item = await getArrearsEntryById(id);
@@ -118,10 +138,61 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   const globalAsOfDate = await getArrearsGlobalAsOfDate();
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
   const endings = await readArrearsDetailEndings();
-  // 현황표=거래처별 말잔이면 공문줄합과 달라도 불일치로 보지 않음
-  const balanceDiff = isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
-    ? 0
-    : item.balance - letterBalance;
+
+  const pair = getArrearsTransferPair(item.externalCode);
+  let transferGroup: ArrearsTransferGroupDto | null = null;
+  if (pair) {
+    const db = getDb();
+    const partnerCode =
+      item.externalCode.trim() === pair.oldCode ? pair.newCode : pair.oldCode;
+    const [partnerRow] = await db
+      .select()
+      .from(arrearsEntries)
+      .where(eq(arrearsEntries.externalCode, partnerCode))
+      .limit(1);
+    const partner = partnerRow ? await getArrearsEntryById(partnerRow.id) : null;
+    const partnerLines = partner ? await listLetterLines(partner.id) : [];
+
+    const oldItem = item.externalCode.trim() === pair.oldCode ? item : partner;
+    const newItem = item.externalCode.trim() === pair.newCode ? item : partner;
+    const oldLines = item.externalCode.trim() === pair.oldCode ? lines : partnerLines;
+    const newLines = item.externalCode.trim() === pair.newCode ? lines : partnerLines;
+
+    const sections: ArrearsTransferGroupDto['sections'] = [];
+    if (oldItem) {
+      sections.push({
+        entryId: oldItem.id,
+        externalCode: oldItem.externalCode,
+        companyName: oldItem.companyName,
+        balance: Math.round(oldItem.balance),
+        lines: oldLines,
+      });
+    }
+    if (newItem) {
+      sections.push({
+        entryId: newItem.id,
+        externalCode: newItem.externalCode,
+        companyName: newItem.companyName,
+        balance: Math.round(newItem.balance),
+        lines: newLines,
+      });
+    }
+    transferGroup = {
+      label: pair.label,
+      oldCode: pair.oldCode,
+      newCode: pair.newCode,
+      sections,
+      combinedBalance: sections.reduce((s, x) => s + x.balance, 0),
+    };
+  }
+
+  // 양수도 분리: 공문줄합≠현황표가 정상이므로 차이 배지 숨김
+  const balanceDiff =
+    isArrearsTransferSplitCode(item.externalCode) ||
+    isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
+      ? 0
+      : item.balance - letterBalance;
+
   return {
     item,
     lines,
@@ -129,6 +200,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
     balanceDiff,
     globalAsOfDate,
     letterAsOfDate,
+    transferGroup,
   };
 }
 
@@ -166,9 +238,7 @@ export async function replaceLetterLines(
       sortOrder: i,
     }))
     // 지급-only 행(내역 비움) 허용 — 사무실 공문 양식과 동일
-    .filter(l => l.description || l.amount || l.paidAmount)
-    // 양수도 이관 적요 등 이중계상 제외
-    .filter(l => !shouldExcludeArrearsLetterDesc(existing.externalCode, l.description));
+    .filter(l => l.description || l.amount || l.paidAmount);
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
 

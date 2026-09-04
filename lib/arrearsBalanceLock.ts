@@ -8,15 +8,16 @@ export const ARREARS_LETTER_PROTECTED_CODES = new Set<string>(['00183', '00199']
 export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
 
 /**
- * 양수도 등으로 구·신 계정이 분리된 경우.
- * 신계정 공문에 구계정 잔액 이관 적요가 있으면 이중계상 → 제외.
- * 01418 천돈가(윤삼식): 잔액은 01418 현황표, 구 미수는 00637 천돈가에 유지.
+ * 양수도로 구·신 코드가 나뉜 업체.
+ * - 공문에는 이관 적요(양수도)를 유지한다.
+ * - 현황표 잔액과 공문 줄합은 구조적으로 다를 수 있음 → 불일치로 보지 않음.
+ * - 상세에서는 구·신 내역을 합산 표시하고, 합계는 현황표 잔액 합을 쓴다.
  */
-export const ARREARS_TRANSFER_EXCLUDE_DESC_BY_CODE: Readonly<
-  Record<string, readonly string[]>
-> = {
-  '01418': ['천돈가양수도'],
-};
+export const ARREARS_TRANSFER_PAIRS: ReadonlyArray<{
+  oldCode: string;
+  newCode: string;
+  label: string;
+}> = [{ oldCode: '00637', newCode: '01418', label: '천돈가 양수도' }];
 
 /** 공문 임포트 시 letter: 중복 코드 (정규화 상호) */
 export const ARREARS_LETTER_DUP_CODE_BY_CANONICAL: Readonly<Record<string, string>> = {
@@ -31,6 +32,16 @@ export function getArrearsManualBalance(_externalCode: string): number | undefin
   return undefined;
 }
 
+export function getArrearsTransferPair(externalCode: string) {
+  const code = String(externalCode || '').trim();
+  if (!code) return null;
+  return ARREARS_TRANSFER_PAIRS.find(p => p.oldCode === code || p.newCode === code) ?? null;
+}
+
+export function isArrearsTransferSplitCode(externalCode: string): boolean {
+  return getArrearsTransferPair(externalCode) != null;
+}
+
 export function isArrearsBalanceLocked(externalCode: string): boolean {
   // 원장 import 시에도 현황표 잔액을 덮지 않도록 보호 코드는 잠금으로 취급
   return isArrearsLetterProtected(externalCode);
@@ -42,18 +53,6 @@ export function isArrearsLetterProtected(externalCode: string): boolean {
 
 export function isArrearsAlwaysListed(externalCode: string): boolean {
   return ARREARS_ALWAYS_LISTED_CODES.has(externalCode.trim());
-}
-
-/** 양수도 이관 적요 등 — 공문 합계·저장에서 제외 */
-export function shouldExcludeArrearsLetterDesc(
-  externalCode: string,
-  description: string,
-): boolean {
-  const list = ARREARS_TRANSFER_EXCLUDE_DESC_BY_CODE[String(externalCode || '').trim()];
-  if (!list?.length) return false;
-  const d = String(description || '').replace(/\s+/g, '');
-  if (!d) return false;
-  return list.some(key => d === key || d.includes(key));
 }
 
 /** DTO 잔액은 DB(현황표) 그대로 — 공문과 불일치 시 배지로 표시 */
