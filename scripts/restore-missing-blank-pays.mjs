@@ -1,13 +1,13 @@
 /**
- * 26.07.27 공문 — 내역 빈 지급행(회수) 누락 전수 복구
- * + 월기장료=월입금(동일금액) 즉시회수 줄 제거
+ * 26.07.27 공문 — 내역 빈 지급행을 공문 엑셀과 같은 순서로 맞춘다.
+ * (이전에 맨 끝에 붙인 경우 재정렬 + 누락 복구)
+ * cutoff 이후 ledger/payment는 공문 뒤에 유지. 월기장=입금 즉시회수는 제외.
  *
  * node --import tsx scripts/restore-missing-blank-pays.mjs [--apply]
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import XLSX from 'xlsx';
 
 const APPLY = process.argv.includes('--apply');
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,11 +62,18 @@ function payKey(paidAmount, paidDate) {
   return `${Math.round(paidAmount)}|${paidDateMatchKey(paidDate)}`;
 }
 
-/** cutoff 이후 월기장+동일금액 입금(즉시회수)만 제거. 공문 letter 완납 이력은 유지 */
+function descKey(d) {
+  return String(d || '').replace(/\s+/g, '');
+}
+
+function lineFingerprint(l) {
+  return `${descKey(l.description)}|${Math.round(l.amount)}|${Math.round(l.paidAmount)}|${paidDateMatchKey(l.paidDate)}|${l.source || ''}`;
+}
+
+/** cutoff 이후 월기장+동일금액 입금(즉시회수)만 제거 */
 function stripImmediateMonthlyRecoveries(lines) {
   const n = lines.length;
   const drop = new Set();
-
   const isMonthCharge = l => {
     if (Math.round(l.amount) <= 0) return false;
     if (l.source === 'letter') return false;
@@ -103,6 +110,118 @@ function stripImmediateMonthlyRecoveries(lines) {
   return lines.filter((_, i) => !drop.has(i));
 }
 
+/**
+ * 26.07.27 공문 줄 순서를 뼈대로 맞추고, DB의 cutoff 이후 줄은 뒤에 붙인다.
+ * 빈 지급행도 엑셀 위치 그대로.
+ */
+function mergeLetterOrder(excelLines, dbLines) {
+  const pool = dbLines.map((l, i) => ({
+    description: l.description,
+    amount: l.amount,
+    paidAmount: l.paidAmount,
+    paidDate: l.paidDate || '',
+    source: l.source,
+    _i: i,
+  }));
+  const used = new Set();
+
+  const take = pred => {
+    const idx = pool.findIndex((l, i) => !used.has(i) && pred(l));
+    if (idx < 0) return null;
+    used.add(idx);
+    const { _i, ...rest } = pool[idx];
+    return rest;
+  };
+
+  const ordered = [];
+  for (const xl of excelLines) {
+    const desc = String(xl.description || '').trim();
+    const amt = Math.round(xl.amount || 0);
+    const paid = Math.round(xl.paidAmount || 0);
+    const pdate = formatArrearsPaidDateKo(xl.paidDate) || xl.paidDate || '';
+
+    // 빈 지급행 → 엑셀 순서 고정
+    if (!desc && paid > 0) {
+      const hit =
+        take(
+          l =>
+            !String(l.description || '').trim() &&
+            Math.round(l.paidAmount) === paid &&
+            paidDateMatchKey(l.paidDate) === paidDateMatchKey(pdate),
+        ) ||
+        take(
+          l =>
+            !String(l.description || '').trim() && Math.round(l.paidAmount) === paid,
+        );
+      ordered.push(
+        hit || {
+          description: '',
+          amount: 0,
+          paidAmount: paid,
+          paidDate: pdate,
+          source: 'letter',
+        },
+      );
+      continue;
+    }
+
+    // 동일 적요+금액(+지급) letter 우선
+    let hit =
+      take(
+        l =>
+          l.source === 'letter' &&
+          descKey(l.description) === descKey(desc) &&
+          Math.round(l.amount) === amt &&
+          Math.round(l.paidAmount) === paid,
+      ) ||
+      take(
+        l =>
+          l.source === 'letter' &&
+          descKey(l.description) === descKey(desc) &&
+          Math.round(l.amount) === amt,
+      ) ||
+      take(l => l.source === 'letter' && descKey(l.description) === descKey(desc));
+
+    if (hit) {
+      // 엑셀에 지급이 더 있으면 보강(드묾)
+      if (paid > Math.round(hit.paidAmount)) {
+        hit = { ...hit, paidAmount: paid, paidDate: pdate || hit.paidDate };
+      }
+      ordered.push(hit);
+    } else {
+      ordered.push({
+        description: desc,
+        amount: amt,
+        paidAmount: paid,
+        paidDate: pdate,
+        source: 'letter',
+      });
+    }
+  }
+
+  // 공문에 없는 DB 잔여(주로 cutoff 이후 ledger/payment). 빈지급 letter는 엑셀에 없으면 버림(중복 방지)
+  const extras = [];
+  for (let i = 0; i < pool.length; i++) {
+    if (used.has(i)) continue;
+    const l = pool[i];
+    if (!String(l.description || '').trim() && Math.round(l.paidAmount) > 0 && l.source === 'letter') {
+      continue; // 엑셀에 없는/이미 배치한 빈지급 — 끝에 두지 않음
+    }
+    const { _i, ...rest } = l;
+    extras.push(rest);
+  }
+
+  return stripImmediateMonthlyRecoveries([...ordered, ...extras]);
+}
+
+function sameOrder(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (lineFingerprint(a[i]) !== lineFingerprint(b[i])) return false;
+  }
+  return true;
+}
+
 const dir = path.join('z:', '10_미수관리', '미수금 공문 - 26년');
 const files = fs
   .readdirSync(dir)
@@ -112,8 +231,7 @@ const files = fs
 const db = getDb();
 const entries = await db.select().from(arrearsEntries);
 
-let restored = 0;
-let stripped = 0;
+let changed = 0;
 const report = [];
 
 for (const filePath of files) {
@@ -121,112 +239,56 @@ for (const filePath of files) {
   const { sheets } = parseArrearsLetterWorkbook(buf);
 
   for (const sh of sheets) {
-    const hit = findByName(entries, sh.companyName);
-    if (!hit) continue;
-    if (isArrearsLetterProtected(hit.externalCode)) continue;
-
     const blankPays = sh.lines.filter(
       l => !String(l.description || '').trim() && Math.round(l.paidAmount) > 0,
     );
     if (!blankPays.length) continue;
 
+    const hit = findByName(entries, sh.companyName);
+    if (!hit) continue;
+    if (isArrearsLetterProtected(hit.externalCode)) continue;
+
     const dbLines = await listLetterLines(hit.id);
-    const existingKeys = new Set(
-      dbLines
-        .filter(l => Math.round(l.paidAmount) > 0)
-        .map(l => payKey(l.paidAmount, l.paidDate)),
-    );
-
-    const missing = blankPays.filter(bp => !existingKeys.has(payKey(bp.paidAmount, bp.paidDate)));
-    if (!missing.length) continue;
-
-    // 공문 letter 줄은 엑셀 기준으로 맞추고, cutoff 이후 ledger/payment는 유지하되
-    // 누락 지급만 보강하는 방식: 기존 줄 + missing blank pays
-    const next = [
-      ...dbLines.map(l => ({
-        description: l.description,
-        amount: l.amount,
-        paidAmount: l.paidAmount,
-        paidDate: l.paidDate || '',
-        source: l.source,
-      })),
-    ];
-
-    for (const bp of missing) {
-      // 지급-only: 내역 비움
-      next.push({
-        description: '',
-        amount: 0,
-        paidAmount: Math.round(bp.paidAmount),
-        paidDate: formatArrearsPaidDateKo(bp.paidDate) || bp.paidDate || '',
-        source: 'letter',
-      });
-    }
+    const merged = mergeLetterOrder(sh.lines, dbLines);
+    if (sameOrder(dbLines, merged)) continue;
 
     const beforeOpen = letterBalanceFromLines(dbLines);
-    let cleaned = stripImmediateMonthlyRecoveries(next);
-    const afterOpen = letterBalanceFromLines(cleaned);
+    const afterOpen = letterBalanceFromLines(merged);
+    const blankIdx = merged.findIndex(
+      l => !String(l.description || '').trim() && Math.round(l.paidAmount) > 0,
+    );
+    const excelBlankIdx = sh.lines.findIndex(
+      l => !String(l.description || '').trim() && Math.round(l.paidAmount) > 0,
+    );
 
     report.push({
       code: hit.externalCode,
       name: hit.companyName,
-      missing: missing.map(m => `${m.paidAmount}@${m.paidDate}`),
       bal: hit.balance,
       openBefore: beforeOpen,
       openAfter: afterOpen,
       linesBefore: dbLines.length,
-      linesAfter: cleaned.length,
-      stripped: next.length - cleaned.length,
+      linesAfter: merged.length,
+      excelBlankAt: excelBlankIdx,
+      mergedBlankAt: blankIdx,
+      sample: merged.slice(0, 6).map(l => ({
+        d: l.description || '(빈지급)',
+        a: l.amount,
+        p: l.paidAmount,
+        pd: l.paidDate,
+        s: l.source,
+      })),
     });
 
     if (APPLY) {
-      await replaceLetterLines(hit.id, 'restore-missing-blank-pays', cleaned, {
+      await replaceLetterLines(hit.id, 'reorder-blank-pays-letter-order', merged, {
         syncBalance: false,
       });
     }
-    restored += missing.length;
-    stripped += next.length - cleaned.length;
+    changed += 1;
   }
-}
-
-// --- 2) 전 업체: cutoff 이후 월기장=입금 즉시회수 줄 정리 ---
-const allEntries = await db.select().from(arrearsEntries);
-let stripOnly = 0;
-for (const e of allEntries) {
-  if (isArrearsLetterProtected(e.externalCode)) continue;
-  if (report.some(r => r.code === e.externalCode)) continue; // already handled
-  const dbLines = await listLetterLines(e.id);
-  const cleaned = stripImmediateMonthlyRecoveries(
-    dbLines.map(l => ({
-      description: l.description,
-      amount: l.amount,
-      paidAmount: l.paidAmount,
-      paidDate: l.paidDate || '',
-      source: l.source,
-    })),
-  );
-  if (cleaned.length === dbLines.length) continue;
-  const beforeOpen = letterBalanceFromLines(dbLines);
-  const afterOpen = letterBalanceFromLines(cleaned);
-  report.push({
-    code: e.externalCode,
-    name: e.companyName,
-    missing: [],
-    bal: e.balance,
-    openBefore: beforeOpen,
-    openAfter: afterOpen,
-    linesBefore: dbLines.length,
-    linesAfter: cleaned.length,
-    stripped: dbLines.length - cleaned.length,
-  });
-  if (APPLY) {
-    await replaceLetterLines(e.id, 'strip-immediate-monthly', cleaned, { syncBalance: false });
-  }
-  stripOnly += dbLines.length - cleaned.length;
 }
 
 console.log(JSON.stringify(report, null, 2));
-console.log(
-  `\n${APPLY ? 'APPLIED' : 'DRY-RUN'}: blankPays=${restored}, strippedRows=${stripped + stripOnly}, companies=${report.length}`,
-);
+console.log(`\n${APPLY ? 'APPLIED' : 'DRY-RUN'}: reordered ${changed} companies`);
 if (!APPLY) console.log('Re-run with --apply to write.');
