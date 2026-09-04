@@ -3,7 +3,9 @@ import { getDb } from '@/db';
 import { arrearsEntries } from '@/db/schema';
 import {
   isArrearsBalanceLocked,
+  isArrearsLetterBalancePreferred,
   isArrearsLetterProtected,
+  isArrearsSkipClientDetail,
 } from '@/lib/arrearsBalanceLock';
 import {
   isAfterCutoff,
@@ -104,11 +106,14 @@ export async function applyStatusImport(
 
   for (const row of parsed.rows) {
     // 잔액은 현황표 그대로 (하나비·오프라인 포함). 공문과 다르면 불일치 표시.
+    // 양수도 신계정 등은 공문 상세 합계를 목록 잔액으로 유지 → 현황표로 덮지 않음.
     const balance = row.balance;
+    const letterPreferred = isArrearsLetterBalancePreferred(row.externalCode);
 
     const [prev] = await db
       .select({
         id: arrearsEntries.id,
+        balance: arrearsEntries.balance,
         mgmtCategory: arrearsEntries.mgmtCategory,
         managerName: arrearsEntries.managerName,
         cmsNote: arrearsEntries.cmsNote,
@@ -121,15 +126,15 @@ export async function applyStatusImport(
     if (prev) {
       const patch: Partial<typeof arrearsEntries.$inferInsert> = {
         companyName: row.companyName,
-        balance,
         carryIn: row.carryIn,
         debit: row.debit,
         credit: row.credit,
         asOfDate: asOfIso,
-        source: 'status',
+        source: letterPreferred ? 'manual' : 'status',
         updatedBy: actorName,
         updatedAt: new Date(),
       };
+      if (!letterPreferred) patch.balance = balance;
       if (row.managerName) patch.managerName = row.managerName;
       if (row.mgmtCategory && row.mgmtCategory !== (prev.mgmtCategory || '')) {
         patch.mgmtCategory = row.mgmtCategory;
@@ -245,7 +250,11 @@ export async function applyClientDetailImport(
   let linesAdded = 0;
 
   for (const [code, codeTxs] of byCode) {
-    if (isInactiveArrearsCode(code) || isArrearsLetterProtected(code)) {
+    if (
+      isInactiveArrearsCode(code) ||
+      isArrearsLetterProtected(code) ||
+      isArrearsSkipClientDetail(code)
+    ) {
       skippedInactive += 1;
       continue;
     }

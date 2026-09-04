@@ -10,14 +10,20 @@ export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
 /**
  * 양수도로 구·신 코드가 나뉜 업체.
  * - 공문에는 이관 적요(양수도)를 **한 줄**로 유지한다 (구계정 전체 이력 합산 금지).
- * - 공문 잔액·미수 수수료는 항상 Σ(금액−지급) — 현황표로 덮어쓰지 않음.
- * - 현황표와 공문 줄합은 구조적으로 다를 수 있음 → 불일치로 보지 않음.
+ * - 신계정(newCode) 목록 잔액은 공문 Σ(금액−지급)을 쓰고, 현황표 import로 덮지 않음.
+ * - 구계정은 현황표·공문이 각각 유지될 수 있음 → 불일치 제외.
  */
 export const ARREARS_TRANSFER_PAIRS: ReadonlyArray<{
   oldCode: string;
   newCode: string;
   label: string;
 }> = [{ oldCode: '00637', newCode: '01418', label: '천돈가 양수도' }];
+
+/**
+ * 거래처별 상세 import 스킵 — 기존 공문이 기준(cutoff 이후 기장·즉시입금 붙이지 않음).
+ * 에스와이메탈: 7/27 회수까지 기존 공문, 8월 기장도 즉시입금.
+ */
+export const ARREARS_SKIP_CLIENT_DETAIL_CODES = new Set<string>(['00176']);
 
 /** 공문 임포트 시 letter: 중복 코드 (정규화 상호) */
 export const ARREARS_LETTER_DUP_CODE_BY_CANONICAL: Readonly<Record<string, string>> = {
@@ -40,6 +46,17 @@ export function getArrearsTransferPair(externalCode: string) {
 
 export function isArrearsTransferSplitCode(externalCode: string): boolean {
   return getArrearsTransferPair(externalCode) != null;
+}
+
+/** 신계정: 목록·외부 잔액을 공문 상세 합계로 맞춤 */
+export function isArrearsLetterBalancePreferred(externalCode: string): boolean {
+  const pair = getArrearsTransferPair(externalCode);
+  if (!pair) return false;
+  return String(externalCode || '').trim() === pair.newCode;
+}
+
+export function isArrearsSkipClientDetail(externalCode: string): boolean {
+  return ARREARS_SKIP_CLIENT_DETAIL_CODES.has(String(externalCode || '').trim());
 }
 
 export function isArrearsBalanceLocked(externalCode: string): boolean {
