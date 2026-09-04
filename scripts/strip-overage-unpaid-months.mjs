@@ -25,7 +25,7 @@ import { getDb } from '../db/index.ts';
 import { arrearsEntries } from '../db/schema.ts';
 import { listLetterLines, replaceLetterLines } from '../lib/arrearsLetterDb.ts';
 import { letterBalanceFromLines } from '../app/types/arrears.ts';
-import { isArrearsLetterProtected, isArrearsTransferSplitCode } from '../lib/arrearsBalanceLock.ts';
+import { isArrearsLetterProtected } from '../lib/arrearsBalanceLock.ts';
 
 function isUnpaidMonthLedger(l) {
   if (l.source !== 'ledger') return false;
@@ -41,7 +41,6 @@ const report = [];
 
 for (const e of entries) {
   if (isArrearsLetterProtected(e.externalCode)) continue;
-  if (isArrearsTransferSplitCode(e.externalCode)) continue; // 천돈가 등 양수도는 손대지 않음
 
   const lines = await listLetterLines(e.id);
   let open = letterBalanceFromLines(lines);

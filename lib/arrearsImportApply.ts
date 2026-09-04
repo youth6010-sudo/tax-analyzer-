@@ -4,7 +4,6 @@ import { arrearsEntries } from '@/db/schema';
 import {
   isArrearsBalanceLocked,
   isArrearsLetterProtected,
-  isArrearsSkipClientDetail,
 } from '@/lib/arrearsBalanceLock';
 import {
   isAfterCutoff,
@@ -173,8 +172,17 @@ export async function applyStatusImport(
     .set({ asOfDate: asOfIso, updatedBy: actorName, updatedAt: new Date() });
 
   const totalBalance = parsed.rows.reduce((s, r) => s + r.balance, 0);
+  const overageStripped = await stripOverageUnpaidMonthLines(actorName);
 
-  return { preview: false, asOfDate, updated, inserted, totalBalance, categoryUpdated };
+  return {
+    preview: false,
+    asOfDate,
+    updated,
+    inserted,
+    totalBalance,
+    categoryUpdated,
+    overageStripped,
+  };
 }
 
 function groupTxByCode(txs: ParsedClientDetailTx[]): Map<string, ParsedClientDetailTx[]> {
@@ -246,11 +254,7 @@ export async function applyClientDetailImport(
   let linesAdded = 0;
 
   for (const [code, codeTxs] of byCode) {
-    if (
-      isInactiveArrearsCode(code) ||
-      isArrearsLetterProtected(code) ||
-      isArrearsSkipClientDetail(code)
-    ) {
+    if (isInactiveArrearsCode(code) || isArrearsLetterProtected(code)) {
       skippedInactive += 1;
       continue;
     }
@@ -295,8 +299,21 @@ export async function applyClientDetailImport(
     for (const tx of txs) {
       const line = clientDetailTxToLineInput(tx, letterDescs);
       if (!line) continue;
-      const key = lineDedupKey(line);
-      if (existingKeys.has(key)) continue;
+      let key = lineDedupKey(line);
+      // 부가세신고 동액 여러 건이 같은 적요로 뭉개지지 않게 건수 유지
+      if (existingKeys.has(key) && /부가세/.test(line.description)) {
+        let n = 2;
+        let desc = `${line.description}(${n})`;
+        key = lineDedupKey({ ...line, description: desc });
+        while (existingKeys.has(key)) {
+          n += 1;
+          desc = `${line.description}(${n})`;
+          key = lineDedupKey({ ...line, description: desc });
+        }
+        line.description = desc;
+      } else if (existingKeys.has(key)) {
+        continue;
+      }
       existingKeys.add(key);
       additions.push(line);
       letterDescs.push(line.description);
@@ -311,6 +328,8 @@ export async function applyClientDetailImport(
     linesAdded += additions.length;
   }
 
+  const overageStripped = await stripOverageUnpaidMonthLines(actorName);
+
   return {
     preview: false,
     cutoffDate,
@@ -319,6 +338,7 @@ export async function applyClientDetailImport(
     skippedIndie,
     skippedNoEntry,
     linesAdded,
+    overageStripped,
   };
 }
 
@@ -336,30 +356,115 @@ export function summarizeBalanceAlignment(
 
 export { isArrearsBalanceLocked };
 
+function isUnpaidMonthLedgerLine(l: {
+  source?: string;
+  description?: string;
+  amount: number;
+  paidAmount: number;
+}): boolean {
+  if (l.source !== 'ledger') return false;
+  if (Math.round(l.amount) <= 0) return false;
+  if (Math.round(l.paidAmount) !== 0) return false;
+  return /\d{1,2}월/.test(String(l.description || '').replace(/\s+/g, ''));
+}
+
 /**
- * 거래처별 상세: 월 기장 청구와 같은 금액 입금이 세트면 즉시회수로 보고 둘 다 스킵.
+ * import 후에도 공문합 > 현황이면, 같은 달 매출·입금으로 넣지 말았어야 할
+ * 월기장(ledger) 줄이 남은 경우로 보고 끝에서부터 제거해 현황과 맞춤.
+ * (보호코드만 제외 — 업체별 예외 없음)
+ */
+export async function stripOverageUnpaidMonthLines(actorName: string): Promise<number> {
+  const db = getDb();
+  const entries = await db.select().from(arrearsEntries);
+  let strippedEntries = 0;
+
+  for (const e of entries) {
+    if (isArrearsLetterProtected(e.externalCode)) continue;
+
+    const lines = await listLetterLines(e.id);
+    const open = letterBalanceFromLines(lines);
+    const bal = Math.round(e.balance);
+    let over = open - bal;
+    if (over <= 0) continue;
+
+    const next: ArrearsLetterLineInput[] = lines.map(l => ({
+      description: l.description,
+      amount: l.amount,
+      paidAmount: l.paidAmount,
+      paidDate: l.paidDate || '',
+      source: l.source,
+    }));
+
+    let removed = 0;
+    for (let i = next.length - 1; i >= 0 && over > 0; i--) {
+      const l = next[i]!;
+      if (!isUnpaidMonthLedgerLine(l)) continue;
+      const amt = Math.round(l.amount);
+      if (amt > over) continue;
+      next.splice(i, 1);
+      over -= amt;
+      removed += 1;
+    }
+    if (!removed) continue;
+
+    const after = letterBalanceFromLines(next);
+    if (after !== bal && Math.abs(after - bal) >= Math.abs(open - bal)) continue;
+
+    await replaceLetterLines(e.id, actorName || 'strip-overage-unpaid', next, {
+      syncBalance: false,
+    });
+    strippedEntries += 1;
+  }
+
+  return strippedEntries;
+}
+
+/**
+ * 월기장회수: 같은 달(또는 직후 동일금액) 매출·입금이 세트면 공문에 넣지 않음.
+ * cutoff 이후 거래처별 상세에만 적용 — 업체 예외 없음.
  */
 export function skipImmediateMonthlyRecoveryTxs<
   T extends { debit: number; credit: number; ledgerDescription: string; eventDate: string },
 >(txs: T[]): T[] {
   const drop = new Set<number>();
+  const monthKey = (eventDate: string) => {
+    const iso = toIsoDate(eventDate) || String(eventDate || '');
+    return iso.slice(0, 7);
+  };
   const isMonthDebit = (t: T) =>
     t.debit > 0 && /\d{1,2}\s*월|기장/.test(String(t.ledgerDescription || ''));
 
   for (let i = 0; i < txs.length; i++) {
     if (drop.has(i)) continue;
-    const t = txs[i];
+    const t = txs[i]!;
     if (!isMonthDebit(t)) continue;
     const amt = Math.round(t.debit);
-    for (let j = i + 1; j < txs.length; j++) {
-      if (drop.has(j)) continue;
-      const u = txs[j];
-      if (Math.round(u.credit) === amt) {
-        drop.add(i);
-        drop.add(j);
+    const mk = monthKey(t.eventDate);
+
+    let pair = -1;
+    for (let j = 0; j < txs.length; j++) {
+      if (j === i || drop.has(j)) continue;
+      const u = txs[j]!;
+      if (Math.round(u.credit) !== amt) continue;
+      if (monthKey(u.eventDate) === mk) {
+        pair = j;
         break;
       }
-      if (u.debit > 0) break;
+    }
+    if (pair < 0) {
+      for (let j = i + 1; j < txs.length; j++) {
+        if (drop.has(j)) continue;
+        const u = txs[j]!;
+        if (Math.round(u.credit) === amt) {
+          pair = j;
+          break;
+        }
+        if (u.debit > 0) break;
+      }
+    }
+    if (pair >= 0) {
+      drop.add(i);
+      drop.add(pair);
     }
   }
   return txs.filter((_, i) => !drop.has(i));

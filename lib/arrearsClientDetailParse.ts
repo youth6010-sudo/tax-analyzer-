@@ -203,8 +203,23 @@ export function ledgerDescToLetterDescription(
   }
   if (/부가세/.test(d)) {
     const m = raw.match(/(\d{1,2})월/);
+    // 부가세신고-르엘 / 스테이s 등 상호가 있으면 건별 유지 (동액 여러 건 dedup 방지)
+    const shop = d
+      .replace(/^.*부가세(?:신고)?(?:수수료)?[-:]?/i, '')
+      .replace(/신고|수수료/g, '')
+      .replace(/^\d{1,2}월/, '')
+      .trim();
+    if (shop) {
+      const base = m
+        ? `${y} ${Number(m[1])}월 부가세신고`
+        : `${y} 부가세신고`;
+      return `${base}-${shop}`;
+    }
     if (m) return `${y} ${Number(m[1])}월 부가세신고`;
-    return `${y} 부가세신고`;
+    // 상호·월 없으면 일자로 구분 (같은 날 여러 건이면 원문 유지)
+    const day = eventDate?.slice(8, 10);
+    if (day && day !== '01') return `${y} 부가세신고(${Number(day)}일)`;
+    return raw || `${y} 부가세신고`;
   }
   if (/기타/.test(d)) {
     const m = raw.match(/(\d{1,2})월/);
