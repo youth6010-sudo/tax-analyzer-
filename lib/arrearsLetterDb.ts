@@ -25,7 +25,6 @@ import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import {
   applyArrearsManualBalance,
-  getArrearsTransferPair,
   isArrearsTransferSplitCode,
 } from '@/lib/arrearsBalanceLock';
 import {
@@ -106,21 +105,6 @@ export async function listLetterLines(entryId: string): Promise<ArrearsLetterLin
   return rows.map(toLineDto);
 }
 
-export type ArrearsTransferGroupDto = {
-  label: string;
-  oldCode: string;
-  newCode: string;
-  sections: Array<{
-    entryId: string;
-    externalCode: string;
-    companyName: string;
-    balance: number;
-    lines: ArrearsLetterLineDto[];
-  }>;
-  /** 현황표 잔액 합 (구+신) — 공문 「미수 수수료」합계 */
-  combinedBalance: number;
-};
-
 export async function getArrearsLetterDetail(id: string): Promise<{
   item: ArrearsEntryDto;
   lines: ArrearsLetterLineDto[];
@@ -128,7 +112,6 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   balanceDiff: number;
   globalAsOfDate: string;
   letterAsOfDate: string;
-  transferGroup: ArrearsTransferGroupDto | null;
 } | null> {
   await ensureInactiveArrearsEntries();
   const item = await getArrearsEntryById(id);
@@ -139,54 +122,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
   const endings = await readArrearsDetailEndings();
 
-  const pair = getArrearsTransferPair(item.externalCode);
-  let transferGroup: ArrearsTransferGroupDto | null = null;
-  if (pair) {
-    const db = getDb();
-    const partnerCode =
-      item.externalCode.trim() === pair.oldCode ? pair.newCode : pair.oldCode;
-    const [partnerRow] = await db
-      .select()
-      .from(arrearsEntries)
-      .where(eq(arrearsEntries.externalCode, partnerCode))
-      .limit(1);
-    const partner = partnerRow ? await getArrearsEntryById(partnerRow.id) : null;
-    const partnerLines = partner ? await listLetterLines(partner.id) : [];
-
-    const oldItem = item.externalCode.trim() === pair.oldCode ? item : partner;
-    const newItem = item.externalCode.trim() === pair.newCode ? item : partner;
-    const oldLines = item.externalCode.trim() === pair.oldCode ? lines : partnerLines;
-    const newLines = item.externalCode.trim() === pair.newCode ? lines : partnerLines;
-
-    const sections: ArrearsTransferGroupDto['sections'] = [];
-    if (oldItem) {
-      sections.push({
-        entryId: oldItem.id,
-        externalCode: oldItem.externalCode,
-        companyName: oldItem.companyName,
-        balance: Math.round(oldItem.balance),
-        lines: oldLines,
-      });
-    }
-    if (newItem) {
-      sections.push({
-        entryId: newItem.id,
-        externalCode: newItem.externalCode,
-        companyName: newItem.companyName,
-        balance: Math.round(newItem.balance),
-        lines: newLines,
-      });
-    }
-    transferGroup = {
-      label: pair.label,
-      oldCode: pair.oldCode,
-      newCode: pair.newCode,
-      sections,
-      combinedBalance: sections.reduce((s, x) => s + x.balance, 0),
-    };
-  }
-
-  // 양수도 분리: 공문줄합≠현황표가 정상이므로 차이 배지 숨김
+  // 양수도 분리: 공문에 「양수도」한 줄만 두고 현황표와 줄합이 달라도 정상
   const balanceDiff =
     isArrearsTransferSplitCode(item.externalCode) ||
     isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
@@ -200,7 +136,6 @@ export async function getArrearsLetterDetail(id: string): Promise<{
     balanceDiff,
     globalAsOfDate,
     letterAsOfDate,
-    transferGroup,
   };
 }
 

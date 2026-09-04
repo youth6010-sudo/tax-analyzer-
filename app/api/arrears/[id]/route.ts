@@ -34,7 +34,6 @@ export async function GET(req: Request, ctx: Ctx) {
           balanceDiff: detail.balanceDiff,
           globalAsOfDate: detail.globalAsOfDate,
           letterAsOfDate: detail.letterAsOfDate,
-          transferGroup: detail.transferGroup,
           canManage: canManageArrears(user),
         },
         NO_STORE,

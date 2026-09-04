@@ -82,19 +82,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [lines, setLines] = useState<ArrearsLetterLineDto[]>([]);
   const [letterBalance, setLetterBalance] = useState(0);
   const [balanceDiff, setBalanceDiff] = useState(0);
-  const [transferGroup, setTransferGroup] = useState<{
-    label: string;
-    oldCode: string;
-    newCode: string;
-    combinedBalance: number;
-    sections: Array<{
-      entryId: string;
-      externalCode: string;
-      companyName: string;
-      balance: number;
-      lines: ArrearsLetterLineDto[];
-    }>;
-  } | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -134,9 +121,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     setLines(ls);
     setLetterBalance((data as { letterBalance?: number }).letterBalance ?? 0);
     setBalanceDiff((data as { balanceDiff?: number }).balanceDiff ?? 0);
-    setTransferGroup(
-      (data as { transferGroup?: typeof transferGroup }).transferGroup ?? null,
-    );
     setCanManage(!!(data as { canManage?: boolean }).canManage);
     const globalAsOf = (data as { globalAsOfDate?: string }).globalAsOfDate || '';
     const letterAsOf =
@@ -174,68 +158,15 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   // 조회·인쇄: 기본 전체. 「0원 이전내역 제외」면 현재 사이클만.
   // 수정 모드는 항상 전체 이력(editLines).
   const canExcludePrior = useMemo(() => hasPriorClosedLetterCycle(lines), [lines]);
-  const singleViewLines = useMemo(() => {
+  const viewLines = useMemo(() => {
     if (!excludePriorZero || !canExcludePrior) return lines;
     return linesForCurrentLetterCycle(lines);
   }, [lines, excludePriorZero, canExcludePrior]);
-
-  type TransferRow =
-    | { kind: 'header'; key: string; label: string }
-    | {
-        kind: 'line';
-        key: string;
-        line: ArrearsLetterLineDto;
-        running: number;
-        prevDescription?: string;
-      }
-    | { kind: 'subtotal'; key: string; label: string; balance: number };
-
-  /** 양수도: 구·신 섹션별 잔액 진행 후 현황표 소계 · 최종 합계는 현황표 합 */
-  const transferRows = useMemo((): TransferRow[] | null => {
-    if (editing || !transferGroup?.sections?.length) return null;
-    const rows: TransferRow[] = [];
-    for (const sec of transferGroup.sections) {
-      rows.push({
-        kind: 'header',
-        key: `h-${sec.externalCode}`,
-        label: `${sec.externalCode} ${sec.companyName}`,
-      });
-      const run = letterRunningBalances(sec.lines).slice();
-      if (run.length && Math.round(run[run.length - 1]!) !== sec.balance) {
-        run[run.length - 1] = sec.balance;
-      }
-      sec.lines.forEach((l, i) => {
-        rows.push({
-          kind: 'line',
-          key: l.id || `l-${sec.externalCode}-${i}`,
-          line: l,
-          running: run[i] ?? 0,
-          prevDescription: i > 0 ? sec.lines[i - 1]?.description : undefined,
-        });
-      });
-      rows.push({
-        kind: 'subtotal',
-        key: `s-${sec.externalCode}`,
-        label: `${sec.externalCode} 소계`,
-        balance: sec.balance,
-      });
-    }
-    return rows;
-  }, [transferGroup, editing]);
-
-  const viewLines = transferRows ? [] : singleViewLines;
-  const runningRaw = useMemo(() => letterRunningBalances(singleViewLines), [singleViewLines]);
+  const runningRaw = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
   const viewLetterBalance = runningRaw.length ? runningRaw[runningRaw.length - 1]! : 0;
-  /**
-   * 미수 수수료 합계 = 현황표 잔액.
-   * 양수도 연계면 구+신 현황표 합 (공문 줄합과 달라도 정상).
-   */
-  const feeBalance =
-    !editing && transferGroup
-      ? Math.round(transferGroup.combinedBalance)
-      : item != null
-        ? Math.round(item.balance)
-        : viewLetterBalance;
+  /** 공문 「미수 수수료」·총액 잔액 = 미수관리 목록 잔액(현황표)과 동일 */
+  const feeBalance = item != null ? Math.round(item.balance) : viewLetterBalance;
+  /** 마지막 행 잔액도 목록 잔액과 맞춘다 (양수도 등으로 줄합≠현황표여도 합계는 현황표) */
   const running = useMemo(() => {
     if (!runningRaw.length) return runningRaw;
     if (Math.round(viewLetterBalance) === feeBalance) return runningRaw;
@@ -243,24 +174,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     next[next.length - 1] = feeBalance;
     return next;
   }, [runningRaw, viewLetterBalance, feeBalance]);
-  const totalAmount = useMemo(() => {
-    if (transferRows) {
-      return transferGroup!.sections.reduce(
-        (s, sec) => s + sec.lines.reduce((a, l) => a + l.amount, 0),
-        0,
-      );
-    }
-    return singleViewLines.reduce((s, l) => s + l.amount, 0);
-  }, [transferRows, transferGroup, singleViewLines]);
-  const totalPaid = useMemo(() => {
-    if (transferRows) {
-      return transferGroup!.sections.reduce(
-        (s, sec) => s + sec.lines.reduce((a, l) => a + l.paidAmount, 0),
-        0,
-      );
-    }
-    return singleViewLines.reduce((s, l) => s + l.paidAmount, 0);
-  }, [transferRows, transferGroup, singleViewLines]);
+  const totalAmount = useMemo(
+    () => viewLines.reduce((s, l) => s + l.amount, 0),
+    [viewLines],
+  );
+  const totalPaid = useMemo(
+    () => viewLines.reduce((s, l) => s + l.paidAmount, 0),
+    [viewLines],
+  );
 
   const startEdit = () => {
     if (!canManage) return;
@@ -515,23 +436,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             <p className="mt-0.5 text-xs text-slate-500">
               {item.externalCode || '—'} · 담당 {item.managerName || '미지정'} · 미수 잔액{' '}
               {formatArrearsWon(item.balance)}원
-              {transferGroup ? (
-                <>
-                  {' '}
-                  · {transferGroup.label} 합산{' '}
-                  {formatArrearsWon(transferGroup.combinedBalance)}원
-                </>
-              ) : null}
             </p>
-            {transferGroup ? (
-              <p className="mt-1 text-[11px] text-slate-600">
-                양수도로 구·신 계정이 나뉩니다. 내역은 합쳐 보이고, 합계는 현황표 잔액 합(
-                {transferGroup.sections
-                  .map(s => `${s.externalCode} ${formatArrearsWon(s.balance)}`)
-                  .join(' + ')}
-                )입니다. 공문 줄합과 원장이 달라도 정상입니다.
-              </p>
-            ) : balanceDiff !== 0 ? (
+            {balanceDiff !== 0 ? (
               <p className="mt-1 text-[11px] font-semibold text-amber-800">
                 현황표 잔액 {formatArrearsWon(item.balance)}원 · 내역합계{' '}
                 {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
@@ -966,8 +872,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             1. 미수 수수료 안내
           </p>
 
-          {(!transferRows && viewLines.length === 0) ||
-          (transferRows && transferRows.every(r => r.kind !== 'line')) ? (
+          {viewLines.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500 print:hidden">
               {`등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
             </p>
@@ -990,87 +895,34 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {transferRows
-                    ? transferRows.map(row => {
-                        if (row.kind === 'header') {
-                          return (
-                            <tr key={row.key} className="bg-slate-100">
-                              <td
-                                colSpan={5}
-                                className="border border-[#222] px-2 py-1.5 text-[11px] font-bold text-slate-800"
-                              >
-                                {row.label}
-                              </td>
-                            </tr>
-                          );
-                        }
-                        if (row.kind === 'subtotal') {
-                          return (
-                            <tr key={row.key} className="bg-[#f3f3f3] font-semibold">
-                              <td className="border border-[#222] px-2 py-1.5" colSpan={4}>
-                                {row.label}
-                              </td>
-                              <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
-                                {formatArrearsWon(row.balance)}
-                              </td>
-                            </tr>
-                          );
-                        }
-                        const l = row.line;
-                        const portalDesc = linePortalDescription(l, {
-                          asOfDate: chargeLabelAsOf,
-                          prevDescription: row.prevDescription,
-                        });
-                        const paidKo = formatArrearsPaidDateKo(l.paidDate);
-                        return (
-                          <tr key={row.key}>
-                            <td className="border border-[#222] px-2 py-1 text-slate-900">
-                              <span className="print:hidden">{portalDesc}</span>
-                              <span className="hidden print:inline">{l.description}</span>
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {l.amount ? formatArrearsWon(l.amount) : ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {l.paidAmount ? formatArrearsWon(l.paidAmount) : ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-center text-slate-800 whitespace-nowrap">
-                              {paidKo || ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {formatArrearsWon(row.running)}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    : viewLines.map((l, i) => {
-                        const prev = i > 0 ? viewLines[i - 1]?.description : undefined;
-                        const portalDesc = linePortalDescription(l, {
-                          asOfDate: chargeLabelAsOf,
-                          prevDescription: prev,
-                        });
-                        const paidKo = formatArrearsPaidDateKo(l.paidDate);
-                        return (
-                          <tr key={l.id}>
-                            <td className="border border-[#222] px-2 py-1 text-slate-900">
-                              <span className="print:hidden">{portalDesc}</span>
-                              <span className="hidden print:inline">{l.description}</span>
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {l.amount ? formatArrearsWon(l.amount) : ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {l.paidAmount ? formatArrearsWon(l.paidAmount) : ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-center text-slate-800 whitespace-nowrap">
-                              {paidKo || ''}
-                            </td>
-                            <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
-                              {formatArrearsWon(running[i] ?? 0)}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                  {viewLines.map((l, i) => {
+                    const prev = i > 0 ? viewLines[i - 1]?.description : undefined;
+                    const portalDesc = linePortalDescription(l, {
+                      asOfDate: chargeLabelAsOf,
+                      prevDescription: prev,
+                    });
+                    const paidKo = formatArrearsPaidDateKo(l.paidDate);
+                    return (
+                      <tr key={l.id}>
+                        <td className="border border-[#222] px-2 py-1 text-slate-900">
+                          <span className="print:hidden">{portalDesc}</span>
+                          <span className="hidden print:inline">{l.description}</span>
+                        </td>
+                        <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
+                          {l.amount ? formatArrearsWon(l.amount) : ''}
+                        </td>
+                        <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
+                          {l.paidAmount ? formatArrearsWon(l.paidAmount) : ''}
+                        </td>
+                        <td className="border border-[#222] px-2 py-1 text-center text-slate-800 whitespace-nowrap">
+                          {paidKo || ''}
+                        </td>
+                        <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
+                          {formatArrearsWon(running[i] ?? 0)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   <tr className="bg-[#ececec] font-semibold">
                     <td className="border border-[#222] px-2 py-1.5">총액</td>
                     <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
@@ -1090,7 +942,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                       colSpan={4}
                     >
                       미수 수수료
-                      {transferGroup ? ' (양수도 합산)' : ''}
                     </td>
                     <td className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5 text-right tabular-nums text-slate-900">
                       {formatArrearsWon(feeBalance)}
