@@ -289,7 +289,10 @@ export async function applyClientDetailImport(
     const existingKeys = new Set(base.map(lineDedupKey));
     const additions: ArrearsLetterLineInput[] = [];
 
-    for (const tx of codeTxs) {
+    // 월기장 청구와 동일금액 입금이 같이 오면 즉시회수 → 공문에 안 붙임
+    const txs = skipImmediateMonthlyRecoveryTxs(codeTxs);
+
+    for (const tx of txs) {
       const line = clientDetailTxToLineInput(tx, letterDescs);
       if (!line) continue;
       const key = lineDedupKey(line);
@@ -332,6 +335,35 @@ export function summarizeBalanceAlignment(
 }
 
 export { isArrearsBalanceLocked };
+
+/**
+ * 거래처별 상세: 월 기장 청구와 같은 금액 입금이 세트면 즉시회수로 보고 둘 다 스킵.
+ */
+export function skipImmediateMonthlyRecoveryTxs<
+  T extends { debit: number; credit: number; ledgerDescription: string; eventDate: string },
+>(txs: T[]): T[] {
+  const drop = new Set<number>();
+  const isMonthDebit = (t: T) =>
+    t.debit > 0 && /\d{1,2}\s*월|기장/.test(String(t.ledgerDescription || ''));
+
+  for (let i = 0; i < txs.length; i++) {
+    if (drop.has(i)) continue;
+    const t = txs[i];
+    if (!isMonthDebit(t)) continue;
+    const amt = Math.round(t.debit);
+    for (let j = i + 1; j < txs.length; j++) {
+      if (drop.has(j)) continue;
+      const u = txs[j];
+      if (Math.round(u.credit) === amt) {
+        drop.add(i);
+        drop.add(j);
+        break;
+      }
+      if (u.debit > 0) break;
+    }
+  }
+  return txs.filter((_, i) => !drop.has(i));
+}
 
 /** 공문 letter 줄 중 cutoff 월 이후 월별 기장료 — 거래처별 상세로 대체 */
 function isPostCutoffLetterMonth(desc: string, cutoffDot: string): boolean {
