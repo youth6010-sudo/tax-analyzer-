@@ -29,7 +29,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       {
         companyName: detail.item.companyName,
         letterDate: detail.letterAsOfDate,
-        entryBalance: detail.item.balance,
+        entryBalance: detail.feeBalance,
         lines: detail.lines.map(l => ({
           description: l.description,
           amount: l.amount,

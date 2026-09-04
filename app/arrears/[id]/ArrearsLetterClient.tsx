@@ -28,6 +28,7 @@ import {
   type ArrearsLetterLineInput,
 } from '@/app/types/arrears';
 import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
+import { arrearsLetterFeeBalance } from '@/lib/arrearsBalanceLock';
 import { fmt } from '@/app/lib/taxAmountFmt';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
@@ -164,9 +165,16 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   }, [lines, excludePriorZero, canExcludePrior]);
   const runningRaw = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
   const viewLetterBalance = runningRaw.length ? runningRaw[runningRaw.length - 1]! : 0;
-  /** 공문 「미수 수수료」·총액 잔액 = 미수관리 목록 잔액(현황표)과 동일 */
-  const feeBalance = item != null ? Math.round(item.balance) : viewLetterBalance;
-  /** 마지막 행 잔액도 목록 잔액과 맞춘다 (양수도 등으로 줄합≠현황표여도 합계는 현황표) */
+  /**
+   * 공문 「미수 수수료」·총액 잔액
+   * - 일반: 현황표 잔액
+   * - 양수도 신계정: 현황표 잔액 + 「양수도」한 줄 금액
+   */
+  const feeBalance = useMemo(() => {
+    if (!item) return viewLetterBalance;
+    return arrearsLetterFeeBalance(item.externalCode, item.balance, viewLines);
+  }, [item, viewLines, viewLetterBalance]);
+  /** 마지막 행 잔액도 미수 수수료와 맞춘다 */
   const running = useMemo(() => {
     if (!runningRaw.length) return runningRaw;
     if (Math.round(viewLetterBalance) === feeBalance) return runningRaw;
@@ -441,6 +449,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               <p className="mt-1 text-[11px] font-semibold text-amber-800">
                 현황표 잔액 {formatArrearsWon(item.balance)}원 · 내역합계{' '}
                 {formatArrearsWon(letterBalance)}원 · 차이 {formatArrearsWon(balanceDiff)}
+              </p>
+            ) : /양수도/.test(viewLines.map(l => l.description).join('')) ? (
+              <p className="mt-1 text-[11px] text-slate-500">
+                미수 수수료 = 현황표 {formatArrearsWon(item.balance)}원 + 양수도 이관액 · 공문은 양수도 한 줄만
+                유지
               </p>
             ) : item?.source === 'status' ? (
               <p className="mt-1 text-[11px] text-slate-500">

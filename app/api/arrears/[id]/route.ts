@@ -31,6 +31,7 @@ export async function GET(req: Request, ctx: Ctx) {
           item: detail.item,
           lines: detail.lines,
           letterBalance: detail.letterBalance,
+          feeBalance: detail.feeBalance,
           balanceDiff: detail.balanceDiff,
           globalAsOfDate: detail.globalAsOfDate,
           letterAsOfDate: detail.letterAsOfDate,

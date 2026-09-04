@@ -1,5 +1,5 @@
-/**
  * 01418 천돈가(윤삼식): 양수도 줄 복구 + 잘못 넣은 2025 7·8월 제거
+ * 공문 미수 수수료 = 현황표 잔액 + 양수도 4,664,000
  * node --import tsx scripts/restore-cheondonga-yangsudo.mjs
  */
 import fs from 'fs';
@@ -70,5 +70,5 @@ console.log({
   open: letterBalanceFromLines(after),
   first: after[0]?.description,
   lines: after.length,
-  note: '줄합≠현황표는 양수도 구조상 정상. 합계 표시는 현황표(또는 구+신 합산).',
+  note: '미수 수수료 = 현황표 + 양수도 이관액. 줄합≠현황표는 정상.',
 });

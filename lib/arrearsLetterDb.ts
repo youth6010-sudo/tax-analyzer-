@@ -25,6 +25,7 @@ import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import {
   applyArrearsManualBalance,
+  arrearsLetterFeeBalance,
   isArrearsTransferSplitCode,
 } from '@/lib/arrearsBalanceLock';
 import {
@@ -109,6 +110,8 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   item: ArrearsEntryDto;
   lines: ArrearsLetterLineDto[];
   letterBalance: number;
+  /** 공문 「미수 수수료」표시액 (신계정 양수도면 현황+이관액) */
+  feeBalance: number;
   balanceDiff: number;
   globalAsOfDate: string;
   letterAsOfDate: string;
@@ -118,6 +121,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   if (!item) return null;
   const lines = await listLetterLines(id);
   const letterBalance = letterBalanceFromLines(lines);
+  const feeBalance = arrearsLetterFeeBalance(item.externalCode, item.balance, lines);
   const globalAsOfDate = await getArrearsGlobalAsOfDate();
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
   const endings = await readArrearsDetailEndings();
@@ -133,6 +137,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
     item,
     lines,
     letterBalance,
+    feeBalance,
     balanceDiff,
     globalAsOfDate,
     letterAsOfDate,
