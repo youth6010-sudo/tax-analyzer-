@@ -362,11 +362,11 @@ function isUnpaidMonthLedgerLine(l: {
   source?: string;
   description?: string;
   amount: number;
-  paidAmount: number;
+  paidAmount?: number;
 }): boolean {
   if (l.source !== 'ledger') return false;
   if (Math.round(l.amount) <= 0) return false;
-  if (Math.round(l.paidAmount) !== 0) return false;
+  if (Math.round(l.paidAmount || 0) !== 0) return false;
   return /\d{1,2}월/.test(String(l.description || '').replace(/\s+/g, ''));
 }
 
@@ -389,10 +389,16 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
     let over = open - bal;
     if (over <= 0) continue;
 
-    const next: ArrearsLetterLineInput[] = lines.map(l => ({
+    const next: Array<{
+      description: string;
+      amount: number;
+      paidAmount: number;
+      paidDate: string;
+      source: ArrearsLetterLineInput['source'];
+    }> = lines.map(l => ({
       description: l.description,
       amount: l.amount,
-      paidAmount: l.paidAmount,
+      paidAmount: Math.round(l.paidAmount || 0),
       paidDate: l.paidDate || '',
       source: l.source,
     }));
