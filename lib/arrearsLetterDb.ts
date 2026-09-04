@@ -35,7 +35,6 @@ import {
   classifyBalanceDiff,
   type BalanceDiffKind,
 } from '@/lib/arrearsBalanceDiff';
-import { isArrearsExcelBalanceAligned, readArrearsDetailEndings } from '@/lib/arrearsDetailEndings';
 
 export type { BalanceDiffKind };
 export { classifyBalanceDiff };
@@ -119,13 +118,7 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   const letterBalance = letterBalanceFromLines(lines);
   const globalAsOfDate = await getArrearsGlobalAsOfDate();
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
-  const endings = await readArrearsDetailEndings();
-
-  // 양수도: 현황≠공문줄합이 정상 → 상세에서는 차이 배지 숨기지 않음(목록 불일치로 확인)
-  const balanceDiff =
-    isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
-      ? 0
-      : item.balance - letterBalance;
+  const balanceDiff = Math.round(item.balance) - letterBalance;
 
   return {
     item,

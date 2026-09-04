@@ -6,10 +6,6 @@ import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
-import {
-  isArrearsExcelBalanceAligned,
-  readArrearsDetailEndings,
-} from '@/lib/arrearsDetailEndings';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
 import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
 import {
@@ -75,29 +71,12 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
     letterBy.set(s.arrearsEntryId, Boolean(s.hasLetter));
   }
 
-  const detailEndings = await readArrearsDetailEndings();
-
   return items.map(item => {
-    const rawOpen = openBy.get(item.id) ?? 0;
-    const excelAligned = isArrearsExcelBalanceAligned(
-      item.externalCode,
-      item.balance,
-      detailEndings,
-    );
+    const linesOpen = openBy.get(item.id) ?? 0;
     /**
-     * 불일치 = 현황표 ≠ 거래처별 말잔(또는 공문 줄합).
-     * 엑셀 두 파일 말잔이 같으면 OK.
-     * 양수도(천돈가 등)는 공문과 현황이 다를 수 있음 → 불일치로 표시.
+     * 불일치 = 현황표 잔액 ≠ 공문·상세 Σ(금액−지급).
+     * (거래처별 말잔과 현황이 같아도, 공문 줄합과 다르면 불일치로 표시)
      */
-    if (excelAligned) {
-      return {
-        ...item,
-        linesOpen: Math.round(item.balance),
-        balanceDiff: 0,
-        balanceDiffKind: 'ok' as const,
-      };
-    }
-    const linesOpen = rawOpen;
     const balanceDiff = Math.round(item.balance) - linesOpen;
     const balanceDiffKind = classifyBalanceDiff({
       ledgerBalance: item.balance,
