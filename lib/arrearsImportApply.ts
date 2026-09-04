@@ -45,6 +45,7 @@ export type StatusImportResult = {
   inserted: number;
   totalBalance: number;
   categoryUpdated: number;
+  overageStripped: number;
 };
 
 export type ClientDetailImportPreview = {
@@ -71,6 +72,7 @@ export type ClientDetailImportResult = {
   skippedIndie: number;
   skippedNoEntry: number;
   linesAdded: number;
+  overageStripped: number;
 };
 
 export async function previewStatusImport(
