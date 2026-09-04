@@ -3,8 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { listArrearsEntries } from '@/lib/arrearsDb';
 import { listLetterLines } from '@/lib/arrearsLetterDb';
-import { arrearsLetterFeeBalance } from '@/lib/arrearsBalanceLock';
-import { linesForCurrentLetterCycle } from '@/app/types/arrears';
+import { linesForCurrentLetterCycle, letterBalanceFromLines } from '@/app/types/arrears';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { ARREARS_MANAGER_NAMES } from '@/app/types/arrears';
 import {
@@ -29,7 +28,7 @@ async function sheetsForEntries(entries: EntryLike[]): Promise<ArrearsLetterExpo
     sheets.push({
       companyName: item.companyName,
       letterDate: item.letterDate || item.asOfDate || '',
-      entryBalance: arrearsLetterFeeBalance(item.externalCode, item.balance, lines),
+      entryBalance: letterBalanceFromLines(lines),
       lines: lines.map(l => ({
         description: l.description,
         amount: l.amount,

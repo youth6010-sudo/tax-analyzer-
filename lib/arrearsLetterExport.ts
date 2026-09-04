@@ -36,7 +36,7 @@ export type ArrearsLetterExportSheet = {
   companyName: string;
   letterDate: string;
   lines: ArrearsLetterExportLine[];
-  /** 미수관리 목록 잔액(현황표). 있으면 「미수 수수료」·총액 잔액에 사용 */
+  /** 미수 수수료·총액 잔액. 없으면 Σ(금액−지급) */
   entryBalance?: number;
 };
 
