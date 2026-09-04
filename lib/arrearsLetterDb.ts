@@ -23,7 +23,7 @@ import {
 } from '@/lib/arrearsLedgerDetailParse';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
-import { applyArrearsManualBalance } from '@/lib/arrearsBalanceLock';
+import { applyArrearsManualBalance, shouldExcludeArrearsLetterDesc } from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,
   isInactiveArrearsCode,
@@ -166,7 +166,9 @@ export async function replaceLetterLines(
       sortOrder: i,
     }))
     // 지급-only 행(내역 비움) 허용 — 사무실 공문 양식과 동일
-    .filter(l => l.description || l.amount || l.paidAmount);
+    .filter(l => l.description || l.amount || l.paidAmount)
+    // 양수도 이관 적요 등 이중계상 제외
+    .filter(l => !shouldExcludeArrearsLetterDesc(existing.externalCode, l.description));
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
 

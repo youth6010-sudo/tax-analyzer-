@@ -4,6 +4,7 @@ import { arrearsEntries } from '@/db/schema';
 import {
   isArrearsBalanceLocked,
   isArrearsLetterProtected,
+  shouldExcludeArrearsLetterDesc,
 } from '@/lib/arrearsBalanceLock';
 import {
   isAfterCutoff,
@@ -268,7 +269,10 @@ export async function applyClientDetailImport(
 
     const existing = await listLetterLines(entry.id);
     const letterLines = existing.filter(
-      l => l.source === 'letter' && !isPostCutoffLetterMonth(l.description, cutoffDate),
+      l =>
+        l.source === 'letter' &&
+        !isPostCutoffLetterMonth(l.description, cutoffDate) &&
+        !shouldExcludeArrearsLetterDesc(code, l.description),
     );
     const junkCount = existing.length - letterLines.length;
     const letterDescs = letterLines.map(l => l.description);
