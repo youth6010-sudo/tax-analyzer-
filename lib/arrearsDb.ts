@@ -16,7 +16,6 @@ import {
   applyArrearsManualBalance,
   ARREARS_ALWAYS_LISTED_CODES,
   isArrearsBalanceLocked,
-  isArrearsTransferSplitCode,
 } from '@/lib/arrearsBalanceLock';
 import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
@@ -86,11 +85,11 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
       detailEndings,
     );
     /**
-     * 불일치 = 현황표 ≠ 거래처별 말잔.
-     * 공문 과거내역 합과 달라도, 엑셀 두 파일 말잔이 같으면 OK (7/27 이후만 덧붙인 구조).
-     * 양수도 분리 계정은 공문줄합≠현황표가 정상 → 불일치 제외.
+     * 불일치 = 현황표 ≠ 거래처별 말잔(또는 공문 줄합).
+     * 엑셀 두 파일 말잔이 같으면 OK.
+     * 양수도(천돈가 등)는 공문과 현황이 다를 수 있음 → 불일치로 표시.
      */
-    if (excelAligned || isArrearsTransferSplitCode(item.externalCode)) {
+    if (excelAligned) {
       return {
         ...item,
         linesOpen: Math.round(item.balance),

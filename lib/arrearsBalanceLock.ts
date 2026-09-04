@@ -10,8 +10,7 @@ export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
 /**
  * 양수도로 구·신 코드가 나뉜 업체.
  * - 공문에는 이관 적요(양수도)를 **한 줄**로 유지한다 (구계정 전체 이력 합산 금지).
- * - 신계정(newCode) 목록 잔액은 공문 Σ(금액−지급)을 쓰고, 현황표 import로 덮지 않음.
- * - 구계정은 현황표·공문이 각각 유지될 수 있음 → 불일치 제외.
+ * - 목록 잔액은 현황표 기준. 공문줄합과 다르면 「불일치」로 표시(양수도 구조상 정상).
  */
 export const ARREARS_TRANSFER_PAIRS: ReadonlyArray<{
   oldCode: string;
@@ -46,13 +45,6 @@ export function getArrearsTransferPair(externalCode: string) {
 
 export function isArrearsTransferSplitCode(externalCode: string): boolean {
   return getArrearsTransferPair(externalCode) != null;
-}
-
-/** 신계정: 목록·외부 잔액을 공문 상세 합계로 맞춤 */
-export function isArrearsLetterBalancePreferred(externalCode: string): boolean {
-  const pair = getArrearsTransferPair(externalCode);
-  if (!pair) return false;
-  return String(externalCode || '').trim() === pair.newCode;
 }
 
 export function isArrearsSkipClientDetail(externalCode: string): boolean {

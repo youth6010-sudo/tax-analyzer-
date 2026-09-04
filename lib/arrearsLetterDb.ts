@@ -25,8 +25,6 @@ import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import {
   applyArrearsManualBalance,
-  isArrearsLetterBalancePreferred,
-  isArrearsTransferSplitCode,
 } from '@/lib/arrearsBalanceLock';
 import {
   ensureInactiveArrearsEntries,
@@ -123,9 +121,8 @@ export async function getArrearsLetterDetail(id: string): Promise<{
   const letterAsOfDate = resolveArrearsLetterAsOfDate(globalAsOfDate, item);
   const endings = await readArrearsDetailEndings();
 
-  // 양수도 분리: 공문에 「양수도」한 줄만 두고 현황표와 줄합이 달라도 정상
+  // 양수도: 현황≠공문줄합이 정상 → 상세에서는 차이 배지 숨기지 않음(목록 불일치로 확인)
   const balanceDiff =
-    isArrearsTransferSplitCode(item.externalCode) ||
     isArrearsExcelBalanceAligned(item.externalCode, item.balance, endings)
       ? 0
       : item.balance - letterBalance;
@@ -202,10 +199,7 @@ export async function replaceLetterLines(
   if (opts?.letterDate !== undefined) {
     updates.letterDate = opts.letterDate.trim();
   }
-  // 양수도 신계정: 공문 줄합을 목록 잔액으로 항상 맞춤
-  const syncBal =
-    isArrearsLetterBalancePreferred(existing.externalCode) || opts?.syncBalance !== false;
-  if (syncBal) {
+  if (opts?.syncBalance !== false) {
     updates.balance = letterBalance;
     updates.source = 'manual';
   }

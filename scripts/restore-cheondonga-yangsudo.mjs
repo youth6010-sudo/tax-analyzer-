@@ -1,5 +1,5 @@
- * 01418 천돈가(윤삼식): 양수도 줄 복구 + 잘못 넣은 2025 7·8월 제거
- * 공문 잔액 = Σ(금액−지급). 현황표와 달라도 정상.
+ * 01418 천돈가(윤삼식): 양수도 줄 복구. (잘못된 2025년 7·8월만 제거 — 2026년 7·8월은 유지)
+ * 목록 잔액=현황표, 공문줄합과 다르면 불일치.
  * node --import tsx scripts/restore-cheondonga-yangsudo.mjs
  */
 import fs from 'fs';
@@ -40,7 +40,7 @@ const lines = await listLetterLines(e.id);
 
 const cleaned = lines.filter(l => {
   const d = (l.description || '').replace(/\s+/g, '');
-  // 이전에 맞추려고 넣은 7·8월 제거
+  // 잘못 맞추려고 넣었던 2025년 7·8월만 제거 (2026년 7·8월은 정상)
   if (/2025년7월|2025년8월/.test(d) && l.source === 'ledger') return false;
   return true;
 });
@@ -70,5 +70,4 @@ console.log({
   open: letterBalanceFromLines(after),
   first: after[0]?.description,
   lines: after.length,
-  note: '미수 수수료 = Σ(금액−지급). 현황표와 달라도 정상.',
-});
+  note: '미수 수수료 = Σ(금액−지급). 
