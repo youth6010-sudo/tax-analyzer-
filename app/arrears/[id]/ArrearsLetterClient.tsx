@@ -94,8 +94,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
   const [manualChannel, setManualChannel] = useState<ManualChannel>('thebill');
   const [manualBusy, setManualBusy] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  /** false=전체 내역(기본), true=0원 청산 이전 구간 숨김(조회·인쇄) */
-  const [excludePriorZero, setExcludePriorZero] = useState(false);
+  /** true=미납 재개 시점부터(조회·인쇄 기본), false=전체 내역. DB 내역은 그대로 유지 */
+  const [excludePriorZero, setExcludePriorZero] = useState(true);
   /** 연결필요(letter:) → 원장 거래처 연결 */
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkMsg, setLinkMsg] = useState('');
@@ -155,8 +155,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     };
   }, [load]);
 
-  // 조회·인쇄: 기본 전체. 「0원 이전내역 제외」면 현재 사이클만.
-  // 수정 모드는 항상 전체 이력(editLines).
+  // 조회·인쇄: 기본은 미납 재개 사이클만. 「미납 시점부터 표시」 끄면 전체.
+  // 수정 모드는 항상 전체 이력(editLines). DB는 변경하지 않음.
   const canExcludePrior = useMemo(() => hasPriorClosedLetterCycle(lines), [lines]);
   const viewLines = useMemo(() => {
     if (!excludePriorZero || !canExcludePrior) return lines;
@@ -476,7 +476,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 {canExcludePrior ? (
                   <label
                     className="flex items-center gap-1.5 text-xs text-slate-600"
-                    title="기본은 전체 내역. 켜면 0원으로 끝난 이전 구간을 숨기고 그대로 인쇄합니다."
+                    title="켜면 0원으로 끝난 이전 구간을 숨기고 미납이 시작된 시점부터 표시·인쇄합니다. 저장된 내역·잔액은 바뀌지 않습니다. 끄면 전체 이력이 보입니다."
                   >
                     <input
                       type="checkbox"
@@ -484,7 +484,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                       checked={excludePriorZero}
                       onChange={e => setExcludePriorZero(e.target.checked)}
                     />
-                    0원 이전내역 제외
+                    미납 시점부터 표시
                   </label>
                 ) : null}
                 {canManage ? (
@@ -859,18 +859,27 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             - 다 음 -
           </p>
 
-          <p className="mt-5 text-[13px] font-semibold text-slate-900 print:mt-4 print:text-[12px]">
-            1. 미수 수수료 안내
-          </p>
-
           {viewLines.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500 print:hidden">
-              {`등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
-            </p>
+            <>
+              <p className="mt-5 text-[13px] font-semibold text-slate-900 print:mt-4 print:text-[12px]">
+                1. 미수 수수료 안내
+              </p>
+              <p className="mt-4 text-sm text-slate-500 print:hidden">
+                {`등록된 미수 내역이 없습니다.${canManage ? ' 「수정」에서 더빌·내역을 입력하세요.' : ''}`}
+              </p>
+            </>
           ) : (
             <div className="mt-2 overflow-x-auto">
               <table className="arrears-letter-table w-full border-collapse text-[12px] print:text-[11px]">
                 <thead>
+                  <tr className="arrears-letter-table-section-title">
+                    <th
+                      colSpan={5}
+                      className="border-0 bg-white px-0 pb-2 pt-5 text-left text-[13px] font-semibold text-slate-900 print:pb-1.5 print:pt-4 print:text-[12px]"
+                    >
+                      1. 미수 수수료 안내
+                    </th>
+                  </tr>
                   <tr className="bg-[#ececec]">
                     <th className="border border-[#222] px-2 py-1.5 text-left font-semibold">내역</th>
                     <th className="border border-[#222] px-2 py-1.5 text-right font-semibold whitespace-nowrap">
@@ -1027,6 +1036,26 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           .arrears-letter-table td {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          /* 전역 table{break-inside:avoid} 오버라이드 — 긴 표는 페이지 넘김, 제목·헤더는 매 페이지 */
+          .arrears-letter-table {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
+          }
+          .arrears-letter-table thead {
+            display: table-header-group !important;
+          }
+          .arrears-letter-table thead tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .arrears-letter-table-section-title th {
+            break-after: avoid !important;
+            page-break-after: avoid !important;
+          }
+          .arrears-letter-table tbody tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
         }
       `}</style>

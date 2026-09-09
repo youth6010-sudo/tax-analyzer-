@@ -236,6 +236,17 @@ export default function BatchInvoiceClient() {
             top: 0;
             width: 100%;
           }
+          .batch-invoice table {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
+          }
+          .batch-invoice table thead {
+            display: table-header-group !important;
+          }
+          .batch-invoice table tbody tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
         }
       `}</style>
     </div>
