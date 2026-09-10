@@ -6,6 +6,7 @@ import {
   isSemiAnnualOffMonthExcluded,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
+  withholdingExcludeReasonLabel,
 } from '@/lib/periodUtils';
 import { type IncomeTypeGridRow } from '@/lib/incomeTypeFilingGrid';
 
@@ -14,6 +15,7 @@ type SpCompareRow = {
   companyName: string;
   businessNo: string;
   cells: IncomeTypeGridRow['cells'];
+  excludeReason?: string | null;
 };
 
 function isWithholdingPoolClient(c: ClientRecord): boolean {
@@ -45,6 +47,8 @@ export type PeriodCompareClientChange = {
   prevActive: boolean;
   currActive: boolean;
   change: 'added' | 'removed' | 'unchanged';
+  /** 제외 사유 (예: 원천세 제외) */
+  reason?: string;
 };
 
 export type MonthlyCompareResult = {
@@ -149,6 +153,17 @@ function comparePoolSessions(
     const prevActive = isActiveInSessionPool(c, prevSession, prevOpts);
     const currActive = isActiveInSessionPool(c, currSession, currOpts);
     if (prevActive === currActive) continue;
+    const currExcluded =
+      !!currSession?.excluded &&
+      Object.prototype.hasOwnProperty.call(currSession.excluded, c.id);
+    const reason =
+      !currActive && currExcluded
+        ? withholdingExcludeReasonLabel(currSession?.excluded?.[c.id])
+        : !currActive &&
+            currOpts.semiAnnualOffMonth != null &&
+            isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, currOpts.semiAnnualOffMonth)
+          ? '반기 신고월 아님'
+          : undefined;
     changedClients.push({
       id: c.id,
       companyName: c.companyName,
@@ -156,6 +171,7 @@ function comparePoolSessions(
       prevActive,
       currActive,
       change: currActive ? 'added' : 'removed',
+      reason: currActive ? undefined : reason,
     });
   }
 
@@ -208,12 +224,20 @@ function compareColumnActive(
   for (const id of allIds) {
     const prevRow = prevMap.get(id);
     const currRow = currMap.get(id);
-    const prevActive = !!prevRow?.cells[key]?.active;
-    const currActive = !!currRow?.cells[key]?.active;
+    const prevExcluded = prevRow?.excludeReason != null;
+    const currExcluded = currRow?.excludeReason != null;
+    const prevActive = !prevExcluded && !!prevRow?.cells[key]?.active;
+    const currActive = !currExcluded && !!currRow?.cells[key]?.active;
     if (prevActive) prevCount += 1;
     if (currActive) currCount += 1;
     if (prevActive === currActive) continue;
     const row = currRow ?? prevRow!;
+    const reason =
+      !currActive && currExcluded
+        ? withholdingExcludeReasonLabel(currRow?.excludeReason)
+        : !currActive && prevExcluded
+          ? withholdingExcludeReasonLabel(prevRow?.excludeReason)
+          : undefined;
     changedClients.push({
       id,
       companyName: row.companyName,
@@ -221,6 +245,7 @@ function compareColumnActive(
       prevActive,
       currActive,
       change: currActive ? 'added' : 'removed',
+      reason: currActive ? undefined : reason,
     });
   }
 

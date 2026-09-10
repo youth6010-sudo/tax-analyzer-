@@ -236,6 +236,9 @@ export default function FilingCheckSessionPanel({
                             {c.change === 'added' ? '추가' : '제외'}
                           </span>
                           <span className="font-medium text-slate-800">{c.companyName}</span>
+                          {c.change === 'removed' && c.reason ? (
+                            <span className="text-xs text-slate-500">({c.reason})</span>
+                          ) : null}
                           {c.businessNo && (
                             <span className="tabular-nums text-slate-500">{c.businessNo}</span>
                           )}
@@ -260,6 +263,9 @@ export default function FilingCheckSessionPanel({
                     {c.change === 'added' ? '추가' : '제외'}
                   </span>
                   <span className="text-sm font-semibold text-slate-800">{c.companyName}</span>
+                  {c.change === 'removed' && c.reason ? (
+                    <span className="text-xs text-slate-500">({c.reason})</span>
+                  ) : null}
                   {c.businessNo && (
                     <span className="text-sm text-slate-500 tabular-nums">{c.businessNo}</span>
                   )}

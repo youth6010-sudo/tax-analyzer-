@@ -122,7 +122,7 @@ export async function listSimplePayrollPrevActiveKeys(
       {},
       prevFiled,
       [],
-      { periodStartDate: new Date(meta.year, meta.month - 1, 1) },
+      // 전월 그리드도 신고월 컷오프(기본값) — 귀속월 1일을 넘기지 않음
     );
     for (const row of grid) {
       for (const [key, cell] of Object.entries(row.cells)) {

@@ -625,7 +625,7 @@ function FilingCheckPageInner() {
   const [incomeSavedTick, setIncomeSavedTick] = useState(false);
   const incomeSavedTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [statFilter, setStatFilter] = useState<IncomeStatFilter>('all');
-  /** 신고대상 = 활성 지급명세 칸 · 전체 = 원천 제외(비활성) 포함 */
+  /** 신고대상 = 활성 칸 + 원천 제외(원천세 제외 표시) · 전체 = 비활성 포함 */
   const [listScope, setListScope] = useState<'targets' | 'all'>('all');
   const [displayOrderEpoch, setDisplayOrderEpoch] = useState(0);
   const displayOrderEpochAppliedRef = useRef(-1);
@@ -1792,9 +1792,9 @@ function FilingCheckPageInner() {
     const nextExcluded = { ...record.excluded };
     const nextForce = { ...(record.forceIncluded ?? {}) };
     if (on) {
-      // 제외 ON — 강제포함 해제 + 수동 제외
+      // 제외 ON — 강제포함 해제 + 수동 제외 (사유 기본: 원천세 제외)
       delete nextForce[id];
-      nextExcluded[id] = nextExcluded[id] ?? '';
+      nextExcluded[id] = nextExcluded[id]?.trim() ? nextExcluded[id] : '원천세 제외';
     } else {
       // 제외 OFF — 수동 제외 해제 + 반기 자동제외도 수기로 살림
       delete nextExcluded[id];
@@ -2784,7 +2784,13 @@ function FilingCheckPageInner() {
           );
           for (const c of col.changedClients) {
             lines.push(
-              `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+              `  - ${c.companyName}${
+                c.change === 'added'
+                  ? ' (추가)'
+                  : c.reason
+                    ? ` (제외·${c.reason})`
+                    : ' (제외)'
+              }`,
             );
           }
         }
@@ -2796,7 +2802,13 @@ function FilingCheckPageInner() {
           lines.push(`· ${compareLabels.prev}과 다른 업체`);
           for (const c of periodCompare.changedClients) {
             lines.push(
-              `  - ${c.companyName}${c.change === 'added' ? ' (추가)' : ' (제외)'}`,
+              `  - ${c.companyName}${
+                c.change === 'added'
+                  ? ' (추가)'
+                  : c.reason
+                    ? ` (제외·${c.reason})`
+                    : ' (제외)'
+              }`,
             );
           }
         }
@@ -3368,13 +3380,12 @@ function FilingCheckPageInner() {
             />
             {listScope === 'targets' && incomeStats.excludedRows > 0 && (
               <span className="text-xs text-slate-500">
-                원천 제외 {incomeStats.excludedRows}곳 — 활성 칸이 있으면 신고대상·차이에 포함, 없으면
-                「전체」에서 확인
+                원천 제외 {incomeStats.excludedRows}곳 — 목록에「원천세 제외」표시, 대상·차이 집계에서는 제외
               </span>
             )}
             {listScope === 'all' && incomeStats.excludedRows > 0 && (
               <span className="text-xs text-slate-500">
-                원천 제외 {incomeStats.excludedRows}곳 — 활성·미접수면 차이에 포함됩니다
+                원천 제외 {incomeStats.excludedRows}곳 —「원천세 제외」표시, 대상·차이·미접수 집계에서는 제외
               </span>
             )}
           </div>

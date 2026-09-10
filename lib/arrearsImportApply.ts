@@ -295,8 +295,11 @@ export async function applyClientDetailImport(
     const existingKeys = new Set(base.map(lineDedupKey));
     const additions: ArrearsLetterLineInput[] = [];
 
-    // 월기장 청구와 동일금액 입금이 같이 오면 즉시회수 → 공문에 안 붙임
-    const txs = skipImmediateMonthlyRecoveryTxs(codeTxs);
+    // 월기장 청구+동일금액 입금 세트는 즉시회수로 보고 생략.
+    // 단, 공문에 기장료 미납이 한 달이라도 있으면 이후 매출·회수는 모두 남김 (훈테크형).
+    const txs = hasUnpaidMonthBookkeepingOnLetter(letterLines)
+      ? codeTxs
+      : skipImmediateMonthlyRecoveryTxs(codeTxs);
 
     for (const tx of txs) {
       const line = clientDetailTxToLineInput(tx, letterDescs);
@@ -357,6 +360,30 @@ export function summarizeBalanceAlignment(
 }
 
 export { isArrearsBalanceLocked };
+
+/** 공문 letter 줄 — 월 기장료 청구(조정·성실·부가세·기타 제외) */
+export function isMonthBookkeepingChargeLine(desc: string, amount: number): boolean {
+  if (Math.round(amount || 0) <= 0) return false;
+  const d = String(desc || '').replace(/\s+/g, '');
+  if (!d) return false;
+  if (/전기이월|원장반영|입금|취소|반환/.test(d)) return false;
+  if (/조정|성실|부가세|양수도|선수금|기타/.test(d)) return false;
+  if (/(20\d{2}|\d{2})년\d{1,2}월/.test(d)) return true;
+  if (/^\d{1,2}월/.test(d) && /기장|수수료/.test(d)) return true;
+  if (/^\d{1,2}월$/.test(d)) return true;
+  return false;
+}
+
+/** 공문에 기장료 미납이 한 달이라도 있는지 */
+export function hasUnpaidMonthBookkeepingOnLetter(
+  letterLines: Array<{ description: string; amount: number; paidAmount?: number }>,
+): boolean {
+  return letterLines.some(
+    l =>
+      isMonthBookkeepingChargeLine(l.description, l.amount) &&
+      Math.round(l.amount) - Math.round(l.paidAmount || 0) > 0,
+  );
+}
 
 function isUnpaidMonthLedgerLine(l: {
   source?: string;
@@ -429,7 +456,8 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
 
 /**
  * 월기장회수: 같은 달(또는 직후 동일금액) 매출·입금이 세트면 공문에 넣지 않음.
- * cutoff 이후 거래처별 상세에만 적용 — 업체 예외 없음.
+ * cutoff 이후 거래처별 상세에만 적용.
+ * 호출측: 공문에 기장료 미납이 한 달이라도 있으면 쓰지 말 것.
  */
 export function skipImmediateMonthlyRecoveryTxs<
   T extends { debit: number; credit: number; ledgerDescription: string; eventDate: string },

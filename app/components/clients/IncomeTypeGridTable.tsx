@@ -176,8 +176,10 @@ function renderNaCell(
     return renderExcludeBadgeCell(colKey, onRevive, locked);
   }
   return (
-    <td key={colKey} className="px-2 py-2 text-center text-[11px] text-slate-300">
-      해당없음
+    <td key={colKey} className="px-2 py-2 text-center text-[11px] leading-tight text-slate-300">
+      해당
+      <br />
+      없음
     </td>
   );
 }

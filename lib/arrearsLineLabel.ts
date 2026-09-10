@@ -59,7 +59,8 @@ export function formatArrearsChargeLabel(
 ): string {
   const raw = String(description || '').trim();
   if (!raw) return '';
-  const d = compactDesc(raw);
+  // 「26년 8월만」등 — 끝의 ‘만’은 표기 잔재로 보고 제거 후 정규화
+  const d = compactDesc(raw).replace(/만$/u, '');
 
   if (/^전기이월/.test(d) || d === '원장반영') {
     const y =
@@ -151,7 +152,9 @@ export function formatArrearsChargeLabel(
     const year = expandYy(Number(withYearMonth[1]));
     const month = Number(withYearMonth[2]);
     if (/기타/.test(d)) return `${year}년 ${month}월 기타수수료`;
-    return `${year}년 ${month}월 기장료`;
+    // 원문에 기장·수수료가 있으면 기장료, 공문 스타일「26년 8월」은「2026년 8월」만
+    if (/기장|수수료/.test(d)) return `${year}년 ${month}월 기장료`;
+    return `${year}년 ${month}월`;
   }
 
   if (monthFee && looksLikeMonthFee) {
@@ -160,7 +163,8 @@ export function formatArrearsChargeLabel(
       yearFromPrevDescription(ctx?.prevDescription) ??
       inferYearForMonth(month, ctx);
     if (/기타/.test(d)) return `${year}년 ${month}월 기타수수료`;
-    return `${year}년 ${month}월 기장료`;
+    if (/기장|수수료/.test(d)) return `${year}년 ${month}월 기장료`;
+    return `${year}년 ${month}월`;
   }
 
   return raw;

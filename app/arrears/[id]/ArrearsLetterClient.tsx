@@ -48,21 +48,17 @@ function linePortalDescription(
   l: ArrearsLetterLineDto,
   ctx: { asOfDate?: string | null; prevDescription?: string | null },
 ): string {
-  // 엑셀 공문(source=letter)은 원문 그대로 — 전기이월·연도 추론 라벨 변환 금지
-  if (l.source === 'letter') return l.description;
+  // 공문·원장 모두 `26년 8월` → `2026년 8월` 등으로 표시 통일 (DB 원문은 유지)
   return formatArrearsChargeLabel(l.description, ctx) || l.description;
 }
 
 function toEditLines(lines: ArrearsLetterLineDto[], asOf?: string | null): EditLine[] {
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
-    description:
-      l.source === 'letter'
-        ? l.description
-        : linePortalDescription(l, {
-            asOfDate: asOf,
-            prevDescription: i > 0 ? lines[i - 1]?.description : undefined,
-          }),
+    description: linePortalDescription(l, {
+      asOfDate: asOf,
+      prevDescription: i > 0 ? lines[i - 1]?.description : undefined,
+    }),
     amount: l.amount ? formatArrearsWon(l.amount) : '',
     paidAmount: l.paidAmount ? formatArrearsWon(l.paidAmount) : '',
     paidDate: formatArrearsPaidDateKo(l.paidDate) || l.paidDate || '',
@@ -870,7 +866,14 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             </>
           ) : (
             <div className="mt-2 overflow-x-auto">
-              <table className="arrears-letter-table w-full border-collapse text-[12px] print:text-[11px]">
+              <table className="arrears-letter-table w-full table-fixed border-collapse text-[12px]">
+                <colgroup>
+                  <col className="arrears-letter-col-desc" />
+                  <col className="arrears-letter-col-amt" />
+                  <col className="arrears-letter-col-amt" />
+                  <col className="arrears-letter-col-date" />
+                  <col className="arrears-letter-col-amt" />
+                </colgroup>
                 <thead>
                   <tr className="arrears-letter-table-section-title">
                     <th
@@ -881,17 +884,21 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     </th>
                   </tr>
                   <tr className="bg-[#ececec]">
-                    <th className="border border-[#222] px-2 py-1.5 text-left font-semibold">내역</th>
-                    <th className="border border-[#222] px-2 py-1.5 text-right font-semibold whitespace-nowrap">
+                    <th className="border border-[#222] px-2 py-1.5 text-center font-semibold">
+                      내역
+                    </th>
+                    <th className="border border-[#222] px-1.5 py-1.5 text-center font-semibold whitespace-nowrap">
                       금액(vat 포함)
                     </th>
-                    <th className="border border-[#222] px-2 py-1.5 text-right font-semibold whitespace-nowrap">
+                    <th className="border border-[#222] px-1.5 py-1.5 text-center font-semibold whitespace-nowrap">
                       지급내역
                     </th>
-                    <th className="border border-[#222] px-2 py-1.5 text-center font-semibold whitespace-nowrap">
+                    <th className="border border-[#222] px-1.5 py-1.5 text-center font-semibold whitespace-nowrap">
                       지급일시
                     </th>
-                    <th className="border border-[#222] px-2 py-1.5 text-right font-semibold">잔액</th>
+                    <th className="border border-[#222] px-1.5 py-1.5 text-center font-semibold whitespace-nowrap">
+                      잔액
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -905,8 +912,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     return (
                       <tr key={l.id}>
                         <td className="border border-[#222] px-2 py-1 text-slate-900">
-                          <span className="print:hidden">{portalDesc}</span>
-                          <span className="hidden print:inline">{l.description}</span>
+                          {portalDesc}
                         </td>
                         <td className="border border-[#222] px-2 py-1 text-right tabular-nums text-slate-900">
                           {l.amount ? formatArrearsWon(l.amount) : ''}
@@ -924,7 +930,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     );
                   })}
                   <tr className="bg-[#ececec] font-semibold">
-                    <td className="border border-[#222] px-2 py-1.5">총액</td>
+                    <td className="border border-[#222] px-2 py-1.5 text-center">총액</td>
                     <td className="border border-[#222] px-2 py-1.5 text-right tabular-nums">
                       {formatArrearsWon(totalAmount)}
                     </td>
@@ -938,7 +944,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                   </tr>
                   <tr className="font-semibold">
                     <td
-                      className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5"
+                      className="border border-[#222] bg-[#d9d9d9] px-2 py-1.5 text-center"
                       colSpan={4}
                     >
                       미수 수수료
@@ -996,10 +1002,36 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       />
 
       <style>{`
+        .arrears-letter-table {
+          table-layout: fixed;
+          width: 100%;
+        }
+        .arrears-letter-col-desc {
+          width: 28%;
+        }
+        .arrears-letter-col-amt {
+          width: 18%;
+        }
+        .arrears-letter-col-date {
+          width: 18%;
+        }
+        .arrears-letter-table td:first-child {
+          word-break: keep-all;
+          overflow-wrap: anywhere;
+        }
+        .arrears-letter-table th:not(:first-child),
+        .arrears-letter-table td:not(:first-child) {
+          overflow: hidden;
+        }
         @media print {
           @page {
             size: A4;
-            margin: 12mm;
+            margin: 12mm 12mm 18mm 12mm;
+            @bottom-center {
+              content: counter(page) " / " counter(pages);
+              font-size: 10pt;
+              color: #555;
+            }
           }
           html, body {
             background: white !important;
@@ -1023,8 +1055,8 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: none !important;
-            margin: 0 !important;
+            max-width: 180mm !important;
+            margin: 0 auto !important;
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
@@ -1036,11 +1068,31 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           .arrears-letter-table td {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            font-size: 12px !important;
+            line-height: 1.4 !important;
+            padding-top: 0.375rem !important;
+            padding-bottom: 0.375rem !important;
           }
-          /* 전역 table{break-inside:avoid} 오버라이드 — 긴 표는 페이지 넘김, 제목·헤더는 매 페이지 */
+          .arrears-letter-table th {
+            padding-top: 0.375rem !important;
+            padding-bottom: 0.375rem !important;
+          }
           .arrears-letter-table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            font-size: 12px !important;
             break-inside: auto !important;
             page-break-inside: auto !important;
+          }
+          .arrears-letter-col-desc {
+            width: 28% !important;
+          }
+          .arrears-letter-col-amt {
+            width: 18% !important;
+          }
+          .arrears-letter-col-date {
+            width: 18% !important;
           }
           .arrears-letter-table thead {
             display: table-header-group !important;

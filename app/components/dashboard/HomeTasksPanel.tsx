@@ -1354,21 +1354,21 @@ export default function HomeTasksPanel() {
                           <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
                             1
                           </span>
-                          <span
+                <span
                             className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${
-                              t.type === 'nts_alert'
-                                ? 'bg-red-100 text-red-700'
+                    t.type === 'nts_alert'
+                      ? 'bg-red-100 text-red-700'
                                 : 'bg-blue-50 text-[#4b6cb7]'
-                            }`}
-                          >
-                            {TYPE_LABEL[t.type]}
-                          </span>
+                  }`}
+                >
+                  {TYPE_LABEL[t.type]}
+                </span>
                           <Link
                             href={t.href}
                             className="min-w-0 flex-1 pr-4 font-semibold leading-snug text-slate-800 hover:underline"
                           >
                             {t.title}
-                          </Link>
+              </Link>
                           {t.type === 'onboarding_incomplete' && t.progress && (
                             <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#4b6cb7] ring-1 ring-blue-100">
                               {t.progress.done}/{t.progress.total}
@@ -1399,14 +1399,14 @@ export default function HomeTasksPanel() {
                             </button>
                           ) : null}
                         </div>
-                      </li>
-                    ))}
-                  </ul>
+            </li>
+          ))}
+        </ul>
                 )}
               </SectionCard>
           </div>
-        )}
-      </section>
+      )}
+    </section>
 
       <CenterModal
         open={editModal === 'personal' && editItem !== null}

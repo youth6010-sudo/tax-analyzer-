@@ -70,4 +70,5 @@ console.log({
   open: letterBalanceFromLines(after),
   first: after[0]?.description,
   lines: after.length,
-  note: '미수 수수료 = Σ(금액−지급). 
+  note: '미수 수수료 = Σ(금액−지급). 현황표와 달라도 정상.',
+});

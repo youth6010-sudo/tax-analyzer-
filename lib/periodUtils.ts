@@ -16,6 +16,15 @@ export function isSemiAnnualFilingMonth(month: number): boolean {
 
 export const SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON = '반기 신고월 아님';
 
+/** 원천세 수동 제외 — 간이지급·연말정산·전월대비 사유 기본값 */
+export const WITHHOLDING_EXCLUDE_REASON = '원천세 제외';
+
+/** 제외 사유가 비어 있으면 원천세 제외로 표시 */
+export function withholdingExcludeReasonLabel(reason: string | null | undefined): string {
+  const t = String(reason ?? '').trim();
+  return t || WITHHOLDING_EXCLUDE_REASON;
+}
+
 /** 반기 신고대상 업체 여부 */
 export function isSemiAnnualWithholdingClient(intakeData: Record<string, unknown>): boolean {
   return readWithholdingSettings(intakeData).semiAnnualTarget;

@@ -15,13 +15,16 @@ import {
   isEmployedColumnApplicable,
   isSimplePayrollEmployedFilingMonth,
   parseSimplePayrollViewPeriod,
+  reportMonthFromAttributionMonth,
   simplePayrollMonthlyPeriodKey,
+  withholdingExcludeReasonLabel,
 } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
 
 /**
  * 기본 신고대상 + 수동 추가.
  * periodStartDate가 있으면 그 날짜 이전에 유출·폐업된 업체는 제외 (기간 중 발생분은 유지).
+ * 원천·간이지급은 신고월 1일 기준(귀속월이 아님) — 원천세 목록과 동일하게 맞춤.
  */
 export function mergeFilingTargetClients(
   baseTargets: ClientRecord[],
@@ -163,7 +166,10 @@ export function buildSimplePayrollGrid(
     filed.filter(r => r.filed).map(r => r.clientId),
   );
 
-  const periodStartDate = opts?.periodStartDate ?? new Date(meta.year, meta.month - 1, 1);
+  // 원천세 isClosedBeforeFilingPeriod와 동일 — 신고월(귀속+1) 1일 이전 유출은 목록에서 제외
+  const report = reportMonthFromAttributionMonth(meta.year, meta.month);
+  const periodStartDate =
+    opts?.periodStartDate ?? new Date(report.year, report.month - 1, 1);
   const targetClients = mergeFilingTargetClients(
     simplePayrollTargetsForPeriod(clients, meta.month),
     clients,
@@ -191,7 +197,7 @@ export function buildSimplePayrollGrid(
         // 전월(근로=직전 반기)에 활성이었으면 이월. 접수 여부와 무관 → 미접수 시 차이.
         // 수동 활성화(__active__)면 전월 없어도 활성 → 미접수는 차이.
         // 수동 비활성(__inactive__)이면 전월 활성이어도 숨김.
-        // 원천세 제외는 활성·차이에 영향 없음.
+        // 원천세 제외 업체는 통계·신고대상에서 따로 빠짐(excludeReason).
         const active =
           applicable &&
           !monthInactive &&
@@ -232,7 +238,9 @@ export function buildSimplePayrollGrid(
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
         // 원천 반기 자동제외는 간이지급에 적용하지 않음 — 일용·사업·기타·근로내용확인은 매달
-        excludeReason: manualExcluded ? (excluded[c.id] ?? '') : null,
+        excludeReason: manualExcluded
+          ? withholdingExcludeReasonLabel(excluded[c.id])
+          : null,
         rowNote: rowNotes[c.id] ?? '',
         semiAnnualTarget: whSettings.semiAnnualTarget,
         semiAnnualMonthlyDisplay: whSettings.semiAnnualMonthlyDisplay,
@@ -370,7 +378,9 @@ export function buildYearEndGrid(
         businessNo: c.businessNo,
         douzoneCode: getClientDouzoneCode(c) || '',
         manager: c.manager ?? '',
-        excludeReason: excluded[c.id] ?? null,
+        excludeReason: Object.prototype.hasOwnProperty.call(excluded, c.id)
+          ? withholdingExcludeReasonLabel(excluded[c.id])
+          : null,
         rowNote: rowNotes[c.id] ?? '',
         closureNotice: filingClosureNotice(c),
         cells,
@@ -496,7 +506,8 @@ export function listUnreceivedByColumn(
     const names: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
-      // 원천세 제외여도 간이지급·연말정산에서 활성 칸이면 미접수 안내에 포함
+      // 원천세 제외 = 간이지급·연말정산 미접수 안내에서도 제외
+      if (row.excludeReason != null) continue;
       const cell = row.cells[key];
       if (!cell?.active) continue;
       if (isCellReceivedForStats(cell, key)) continue;

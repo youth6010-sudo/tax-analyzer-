@@ -18,6 +18,7 @@ import {
 } from '@/lib/taxFilingChecksDb';
 import {
   employedSimplePayrollPeriodKey,
+  reportMonthFromAttributionMonth,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
 import {
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
       listSimplePayrollFilingsByKeys(periodKeys),
       listSimplePayrollPrevActiveKeys(clients, meta.year, meta.month),
     ]);
-    const periodStart = new Date(meta.year, meta.month - 1, 1);
+    // periodStartDate 생략 → 신고월 1일(원천세 유출 컷오프와 동일)
     const { grid } = buildSimplePayrollGrid(
       clients,
       periodKey,
@@ -87,7 +88,6 @@ export async function GET(request: NextRequest) {
       forceIncluded,
       prevActiveKeys,
       extraClientIds,
-      { periodStartDate: periodStart },
     );
 
     return NextResponse.json({
@@ -209,11 +209,15 @@ export async function POST(request: NextRequest) {
         .map(c => c.id),
     );
 
+    const report = reportMonthFromAttributionMonth(year, month);
     const targetClients = mergeFilingTargetClients(
       simplePayrollTargetsForPeriod(clients, month),
       clients,
       extraClientIds,
-      { filedClientIds: receiptClientIds },
+      {
+        filedClientIds: receiptClientIds,
+        periodStartDate: new Date(report.year, report.month - 1, 1),
+      },
     );
     const clientByBiz = new Map<string, (typeof targetClients)[0]>();
     for (const c of managerScoped) {

@@ -222,8 +222,9 @@ function matchesRowFilter(
   filter: IncomeStatFilter,
 ): boolean {
   if (filter === 'all') return true;
+  // 원천세 제외 = 간이지급·연말정산도 신고대상·차이에서 제외
+  if (isGridRowExcluded(row)) return false;
   const hasActive = Object.values(row.cells).some(c => c.active);
-  // 원천 제외여도 활성 칸이 있으면 신고대상·차이·접수 필터에 포함
   if (!hasActive) return false;
   if (filter === 'target') return true;
   const fullyFiled = isRowFullyFiled(row, mode);
@@ -271,6 +272,7 @@ function computeStats(
     let colTarget = 0;
     let colReceived = 0;
     for (const row of rows) {
+      if (isGridRowExcluded(row)) continue;
       const cell = row.cells[key];
       if (!cell?.active) continue;
       colTarget += 1;
@@ -297,7 +299,7 @@ function computeStats(
     const names: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
-      // 원천세 제외여도 활성 칸이면 미접수 안내에 포함
+      if (isGridRowExcluded(row)) continue;
       const cell = row.cells[key];
       if (!cell?.active) continue;
       if (isCellReceived(cell, key)) continue;
@@ -390,10 +392,13 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
 
   const filteredGrid = useMemo(() => {
     const byManager = filterByManager(orderedGrid, manager);
-    // 신고대상 = 활성 지급명세 칸이 있는 업체 (원천 제외여도 활성·미접수면 차이 대상)
+    // 신고대상 = 활성 칸 또는 원천 제외(배지 표시). 집계·차이에서는 원천 제외 제외.
     const scoped =
       listScope === 'targets'
-        ? byManager.filter(row => Object.values(row.cells).some(c => c?.active))
+        ? byManager.filter(
+            row =>
+              isGridRowExcluded(row) || Object.values(row.cells).some(c => c?.active),
+          )
         : byManager;
     if (rowFilter === 'all') return scoped;
     return scoped.filter(row => matchesRowFilter(row, mode, rowFilter));
@@ -931,7 +936,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
           if (row.clientId !== clientId) return row;
           return {
             ...row,
-            excludeReason: data.excluded ? (row.excludeReason ?? '') : null,
+            excludeReason: data.excluded ? (row.excludeReason?.trim() || '원천세 제외') : null,
           };
         }),
       );

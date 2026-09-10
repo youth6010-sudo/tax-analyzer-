@@ -9,6 +9,7 @@ import {
   mergeCarryFieldLayers,
 } from '@/app/utils/filingCheckStorage';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
+import { WITHHOLDING_EXCLUDE_REASON } from '@/lib/periodUtils';
 
 export type FilingCheckSessionData = {
   overrides: Record<string, boolean>;
@@ -826,7 +827,9 @@ export async function toggleWithholdingClientExclusion(
   const forceIncluded = { ...(session.forceIncluded ?? {}) };
   const nowExcluded = !Object.prototype.hasOwnProperty.call(excluded, clientId);
   if (nowExcluded) {
-    excluded[clientId] = excluded[clientId] ?? '';
+    excluded[clientId] = excluded[clientId]?.trim()
+      ? excluded[clientId]
+      : WITHHOLDING_EXCLUDE_REASON;
     delete forceIncluded[clientId];
   } else {
     delete excluded[clientId];
@@ -897,7 +900,9 @@ export async function toggleWithholdingClientExclusionForYear(
     const excluded = { ...cur.excluded };
     const forceIncluded = { ...(cur.forceIncluded ?? {}) };
     if (nowExcluded) {
-      excluded[clientId] = excluded[clientId] ?? '';
+      excluded[clientId] = excluded[clientId]?.trim()
+        ? excluded[clientId]
+        : WITHHOLDING_EXCLUDE_REASON;
       delete forceIncluded[clientId];
     } else {
       delete excluded[clientId];
