@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { recordClientManagerChange } from '@/lib/clientManagerHistory';
+import { recordClientManagerChange } from '@/lib/clientManagerHistoryDb';
 import { clients, intakeInquiries, users } from '@/db/schema';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 

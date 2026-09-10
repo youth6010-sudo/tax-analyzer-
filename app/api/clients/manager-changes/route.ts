@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { handleApiError } from '@/lib/apiError';
-import { listManagerChangesSince } from '@/lib/clientManagerHistory';
+import { listManagerChangesSince } from '@/lib/clientManagerHistoryDb';
 import { listFilingCheckSessionsForPeriod } from '@/lib/taxFilingChecksDb';
 
 const NO_STORE = { headers: { 'Cache-Control': 'no-store' } };

@@ -26,7 +26,7 @@ import {
   nextManagerAfterChange,
   type ManagerActor,
 } from '@/lib/intakeManagerSync';
-import { recordClientManagerChange } from '@/lib/clientManagerHistory';
+import { recordClientManagerChange } from '@/lib/clientManagerHistoryDb';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
