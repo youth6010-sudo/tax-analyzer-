@@ -263,7 +263,8 @@ export async function rebuildArrearsStack(opts: {
 
     const result = await upsertLetterImport(parsed.sheets, parsed.managerName, actor, {
       unmatchedCreate: true,
-      syncBalance: true,
+      // 잔액은 현황표. 공문 재시드가 잔액을 덮으면 양수도 등 불일치가 사라짐
+      syncBalance: false,
     });
     report.layer1.created += result.created;
     report.layer1.updated += result.updated;

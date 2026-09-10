@@ -15,6 +15,7 @@ import {
   type FeeBreakdownSave,
   type FeeLineItem,
 } from '@/app/utils/feeBreakdown';
+import ClientEditHistoryButton from '@/app/components/clients/ClientEditHistoryButton';
 
 function formatAmount(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -211,6 +212,10 @@ export default function ClientFeeCell({
           <div className="mt-4 rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5 text-sm">
             <p className="text-slate-500 mb-1">{CLIENT_FIELD_LABELS.fee} 합계</p>
             <p className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(previewTotal)}</p>
+          </div>
+
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <ClientEditHistoryButton clientId={clientId} />
           </div>
 
           <div className="mt-5 flex justify-end gap-2">

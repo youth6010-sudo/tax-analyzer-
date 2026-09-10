@@ -123,6 +123,19 @@ export const clientFeeChanges = pgTable('client_fee_changes', {
   index('client_fee_changes_changed_at_idx').on(t.changedAt),
 ]);
 
+/** 수임처 담당자 변경 이력 — 원천 마감일 기준 담당 복원용 */
+export const clientManagerChanges = pgTable('client_manager_changes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: text('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  previousManager: text('previous_manager').notNull().default(''),
+  newManager: text('new_manager').notNull().default(''),
+  changedByUserId: uuid('changed_by_user_id').references(() => users.id),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index('client_manager_changes_client_id_idx').on(t.clientId),
+  index('client_manager_changes_changed_at_idx').on(t.changedAt),
+]);
+
 export const churnRecords = pgTable('churn_records', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: text('client_id').references(() => clients.id),

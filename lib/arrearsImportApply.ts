@@ -225,7 +225,8 @@ export async function previewClientDetailImport(
   };
 }
 
-/** 공문(letter) 줄은 유지, 원장 플러그(전기이월 등) 제거 후 cutoff 이후 상세만 추가 */
+/** 공문(letter) 줄은 유지, 원장 플러그(전기이월 등) 제거 후 cutoff 이후 상세만 추가.
+ * 수정모드 직접입력(manual)은 파일 재반영해도 유지. */
 export async function applyClientDetailImport(
   buffer: Buffer,
   actorName: string,
@@ -278,18 +279,27 @@ export async function applyClientDetailImport(
     }
 
     const existing = await listLetterLines(entry.id);
-    const letterLines = existing.filter(
-      l => l.source === 'letter' && !isPostCutoffLetterMonth(l.description, cutoffDate),
-    );
-    const junkCount = existing.length - letterLines.length;
-    const letterDescs = letterLines.map(l => l.description);
+    // 유지: cutoff 이전 공문(letter) + 수정모드 직접입력(manual)
+    // 제거 후 파일로 재구성: cutoff 이후 letter 월기장 · 이전 import의 ledger/payment/tax
+    const keptFromExisting = existing.filter(l => {
+      if (l.source === 'manual') return true;
+      if (
+        l.source === 'letter' &&
+        !isPostCutoffLetterMonth(l.description, cutoffDate)
+      ) {
+        return true;
+      }
+      return false;
+    });
+    const removedCount = existing.length - keptFromExisting.length;
+    const letterDescs = keptFromExisting.map(l => l.description);
 
-    const base: ArrearsLetterLineInput[] = letterLines.map(l => ({
+    const base: ArrearsLetterLineInput[] = keptFromExisting.map(l => ({
       description: l.description,
       amount: l.amount,
       paidAmount: l.paidAmount,
       paidDate: l.paidDate,
-      source: 'letter',
+      source: l.source === 'manual' ? 'manual' : 'letter',
     }));
 
     const existingKeys = new Set(base.map(lineDedupKey));
@@ -297,7 +307,7 @@ export async function applyClientDetailImport(
 
     // 월기장 청구+동일금액 입금 세트는 즉시회수로 보고 생략.
     // 단, 공문에 기장료 미납이 한 달이라도 있으면 이후 매출·회수는 모두 남김 (훈테크형).
-    const txs = hasUnpaidMonthBookkeepingOnLetter(letterLines)
+    const txs = hasUnpaidMonthBookkeepingOnLetter(keptFromExisting)
       ? codeTxs
       : skipImmediateMonthlyRecoveryTxs(codeTxs);
 
@@ -324,7 +334,7 @@ export async function applyClientDetailImport(
       letterDescs.push(line.description);
     }
 
-    if (!additions.length && junkCount === 0) continue;
+    if (!additions.length && removedCount === 0) continue;
 
     await replaceLetterLines(entry.id, actorName, [...base, ...additions], {
       syncBalance: false,

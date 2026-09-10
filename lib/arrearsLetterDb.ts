@@ -192,7 +192,8 @@ export async function replaceLetterLines(
   if (opts?.letterDate !== undefined) {
     updates.letterDate = opts.letterDate.trim();
   }
-  if (opts?.syncBalance !== false) {
+  // 목록 잔액 = 현황표. 공문 줄 저장이 잔액을 덮으면 불일치가 사라지므로 기본 유지.
+  if (opts?.syncBalance === true) {
     updates.balance = letterBalance;
     updates.source = 'manual';
   }
@@ -521,7 +522,8 @@ export async function upsertLetterImport(
     totalLines += inputs.length;
 
     await replaceLetterLines(hit.id, actor, inputs, {
-      syncBalance: opts?.syncBalance !== false,
+      // 잔액은 현황표 전용. 공문 엑셀이 잔액을 덮지 않음 → 양수도 등 불일치 유지
+      syncBalance: opts?.syncBalance === true,
       letterDate: sheet.letterDate,
     });
 
@@ -710,7 +712,7 @@ export async function applyFeeEvents(
   netted: number;
   nettedAmount: number;
 }> {
-  const syncBalance = opts?.syncBalance !== false;
+  const syncBalance = opts?.syncBalance === true;
   const netAgainstLedgerRef = opts?.netAgainstLedgerRef === true;
   const skipIfSameOpenAmount = opts?.skipIfSameOpenAmount === true;
   const skipIfPdfCovered = opts?.skipIfPdfCovered === true;

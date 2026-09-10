@@ -26,6 +26,7 @@ import {
   nextManagerAfterChange,
   type ManagerActor,
 } from '@/lib/intakeManagerSync';
+import { recordClientManagerChange } from '@/lib/clientManagerHistory';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -573,6 +574,19 @@ export async function updateClientIntake(
     .where(eq(clients.id, id))
     .returning();
 
+  if (patch.manager !== undefined) {
+    const nextManager = patch.manager.trim();
+    const prevManager = (existing.manager || '').trim();
+    if (nextManager !== prevManager) {
+      await recordClientManagerChange({
+        clientId: id,
+        previousManager: prevManager,
+        newManager: nextManager,
+      });
+      await applyManagerToLinkedInquiries(id, nextManager);
+    }
+  }
+
   return clientToRecord(row);
 }
 
@@ -671,6 +685,19 @@ export async function updateClient(
   if (!row) throw new Error('NOT_FOUND');
 
   if (nextManager !== (existing.manager || '').trim()) {
+    let changedByUserId: string | null = null;
+    if (actor?.loginId || actor?.name) {
+      const byLogin = actor.loginId
+        ? await db.select({ id: users.id }).from(users).where(eq(users.loginId, actor.loginId)).limit(1)
+        : [];
+      changedByUserId = byLogin[0]?.id ?? (await findUserByName(actor.name))?.id ?? null;
+    }
+    await recordClientManagerChange({
+      clientId: id,
+      previousManager: existing.manager || '',
+      newManager: nextManager,
+      changedByUserId,
+    });
     await applyManagerToLinkedInquiries(id, nextManager);
   }
 
@@ -814,7 +841,7 @@ export async function getClientFeeChanges(clientId: string, limit = 50): Promise
       changedByName: users.name,
     })
     .from(clientFeeChanges)
-    .innerJoin(users, eq(clientFeeChanges.changedByUserId, users.id))
+    .leftJoin(users, eq(clientFeeChanges.changedByUserId, users.id))
     .where(and(...conditions))
     .orderBy(desc(clientFeeChanges.changedAt))
     .limit(limit);
@@ -823,7 +850,7 @@ export async function getClientFeeChanges(clientId: string, limit = 50): Promise
     id: r.id,
     previousFee: r.previousFee ?? null,
     newFee: r.newFee ?? null,
-    changedByName: r.changedByName,
+    changedByName: r.changedByName?.trim() || '알 수 없음',
     changedAt: r.changedAt.toISOString(),
   }));
 }

@@ -72,7 +72,7 @@ export async function PUT(req: Request, ctx: Ctx) {
         body.lines,
         {
           letterDate: body.letterDate,
-          syncBalance: body.syncBalance !== false,
+          syncBalance: body.syncBalance === true,
         },
       );
       return NextResponse.json({ ...result, canManage: true }, NO_STORE);
@@ -150,7 +150,7 @@ export async function POST(req: Request, ctx: Ctx) {
           paidDate,
           source: body.source || 'manual',
         },
-        { syncBalance: body.syncBalance !== false },
+        { syncBalance: body.syncBalance === true },
       );
       return NextResponse.json({ ...result, canManage: true }, NO_STORE);
     } catch (e) {

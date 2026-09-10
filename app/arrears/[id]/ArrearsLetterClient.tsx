@@ -206,7 +206,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
         body: JSON.stringify({
           lines: payload,
           letterDate,
-          syncBalance: true,
+          syncBalance: false,
         }),
       });
       const data = await res.json().catch(() => ({}));

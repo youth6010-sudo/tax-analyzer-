@@ -89,7 +89,7 @@ export async function POST(req: Request) {
           paidDate,
           source,
         },
-        { syncBalance: true },
+        { syncBalance: false },
       );
       return NextResponse.json(
         {

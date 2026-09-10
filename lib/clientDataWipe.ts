@@ -4,6 +4,7 @@ import {
   churnRecords,
   clientContacts,
   clientFeeChanges,
+  clientManagerChanges,
   clientFeeImportPending,
   clientMeetings,
   clients,
@@ -39,6 +40,7 @@ export type ClientDataCounts = {
   taxFilingChecks: number;
   clientFeeChanges: number;
   clientFeeImportPending: number;
+  clientManagerChanges: number;
 };
 
 /** 삭제될/보존될 데이터 건수 미리보기 (DB 변경 없음) */
@@ -58,6 +60,7 @@ export async function countClientData(): Promise<ClientDataCounts> {
     filingC,
     feeChangesC,
     feePendingC,
+    managerChangesC,
   ] = await Promise.all([
     db.select({ c: count() }).from(clients),
     db.select({ c: count() }).from(clientContacts),
@@ -71,6 +74,7 @@ export async function countClientData(): Promise<ClientDataCounts> {
     db.select({ c: count() }).from(taxFilingChecks),
     db.select({ c: count() }).from(clientFeeChanges),
     db.select({ c: count() }).from(clientFeeImportPending),
+    db.select({ c: count() }).from(clientManagerChanges),
   ]);
 
   return {
@@ -86,6 +90,7 @@ export async function countClientData(): Promise<ClientDataCounts> {
     taxFilingChecks: filingC[0].c,
     clientFeeChanges: feeChangesC[0].c,
     clientFeeImportPending: feePendingC[0].c,
+    clientManagerChanges: managerChangesC[0].c,
   };
 }
 
@@ -106,6 +111,7 @@ export async function wipeClientData(): Promise<ClientDataWipeResult> {
   await db.transaction(async tx => {
     await tx.delete(taxFilingChecks);
     await tx.delete(clientFeeChanges);
+    await tx.delete(clientManagerChanges);
     await tx.delete(clientFeeImportPending);
     await tx.delete(churnRecords);
     await tx.delete(intakeProcesses);
@@ -136,6 +142,7 @@ export async function wipeClientData(): Promise<ClientDataWipeResult> {
       taxFilingChecks: before.taxFilingChecks,
       clientFeeChanges: before.clientFeeChanges,
       clientFeeImportPending: before.clientFeeImportPending,
+      clientManagerChanges: before.clientManagerChanges,
     },
     keptInquiryDrafts: before.intakeInquiryDrafts,
   };

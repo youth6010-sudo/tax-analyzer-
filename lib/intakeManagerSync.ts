@@ -1,5 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
+import { recordClientManagerChange } from '@/lib/clientManagerHistory';
 import { clients, intakeInquiries, users } from '@/db/schema';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
 
@@ -27,6 +28,12 @@ async function findAssignedUserId(managerName: string): Promise<string | null> {
 export async function applyManagerToClient(clientId: string, managerName: string): Promise<void> {
   const mgr = managerName.trim();
   const db = getDb();
+  const [existing] = await db
+    .select({ manager: clients.manager })
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .limit(1);
+  const prev = (existing?.manager ?? '').trim();
   const assignedUserId = mgr ? await findAssignedUserId(mgr) : null;
   await db
     .update(clients)
@@ -36,6 +43,13 @@ export async function applyManagerToClient(clientId: string, managerName: string
       updatedAt: new Date(),
     })
     .where(eq(clients.id, clientId));
+  if (prev !== mgr) {
+    await recordClientManagerChange({
+      clientId,
+      previousManager: prev,
+      newManager: mgr,
+    });
+  }
 }
 
 /** 연결된 유입문의 assigneeManager 갱신 */

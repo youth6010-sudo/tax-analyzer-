@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       user.name || user.loginId || '',
       parsed.detected === 'tax_issuance'
         ? { syncBalance: false, skipIfSameOpenAmount: true, skipIfPdfCovered: true, netAgainstLedgerRef: false }
-        : { syncBalance: true },
+        : { syncBalance: false },
     );
 
     return NextResponse.json(

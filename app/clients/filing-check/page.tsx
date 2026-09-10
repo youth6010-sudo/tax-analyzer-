@@ -66,7 +66,7 @@ import {
   multiFilingReasonKey,
   specialFilingKey,
   countHometaxFilingsByBiz,
-  filingCountForBiz,
+  regularFilingCountForBiz,
   surplusFilingCountForTargets,
   usesMonthOverMonthCompare,
   withholdingTargetsForPeriod,
@@ -82,7 +82,7 @@ import {
 } from '@/app/utils/filingCheck';
 import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
-import { filingClosureNotice, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
+import { filingClosureNotice, filingPeriodStartDate, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
 import { readVatFilingFee, vatProgressPeriodKey } from '@/lib/vatEntryProgress';
 import {
   compareWithholdingMonths,
@@ -97,6 +97,13 @@ import {
 } from '@/lib/comprehensiveFilingGroups';
 import { simplePayrollMonthlyPeriodKey, attributionMonthFromReportMonth, reportMonthFromAttributionMonth } from '@/lib/periodUtils';
 import { readWithholdingSettings } from '@/lib/incomeTypes';
+import {
+  groupManagerChangesByClient,
+  inferPrevManagerFromSessions,
+  managerAsOf,
+  withholdingManagerAsOfDate,
+  type ManagerChangeEntry,
+} from '@/lib/clientManagerHistory';
 import type { FilingCheckSessionData } from '@/lib/taxFilingChecksDb';
 import {
   hasFilingCarryData,
@@ -567,6 +574,11 @@ function FilingCheckPageInner() {
   const [prevSession, setPrevSession] = useState<FilingCheckSessionData | null>(null);
   /** 직전 대비에 쓰는 완료 신고분의 periodKey (없으면 대비 비표시) */
   const [prevCompletedPeriodKey, setPrevCompletedPeriodKey] = useState<string | null>(null);
+  /** 담당 변경 이력 + 직전 기간 전 담당자 세션(이력 없을 때 전월 담당 추정) */
+  const [managerChanges, setManagerChanges] = useState<ManagerChangeEntry[]>([]);
+  const [prevPeriodSessions, setPrevPeriodSessions] = useState<
+    Array<{ manager: string; data: FilingCheckSessionData }>
+  >([]);
   /** 간이지급 — 활성 소득유형 칸 기준 전월대비 (그리드에서 계산) */
   const [spPeriodCompare, setSpPeriodCompare] = useState<PeriodCompareResult | null>(null);
   // 전체 조회 권한(인디·개발자)만 담당자 선택 — 일반 담당자는 본인 세션만
@@ -1015,14 +1027,90 @@ function FilingCheckPageInner() {
     };
   }, [tax, period, selManager]);
 
+  // 담당 변경 이력 (+ 직전 기간 전 담당 세션 — 이력 없을 때 전월 담당 추정)
+  useEffect(() => {
+    if (tax !== 'withholding' && tax !== 'simplePayroll') {
+      setManagerChanges([]);
+      setPrevPeriodSessions([]);
+      return;
+    }
+    let cancelled = false;
+    const qs = new URLSearchParams({ months: '18', taxType: tax });
+    if (prevCompletedPeriodKey) qs.set('prevPeriodKey', prevCompletedPeriodKey);
+    void fetch(`/api/clients/manager-changes?${qs}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled) return;
+        const changes = Array.isArray(d?.changes) ? (d.changes as ManagerChangeEntry[]) : [];
+        setManagerChanges(changes);
+        const sessions = Array.isArray(d?.prevSessions)
+          ? (d.prevSessions as Array<{ manager: string; data: FilingCheckSessionData }>)
+          : [];
+        setPrevPeriodSessions(sessions);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setManagerChanges([]);
+          setPrevPeriodSessions([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tax, prevCompletedPeriodKey]);
+
+  const managerChangeMap = useMemo(
+    () => groupManagerChangesByClient(managerChanges),
+    [managerChanges],
+  );
+
+  /** 원천·간이지급 — 해당 신고월 마감(또는 현재) 시점 담당 */
+  const currManagerAsOf = useMemo(() => {
+    if (tax !== 'withholding' && tax !== 'simplePayroll') return null;
+    return withholdingManagerAsOfDate(period.year, period.month);
+  }, [tax, period.year, period.month]);
+
+  const resolveManagerAt = useCallback(
+    (c: ClientRecord, asOf: Date | null, forPrev = false) => {
+      const current = c.manager?.trim() || UNCategorized;
+      if (!asOf) return current;
+      const hist = managerChangeMap.get(c.id) ?? [];
+      const fromHist = managerAsOf(c.manager ?? '', hist, asOf) || UNCategorized;
+      const asOfMs = asOf.getTime();
+      const hadFutureChange = hist.some(ch => {
+        const t = new Date(ch.changedAt).getTime();
+        return !Number.isNaN(t) && t > asOfMs;
+      });
+      if (hadFutureChange) return fromHist;
+      // 이력 기록 전 이전 건 — 직전 신고분 세션에 손댄 담당자로 추정
+      if (forPrev && prevPeriodSessions.length > 0) {
+        const inferred = inferPrevManagerFromSessions(
+          c.id,
+          c.businessNo,
+          c.manager ?? '',
+          prevPeriodSessions,
+        );
+        if (inferred) return inferred;
+      }
+      return fromHist;
+    },
+    [managerChangeMap, prevPeriodSessions],
+  );
+
   const scopeByManager = useCallback(
-    (list: ClientRecord[]) => {
+    (list: ClientRecord[], asOf: Date | null = currManagerAsOf, forPrev = false) => {
       if (selManager === ALL_MANAGERS) return list;
       const names = new Set(getManagerMatchNames(selManager));
       names.add(selManager);
-      return list.filter(c => names.has(c.manager?.trim() || UNCategorized));
+      return list.filter(c => {
+        const m =
+          asOf && (tax === 'withholding' || tax === 'simplePayroll')
+            ? resolveManagerAt(c, asOf, forPrev)
+            : c.manager?.trim() || UNCategorized;
+        return names.has(m);
+      });
     },
-    [selManager],
+    [selManager, currManagerAsOf, tax, resolveManagerAt],
   );
 
   const matchesSelManager = useCallback(
@@ -1033,6 +1121,17 @@ function FilingCheckPageInner() {
       return names.has(manager?.trim() || UNCategorized);
     },
     [selManager],
+  );
+
+  const matchesClientManager = useCallback(
+    (c: ClientRecord, forPrev = false) => {
+      if (selManager === ALL_MANAGERS) return true;
+      if (tax === 'withholding' || tax === 'simplePayroll') {
+        return matchesSelManager(resolveManagerAt(c, currManagerAsOf, forPrev));
+      }
+      return matchesSelManager(c.manager);
+    },
+    [selManager, tax, currManagerAsOf, resolveManagerAt, matchesSelManager],
   );
 
   const locked = record.done;
@@ -1095,18 +1194,40 @@ function FilingCheckPageInner() {
     const prevPk = prevCompletedPeriodKey;
     const prevP = parsePeriodKey(tax, prevPk);
     const prevRec = prevSession ?? EMPTY_RECORD;
-    const withExtras = (base: ClientRecord[]) => {
+    const withSessionExtras = (base: ClientRecord[], extras: ManualClient[] | undefined) => {
       const seen = new Set(base.map(c => c.id));
-      return [
-        ...base,
-        ...resolveExtraClients(prevRec.extraClients ?? [], clients, seen),
-      ];
+      return [...base, ...resolveExtraClients(extras ?? [], clients, seen)];
     };
+    /** 직전 세션에 직접 추가된 업체 */
+    const withExtras = (base: ClientRecord[]) => withSessionExtras(base, prevRec.extraClients);
 
     if (tax === 'withholding') {
       const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
+      // 현재 신고월 시작일 이후에 등록된 수임처는 전월 대상이 아님(신규 → 전월차이 「추가」)
+      const currPeriodStart = filingPeriodStartDate(tax, period).getTime();
+      const existedBeforeCurrPeriod = (c: ClientRecord) => {
+        if (!c.createdAt) return true;
+        const t = new Date(c.createdAt).getTime();
+        if (Number.isNaN(t)) return true;
+        return t < currPeriodStart;
+      };
+      const prevWhBase = filingTargets(clients, 'withholding').filter(
+        c =>
+          isContractProgressClient(c) &&
+          !isClosedBeforeFilingPeriod(c, tax, prevP) &&
+          existedBeforeCurrPeriod(c),
+      );
       return compareWithholdingMonths(
-        scopeByManager(taxTargetsAll),
+        scopeByManager(
+          withSessionExtras(prevWhBase, prevRec.extraClients),
+          withholdingManagerAsOfDate(prevP.year, prevP.month),
+          true,
+        ),
+        scopeByManager(
+          withSessionExtras(taxTargetsAll, record.extraClients),
+          currManagerAsOf,
+          false,
+        ),
         prevRec,
         record,
         prevAttr.month,
@@ -1220,6 +1341,9 @@ function FilingCheckPageInner() {
     attribution.month,
     excelSet,
     spPeriodCompare,
+    currManagerAsOf,
+    managerChangeMap,
+    prevPeriodSessions,
   ]);
 
   const compareLabels = useMemo(() => {
@@ -1268,11 +1392,14 @@ function FilingCheckPageInner() {
       return filing;
     }
     for (const c of taxTargetsAll) {
-      const k = c.manager?.trim() || UNCategorized;
+      const k =
+        tax === 'withholding' || tax === 'simplePayroll'
+          ? resolveManagerAt(c, currManagerAsOf, false)
+          : c.manager?.trim() || UNCategorized;
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
-  }, [tax, taxTargetsAll, period.vatPhase]);
+  }, [tax, taxTargetsAll, period.vatPhase, resolveManagerAt, currManagerAsOf]);
 
   const vatManagerNoticeCounts = useMemo(() => {
     if (tax !== 'vat' || !isVatProvisionalPhase(period.vatPhase)) return new Map<string, number>();
@@ -1319,7 +1446,7 @@ function FilingCheckPageInner() {
       ).map(c => c.id);
     }
 
-    const scoped = whPool.filter(c => matchesSelManager(c.manager));
+    const scoped = whPool.filter(c => matchesClientManager(c));
     const custom = readFilingCheckClientOrder(selManager, 'withholding');
     if (custom?.length) {
       // 저장된 순서 id를 앞에 두고, 원천 대상에만 있는 나머지는 뒤에
@@ -1344,7 +1471,7 @@ function FilingCheckPageInner() {
     clients,
     attribution.month,
     selManager,
-    matchesSelManager,
+    matchesClientManager,
     clientListSort,
     managerOrder,
     clientOrderVersion,
@@ -1354,7 +1481,7 @@ function FilingCheckPageInner() {
     const scoped =
       selManager === ALL_MANAGERS
         ? taxTargetsAll
-        : taxTargetsAll.filter(c => matchesSelManager(c.manager));
+        : taxTargetsAll.filter(c => matchesClientManager(c));
     const ordered = applyManagerScopedFilingCheckOrder(
       scoped,
       clientListSort,
@@ -1366,7 +1493,7 @@ function FilingCheckPageInner() {
     const seen = new Set(ordered.map(c => c.id));
 
     const manual = resolveExtraClients(record.extraClients, clients, seen).filter(c => {
-      if (selManager !== ALL_MANAGERS && !matchesSelManager(c.manager)) return false;
+      if (selManager !== ALL_MANAGERS && !matchesClientManager(c)) return false;
       return true;
     });
 
@@ -1374,7 +1501,7 @@ function FilingCheckPageInner() {
   }, [
     taxTargetsAll,
     selManager,
-    matchesSelManager,
+    matchesClientManager,
     record.extraClients,
     clientListSort,
     managerOrder,
@@ -1594,8 +1721,10 @@ function FilingCheckPageInner() {
     return surplusFilingCountForTargets(
       record.excelBizCounts,
       receiptActiveTargets.map(c => c.businessNo),
+      record.specialFilings,
+      excelSet,
     );
-  }, [tax, record.excelBizCounts, receiptActiveTargets]);
+  }, [tax, record.excelBizCounts, record.specialFilings, receiptActiveTargets, excelSet]);
 
   const excelFilingTotal = useMemo(() => {
     const counts = record.excelBizCounts;
@@ -1611,7 +1740,6 @@ function FilingCheckPageInner() {
 
   const multiFilings = useMemo(() => {
     if (tax !== 'withholding') return [] as { bizNo: string; name: string; count: number }[];
-    const counts = record.excelBizCounts ?? {};
     const nameByBiz = new Map<string, string>();
     for (const [biz, name] of Object.entries(record.excelNamesByBiz ?? {})) {
       if (biz && name?.trim()) nameByBiz.set(normalizeBizNo(biz), name.trim());
@@ -1624,10 +1752,15 @@ function FilingCheckPageInner() {
       receiptActiveTargets.map(c => normalizeBizNo(c.businessNo)).filter(Boolean),
     );
     const items: { bizNo: string; name: string; count: number }[] = [];
-    for (const [rawBiz, count] of Object.entries(counts)) {
-      const biz = normalizeBizNo(rawBiz);
-      const n = Number(count) || 0;
-      if (!biz || n <= 1 || !targetBiz.has(biz)) continue;
+    for (const biz of targetBiz) {
+      // 정기신고만 — 수정·기한후·경정청구는 복수 접수에서 제외
+      const n = regularFilingCountForBiz(
+        record.excelBizCounts,
+        record.specialFilings,
+        excelSet,
+        biz,
+      );
+      if (n <= 1) continue;
       items.push({
         bizNo: biz,
         name: nameByBiz.get(biz) || biz,
@@ -1635,7 +1768,14 @@ function FilingCheckPageInner() {
       });
     }
     return items.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  }, [tax, record.excelBizCounts, record.excelNamesByBiz, receiptActiveTargets]);
+  }, [
+    tax,
+    record.excelBizCounts,
+    record.specialFilings,
+    record.excelNamesByBiz,
+    receiptActiveTargets,
+    excelSet,
+  ]);
 
   const multiFilingMissingReason = useMemo(
     () =>
@@ -1748,7 +1888,14 @@ function FilingCheckPageInner() {
         if (excluded) return false;
         if (!received) return true;
         if (tax === 'withholding') {
-          return filingCountForBiz(record.excelBizCounts, excelSet, c.businessNo) > 1;
+          return (
+            regularFilingCountForBiz(
+              record.excelBizCounts,
+              record.specialFilings,
+              excelSet,
+              c.businessNo,
+            ) > 1
+          );
         }
         return false;
       }
@@ -1762,6 +1909,7 @@ function FilingCheckPageInner() {
     record.excluded,
     record.overrides,
     record.excelBizCounts,
+    record.specialFilings,
     excelSet,
     tax,
     vatProvisional,
@@ -1887,8 +2035,8 @@ function FilingCheckPageInner() {
     () =>
       selManager === ALL_MANAGERS
         ? []
-        : taxTargetsAll.filter(c => matchesSelManager(c.manager)),
-    [taxTargetsAll, selManager, matchesSelManager],
+        : taxTargetsAll.filter(c => matchesClientManager(c)),
+    [taxTargetsAll, selManager, matchesClientManager],
   );
 
   const canReorderTargets = !locked && selManager !== ALL_MANAGERS;
@@ -2599,7 +2747,7 @@ function FilingCheckPageInner() {
       const managerScopedClients =
         selManager === ALL_MANAGERS
           ? clients
-          : clients.filter(c => matchesSelManager(c.manager));
+          : clients.filter(c => matchesClientManager(c));
       const clientByBiz = new Map<string, ClientRecord>();
       for (const c of managerScopedClients) {
         const b = normalizeBizNo(c.businessNo);
@@ -2743,10 +2891,41 @@ function FilingCheckPageInner() {
         }
       }
       if (excludedTargetsForSummary.length > 0) {
-        lines.push(`· 신고제외 ${excludedTargetsForSummary.length}곳`);
-        for (const c of excludedTargetsForSummary) {
-          const r = (excludeReasonOf(c) ?? '').trim();
-          lines.push(`  - ${c.companyName || c.representative || '(이름없음)'}${r ? ` (${r})` : ''}`);
+        // 전월과 제외사유가 동일하면 요약에서 생략 (새로 제외·사유 변경분만)
+        const prevExcluded = prevSession?.excluded ?? {};
+        const prevForce = prevSession?.forceIncluded ?? {};
+        const prevAttrMonth =
+          tax === 'withholding' && prevCompletedPeriodKey
+            ? attributionMonthFromReportMonth(
+                parsePeriodKey(tax, prevCompletedPeriodKey).year,
+                parsePeriodKey(tax, prevCompletedPeriodKey).month,
+              ).month
+            : null;
+        const prevExcludeReasonOf = (c: ClientRecord): string | null => {
+          if (Object.prototype.hasOwnProperty.call(prevExcluded, c.id)) {
+            return prevExcluded[c.id] ?? '';
+          }
+          if (prevForce[c.id]) return null;
+          if (
+            prevAttrMonth != null &&
+            isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, prevAttrMonth)
+          ) {
+            return SEMI_ANNUAL_OFF_MONTH_EXCLUDE_REASON;
+          }
+          return null;
+        };
+        const changedExclusions = excludedTargetsForSummary.filter(c => {
+          const curr = (excludeReasonOf(c) ?? '').trim();
+          const prev = prevExcludeReasonOf(c);
+          if (prev == null) return true;
+          return prev.trim() !== curr;
+        });
+        if (changedExclusions.length > 0) {
+          lines.push(`· 신고제외 ${changedExclusions.length}곳`);
+          for (const c of changedExclusions) {
+            const r = (excludeReasonOf(c) ?? '').trim();
+            lines.push(`  - ${c.companyName || c.representative || '(이름없음)'}${r ? ` (${r})` : ''}`);
+          }
         }
       }
       const noteTargets = activeTargets.filter(c => (record.rowNotes[c.id] ?? '').trim());
@@ -2843,6 +3022,8 @@ function FilingCheckPageInner() {
     incomeUploaded,
     periodCompare,
     compareLabels,
+    prevSession,
+    prevCompletedPeriodKey,
   ]);
 
   const copySummary = async () => {
@@ -4065,12 +4246,17 @@ function FilingCheckPageInner() {
                           </span>
                         )}
                         {tax === 'withholding' && (() => {
-                          const n = filingCountForBiz(record.excelBizCounts, excelSet, c.businessNo);
+                          const n = regularFilingCountForBiz(
+                            record.excelBizCounts,
+                            record.specialFilings,
+                            excelSet,
+                            c.businessNo,
+                          );
                           if (n <= 1) return null;
                           return (
                             <span
                               className="shrink-0 whitespace-nowrap rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
-                              title="접수목록에 같은 사업자번호 신고가 2건 이상입니다"
+                              title="정기신고 접수목록에 같은 사업자번호가 2건 이상입니다 (수정·기한후·경정청구 제외)"
                             >
                               접수 {n}건
                             </span>

@@ -37,6 +37,7 @@ const expectedTables = [
   'clients',
   'client_fee_import_pending',
   'client_fee_changes',
+  'client_manager_changes',
   'churn_records',
   'intake_inquiries',
   'intake_processes',

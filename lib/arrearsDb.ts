@@ -74,8 +74,9 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   return items.map(item => {
     const linesOpen = openBy.get(item.id) ?? 0;
     /**
-     * 불일치 = 현황표 잔액 ≠ 공문·상세 Σ(금액−지급).
-     * (거래처별 말잔과 현황이 같아도, 공문 줄합과 다르면 불일치로 표시)
+     * 불일치 = 현황표(미수수수료 거래처 잔액현황) 잔액
+     *        ≠ 공문·상세 Σ(금액−지급) (거래처별 현황 반영 내역).
+     * 둘이 다르면 무조건 mismatch (양수도 등 의도적 차이 포함).
      */
     const balanceDiff = Math.round(item.balance) - linesOpen;
     const balanceDiffKind = classifyBalanceDiff({

@@ -24,6 +24,7 @@ import ClientBizNoDuplicatesPanel from '@/app/components/clients/ClientBizNoDupl
 import ClientBlueholeCompact from '@/app/components/clients/ClientBlueholeCompact';
 import ClientNtsPanel from '@/app/components/clients/ClientNtsPanel';
 import { portalBtnPrimary, portalBtnSecondary } from '@/app/components/portal/uiClasses';
+import ClientEditHistoryButton from '@/app/components/clients/ClientEditHistoryButton';
 
 function Section({
   title,
@@ -221,10 +222,11 @@ export default function ClientDetailPage({
         </div>
       )}
 
-      {canEdit && (
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-          {saveError && <p className="mr-auto text-xs text-rose-600">{saveError}</p>}
-          {!unifiedEditing ? (
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        {canEdit && saveError && <p className="mr-auto text-xs text-rose-600">{saveError}</p>}
+        <ClientEditHistoryButton clientId={client.id} className={!canEdit || saveError ? '' : 'mr-auto sm:mr-0'} />
+        {canEdit &&
+          (!unifiedEditing ? (
             <button
               type="button"
               onClick={() => setUnifiedEditing(true)}
@@ -254,9 +256,8 @@ export default function ClientDetailPage({
                 {saving ? '저장 중…' : '저장'}
               </button>
             </>
-          )}
-        </div>
-      )}
+          ))}
+      </div>
 
       <article className="rounded-lg border border-slate-200 bg-white">
         <ContactDetailView

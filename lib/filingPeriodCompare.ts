@@ -141,31 +141,46 @@ export function compareSessionTargets(
 }
 
 function comparePoolSessions(
-  clients: ClientRecord[],
+  prevClients: ClientRecord[],
+  currClients: ClientRecord[],
   prevSession: FilingCheckSessionData | null,
   currSession: FilingCheckSessionData | null,
   prevOpts: { semiAnnualOffMonth?: number },
   currOpts: { semiAnnualOffMonth?: number },
 ): MonthlyCompareResult {
+  const prevMap = new Map(prevClients.map(c => [c.id, c]));
+  const currMap = new Map(currClients.map(c => [c.id, c]));
+  const allIds = new Set([...prevMap.keys(), ...currMap.keys()]);
   const changedClients: MonthlyCompareResult['changedClients'] = [];
 
-  for (const c of clients) {
-    const prevActive = isActiveInSessionPool(c, prevSession, prevOpts);
-    const currActive = isActiveInSessionPool(c, currSession, currOpts);
+  let prevCount = 0;
+  let currCount = 0;
+
+  for (const id of allIds) {
+    const prevC = prevMap.get(id);
+    const currC = currMap.get(id);
+    const c = currC ?? prevC!;
+    const prevActive = prevC ? isActiveInSessionPool(prevC, prevSession, prevOpts) : false;
+    const currActive = currC ? isActiveInSessionPool(currC, currSession, currOpts) : false;
+
+    if (prevActive) prevCount += 1;
+    if (currActive) currCount += 1;
     if (prevActive === currActive) continue;
+
     const currExcluded =
       !!currSession?.excluded &&
-      Object.prototype.hasOwnProperty.call(currSession.excluded, c.id);
+      Object.prototype.hasOwnProperty.call(currSession.excluded, id);
     const reason =
       !currActive && currExcluded
-        ? withholdingExcludeReasonLabel(currSession?.excluded?.[c.id])
+        ? withholdingExcludeReasonLabel(currSession?.excluded?.[id])
         : !currActive &&
+            currC &&
             currOpts.semiAnnualOffMonth != null &&
-            isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, currOpts.semiAnnualOffMonth)
+            isSemiAnnualOffMonthExcluded(currC.intakeData ?? {}, currOpts.semiAnnualOffMonth)
           ? '반기 신고월 아님'
           : undefined;
     changedClients.push({
-      id: c.id,
+      id,
       companyName: c.companyName,
       businessNo: normalizeBizNo(c.businessNo),
       prevActive,
@@ -176,22 +191,20 @@ function comparePoolSessions(
   }
 
   changedClients.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
-
-  const prevCount = clients.filter(c => isActiveInSessionPool(c, prevSession, prevOpts)).length;
-  const currCount = clients.filter(c => isActiveInSessionPool(c, currSession, currOpts)).length;
-
   return { prevCount, currCount, diff: currCount - prevCount, changedClients };
 }
 
 export function compareWithholdingMonths(
-  clients: ClientRecord[],
+  prevClients: ClientRecord[],
+  currClients: ClientRecord[],
   prevSession: FilingCheckSessionData | null,
   currSession: FilingCheckSessionData | null,
   prevMonth: number,
   currMonth: number,
 ): MonthlyCompareResult {
   return comparePoolSessions(
-    clients,
+    prevClients,
+    currClients,
     prevSession,
     currSession,
     { semiAnnualOffMonth: prevMonth },

@@ -457,7 +457,21 @@ export function multiFilingReasonKey(bizNo: string): string {
   return `${normalizeBizNo(bizNo)}|복수접수`;
 }
 
-/** 홈택스 접수목록 — 사업자번호별 행(신고) 건수 */
+// 신고유형 → 특이 분류('수정신고'/'기한후신고'/'경정청구') 또는 null
+export function classifySpecialType(filingType: string): string | null {
+  const t = (filingType || '').replace(/\s/g, '');
+  if (t.includes('기한후')) return '기한후신고';
+  if (t.includes('수정')) return '수정신고';
+  if (t.includes('경정')) return '경정청구';
+  return null;
+}
+
+/** 수정·기한후·경정청구 — 같은 사업자번호 복수 접수 집계에서 제외 */
+export function isSpecialHometaxFilingType(filingType: string): boolean {
+  return classifySpecialType(filingType) != null;
+}
+
+/** 홈택스 접수목록 — 사업자번호별 행(신고) 건수 (전체 유형) */
 export function countHometaxFilingsByBiz(filings: HometaxFiling[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const f of filings) {
@@ -466,6 +480,42 @@ export function countHometaxFilingsByBiz(filings: HometaxFiling[]): Record<strin
     counts[biz] = (counts[biz] ?? 0) + 1;
   }
   return counts;
+}
+
+/** 정기신고만 건수 (수정·기한후·경정청구 제외) — 업로드 직후·복수 접수용 */
+export function countRegularHometaxFilingsByBiz(
+  filings: HometaxFiling[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const f of filings) {
+    if (isSpecialHometaxFilingType(f.filingType)) continue;
+    const biz = normalizeBizNo(f.bizNo);
+    if (biz.length !== 10) continue;
+    counts[biz] = (counts[biz] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * 세션에 저장된 건수에서 특이신고(수정·기한후·경정) 건수를 뺀 정기 접수 건수.
+ * 예전 업로드(특이 포함 집계)와도 맞춤.
+ */
+export function regularFilingCountForBiz(
+  excelBizCounts: Record<string, number> | undefined,
+  specialFilings: SpecialFiling[] | undefined,
+  excelBizSet: ReadonlySet<string>,
+  bizNo: string,
+): number {
+  const biz = normalizeBizNo(bizNo);
+  if (!biz) return 0;
+  const total = filingCountForBiz(excelBizCounts, excelBizSet, biz);
+  if (total <= 0) return 0;
+  let special = 0;
+  for (const s of specialFilings ?? []) {
+    if (normalizeBizNo(s.bizNo) !== biz) continue;
+    special += Math.max(0, Number(s.count) || 0);
+  }
+  return Math.max(0, total - special);
 }
 
 /** 세션에 저장된 건수(없으면 목록 존재 시 1) */
@@ -483,12 +533,14 @@ export function filingCountForBiz(
 }
 
 /**
- * 같은 사업자번호로 접수목록 행이 2건 이상이면 초과분(건수−1) 합.
- * 귀속 지급 등으로 정기 신고가 두 번 올라온 경우 차이에 반영.
+ * 같은 사업자번호로 정기 접수 행이 2건 이상이면 초과분(건수−1) 합.
+ * 수정·기한후·경정청구는 제외.
  */
 export function surplusFilingCountForTargets(
   excelBizCounts: Record<string, number> | undefined,
   targetBizNos: Iterable<string>,
+  specialFilings?: SpecialFiling[],
+  excelBizSet?: ReadonlySet<string>,
 ): number {
   if (!excelBizCounts) return 0;
   const targets = new Set<string>();
@@ -496,12 +548,11 @@ export function surplusFilingCountForTargets(
     const biz = normalizeBizNo(raw);
     if (biz) targets.add(biz);
   }
+  const set = excelBizSet ?? new Set(Object.keys(excelBizCounts));
   let surplus = 0;
-  for (const [biz, count] of Object.entries(excelBizCounts)) {
-    const n = Number(count) || 0;
-    if (n <= 1) continue;
-    if (!targets.has(normalizeBizNo(biz))) continue;
-    surplus += n - 1;
+  for (const biz of targets) {
+    const n = regularFilingCountForBiz(excelBizCounts, specialFilings, set, biz);
+    if (n > 1) surplus += n - 1;
   }
   return surplus;
 }
@@ -532,15 +583,6 @@ export function formatCompanyNameList(names: string[], limit = 12): string {
   if (cleaned.length === 0) return '';
   const shown = cleaned.slice(0, limit).join(', ');
   return cleaned.length > limit ? `${shown} 외 ${cleaned.length - limit}건` : shown;
-}
-
-// 신고유형 → 특이 분류('수정신고'/'기한후신고'/'경정청구') 또는 null
-function classifySpecialType(filingType: string): string | null {
-  const t = (filingType || '').replace(/\s/g, '');
-  if (t.includes('기한후')) return '기한후신고';
-  if (t.includes('수정')) return '수정신고';
-  if (t.includes('경정')) return '경정청구';
-  return null;
 }
 
 const REPORT_NAME_HEADER_PATTERNS = [

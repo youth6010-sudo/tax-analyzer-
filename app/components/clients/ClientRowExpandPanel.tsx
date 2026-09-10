@@ -1,12 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-import { CLIENT_FIELD_LABELS } from '@/app/config/clientFieldLabels';
 import { portalBtnSecondary } from '@/app/components/portal/uiClasses';
-import type { ClientFeeChange } from '@/app/types/client';
 import type { FeeLineItem } from '@/app/utils/feeBreakdown';
 import { feeItemAnnualAmount, isMonthlyAnnualFeeItem } from '@/app/utils/feeBreakdown';
+import ClientEditHistoryButton from '@/app/components/clients/ClientEditHistoryButton';
 
 export type ExpandField = {
   label: string;
@@ -17,18 +14,6 @@ export type ExpandField = {
 function formatFee(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
   return `${value.toLocaleString('ko-KR')}원`;
-}
-
-function formatChangedAt(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 }
 
 export default function ClientRowExpandPanel({
@@ -50,33 +35,6 @@ export default function ClientRowExpandPanel({
   showFeeHistory?: boolean;
   extraContent?: React.ReactNode;
 }) {
-  const [changes, setChanges] = useState<ClientFeeChange[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!showFeeHistory) {
-      setChanges([]);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/clients/${clientId}/fee-changes`)
-      .then(r => (r.ok ? r.json() : { changes: [] }))
-      .then(data => {
-        if (!cancelled) setChanges(data.changes ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setChanges([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId, feeRefreshKey, showFeeHistory]);
-
   return (
     <div className="relative mt-1 pt-1 border-t border-slate-200/80">
       <button
@@ -122,28 +80,13 @@ export default function ClientRowExpandPanel({
       )}
 
       {showFeeHistory && (
-      <div className="mt-2 pt-1.5 border-t border-slate-100">
-        <h4 className="text-[11px] font-semibold text-slate-600 mb-1">{CLIENT_FIELD_LABELS.fee} 변경 이력</h4>
-        {loading ? (
-          <p className="text-[11px] text-slate-400">불러오는 중…</p>
-        ) : changes.length === 0 ? (
-          <p className="text-[11px] text-slate-400">변경 이력 없음 (엑셀 반영 이후 수정 시 기록)</p>
-        ) : (
-          <ul className="space-y-0.5">
-            {changes.map(c => (
-              <li key={c.id} className="text-[11px] text-slate-600 tabular-nums">
-                <span className="font-semibold text-slate-800">{c.changedByName}</span>
-                <span className="text-slate-400 mx-1">·</span>
-                <span>{formatChangedAt(c.changedAt)}</span>
-                <span className="text-slate-400 mx-1">·</span>
-                <span>
-                  {formatFee(c.previousFee)} → {formatFee(c.newFee)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        <div className="mt-2 pt-1.5 border-t border-slate-100">
+          <ClientEditHistoryButton
+            key={`${clientId}-${feeRefreshKey}`}
+            clientId={clientId}
+            compact
+          />
+        </div>
       )}
     </div>
   );

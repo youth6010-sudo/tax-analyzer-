@@ -220,7 +220,7 @@ function mergeReceiptSlices(
 }
 
 /** 해당 세목·기간의 모든 담당자 세션 */
-async function listFilingCheckSessionsForPeriod(
+export async function listFilingCheckSessionsForPeriod(
   taxType: FilingTaxId | string,
   periodKey: string,
 ): Promise<Array<{ manager: string; data: FilingCheckSessionData }>> {
