@@ -707,7 +707,11 @@ export default function CalendarPageClient() {
                   members.length > 0 && (
                   <ul className="mt-2 space-y-0.5 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
                     {members.map(name => {
-                      const detail = selectedEvent.checkoffDetails?.[name];
+                      const detail =
+                        selectedEvent.checkoffDetails?.[name]
+                        ?? Object.entries(selectedEvent.checkoffDetails ?? {}).find(
+                          ([k]) => managerNamesMatch(k, name),
+                        )?.[1];
                       const done = detail?.completed ?? false;
                       const at = formatCheckoffCompletedAt(detail?.completedAt);
                       return (

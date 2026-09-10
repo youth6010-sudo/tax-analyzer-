@@ -5,6 +5,7 @@ import {
   toggleWithholdingClientExclusion,
   toggleWithholdingClientExclusionForYear,
 } from '@/lib/taxFilingChecksDb';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +25,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'clientId required' }, { status: 400 });
     }
 
-    if (!isMasterUser(user) && manager !== user.name && manager !== '전체') {
+    if (
+      !isMasterUser(user) &&
+      manager !== '전체' &&
+      !managerNamesMatch(manager, user.name)
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

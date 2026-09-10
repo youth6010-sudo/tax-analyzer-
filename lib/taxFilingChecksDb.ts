@@ -7,6 +7,7 @@ import {
   carryFieldsFromRecord,
   hasCarryFieldsData,
   mergeCarryFieldLayers,
+  reconcileForceIncludedExclude,
 } from '@/app/utils/filingCheckStorage';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { WITHHOLDING_EXCLUDE_REASON } from '@/lib/periodUtils';
@@ -273,12 +274,12 @@ function mergeCarrySlicesFromParts(
     }
   }
 
-  return {
+  return reconcileForceIncludedExclude({
     excluded,
     forceIncluded,
     rowNotes,
     extraClients: [...extraById.values()],
-  };
+  });
 }
 
 function overlayMergedCarry(
@@ -297,7 +298,7 @@ function overlayMergedCarry(
     { extraClients: overlay.extraClients },
     { extraClients: base.extraClients ?? [] },
   ]).extraClients;
-  return {
+  return reconcileForceIncludedExclude({
     excluded: mergeCarrySlicesFromParts([
       { excluded: overlay.excluded },
       { excluded: base.excluded ?? {} },
@@ -313,7 +314,7 @@ function overlayMergedCarry(
       ),
     },
     extraClients: extras,
-  };
+  });
 }
 
 /** 「전체」조회 — 담당자별 기한후·수정신고 사유를 결재자가 모두 볼 수 있게 합침 */
@@ -363,7 +364,10 @@ function carryNeedsPreviousMerge(
   if (!previous) return false;
   const prevEx = previous.excluded ?? {};
   const curEx = current?.excluded ?? {};
+  const curForce = current?.forceIncluded ?? {};
   for (const id of Object.keys(prevEx)) {
+    // 당월에 수기 복원한 업체는 제외 키 누락이 의도된 삭제 — 전월 제외를 다시 끌어오지 않음
+    if (curForce[id]) continue;
     if (!Object.prototype.hasOwnProperty.call(curEx, id)) return true;
   }
   const prevNotes = previous.rowNotes ?? {};
@@ -372,7 +376,6 @@ function carryNeedsPreviousMerge(
     if (!(curNotes[id] ?? '').trim() && (prevNotes[id] ?? '').trim()) return true;
   }
   const prevForce = previous.forceIncluded ?? {};
-  const curForce = current?.forceIncluded ?? {};
   for (const id of Object.keys(prevForce)) {
     if (prevForce[id] && !curForce[id]) return true;
   }
@@ -457,7 +460,7 @@ export async function loadFilingCheckSessionWithCarry(
   if (previous && carryNeedsPreviousMerge(previous.data, current)) {
     const carry = mergeCarryFieldLayers(previous.data, current);
     const carryOverlay = overlayMergedCarry(carry, mergedManagerCarry);
-    const merged: FilingCheckSessionData = {
+    const merged: FilingCheckSessionData = reconcileForceIncludedExclude({
       ...EMPTY_SESSION_DATA,
       ...carry,
       ...carryOverlay,
@@ -467,7 +470,7 @@ export async function loadFilingCheckSessionWithCarry(
       done: current.done,
       clientOrder: current.clientOrder,
       siteDone: mergedReceipt.siteDone ?? current.siteDone,
-    };
+    });
     // 「전체」는 합산 접수를 저장하지 않음 — 담당자별 원본만 유지
     if (manager !== '전체') {
       await upsertFilingCheckSession(manager, taxType, periodKey, {
@@ -480,17 +483,28 @@ export async function loadFilingCheckSessionWithCarry(
   }
 
   const currentCarry = overlayMergedCarry(carryFieldsFromRecord(current), mergedManagerCarry);
-  return {
-    data: {
-      ...EMPTY_SESSION_DATA,
-      ...carryFieldsFromRecord(current),
-      ...currentCarry,
-      ...mergedReceipt,
-      ...(mergedSpecials ?? {}),
-      done: current.done,
-    },
-    carriedFromPeriodKey,
-  };
+  const data = reconcileForceIncludedExclude({
+    ...EMPTY_SESSION_DATA,
+    ...carryFieldsFromRecord(current),
+    ...currentCarry,
+    ...mergedReceipt,
+    ...(mergedSpecials ?? {}),
+    done: current.done,
+  });
+  // forceIncluded인데 excluded가 같이 남은 오염 세션 정리 (재진입 시 제외로 되돌아가는 문제)
+  if (manager !== '전체') {
+    const hadConflict = Object.entries(current.forceIncluded ?? {}).some(
+      ([id, on]) => on && Object.prototype.hasOwnProperty.call(current.excluded ?? {}, id),
+    );
+    if (hadConflict) {
+      await upsertFilingCheckSession(manager, taxType, periodKey, {
+        ...data,
+        ...receiptSlice(current),
+        done: current.done,
+      });
+    }
+  }
+  return { data, carriedFromPeriodKey };
 }
 
 /** 목록 조회용 — 승계 병합만 하고 DB에 쓰지 않음 (담당자 N회 조회 최적화) */
@@ -512,7 +526,7 @@ function mergeSessionForTargetList(
   const receipt = receiptSlice(current);
   if (previous && carryNeedsPreviousMerge(previous.data, current)) {
     const carry = mergeCarryFieldLayers(previous.data, current);
-    return {
+    return reconcileForceIncludedExclude({
       ...EMPTY_SESSION_DATA,
       ...carry,
       ...receipt,
@@ -522,10 +536,14 @@ function mergeSessionForTargetList(
       },
       clientOrder: current.clientOrder,
       siteDone: current.siteDone,
-    };
+    });
   }
 
-  return { ...EMPTY_SESSION_DATA, ...carryFieldsFromRecord(current), ...receipt };
+  return reconcileForceIncludedExclude({
+    ...EMPTY_SESSION_DATA,
+    ...carryFieldsFromRecord(current),
+    ...receipt,
+  });
 }
 
 /**
@@ -630,6 +648,8 @@ export async function upsertFilingCheckSession(
   } else {
     merged = incoming;
   }
+
+  merged = reconcileForceIncludedExclude(merged);
 
   if (existing) {
     await db

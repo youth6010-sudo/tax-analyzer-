@@ -2,6 +2,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { taxDeadlineCheckoffs } from '@/db/schema';
 import type { CheckoffDetail } from '@/app/types/calendar';
+import { putCheckoffDetailWithAliases } from '@/app/utils/checkoffAliases';
+import { getManagerMatchNames, resolveCanonicalMemberName } from '@/app/utils/managerMatch';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 
 export type TaxDeadlineCheckoffDetailMap = Record<string, CheckoffDetail>;
 
@@ -24,10 +27,10 @@ export async function listCheckoffDetailsForTaxDeadlines(
 
   for (const row of rows) {
     const existing = map.get(row.deadlineId) ?? {};
-    existing[row.memberName] = {
+    putCheckoffDetailWithAliases(existing, row.memberName, {
       completed: row.completed,
       completedAt: toIso(row.completedAt),
-    };
+    });
     map.set(row.deadlineId, existing);
   }
   return map;
@@ -37,13 +40,19 @@ export async function setTaxDeadlineCheckoff(
   deadlineId: string,
   memberName: string,
   completed: boolean,
+  canonicalParticipants?: readonly string[],
 ): Promise<void> {
   const db = getDb();
+  const team = canonicalParticipants?.length
+    ? canonicalParticipants
+    : await listCalendarTeamMembers();
+  const key = resolveCanonicalMemberName(memberName, team);
+
   await db
     .insert(taxDeadlineCheckoffs)
     .values({
       deadlineId,
-      memberName,
+      memberName: key,
       completed,
       completedAt: completed ? new Date() : null,
     })
@@ -54,6 +63,21 @@ export async function setTaxDeadlineCheckoff(
         completedAt: completed ? new Date() : null,
       },
     });
+
+  const aliases = getManagerMatchNames(key).filter(a => a !== key);
+  if (aliases.length === 0) return;
+  await db
+    .update(taxDeadlineCheckoffs)
+    .set({
+      completed,
+      completedAt: completed ? new Date() : null,
+    })
+    .where(
+      and(
+        eq(taxDeadlineCheckoffs.deadlineId, deadlineId),
+        inArray(taxDeadlineCheckoffs.memberName, aliases),
+      ),
+    );
 }
 
 export async function setTaxDeadlineCheckoffs(
@@ -63,7 +87,10 @@ export async function setTaxDeadlineCheckoffs(
 ): Promise<void> {
   const name = memberName.trim();
   if (!name || deadlineIds.length === 0) return;
-  await Promise.all(deadlineIds.map(id => setTaxDeadlineCheckoff(id, name, completed)));
+  const team = await listCalendarTeamMembers();
+  await Promise.all(
+    deadlineIds.map(id => setTaxDeadlineCheckoff(id, name, completed, team)),
+  );
 }
 
 export async function countUserCompletedTaxDeadlineCheckoffs(
@@ -71,16 +98,18 @@ export async function countUserCompletedTaxDeadlineCheckoffs(
   deadlineIds: string[],
 ): Promise<number> {
   if (deadlineIds.length === 0) return 0;
+  const aliases = getManagerMatchNames(memberName);
+  if (aliases.length === 0) return 0;
   const db = getDb();
   const rows = await db
     .select({ deadlineId: taxDeadlineCheckoffs.deadlineId })
     .from(taxDeadlineCheckoffs)
     .where(and(
       inArray(taxDeadlineCheckoffs.deadlineId, deadlineIds),
-      eq(taxDeadlineCheckoffs.memberName, memberName),
+      inArray(taxDeadlineCheckoffs.memberName, aliases),
       eq(taxDeadlineCheckoffs.completed, true),
     ));
-  return rows.length;
+  return new Set(rows.map(r => r.deadlineId)).size;
 }
 
 export function isTaxDeadlineEventId(id: string): boolean {

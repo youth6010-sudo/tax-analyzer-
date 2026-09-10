@@ -12,6 +12,7 @@ import {
 import { filingSessionToTaxDeadlineIds } from '@/lib/filingCheckTaxDeadlineIds';
 import { setTaxDeadlineCheckoff } from '@/lib/taxDeadlineCheckoffs';
 import { previousPeriodKey } from '@/app/utils/filingCheck';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +27,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'manager, taxType, periodKey required' }, { status: 400 });
     }
 
-    if (!isMasterUser(user) && manager !== user.name && manager !== '전체') {
+    if (
+      !isMasterUser(user) &&
+      manager !== '전체' &&
+      !managerNamesMatch(manager, user.name)
+    ) {
       throw new Error('FORBIDDEN');
     }
 
@@ -113,7 +118,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'manager, taxType, periodKey, data required' }, { status: 400 });
     }
 
-    if (!isMasterUser(user) && manager !== user.name) {
+    if (!isMasterUser(user) && !managerNamesMatch(manager, user.name)) {
       throw new Error('FORBIDDEN');
     }
 

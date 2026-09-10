@@ -1,6 +1,7 @@
 import type { CalendarEventDto } from '@/app/types/calendar';
 import { isChecklistCollaboratorForViewer } from '@/app/types/calendar';
 import { formatLeaveKindLabel } from '@/app/types/leave';
+import { countTeamCheckoffsDone, isMyCheckoffDone } from '@/app/utils/checkoffAliases';
 import { listCompanyEvents } from '@/lib/companyEvents';
 import {
   checkoffsFromDetails,
@@ -75,7 +76,7 @@ export async function listCalendarEvents(
   for (const ev of company) {
     const details = companyDetails.get(ev.id) ?? {};
     const checkoffs = checkoffsFromDetails(details);
-    const myDone = viewer ? !!checkoffs[viewer] : false;
+    const myDone = viewer ? isMyCheckoffDone(checkoffs, viewer) : false;
     const kindLabel = ev.scheduleKind === 'deadline' ? '기한' : '범위';
     events.push({
       id: `company-${ev.id}`,
@@ -90,7 +91,7 @@ export async function listCalendarEvents(
       companyScheduleKind: ev.scheduleKind,
       companyDescription: ev.description,
       completed: myDone,
-      checkoffDone: team.filter(n => checkoffs[n]).length,
+      checkoffDone: countTeamCheckoffsDone(checkoffs, team),
       checkoffTotal: team.length,
       checkoffDetails: opts?.includeCheckoffDetails ? details : undefined,
     });
@@ -99,11 +100,11 @@ export async function listCalendarEvents(
   for (const ev of taxEvents) {
     const details = taxDetails.get(ev.id) ?? {};
     const checkoffs = checkoffsFromDetails(details);
-    const myDone = viewer ? !!checkoffs[viewer] : false;
+    const myDone = viewer ? isMyCheckoffDone(checkoffs, viewer) : false;
     events.push({
       ...ev,
       completed: myDone,
-      checkoffDone: team.filter(n => checkoffs[n]).length,
+      checkoffDone: countTeamCheckoffsDone(checkoffs, team),
       checkoffTotal: team.length,
       checkoffDetails: opts?.includeCheckoffDetails ? details : undefined,
     });

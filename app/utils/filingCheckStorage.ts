@@ -44,6 +44,21 @@ export function resetReceiptOnly(rec: CheckRecord): CheckRecord {
   };
 }
 
+/** forceIncluded가 있으면 같은 id의 excluded를 제거 (수기 복원 우선) */
+export function reconcileForceIncludedExclude<T extends Partial<CheckRecord>>(rec: T): T {
+  const forceIncluded = { ...(rec.forceIncluded ?? {}) };
+  const excluded = { ...(rec.excluded ?? {}) };
+  let changed = false;
+  for (const [id, on] of Object.entries(forceIncluded)) {
+    if (!on) continue;
+    if (!Object.prototype.hasOwnProperty.call(excluded, id)) continue;
+    delete excluded[id];
+    changed = true;
+  }
+  if (!changed) return rec;
+  return { ...rec, excluded, forceIncluded };
+}
+
 export function mergeCarryFieldLayers(
   previous: CheckRecord | null | undefined,
   current: CheckRecord | null | undefined,
@@ -53,9 +68,15 @@ export function mergeCarryFieldLayers(
 > {
   const prev = carryFieldsFromRecord(previous ? { ...EMPTY_CHECK_RECORD, ...previous } : EMPTY_CHECK_RECORD);
   const cur = carryFieldsFromRecord(current ? { ...EMPTY_CHECK_RECORD, ...current } : EMPTY_CHECK_RECORD);
+  const forceIncluded = { ...prev.forceIncluded, ...cur.forceIncluded };
+  const excluded = { ...prev.excluded, ...cur.excluded };
+  // 수기로 다시 살린 업체(forceIncluded)는 전월 제외를 되살리지 않음
+  for (const [id, on] of Object.entries(forceIncluded)) {
+    if (on) delete excluded[id];
+  }
   return {
-    excluded: { ...prev.excluded, ...cur.excluded },
-    forceIncluded: { ...prev.forceIncluded, ...cur.forceIncluded },
+    excluded,
+    forceIncluded,
     rowNotes: { ...prev.rowNotes, ...cur.rowNotes },
     specialReasons: { ...prev.specialReasons, ...cur.specialReasons },
     extraClients: cur.extraClients.length > 0 ? cur.extraClients : prev.extraClients,
@@ -84,11 +105,16 @@ export function mergeFilingRecords(
   if (!server || !hasFilingCarryData(server)) return local;
   if (!hasFilingCarryData(local)) return server;
 
+  const forceIncluded = { ...local.forceIncluded, ...server.forceIncluded };
+  const excluded = { ...local.excluded, ...server.excluded };
+  for (const [id, on] of Object.entries(forceIncluded)) {
+    if (on) delete excluded[id];
+  }
   return {
     ...server,
     diffReason: server.diffReason?.trim() ? server.diffReason : local.diffReason,
-    excluded: { ...local.excluded, ...server.excluded },
-    forceIncluded: { ...local.forceIncluded, ...server.forceIncluded },
+    excluded,
+    forceIncluded,
     rowNotes: { ...local.rowNotes, ...server.rowNotes },
     specialReasons: { ...local.specialReasons, ...server.specialReasons },
     extraClients: server.extraClients?.length ? server.extraClients : local.extraClients,
@@ -246,5 +272,11 @@ export function restoreCarryFromLocalStorage(
     /* skip */
   }
 
-  return { excluded, forceIncluded, rowNotes, diffReason, specialReasons };
+  return reconcileForceIncludedExclude({
+    excluded,
+    forceIncluded,
+    rowNotes,
+    diffReason,
+    specialReasons,
+  });
 }

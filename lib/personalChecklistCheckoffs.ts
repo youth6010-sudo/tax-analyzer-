@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { personalChecklistCheckoffs } from '@/db/schema';
 import type { CheckoffDetail } from '@/app/types/calendar';
+import { putCheckoffDetailWithAliases } from '@/app/utils/checkoffAliases';
 import { getManagerMatchNames, resolveCanonicalMemberName } from '@/app/utils/managerMatch';
 
 export type PersonalChecklistCheckoffDetailMap = Record<string, CheckoffDetail>;
@@ -25,16 +26,11 @@ export async function listCheckoffDetailsForPersonalItems(
 
   for (const row of rows) {
     const existing = map.get(row.itemId) ?? {};
-    const detail: CheckoffDetail = {
+    putCheckoffDetailWithAliases(existing, row.memberName, {
       completed: row.completed,
       completedAt: toIso(row.completedAt),
       dismissedAt: toIso(row.dismissedAt),
-    };
-    existing[row.memberName] = detail;
-    // 닉네임·실명 양쪽에서 조회되도록 별칭 키도 채움
-    for (const alias of getManagerMatchNames(row.memberName)) {
-      if (!existing[alias]) existing[alias] = detail;
-    }
+    });
     map.set(row.itemId, existing);
   }
   return map;

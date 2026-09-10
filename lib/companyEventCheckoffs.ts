@@ -2,6 +2,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { companyEventCheckoffs } from '@/db/schema';
 import type { CheckoffDetail } from '@/app/types/calendar';
+import { putCheckoffDetailWithAliases } from '@/app/utils/checkoffAliases';
+import { getManagerMatchNames, resolveCanonicalMemberName } from '@/app/utils/managerMatch';
+import { listCalendarTeamMembers } from '@/lib/calendarTeam';
 
 export type CompanyEventCheckoffMap = Record<string, boolean>;
 export type CompanyEventCheckoffDetailMap = Record<string, CheckoffDetail>;
@@ -35,10 +38,10 @@ export async function listCheckoffDetailsForEvents(
 
   for (const row of rows) {
     const existing = map.get(row.eventId) ?? {};
-    existing[row.memberName] = {
+    putCheckoffDetailWithAliases(existing, row.memberName, {
       completed: row.completed,
       completedAt: toIso(row.completedAt),
-    };
+    });
     map.set(row.eventId, existing);
   }
   return map;
@@ -60,13 +63,19 @@ export async function setCompanyEventCheckoff(
   eventId: string,
   memberName: string,
   completed: boolean,
+  canonicalParticipants?: readonly string[],
 ): Promise<void> {
   const db = getDb();
+  const team = canonicalParticipants?.length
+    ? canonicalParticipants
+    : await listCalendarTeamMembers();
+  const key = resolveCanonicalMemberName(memberName, team);
+
   await db
     .insert(companyEventCheckoffs)
     .values({
       eventId,
-      memberName,
+      memberName: key,
       completed,
       completedAt: completed ? new Date() : null,
     })
@@ -77,6 +86,22 @@ export async function setCompanyEventCheckoff(
         completedAt: completed ? new Date() : null,
       },
     });
+
+  // 예전 실명/닉네임 중복 행이 있으면 동일 상태로 맞춤
+  const aliases = getManagerMatchNames(key).filter(a => a !== key);
+  if (aliases.length === 0) return;
+  await db
+    .update(companyEventCheckoffs)
+    .set({
+      completed,
+      completedAt: completed ? new Date() : null,
+    })
+    .where(
+      and(
+        eq(companyEventCheckoffs.eventId, eventId),
+        inArray(companyEventCheckoffs.memberName, aliases),
+      ),
+    );
 }
 
 export async function countUserCompletedCheckoffs(
@@ -84,14 +109,16 @@ export async function countUserCompletedCheckoffs(
   eventIds: string[],
 ): Promise<number> {
   if (eventIds.length === 0) return 0;
+  const aliases = getManagerMatchNames(memberName);
+  if (aliases.length === 0) return 0;
   const db = getDb();
   const rows = await db
     .select({ eventId: companyEventCheckoffs.eventId })
     .from(companyEventCheckoffs)
     .where(and(
       inArray(companyEventCheckoffs.eventId, eventIds),
-      eq(companyEventCheckoffs.memberName, memberName),
+      inArray(companyEventCheckoffs.memberName, aliases),
       eq(companyEventCheckoffs.completed, true),
     ));
-  return rows.length;
+  return new Set(rows.map(r => r.eventId)).size;
 }

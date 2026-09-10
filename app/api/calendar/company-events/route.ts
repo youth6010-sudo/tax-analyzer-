@@ -20,6 +20,10 @@ import { listCheckoffDetailsForTaxDeadlines } from '@/lib/taxDeadlineCheckoffs';
 import { isDataViewer } from '@/lib/masterAccess';
 import { expandRepeatDates, type CalendarRepeatInput } from '@/lib/calendarRepeat';
 import type { CheckoffDetail, CompanyEventDto } from '@/app/types/calendar';
+import {
+  countTeamCheckoffsDone,
+  isMyCheckoffDone,
+} from '@/app/utils/checkoffAliases';
 
 function enrichCheckoffs(
   item: CompanyEventDto,
@@ -28,11 +32,10 @@ function enrichCheckoffs(
   userName: string,
 ): CompanyEventDto {
   const checkoffs = checkoffsFromDetails(details);
-  const checkoffDone = team.filter(name => checkoffs[name]).length;
   return {
     ...item,
-    myCheckoff: checkoffs[userName] ?? false,
-    checkoffDone,
+    myCheckoff: isMyCheckoffDone(checkoffs, userName),
+    checkoffDone: countTeamCheckoffsDone(checkoffs, team),
     checkoffTotal: team.length,
     checkoffs,
     checkoffDetails: details,

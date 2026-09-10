@@ -28,9 +28,12 @@ import {
 import type { IncomeTypeKey, YearEndClientTypes, YearEndIncomeKey } from '@/app/types/incomeTypes';
 import {
   employedSimplePayrollPeriodKey,
+  parseSimplePayrollViewPeriod,
   prevSimplePayrollCompareViewKeys,
+  reportMonthFromAttributionMonth,
   simplePayrollMonthlyPeriodKey,
 } from '@/lib/periodUtils';
+import { withholdingManagerAsOfDate } from '@/lib/clientManagerHistory';
 import { formatIncomeUploadNotice, parseHometaxFile, parseIncomeUploadResult, type IncomeUploadResult } from '@/app/utils/filingCheck';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { UNCategorized } from '@/app/utils/clientsGrouping';
@@ -477,6 +480,23 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
       onPeriodCompareChange(null);
       return;
     }
+
+    let existedByPrevAsOf: ((clientId: string) => boolean) | undefined;
+    if (monthly) {
+      const { year: ay, month: am } = parseSimplePayrollViewPeriod(monthly);
+      const report = reportMonthFromAttributionMonth(ay, am);
+      const asOf = withholdingManagerAsOfDate(report.year, report.month);
+      const asOfMs = asOf.getTime();
+      const byId = new Map(clients.map(c => [c.id, c]));
+      existedByPrevAsOf = (clientId: string) => {
+        const c = byId.get(clientId);
+        if (!c?.createdAt) return true;
+        const t = new Date(c.createdAt).getTime();
+        if (Number.isNaN(t)) return true;
+        return t <= asOfMs;
+      };
+    }
+
     onPeriodCompareChange(
       compareSimplePayrollByColumns({
         currGrid: filterByManager(grid, manager),
@@ -485,6 +505,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
         monthlyPrevKey: monthly,
         employedPrevViewKey: employedView,
         currMonth: month,
+        existedByPrevAsOf,
       }),
     );
   }, [
@@ -495,6 +516,7 @@ const IncomeTypeFilingSection = forwardRef<IncomeTypeFilingHandle, Props>(functi
     prevEmployedGrid,
     grid,
     manager,
+    clients,
     onPeriodCompareChange,
   ]);
 

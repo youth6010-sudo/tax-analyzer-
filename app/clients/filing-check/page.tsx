@@ -24,7 +24,6 @@ import {
   MANAGER_CLIENT_ORDER_STORAGE_KEY,
   MANAGER_ORDER_STORAGE_KEY,
   compareManagersByOrder,
-  readFilingCheckClientOrder,
   type ClientSortKey,
 } from '@/app/utils/clientListPrefs';
 import { useTriangleListReorder } from '@/app/utils/useTriangleListReorder';
@@ -82,7 +81,7 @@ import {
 } from '@/app/utils/filingCheck';
 import { hydratePortal, patchPortalClient, usePortalClients, getPortalClients } from '@/app/utils/portalStore';
 import type { ClientRecord } from '@/app/types/client';
-import { filingClosureNotice, filingPeriodStartDate, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
+import { filingClosureNotice, isClosedBeforeFilingPeriod } from '@/app/utils/clientClosure';
 import { readVatFilingFee, vatProgressPeriodKey } from '@/lib/vatEntryProgress';
 import {
   compareWithholdingMonths,
@@ -653,11 +652,13 @@ function FilingCheckPageInner() {
 
   const cycle = getCycle(tax);
   const isIncomeTypeTax = tax === 'simplePayroll' || tax === 'yearEnd';
-  /** 부가세는 기수별 순서 키 — ▲▼ 저장/조회 */
-  const orderTaxKey = filingCheckOrderTaxKey(
-    tax,
-    tax === 'vat' ? period.vatPhase : tax === 'corporate' ? period.corpPhase : null,
-  );
+  /** 간이지급·연말정산 순서 = 원천세와 동일 키. 부가세·법인은 기수별 키 */
+  const orderTaxKey = isIncomeTypeTax
+    ? 'withholding'
+    : filingCheckOrderTaxKey(
+        tax,
+        tax === 'vat' ? period.vatPhase : tax === 'corporate' ? period.corpPhase : null,
+      );
   const taxLabel = FILING_TAXES.find(t => t.id === tax)?.label ?? '';
   const keyId = `${managerPrefix(selManager)}${tax}:${periodKey(tax, period)}`;
   const loadedKeyRef = useRef<string>('');
@@ -1203,24 +1204,25 @@ function FilingCheckPageInner() {
 
     if (tax === 'withholding') {
       const prevAttr = attributionMonthFromReportMonth(prevP.year, prevP.month);
-      // 현재 신고월 시작일 이후에 등록된 수임처는 전월 대상이 아님(신규 → 전월차이 「추가」)
-      const currPeriodStart = filingPeriodStartDate(tax, period).getTime();
-      const existedBeforeCurrPeriod = (c: ClientRecord) => {
+      // 전월 마감(또는 그 시점) 이후에 등록된 수임처는 전월 대상이 아님 → 「추가」
+      // (예: 8/26 등록 · 8월 마감 10일 이후 → 9월 신고분 전월대비에 추가)
+      const prevAsOfDate = withholdingManagerAsOfDate(prevP.year, prevP.month);
+      const existedByPrevAsOf = (c: ClientRecord) => {
         if (!c.createdAt) return true;
         const t = new Date(c.createdAt).getTime();
         if (Number.isNaN(t)) return true;
-        return t < currPeriodStart;
+        return t <= prevAsOfDate.getTime();
       };
       const prevWhBase = filingTargets(clients, 'withholding').filter(
         c =>
           isContractProgressClient(c) &&
           !isClosedBeforeFilingPeriod(c, tax, prevP) &&
-          existedBeforeCurrPeriod(c),
+          existedByPrevAsOf(c),
       );
       return compareWithholdingMonths(
         scopeByManager(
           withSessionExtras(prevWhBase, prevRec.extraClients),
-          withholdingManagerAsOfDate(prevP.year, prevP.month),
+          prevAsOfDate,
           true,
         ),
         scopeByManager(
@@ -1425,15 +1427,17 @@ function FilingCheckPageInner() {
     return [...set].sort((a, b) => compareManagersByOrder(a, b, managerOrder, UNCategorized));
   }, [clients, managerOrder]);
 
-  /** 간이지급·연말정산 — 원천세 탭에서 꾹 눌러 정한 순서(저장 목록) 우선 */
+  /** 간이지급·연말정산 — 원천세 목록과 동일한 순서 */
   const withholdingOrderIds = useMemo(() => {
     if (!isIncomeTypeTax) return [];
-    // 연말정산은 연간 원천 대상, 간이지급은 해당 귀속월 원천 대상과 맞춤
+    // 연말정산은 연간 원천 대상, 간이지급은 해당 귀속월 원천 대상과 맞춤 (+ 유출 컷오프)
     const whPool = (
       tax === 'yearEnd'
         ? filingTargets(clients, 'withholding')
         : withholdingTargetsForPeriod(clients, attribution.month)
-    ).filter(isContractProgressClient);
+    ).filter(
+      c => isContractProgressClient(c) && !isClosedBeforeFilingPeriod(c, 'withholding', period),
+    );
 
     if (selManager === ALL_MANAGERS) {
       return applyManagerScopedFilingCheckOrder(
@@ -1447,16 +1451,6 @@ function FilingCheckPageInner() {
     }
 
     const scoped = whPool.filter(c => matchesClientManager(c));
-    const custom = readFilingCheckClientOrder(selManager, 'withholding');
-    if (custom?.length) {
-      // 저장된 순서 id를 앞에 두고, 원천 대상에만 있는 나머지는 뒤에
-      const inScope = new Set(scoped.map(c => c.id));
-      const head = custom.filter(id => inScope.has(id));
-      const headSet = new Set(head);
-      const tail = scoped.map(c => c.id).filter(id => !headSet.has(id));
-      return [...head, ...tail];
-    }
-
     return applyManagerScopedFilingCheckOrder(
       scoped,
       clientListSort,
@@ -1470,6 +1464,7 @@ function FilingCheckPageInner() {
     tax,
     clients,
     attribution.month,
+    period,
     selManager,
     matchesClientManager,
     clientListSort,
@@ -1634,9 +1629,9 @@ function FilingCheckPageInner() {
 
   // 연말정산·간이지급 제외는 원천세 세션에서 끌어옴 (IncomeTypeFilingSection)
   const excludeReasonOf = (c: ClientRecord): string | null => {
-    if (isManualExcluded(c.id)) return record.excluded[c.id] ?? '';
-    // 수기로 다시 살린 업체는 반기 자동제외 무시
+    // 수기 복원(forceIncluded)이 수동·자동 제외보다 우선 (승계로 excluded가 다시 붙어도 유지)
     if (isForceIncluded(c.id)) return null;
+    if (isManualExcluded(c.id)) return record.excluded[c.id] ?? '';
     if (
       tax === 'withholding' &&
       isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, attribution.month)
@@ -2956,6 +2951,20 @@ function FilingCheckPageInner() {
         lines.push(
           `· ${compareLabels.title} 합계: ${periodCompare.prevCount}건 → ${periodCompare.currCount}건 (${periodCompare.diff >= 0 ? '+' : ''}${periodCompare.diff})`,
         );
+        if (periodCompare.changedClients.length > 0) {
+          lines.push(`· ${compareLabels.prev}과 다른 업체`);
+          for (const c of periodCompare.changedClients) {
+            lines.push(
+              `  - ${c.companyName}${
+                c.change === 'added'
+                  ? ' (추가)'
+                  : c.reason
+                    ? ` (제외·${c.reason})`
+                    : ' (제외)'
+              }`,
+            );
+          }
+        }
         for (const col of periodCompare.byColumn) {
           if (col.diff === 0 && col.changedClients.length === 0) continue;
           lines.push(

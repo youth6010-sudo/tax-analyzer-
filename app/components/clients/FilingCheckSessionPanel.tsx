@@ -197,7 +197,37 @@ export default function FilingCheckSessionPanel({
             </span>
           </p>
           {periodCompare.byColumn && periodCompare.byColumn.length > 0 ? (
-            <ul className="mt-3 space-y-3">
+            <>
+              {periodCompare.changedClients.length > 0 ? (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-xs font-semibold text-slate-600">
+                    {comparePrevLabel}과 다른 업체
+                  </p>
+                  <ul className="space-y-1 text-sm">
+                    {periodCompare.changedClients.map(c => (
+                      <li key={`pool-${c.id}`} className="flex flex-wrap items-center gap-2 text-slate-700">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            c.change === 'added'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {c.change === 'added' ? '추가' : '제외'}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-800">{c.companyName}</span>
+                        {c.change === 'removed' && c.reason ? (
+                          <span className="text-xs text-slate-500">({c.reason})</span>
+                        ) : null}
+                        {c.businessNo && (
+                          <span className="text-sm text-slate-500 tabular-nums">{c.businessNo}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <ul className="mt-3 space-y-3">
               {periodCompare.byColumn.map(col => (
                 <li key={col.key} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
@@ -251,6 +281,7 @@ export default function FilingCheckSessionPanel({
                 </li>
               ))}
             </ul>
+            </>
           ) : periodCompare.changedClients.length > 0 ? (
             <ul className="mt-3 space-y-1 text-sm">
               {periodCompare.changedClients.map(c => (

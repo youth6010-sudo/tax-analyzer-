@@ -28,6 +28,8 @@ function isActiveInSessionPool(
   opts: { semiAnnualOffMonth?: number },
 ): boolean {
   if (!isWithholdingPoolClient(c)) return false;
+  // 수기 복원은 반기 자동제외·수동 제외보다 우선
+  if (session?.forceIncluded?.[c.id]) return true;
   if (
     opts.semiAnnualOffMonth != null &&
     isSemiAnnualOffMonthExcluded(c.intakeData ?? {}, opts.semiAnnualOffMonth)
@@ -76,6 +78,7 @@ export type PeriodCompareResult = MonthlyCompareResult & {
 };
 
 function isExcludedInSession(session: FilingCheckSessionData | null, clientId: string): boolean {
+  if (session?.forceIncluded?.[clientId]) return false;
   return Boolean(
     session?.excluded && Object.prototype.hasOwnProperty.call(session.excluded, clientId),
   );
@@ -87,6 +90,7 @@ export function isActiveFilingTarget(
   session: FilingCheckSessionData | null,
   autoExcluded?: boolean,
 ): boolean {
+  if (session?.forceIncluded?.[clientId]) return true;
   if (autoExcluded) return false;
   return !isExcludedInSession(session, clientId);
 }
@@ -267,7 +271,49 @@ function compareColumnActive(
 }
 
 /**
- * 간이지급 전월대비 — 항목별 활성 칸 비교.
+ * 간이지급 업체 단위 전월대비 — 원천세와 동일하게
+ * 「목록에 있고 원천 제외가 아니면」 활성. 전월 마감 이후 등록분은 전월에서 제외 → 「추가」.
+ */
+export function compareSimplePayrollClientPool(opts: {
+  currGrid: SpCompareRow[];
+  prevMonthlyGrid: SpCompareRow[];
+  /** false면 전월 풀에서 제외 (신규 수임 등) */
+  existedByPrevAsOf?: (clientId: string) => boolean;
+}): PeriodCompareClientChange[] {
+  const { currGrid, prevMonthlyGrid, existedByPrevAsOf } = opts;
+  const prevMap = new Map(prevMonthlyGrid.map(r => [r.clientId, r]));
+  const currMap = new Map(currGrid.map(r => [r.clientId, r]));
+  const allIds = new Set([...prevMap.keys(), ...currMap.keys()]);
+  const changedClients: PeriodCompareClientChange[] = [];
+
+  for (const id of allIds) {
+    const prevRow = prevMap.get(id);
+    const currRow = currMap.get(id);
+    const prevExisted = existedByPrevAsOf ? existedByPrevAsOf(id) : true;
+    const prevActive = Boolean(prevRow && prevExisted && prevRow.excludeReason == null);
+    const currActive = Boolean(currRow && currRow.excludeReason == null);
+    if (prevActive === currActive) continue;
+    const row = currRow ?? prevRow!;
+    changedClients.push({
+      id,
+      companyName: row.companyName,
+      businessNo: normalizeBizNo(row.businessNo),
+      prevActive,
+      currActive,
+      change: currActive ? 'added' : 'removed',
+      reason:
+        !currActive && currRow?.excludeReason
+          ? withholdingExcludeReasonLabel(currRow.excludeReason)
+          : undefined,
+    });
+  }
+
+  changedClients.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
+  return changedClients;
+}
+
+/**
+ * 간이지급 전월대비 — 항목별 활성 칸 비교 + 업체 단위(원천과 동일) 추가/제외.
  * 근로: 직전 반기(귀속 6↔12) / 일용·사업·기타: 달력 직전 달
  */
 export function compareSimplePayrollByColumns(opts: {
@@ -277,6 +323,8 @@ export function compareSimplePayrollByColumns(opts: {
   monthlyPrevKey: string | null;
   employedPrevViewKey: string | null;
   currMonth: number;
+  /** 전월 마감 이후 등록분 → 업체 「추가」 (원천세와 동일) */
+  existedByPrevAsOf?: (clientId: string) => boolean;
 }): PeriodCompareResult {
   const {
     currGrid,
@@ -285,6 +333,7 @@ export function compareSimplePayrollByColumns(opts: {
     monthlyPrevKey,
     employedPrevViewKey,
     currMonth,
+    existedByPrevAsOf,
   } = opts;
 
   const monthlyPrevLabel = monthlyPrevKey
@@ -297,8 +346,6 @@ export function compareSimplePayrollByColumns(opts: {
   const byColumn: PeriodCompareColumnDiff[] = [];
   let prevTotal = 0;
   let currTotal = 0;
-  const flatChanged: PeriodCompareClientChange[] = [];
-  const seenChange = new Set<string>();
 
   for (const col of SIMPLE_PAYROLL_STAT_COLUMNS) {
     const isEmployed = col.key === 'employed';
@@ -333,25 +380,19 @@ export function compareSimplePayrollByColumns(opts: {
       diff: currCount - prevCount,
       changedClients,
     });
-
-    for (const c of changedClients) {
-      const k = `${col.key}:${c.id}:${c.change}`;
-      if (seenChange.has(k)) continue;
-      seenChange.add(k);
-      flatChanged.push({
-        ...c,
-        companyName: `${c.companyName} (${col.label})`,
-      });
-    }
   }
 
-  flatChanged.sort((a, b) => a.companyName.localeCompare(b.companyName, 'ko'));
+  const changedClients = compareSimplePayrollClientPool({
+    currGrid,
+    prevMonthlyGrid,
+    existedByPrevAsOf,
+  });
 
   return {
     prevCount: prevTotal,
     currCount: currTotal,
     diff: currTotal - prevTotal,
-    changedClients: flatChanged,
+    changedClients,
     byColumn,
   };
 }

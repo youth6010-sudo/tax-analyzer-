@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { isMasterUser } from '@/lib/clientAccess';
 import { getExcludedClientIds } from '@/lib/taxFilingChecksDb';
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 /** 대시보드 — 신고대상확인 제외 목록 실시간 조회 */
 export async function GET(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'taxType, periodKey required' }, { status: 400 });
     }
 
-    if (!isMasterUser(user) && manager !== user.name) {
+    if (!isMasterUser(user) && !managerNamesMatch(manager, user.name)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
