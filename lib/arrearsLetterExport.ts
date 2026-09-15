@@ -5,6 +5,7 @@
  */
 import ExcelJS from 'exceljs';
 import {
+  filterHiddenCancelledTaxInvoiceLines,
   formatArrearsLetterDate,
   formatArrearsPaidDateKo,
   letterBalanceFromLines,
@@ -108,7 +109,10 @@ function appendArrearsLetterSheet(
 ): void {
   const company = letterCompanyDisplayName(sheet.companyName || '');
   const letterDate = formatArrearsLetterDate(sheet.letterDate || '');
-  const lines = linesForCurrentLetterCycle(sheet.lines || []);
+  const lines = filterHiddenCancelledTaxInvoiceLines(
+    linesForCurrentLetterCycle(sheet.lines || []),
+    sheet.companyName || '',
+  );
   const running = letterRunningBalances(lines);
   const totalAmount = lines.reduce((s, l) => s + Math.round(l.amount || 0), 0);
   const totalPaid = lines.reduce((s, l) => s + Math.round(l.paidAmount || 0), 0);

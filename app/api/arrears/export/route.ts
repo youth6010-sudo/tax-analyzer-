@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { listArrearsEntries } from '@/lib/arrearsDb';
 import { listLetterLines } from '@/lib/arrearsLetterDb';
-import { linesForCurrentLetterCycle, letterBalanceFromLines } from '@/app/types/arrears';
+import { linesForCurrentLetterCycle, letterBalanceFromLines, filterHiddenCancelledTaxInvoiceLines } from '@/app/types/arrears';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { ARREARS_MANAGER_NAMES } from '@/app/types/arrears';
 import {
@@ -23,7 +23,10 @@ async function sheetsForEntries(entries: EntryLike[]): Promise<ArrearsLetterExpo
   for (const item of entries) {
     if (item.balance === 0) continue;
     const allLines = await listLetterLines(item.id);
-    const lines = linesForCurrentLetterCycle(allLines);
+    const lines = filterHiddenCancelledTaxInvoiceLines(
+      linesForCurrentLetterCycle(allLines),
+      item.companyName,
+    );
     if (!lines.length) continue;
     sheets.push({
       companyName: item.companyName,

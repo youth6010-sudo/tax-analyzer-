@@ -135,6 +135,52 @@ export function hasPriorClosedLetterCycle<T extends { amount: number; paidAmount
   return linesForCurrentLetterCycle(lines).length < lines.length;
 }
 
+/**
+ * 세금계산서 취소 발급 — 금액(vat 포함)=지급내역인데 지급일시가 비어 잔액 변동 없는 행.
+ * 아래 4개사만 미수내역(조회·인쇄·엑셀)에서 숨김. 수정 모드·DB는 유지.
+ */
+const HIDE_CANCELLED_TAX_INVOICE_SOFT_KEYS = new Set([
+  '더좋은사람들',
+  '아이런코리아',
+  '다라팩토리',
+  '미씨난다',
+]);
+
+function arrearsCompanySoftKey(name: string): string {
+  return String(name || '')
+    .replace(/\s+/g, '')
+    .replace(/[＆&]/g, '')
+    .replace(/㈜/g, '')
+    .replace(/주식회사/g, '')
+    .replace(/\(주\)/g, '')
+    .replace(/유한회사/g, '')
+    .replace(/\(유\)/g, '')
+    .replace(/[()（）·・./\-]/g, '')
+    .toLowerCase()
+    .replace(/원/g, '');
+}
+
+export function isCancelledTaxInvoiceLetterLine(l: {
+  amount: number;
+  paidAmount?: number;
+  paidDate?: string;
+}): boolean {
+  const amount = Math.round(Number(l.amount) || 0);
+  const paid = Math.round(Number(l.paidAmount) || 0);
+  return amount > 0 && amount === paid && !String(l.paidDate || '').trim();
+}
+
+export function shouldHideCancelledTaxInvoiceLines(companyName: string): boolean {
+  return HIDE_CANCELLED_TAX_INVOICE_SOFT_KEYS.has(arrearsCompanySoftKey(companyName));
+}
+
+export function filterHiddenCancelledTaxInvoiceLines<
+  T extends { amount: number; paidAmount?: number; paidDate?: string },
+>(lines: T[], companyName: string): T[] {
+  if (!shouldHideCancelledTaxInvoiceLines(companyName)) return lines;
+  return lines.filter(l => !isCancelledTaxInvoiceLetterLine(l));
+}
+
 /** asOfDate(YYYY-MM-DD) → 공문 일자 표기 2026.07.27 */
 export function formatArrearsLetterDate(asOfOrLetter: string): string {
   const s = (asOfOrLetter || '').trim();

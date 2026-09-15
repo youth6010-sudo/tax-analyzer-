@@ -18,6 +18,7 @@ import {
   formatArrearsLetterDate,
   formatArrearsPaidDateKo,
   formatArrearsWon,
+  filterHiddenCancelledTaxInvoiceLines,
   hasPriorClosedLetterCycle,
   letterRunningBalances,
   linesForCurrentLetterCycle,
@@ -153,11 +154,13 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
 
   // 조회·인쇄: 기본은 미납 재개 사이클만. 「미납 시점부터 표시」 끄면 전체.
   // 수정 모드는 항상 전체 이력(editLines). DB는 변경하지 않음.
+  // 지정 4개사: 세금계산서 취소(금액=지급·지급일시 없음) 행은 표시에서만 숨김.
   const canExcludePrior = useMemo(() => hasPriorClosedLetterCycle(lines), [lines]);
   const viewLines = useMemo(() => {
-    if (!excludePriorZero || !canExcludePrior) return lines;
-    return linesForCurrentLetterCycle(lines);
-  }, [lines, excludePriorZero, canExcludePrior]);
+    const base =
+      !excludePriorZero || !canExcludePrior ? lines : linesForCurrentLetterCycle(lines);
+    return filterHiddenCancelledTaxInvoiceLines(base, item?.companyName ?? '');
+  }, [lines, excludePriorZero, canExcludePrior, item?.companyName]);
   const running = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
   /** 공문 「미수 수수료」·총액 잔액 = Σ(금액 − 지급) — 덮어쓰지 않음 */
   const feeBalance = running.length ? running[running.length - 1]! : 0;
