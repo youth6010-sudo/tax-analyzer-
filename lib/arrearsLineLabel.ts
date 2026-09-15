@@ -93,8 +93,9 @@ export function stripChargeYearPrefix(description: string): string {
 }
 
 /**
- * 청구 적요 → `2026년 7월 기장료` 등 (월 기장·부가세 위주)
+ * 청구 적요 → `2026년 7월 기장료` 등 (월 기장 위주)
  * - 성실/조정: 원문에 연도 없으면 붙이지 않음
+ * - 부가세: 연도 없이 (`7월 부가세` / `부가세`)
  * - stripYear: 기장료 사이 끼인 항목은 연도 없이
  */
 export function formatArrearsChargeLabel(
@@ -114,9 +115,13 @@ export function formatArrearsChargeLabel(
   }
 
   if (/성실/.test(d)) {
-    if (ctx?.stripYear) return stripChargeYearPrefix(raw);
+    if (ctx?.stripYear) return '성실신고수수료';
     // 원문에 연도 있을 때만 유지 — asOf로 임의 부여하지 않음
-    return raw;
+    const yearMatch = d.match(/(20\d{2}|\d{2})년/) || d.match(/^(20\d{2}|\d{2})(?!\d)/);
+    if (yearMatch) {
+      return `${expandYy(Number(yearMatch[1]))}년 성실신고수수료`;
+    }
+    return '성실신고수수료';
   }
 
   if (
@@ -129,33 +134,19 @@ export function formatArrearsChargeLabel(
   }
 
   if (/부가세/.test(d)) {
-    if (ctx?.stripYear) return stripChargeYearPrefix(raw);
     const withYearMonth = d.match(/(20\d{2}|\d{2})년.*?(\d{1,2})월/);
     const monthOnly = d.match(/(\d{1,2})월/);
-    let year: number | null = null;
-    let month: number | null = null;
-    if (withYearMonth) {
-      year = expandYy(Number(withYearMonth[1]));
-      month = Number(withYearMonth[2]);
-    } else if (monthOnly) {
-      month = Number(monthOnly[1]);
-      year =
-        yearFromPrevDescription(ctx?.prevDescription) ??
-        inferYearForMonth(month, ctx);
-    } else {
-      year = parseAsOfParts(ctx?.asOfDate)?.year ?? null;
-    }
+    const month = withYearMonth
+      ? Number(withYearMonth[2])
+      : monthOnly
+        ? Number(monthOnly[1])
+        : null;
     const shop = d
       .replace(/^.*부가세(?:신고)?[-:]?/i, '')
       .replace(/신고/g, '')
       .replace(/(20\d{2}|\d{2})년/g, '')
       .replace(/\d{1,2}월/g, '');
-    const base =
-      year && month
-        ? `${year}년 ${month}월 부가세`
-        : year
-          ? `${year}년 부가세`
-          : '부가세';
+    const base = month ? `${month}월 부가세` : '부가세';
     return shop ? `${base}-${shop}` : base;
   }
 
