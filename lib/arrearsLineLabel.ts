@@ -7,6 +7,11 @@ export type ArrearsLineLabelCtx = {
   /** letterDate 또는 asOfDate (YYYY-MM-DD / YYYY.MM.DD) */
   asOfDate?: string | null;
   prevDescription?: string | null;
+  /**
+   * 기장료(월) 사이에 끼인 비기장 항목 — 표시에서 연도 제거
+   * (예: 16년 5월 → 16년 조정수수료 → 16년 6월  ⇒  조정수수료)
+   */
+  stripYear?: boolean;
 };
 
 function parseAsOfParts(asOf?: string | null): { year: number; month: number } | null {
@@ -49,9 +54,48 @@ function compactDesc(description: string): string {
   return String(description || '').replace(/\s+/g, '');
 }
 
+/** 조정·성실·고문 등 월 기장이 아닌 청구 품목 */
+export function isNonMonthlyChargeDesc(description: string): boolean {
+  const d = compactDesc(description);
+  if (!d) return false;
+  if (/입금|취소|반환|전기이월|원장반영/.test(d)) return false;
+  if (/개인조정|세무조정|법인조정|조정료|조정수수료|성실|고문수수료/.test(d)) return true;
+  if (/조정/.test(d) && !/\d{1,2}월$/.test(d) && !/(20\d{2}|\d{2})년\d{1,2}월$/.test(d)) {
+    return true;
+  }
+  return false;
+}
+
+/** 월 기장·「N년 N월」 스타일 (조정·성실 제외) */
+export function isMonthlyBookkeepingDesc(description: string): boolean {
+  const d = compactDesc(description);
+  if (!d) return false;
+  if (isNonMonthlyChargeDesc(description)) return false;
+  if (/입금|취소|반환|전기이월|원장반영/.test(d)) return false;
+  if (/부가세/.test(d)) return false;
+  return (
+    /(20\d{2}|\d{2})년\d{1,2}월/.test(d) ||
+    /^\d{1,2}월/.test(d) ||
+    /기장/.test(d)
+  );
+}
+
+/** 표시용 — 앞쪽 연도(·월 -) 제거 */
+export function stripChargeYearPrefix(description: string): string {
+  let s = String(description || '').trim();
+  if (!s) return '';
+  s = s.replace(/^(20\d{2}|\d{2})년\s*/, '');
+  // 「3월 - 법인조정료」→「법인조정료」
+  if (isNonMonthlyChargeDesc(s) || isNonMonthlyChargeDesc(description)) {
+    s = s.replace(/^\d{1,2}월\s*[-–—:]?\s*/, '');
+  }
+  return s.trim() || String(description || '').trim();
+}
+
 /**
  * 청구 적요 → `2026년 7월 기장료` 등 (월 기장·부가세 위주)
- * 법인/세무/개인 조정료는 공문 품목 원문 유지
+ * - 성실/조정: 원문에 연도 없으면 붙이지 않음
+ * - stripYear: 기장료 사이 끼인 항목은 연도 없이
  */
 export function formatArrearsChargeLabel(
   description: string,
@@ -70,25 +114,22 @@ export function formatArrearsChargeLabel(
   }
 
   if (/성실/.test(d)) {
-    const ym = d.match(/(20\d{2}|\d{2})년/);
-    const y = ym
-      ? expandYy(Number(ym[1]))
-      : (parseAsOfParts(ctx?.asOfDate)?.year ?? new Date().getFullYear());
-    return `${y}년 성실신고`;
-  }
-
-  if (/개인조정/.test(d)) {
-    // 공문 원문 유지 (연도·「조정료(개인)」로 임의 변환하지 않음)
+    if (ctx?.stripYear) return stripChargeYearPrefix(raw);
+    // 원문에 연도 있을 때만 유지 — asOf로 임의 부여하지 않음
     return raw;
   }
 
-  if (/세무조정|법인조정|조정료|조정수수료/.test(d) || (/조정/.test(d) && !/월/.test(d))) {
-    // 공문 품목 그대로 — asOf 연도를 붙이거나 「조정료」로 통일하지 않음
-    // (예: 법인조정료 → 2026년 조정료 로 바뀌던 문제)
+  if (
+    /개인조정|세무조정|법인조정|조정료|조정수수료|고문수수료/.test(d) ||
+    (/조정/.test(d) && !/\d{1,2}월$/.test(d) && !/(20\d{2}|\d{2})년\d{1,2}월$/.test(d))
+  ) {
+    if (ctx?.stripYear) return stripChargeYearPrefix(raw);
+    // 조정료만 있는 공문 등 — 원문에 연도 있으면 그대로
     return raw;
   }
 
   if (/부가세/.test(d)) {
+    if (ctx?.stripYear) return stripChargeYearPrefix(raw);
     const withYearMonth = d.match(/(20\d{2}|\d{2})년.*?(\d{1,2})월/);
     const monthOnly = d.match(/(\d{1,2})월/);
     let year: number | null = null;
@@ -163,6 +204,46 @@ export function formatArrearsChargeLabel(
   }
 
   return raw;
+}
+
+/**
+ * 공문 내역 일괄 표시 라벨.
+ * 기장료(월) 사이에 끼인 조정·성실 등은 연도 없이, 조정료만 있는 줄은 원문 연도 유지.
+ */
+export function formatArrearsLetterLineLabels(
+  lines: Array<{ description?: string | null }>,
+  asOfDate?: string | null,
+): string[] {
+  const descs = lines.map(l => String(l.description || '').trim());
+  const isMonth = descs.map(d => isMonthlyBookkeepingDesc(d));
+  const isNonMonth = descs.map(d => isNonMonthlyChargeDesc(d));
+
+  return descs.map((desc, i) => {
+    let hasPrevMonth = false;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      if (!descs[j]) continue;
+      if (isMonth[j]) {
+        hasPrevMonth = true;
+        break;
+      }
+    }
+    let hasNextMonth = false;
+    for (let j = i + 1; j < descs.length; j += 1) {
+      if (!descs[j]) continue;
+      if (isMonth[j]) {
+        hasNextMonth = true;
+        break;
+      }
+    }
+    const stripYear = isNonMonth[i] && hasPrevMonth && hasNextMonth;
+    return (
+      formatArrearsChargeLabel(desc, {
+        asOfDate,
+        prevDescription: i > 0 ? descs[i - 1] : undefined,
+        stripYear,
+      }) || desc
+    );
+  });
 }
 
 type YmdParts = { year: number; month: number; day: number };

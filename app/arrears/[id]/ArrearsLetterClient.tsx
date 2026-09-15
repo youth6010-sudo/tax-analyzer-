@@ -28,7 +28,7 @@ import {
   type ArrearsLetterLineDto,
   type ArrearsLetterLineInput,
 } from '@/app/types/arrears';
-import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
+import { formatArrearsLetterLineLabels } from '@/lib/arrearsLineLabel';
 import { fmt } from '@/app/lib/taxAmountFmt';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 
@@ -45,18 +45,9 @@ type EditLine = {
   source: ArrearsLetterLineDto['source'];
 };
 
-function linePortalDescription(
-  l: ArrearsLetterLineDto,
-  ctx: { asOfDate?: string | null; prevDescription?: string | null },
-): string {
-  // 공문·원장 모두 `26년 8월` → `2026년 8월` 등으로 표시 통일 (DB 원문은 유지)
-  return formatArrearsChargeLabel(l.description, ctx) || l.description;
-}
-
 function toEditLines(lines: ArrearsLetterLineDto[], asOf?: string | null): EditLine[] {
   void asOf;
-  // 편집·저장은 DB 원문 그대로 — 표시용 formatArrearsChargeLabel을 넣으면
-  // 저장 시 「법인조정료」→「2026년 조정료」로 덮어씀
+  // 편집·저장은 DB 원문 그대로 — 표시용 포맷을 넣으면 저장 시 덮어씀
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
     description: l.description || '',
@@ -161,6 +152,11 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
       !excludePriorZero || !canExcludePrior ? lines : linesForCurrentLetterCycle(lines);
     return filterHiddenCancelledTaxInvoiceLines(base, item?.companyName ?? '');
   }, [lines, excludePriorZero, canExcludePrior, item?.companyName]);
+  const chargeLabelAsOf = letterAsOfRaw || item?.asOfDate || '';
+  const viewPortalLabels = useMemo(
+    () => formatArrearsLetterLineLabels(viewLines, chargeLabelAsOf),
+    [viewLines, chargeLabelAsOf],
+  );
   const running = useMemo(() => letterRunningBalances(viewLines), [viewLines]);
   /** 공문 「미수 수수료」·총액 잔액 = Σ(금액 − 지급) — 덮어쓰지 않음 */
   const feeBalance = running.length ? running[running.length - 1]! : 0;
@@ -391,7 +387,6 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
           letterDate: '',
         }),
       );
-  const chargeLabelAsOf = letterAsOfRaw || item?.asOfDate || '';
 
   if (loading) {
     return (
@@ -906,11 +901,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                 </thead>
                 <tbody>
                   {viewLines.map((l, i) => {
-                    const prev = i > 0 ? viewLines[i - 1]?.description : undefined;
-                    const portalDesc = linePortalDescription(l, {
-                      asOfDate: chargeLabelAsOf,
-                      prevDescription: prev,
-                    });
+                    const portalDesc = viewPortalLabels[i] || l.description;
                     const paidKo = formatArrearsPaidDateKo(l.paidDate);
                     return (
                       <tr key={l.id}>
