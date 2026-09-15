@@ -54,12 +54,12 @@ function linePortalDescription(
 }
 
 function toEditLines(lines: ArrearsLetterLineDto[], asOf?: string | null): EditLine[] {
+  void asOf;
+  // 편집·저장은 DB 원문 그대로 — 표시용 formatArrearsChargeLabel을 넣으면
+  // 저장 시 「법인조정료」→「2026년 조정료」로 덮어씀
   return lines.map((l, i) => ({
     key: l.id || `n-${i}`,
-    description: linePortalDescription(l, {
-      asOfDate: asOf,
-      prevDescription: i > 0 ? lines[i - 1]?.description : undefined,
-    }),
+    description: l.description || '',
     amount: l.amount ? formatArrearsWon(l.amount) : '',
     paidAmount: l.paidAmount ? formatArrearsWon(l.paidAmount) : '',
     paidDate: formatArrearsPaidDateKo(l.paidDate) || l.paidDate || '',

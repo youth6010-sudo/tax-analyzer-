@@ -50,8 +50,8 @@ function compactDesc(description: string): string {
 }
 
 /**
- * 청구 적요 → `2026년 7월 기장료` / `2025년 조정료` 등
- * 알 수 없으면 원문 trim 반환
+ * 청구 적요 → `2026년 7월 기장료` 등 (월 기장·부가세 위주)
+ * 법인/세무/개인 조정료는 공문 품목 원문 유지
  */
 export function formatArrearsChargeLabel(
   description: string,
@@ -78,19 +78,14 @@ export function formatArrearsChargeLabel(
   }
 
   if (/개인조정/.test(d)) {
-    const ym = d.match(/(20\d{2}|\d{2})년/);
-    const y = ym
-      ? expandYy(Number(ym[1]))
-      : (parseAsOfParts(ctx?.asOfDate)?.year ?? new Date().getFullYear());
-    return `${y}년 조정료(개인)`;
+    // 공문 원문 유지 (연도·「조정료(개인)」로 임의 변환하지 않음)
+    return raw;
   }
 
   if (/세무조정|법인조정|조정료|조정수수료/.test(d) || (/조정/.test(d) && !/월/.test(d))) {
-    const ym = d.match(/(20\d{2}|\d{2})년/);
-    const y = ym
-      ? expandYy(Number(ym[1]))
-      : (parseAsOfParts(ctx?.asOfDate)?.year ?? new Date().getFullYear());
-    return `${y}년 조정료`;
+    // 공문 품목 그대로 — asOf 연도를 붙이거나 「조정료」로 통일하지 않음
+    // (예: 법인조정료 → 2026년 조정료 로 바뀌던 문제)
+    return raw;
   }
 
   if (/부가세/.test(d)) {
