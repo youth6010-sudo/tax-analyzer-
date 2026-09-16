@@ -112,6 +112,7 @@ export async function applyStatusImport(
       .select({
         id: arrearsEntries.id,
         mgmtCategory: arrearsEntries.mgmtCategory,
+        churnMgmtStatus: arrearsEntries.churnMgmtStatus,
         managerName: arrearsEntries.managerName,
         cmsNote: arrearsEntries.cmsNote,
         memo: arrearsEntries.memo,
@@ -137,6 +138,9 @@ export async function applyStatusImport(
         patch.mgmtCategory = row.mgmtCategory;
         categoryUpdated += 1;
       }
+      if (row.churnMgmtStatus && row.churnMgmtStatus !== (prev.churnMgmtStatus || '')) {
+        patch.churnMgmtStatus = row.churnMgmtStatus;
+      }
       if (row.cmsNote) patch.cmsNote = row.cmsNote;
       if (row.memo) patch.memo = row.memo;
 
@@ -155,6 +159,7 @@ export async function applyStatusImport(
         credit: row.credit,
         managerName: row.managerName,
         mgmtCategory: row.mgmtCategory,
+        churnMgmtStatus: row.churnMgmtStatus,
         cmsNote: row.cmsNote,
         memo: row.memo,
         asOfDate: asOfIso,

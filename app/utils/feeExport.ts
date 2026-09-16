@@ -2,10 +2,12 @@ import type { ClientRecord } from '@/app/types/client';
 import { companyLinkKey } from '@/lib/review/companyKey';
 import type { CorpFeeEntry } from '@/lib/review/corpFeeTypes';
 
+import { getClientCategoryForFilter } from './clientsGrouping';
 import { bucketFeeItemsForExport, readFeeItems, resolveClientRecordFee } from './feeBreakdown';
 
 export const FEE_EXPORT_COLUMNS = [
   '담당자',
+  '구분',
   '업체명',
   '사업자번호',
   '기장수수료',
@@ -16,6 +18,8 @@ export const FEE_EXPORT_COLUMNS = [
 ] as const;
 
 export type FeeExportRow = Record<(typeof FEE_EXPORT_COLUMNS)[number], string | number>;
+
+const FEE_EXPORT_SHEET_CATEGORIES = ['법인', '개인', '신고대리'] as const;
 
 export function buildFeeExportRows(
   clients: readonly ClientRecord[],
@@ -43,6 +47,7 @@ export function buildFeeExportRows(
 
     return {
       담당자: c.manager?.trim() || '',
+      구분: getClientCategoryForFilter(c) ?? '',
       업체명: c.companyName,
       사업자번호: c.businessNo ?? '',
       기장수수료: buckets.bookkeeping,
@@ -62,9 +67,19 @@ export async function downloadFeeExportExcel(
 ): Promise<void> {
   const XLSX = await import('xlsx');
   const rows = buildFeeExportRows(clients, corpFeeByKey, corpRevenueByClientId);
-  const ws = XLSX.utils.json_to_sheet(rows, { header: [...FEE_EXPORT_COLUMNS] });
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '수수료');
+
+  const appendSheet = (name: string, sheetRows: FeeExportRow[]) => {
+    const ws = XLSX.utils.json_to_sheet(sheetRows, { header: [...FEE_EXPORT_COLUMNS] });
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+
+  appendSheet('전체', rows);
+  for (const cat of FEE_EXPORT_SHEET_CATEGORIES) {
+    const catRows = rows.filter(r => r.구분 === cat);
+    if (catRows.length) appendSheet(cat, catRows);
+  }
+
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   XLSX.writeFile(wb, filename ?? `수임처수수료_${date}.xlsx`);
 }

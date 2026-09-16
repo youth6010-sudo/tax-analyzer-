@@ -9,6 +9,17 @@ export const ARREARS_MGMT_CATEGORIES = [
 
 export type ArrearsMgmtCategory = (typeof ARREARS_MGMT_CATEGORIES)[number]['id'] | '';
 
+/** 미수관리 — 해임(유출) 처리 구분 */
+export const ARREARS_CHURN_STATUSES = [
+  { id: 'pending', label: '대기' },
+  { id: 'done', label: '완료' },
+  { id: 'confirmed', label: '확정' },
+  { id: 'deferred', label: '유예' },
+  { id: 'special', label: '특수' },
+] as const;
+
+export type ArrearsChurnStatus = (typeof ARREARS_CHURN_STATUSES)[number]['id'] | '';
+
 export const ARREARS_MANAGER_CODE_MAP: Record<number, string> = {
   1: '인디',
   2: '블루',
@@ -33,6 +44,8 @@ export type ArrearsEntryDto = {
   credit: number;
   managerName: string;
   mgmtCategory: ArrearsMgmtCategory;
+  /** 해임 처리 구분 — 대기·완료·확정·유예·특수 */
+  churnMgmtStatus: ArrearsChurnStatus;
   cmsNote: string;
   memo: string;
   asOfDate: string;
@@ -267,6 +280,36 @@ export function arrearsCategoryLabel(id: string): string {
   if (!id) return '—';
   const found = ARREARS_MGMT_CATEGORIES.find(c => c.id === id);
   return found?.label ?? id;
+}
+
+export function arrearsChurnStatusLabel(id: string): string {
+  if (!id) return '—';
+  const found = ARREARS_CHURN_STATUSES.find(c => c.id === id);
+  return found?.label ?? id;
+}
+
+export function arrearsChurnStatusFromLabel(label: string): ArrearsChurnStatus {
+  const s = String(label || '').replace(/\s+/g, '').trim();
+  if (!s) return '';
+  const found = ARREARS_CHURN_STATUSES.find(c => c.label === s || c.id === s);
+  return found?.id ?? '';
+}
+
+export function arrearsChurnStatusChipClass(id: string): string {
+  switch (id) {
+    case 'pending':
+      return 'bg-slate-100 text-slate-700 border-slate-300';
+    case 'done':
+      return 'bg-emerald-50 text-emerald-900 border-emerald-300';
+    case 'confirmed':
+      return 'bg-blue-50 text-blue-900 border-blue-300';
+    case 'deferred':
+      return 'bg-amber-50 text-amber-900 border-amber-300';
+    case 'special':
+      return 'bg-violet-50 text-violet-900 border-violet-300';
+    default:
+      return 'bg-slate-50 text-slate-500 border-slate-200';
+  }
 }
 
 /**

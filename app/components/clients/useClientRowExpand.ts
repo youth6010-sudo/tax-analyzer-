@@ -44,7 +44,7 @@ export function useClientRowExpand(clientId: string, returnTo?: string) {
   );
 
   const nameButtonClass = [
-    'text-left font-semibold text-slate-900 hover:text-blue-800',
+    'text-left font-semibold',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 rounded-sm',
     'cursor-pointer transition-colors min-w-0 truncate',
   ].join(' ');

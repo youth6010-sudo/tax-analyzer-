@@ -50,6 +50,7 @@ export default function AppHeaderUser() {
       if (!res.ok) return;
       setUser(data.user);
       clearPortal();
+      window.dispatchEvent(new Event('portal:auth-changed'));
       router.refresh();
     } finally {
       setAdminModeBusy(false);

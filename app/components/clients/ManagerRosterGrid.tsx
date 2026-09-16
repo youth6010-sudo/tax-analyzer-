@@ -34,6 +34,12 @@ import { clientNeedsNtsAttention } from '@/app/utils/churnMatch';
 import { managerAccentBorderStyle, managerHexColor } from '@/lib/calendarManagerColors';
 import { resolveClientRecordFee, readFeeItems, type FeeBreakdownSave } from '@/app/utils/feeBreakdown';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
+import { isDayaHighlightedClient } from '@/app/utils/dayaHighlight';
+import {
+  emptyArrearsRecoveryRefs,
+  isArrearsRecoveryClient,
+  type ArrearsRecoveryRefs,
+} from '@/app/utils/arrearsRecoveryHighlight';
 import { formatBusinessNo, formatCorporateNo, formatResidentNo } from '@/app/utils/idFormat';
 import { isSimplifiedVatClient, isTaxExemptClient } from '@/app/utils/filingCheck';
 import { fiscalYearEndBadgeLabel } from '@/app/utils/fiscalYearEnd';
@@ -186,6 +192,7 @@ function ClientRosterRow({
   reorderProps,
   consumeReorderClick,
   showNtsClosed,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   client: ClientRecord;
   index: number;
@@ -202,6 +209,7 @@ function ClientRosterRow({
   reorderProps?: React.HTMLAttributes<HTMLButtonElement>;
   consumeReorderClick?: () => boolean;
   showNtsClosed?: boolean;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const isChurned = c.status === 'churned';
   const rep = dash(c.representative);
@@ -229,13 +237,21 @@ function ClientRosterRow({
     c.id,
     returnTo,
   );
+  const dayaName = !isChurned && isDayaHighlightedClient(c);
+  const recoveryRow = !isChurned && isArrearsRecoveryClient(c, recoveryRefs);
 
   return (
     <li
       className={[
         rowGrid,
         'px-2 py-1 border-b border-slate-100 last:border-b-0',
-        expanded ? 'bg-blue-50/40' : index % 2 === 1 ? 'bg-slate-50/70' : 'bg-white',
+        recoveryRow
+          ? 'bg-[#fecaca]'
+          : expanded
+            ? 'bg-blue-50/40'
+            : index % 2 === 1
+              ? 'bg-slate-50/70'
+              : 'bg-white',
         isChurned ? 'opacity-45' : '',
       ].join(' ')}
     >
@@ -249,6 +265,7 @@ function ClientRosterRow({
           companyTitle={c.companyName}
           expanded={expanded}
           isChurned={isChurned}
+          dayaHighlight={dayaName}
           badges={badges}
           ntsClosed={ntsClosed}
           ntsClosedLabel={ntsClosedLabel}
@@ -314,6 +331,7 @@ function EntityPanel({
   panelHeightPx,
   heightKey,
   onPanelHeightChange,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   title: string;
   variant: 'personal' | 'corporate' | 'other';
@@ -333,6 +351,7 @@ function EntityPanel({
   panelHeightPx: number;
   heightKey: RosterEntityHeightKey;
   onPanelHeightChange: (key: RosterEntityHeightKey, height: number) => void;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const feeSum = sumClientFees(clients);
   const s = variant === 'other' && title === SINGO_DAERI ? PANEL.singo : PANEL[variant];
@@ -464,6 +483,7 @@ function EntityPanel({
                   reorderProps={getItemProps(c.id)}
                   consumeReorderClick={consumeClick}
                   showNtsClosed={clientNeedsNtsAttention(c, churnRecords)}
+                  recoveryRefs={recoveryRefs}
                 />
               ))}
             </ul>
@@ -497,15 +517,21 @@ function MainCategorySummary({
   personal,
   corporate,
   feeVisible = true,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   personal: ClientRecord[];
   corporate: ClientRecord[];
   feeVisible?: boolean;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const personalFee = sumClientFees(personal);
   const corporateFee = sumClientFees(corporate);
   const mainCount = personal.length + corporate.length;
   const mainFee = personalFee + corporateFee;
+  const recoveryClients = [...personal, ...corporate].filter(c =>
+    isArrearsRecoveryClient(c, recoveryRefs),
+  );
+  const recoveryFee = sumClientFees(recoveryClients);
   const feeSuffix = (n: number | null) => (feeVisible ? ` · ${formatFee(n)}` : '');
 
   return (
@@ -525,6 +551,13 @@ function MainCategorySummary({
         <span className="tabular-nums font-bold text-slate-900 whitespace-nowrap">
           {mainCount}건
           {feeSuffix(mainFee)}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-1.5 text-xs text-red-900 border-t border-red-200/60 pt-1.5">
+        <span className="font-semibold">채권회수 합계</span>
+        <span className="tabular-nums font-bold whitespace-nowrap">
+          {recoveryClients.length}건
+          {feeSuffix(recoveryFee)}
         </span>
       </div>
     </div>
@@ -595,6 +628,7 @@ function ManagerSection({
   acceptCorporate = false,
   canToggleAccept = false,
   onToggleAccept,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   manager: string;
   clients: ClientRecord[];
@@ -615,6 +649,7 @@ function ManagerSection({
   acceptCorporate?: boolean;
   canToggleAccept?: boolean;
   onToggleAccept?: (kind: 'individual' | 'corporate') => void;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
@@ -695,6 +730,7 @@ function ManagerSection({
           panelHeightPx={entityHeights.corporate}
           heightKey="corporate"
           onPanelHeightChange={onEntityHeightChange}
+          recoveryRefs={recoveryRefs}
         />
         <EntityPanel
           title="개인"
@@ -714,8 +750,14 @@ function ManagerSection({
           panelHeightPx={entityHeights.personal}
           heightKey="personal"
           onPanelHeightChange={onEntityHeightChange}
+          recoveryRefs={recoveryRefs}
         />
-        <MainCategorySummary personal={personal} corporate={corporate} feeVisible={feeVisible} />
+        <MainCategorySummary
+          personal={personal}
+          corporate={corporate}
+          feeVisible={feeVisible}
+          recoveryRefs={recoveryRefs}
+        />
         {visibleOptional.map(({ category, clients: catClients }) => (
           <EntityPanel
             key={category}
@@ -736,6 +778,7 @@ function ManagerSection({
             panelHeightPx={entityHeights.other}
             heightKey="other"
             onPanelHeightChange={onEntityHeightChange}
+            recoveryRefs={recoveryRefs}
           />
         ))}
       </div>
@@ -1011,6 +1054,7 @@ export default function ManagerRosterGrid({
   corpRevenueByClientId,
   orderVersion = 0,
   onClientOrderChange,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   clients: ClientRecord[];
   sort: 'name' | 'code';
@@ -1025,6 +1069,7 @@ export default function ManagerRosterGrid({
   corpRevenueByClientId?: Record<string, number | null>;
   orderVersion?: number;
   onClientOrderChange?: () => void;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const [columnWidth, setColumnWidth] = useState(DEFAULT_ROSTER_COLUMN_WIDTH);
   const [entityHeights, setEntityHeights] = useState(() => readRosterEntityHeights());
@@ -1118,6 +1163,7 @@ export default function ManagerRosterGrid({
             acceptCorporate={getAccept(mgr.manager).acceptCorporate}
             canToggleAccept={canToggle(mgr.manager)}
             onToggleAccept={kind => void toggle(mgr.manager, kind)}
+            recoveryRefs={recoveryRefs}
           />
           <RosterColumnResizeHandle columnWidth={columnWidth} onResize={setColumnWidth} />
         </div>

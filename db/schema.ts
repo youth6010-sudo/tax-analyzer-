@@ -649,6 +649,8 @@ export const arrearsEntries = pgTable('arrears_entries', {
   managerName: text('manager_name').notNull().default(''),
   /** recovery | bad | long | temp | cms | '' */
   mgmtCategory: text('mgmt_category').notNull().default(''),
+  /** pending | done | confirmed | deferred | special | '' — 해임 처리 구분 */
+  churnMgmtStatus: text('churn_mgmt_status').notNull().default(''),
   cmsNote: text('cms_note').notNull().default(''),
   memo: text('memo').notNull().default(''),
   asOfDate: text('as_of_date').notNull().default(''),
@@ -663,6 +665,7 @@ export const arrearsEntries = pgTable('arrears_entries', {
   uniqueIndex('arrears_entries_external_code_uidx').on(t.externalCode),
   index('arrears_entries_manager_idx').on(t.managerName),
   index('arrears_entries_category_idx').on(t.mgmtCategory),
+  index('arrears_entries_churn_status_idx').on(t.churnMgmtStatus),
   index('arrears_entries_balance_idx').on(t.balance),
   index('arrears_entries_client_id_idx').on(t.clientId),
   index('arrears_entries_business_no_idx').on(t.businessNo),

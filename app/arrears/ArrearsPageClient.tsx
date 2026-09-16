@@ -13,11 +13,14 @@ import {
 } from '@/app/components/portal/uiClasses';
 import CenterModal from '@/app/components/portal/CenterModal';
 import {
+  ARREARS_CHURN_STATUSES,
   ARREARS_MANAGER_NAMES,
   ARREARS_MGMT_CATEGORIES,
   arrearsCategoryChipClass,
   arrearsCategoryLabel,
   arrearsCategoryRowClass,
+  arrearsChurnStatusChipClass,
+  arrearsChurnStatusLabel,
   formatArrearsWon,
   type ArrearsEntryDto,
   type ArrearsManagerTotal,
@@ -73,6 +76,7 @@ type ArrearsListUiPersist = {
   q?: string;
   managers?: string[];
   categories?: string[];
+  churnStatuses?: string[];
   showZero?: boolean;
   churnedOnly?: boolean;
   mismatchOnly?: boolean;
@@ -123,6 +127,8 @@ export default function ArrearsPageClient() {
   const [managers, setManagers] = useState<string[]>([]);
   /** 선택된 관리분류 id. '' = 미분류. 빈 배열 = 전체 */
   const [categories, setCategories] = useState<string[]>([]);
+  /** 선택된 해임 구분 id. '' = 미지정. 빈 배열 = 전체 */
+  const [churnStatuses, setChurnStatuses] = useState<string[]>([]);
   /** false=잔액0 숨김(기본), true=0원도 보기 */
   const [showZero, setShowZero] = useState(false);
   const [churnedOnly, setChurnedOnly] = useState(false);
@@ -160,6 +166,7 @@ export default function ArrearsPageClient() {
   const [balanceFilterQ, setBalanceFilterQ] = useState('');
   const [bulkFieldManager, setBulkFieldManager] = useState('');
   const [bulkFieldCategory, setBulkFieldCategory] = useState('__keep__');
+  const [bulkFieldChurn, setBulkFieldChurn] = useState('__keep__');
   const [bulkFieldBusy, setBulkFieldBusy] = useState(false);
 
   useEffect(() => {
@@ -171,6 +178,7 @@ export default function ArrearsPageClient() {
     }
     if (Array.isArray(saved.managers)) setManagers(saved.managers.filter(Boolean));
     if (Array.isArray(saved.categories)) setCategories(saved.categories);
+    if (Array.isArray(saved.churnStatuses)) setChurnStatuses(saved.churnStatuses);
     if (typeof saved.showZero === 'boolean') setShowZero(saved.showZero);
     if (typeof saved.churnedOnly === 'boolean') setChurnedOnly(saved.churnedOnly);
     if (typeof saved.mismatchOnly === 'boolean') setMismatchOnly(saved.mismatchOnly);
@@ -185,6 +193,7 @@ export default function ArrearsPageClient() {
         q,
         managers,
         categories,
+        churnStatuses,
         showZero,
         churnedOnly,
         mismatchOnly,
@@ -193,7 +202,7 @@ export default function ArrearsPageClient() {
     } catch {
       /* ignore quota */
     }
-  }, [uiReady, editMode, q, managers, categories, showZero, churnedOnly, mismatchOnly]);
+  }, [uiReady, editMode, q, managers, categories, churnStatuses, showZero, churnedOnly, mismatchOnly]);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 250);
@@ -206,6 +215,9 @@ export default function ArrearsPageClient() {
       for (const m of managers) params.append('manager', m);
       for (const c of categories) {
         params.append('category', c === '' ? 'none' : c);
+      }
+      for (const s of churnStatuses) {
+        params.append('churnStatus', s === '' ? 'none' : s);
       }
       if (!showZero) params.set('nonzero', '1');
       if (churnedOnly) params.set('churned', '1');
@@ -242,7 +254,7 @@ export default function ArrearsPageClient() {
         if (mode === 'full') setLoading(false);
       }
     },
-    [managers, categories, showZero, churnedOnly, mismatchOnly, qDebounced],
+    [managers, categories, churnStatuses, showZero, churnedOnly, mismatchOnly, qDebounced],
   );
 
   useEffect(() => {
@@ -266,7 +278,9 @@ export default function ArrearsPageClient() {
   const patchRow = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'memo'>>,
+      patch: Partial<
+        Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'churnMgmtStatus' | 'memo'>
+      >,
     ) => {
       setSavingId(id);
       setError('');
@@ -601,13 +615,18 @@ export default function ArrearsPageClient() {
 
   const applyBulkFields = async () => {
     if (!canManage || !selectedCount || bulkFieldBusy) return;
-    const patch: Partial<Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory'>> = {};
+    const patch: Partial<
+      Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'churnMgmtStatus'>
+    > = {};
     if (bulkFieldManager !== '') patch.managerName = bulkFieldManager;
     if (bulkFieldCategory !== '__keep__') {
       patch.mgmtCategory = bulkFieldCategory as ArrearsEntryDto['mgmtCategory'];
     }
+    if (bulkFieldChurn !== '__keep__') {
+      patch.churnMgmtStatus = bulkFieldChurn as ArrearsEntryDto['churnMgmtStatus'];
+    }
     if (Object.keys(patch).length === 0) {
-      setError('담당 또는 관리분류를 선택한 뒤 적용하세요.');
+      setError('담당·관리·해임 중 변경할 항목을 선택한 뒤 적용하세요.');
       return;
     }
     const ids = [...selectedIds];
@@ -618,6 +637,11 @@ export default function ArrearsPageClient() {
     if (patch.mgmtCategory !== undefined) {
       labelParts.push(
         `관리 → ${patch.mgmtCategory ? arrearsCategoryLabel(patch.mgmtCategory) : '미분류'}`,
+      );
+    }
+    if (patch.churnMgmtStatus !== undefined) {
+      labelParts.push(
+        `해임 → ${patch.churnMgmtStatus ? arrearsChurnStatusLabel(patch.churnMgmtStatus) : '미지정'}`,
       );
     }
     if (
@@ -708,6 +732,9 @@ export default function ArrearsPageClient() {
         for (const m of managers) params.append('manager', m);
         for (const c of categories) {
           params.append('category', c === '' ? 'none' : c);
+        }
+        for (const s of churnStatuses) {
+          params.append('churnStatus', s === '' ? 'none' : s);
         }
         if (qDebounced) params.set('q', qDebounced);
         const res = await fetch(`/api/arrears/export?${params}`, { cache: 'no-store' });
@@ -1030,12 +1057,31 @@ export default function ArrearsPageClient() {
                 ))}
               </select>
             </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              해임
+              <select
+                className={`${portalInput} min-w-[7rem] py-2`}
+                value={bulkFieldChurn}
+                onChange={e => setBulkFieldChurn(e.target.value)}
+                disabled={bulkFieldBusy}
+              >
+                <option value="__keep__">변경 안 함</option>
+                <option value="">미지정</option>
+                {ARREARS_CHURN_STATUSES.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className={`${portalBtnPrimary} py-2`}
               disabled={
                 bulkFieldBusy ||
-                (bulkFieldManager === '' && bulkFieldCategory === '__keep__')
+                (bulkFieldManager === '' &&
+                  bulkFieldCategory === '__keep__' &&
+                  bulkFieldChurn === '__keep__')
               }
               onClick={() => void applyBulkFields()}
             >
@@ -1085,8 +1131,8 @@ export default function ArrearsPageClient() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex min-w-[12rem] flex-col gap-1.5 self-start">
+        <div className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex shrink-0 flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">담당 (다중선택)</span>
               {canManage && managers.length > 0 ? (
@@ -1099,7 +1145,7 @@ export default function ArrearsPageClient() {
                 </button>
               ) : null}
             </div>
-            <div className="flex max-w-md flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
               {[
                 ...ARREARS_MANAGER_NAMES,
                 ...managerFilterOptions.filter(
@@ -1112,7 +1158,7 @@ export default function ArrearsPageClient() {
                 return (
                   <label
                     key={n}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
                       locked
                         ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
                         : on
@@ -1139,7 +1185,7 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <div className="flex min-w-[14rem] flex-col gap-1.5 self-start">
+          <div className="flex shrink-0 flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">관리분류 (다중선택)</span>
               {categories.length > 0 ? (
@@ -1152,9 +1198,9 @@ export default function ArrearsPageClient() {
                 </button>
               ) : null}
             </div>
-            <div className="flex max-w-lg flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
               <label
-                className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
                   categories.includes('')
                     ? 'border-slate-500 bg-slate-100 text-slate-900'
                     : 'border-slate-200 bg-white text-slate-700'
@@ -1177,7 +1223,7 @@ export default function ArrearsPageClient() {
                 return (
                   <label
                     key={c.id}
-                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${arrearsCategoryChipClass(c.id)} ${
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${arrearsCategoryChipClass(c.id)} ${
                       on ? 'ring-2 ring-slate-500 ring-offset-1' : ''
                     }`}
                   >
@@ -1200,7 +1246,68 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <div className="flex flex-col justify-end gap-1.5 pb-0.5 text-sm text-slate-700">
+          <div className="flex shrink-0 flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-600">해임 (다중선택)</span>
+              {churnStatuses.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+                  onClick={() => setChurnStatuses([])}
+                >
+                  전체
+                </button>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+              <label
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
+                  churnStatuses.includes('')
+                    ? 'border-slate-500 bg-slate-100 text-slate-900'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300"
+                  checked={churnStatuses.includes('')}
+                  onChange={() =>
+                    setChurnStatuses(prev =>
+                      prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''],
+                    )
+                  }
+                />
+                미지정
+              </label>
+              {ARREARS_CHURN_STATUSES.map(c => {
+                const on = churnStatuses.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${arrearsChurnStatusChipClass(c.id)} ${
+                      on ? 'ring-2 ring-slate-500 ring-offset-1' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={on}
+                      onChange={() =>
+                        setChurnStatuses(prev =>
+                          prev.includes(c.id)
+                            ? prev.filter(x => x !== c.id)
+                            : [...prev, c.id],
+                        )
+                      }
+                    />
+                    {c.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-end gap-1.5 self-stretch pb-0.5 text-sm text-slate-700">
             <label className="flex items-center gap-2 whitespace-nowrap">
               <input
                 type="checkbox"
@@ -1233,7 +1340,7 @@ export default function ArrearsPageClient() {
             </label>
           </div>
 
-          <label className="flex min-w-[10rem] max-w-xs flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
+          <label className="flex min-w-[10rem] max-w-xs flex-1 flex-col gap-1 self-end text-xs font-medium text-slate-600">
             검색
             <input
               className={`${portalInput} py-2`}
@@ -1244,7 +1351,7 @@ export default function ArrearsPageClient() {
           </label>
           <button
             type="button"
-            className={`${portalBtnSecondary} py-2`}
+            className={`${portalBtnSecondary} self-end py-2`}
             onClick={() => void load('full')}
           >
             새로고침
@@ -1454,6 +1561,7 @@ export default function ArrearsPageClient() {
                 <th className="px-3 py-2.5 min-w-[12rem]">미수 사유</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">담당</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">관리</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">해임</th>
                 <th className="px-3 py-2.5 min-w-[8rem]">메모</th>
                 {editMode ? (
                   <th className="px-3 py-2.5 whitespace-nowrap print:hidden">입력</th>
@@ -1463,13 +1571,13 @@ export default function ArrearsPageClient() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={editMode ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={editMode ? 10 : 9} className="px-3 py-10 text-center text-slate-500">
                     불러오는 중…
                   </td>
                 </tr>
               ) : displayItems.length === 0 ? (
                 <tr>
-                  <td colSpan={editMode ? 9 : 8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={editMode ? 10 : 9} className="px-3 py-10 text-center text-slate-500">
                     표시할 미수 항목이 없습니다.
                     {!showZero ? ' 「0원인것도 보기」를 켜 보세요.' : ''}
                     {filterCompanies.length || filterBalances.length
@@ -1629,6 +1737,33 @@ export default function ArrearsPageClient() {
                           className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${arrearsCategoryChipClass(row.mgmtCategory)}`}
                         >
                           {arrearsCategoryLabel(row.mgmtCategory)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {editMode ? (
+                        <select
+                          className={`${portalInput} py-1 text-xs min-w-[5.5rem] bg-white/80 ${arrearsChurnStatusChipClass(row.churnMgmtStatus)}`}
+                          value={row.churnMgmtStatus}
+                          disabled={savingId === row.id}
+                          onChange={e =>
+                            void patchRow(row.id, {
+                              churnMgmtStatus: e.target.value as ArrearsEntryDto['churnMgmtStatus'],
+                            })
+                          }
+                        >
+                          <option value="">미지정</option>
+                          {ARREARS_CHURN_STATUSES.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${arrearsChurnStatusChipClass(row.churnMgmtStatus)}`}
+                        >
+                          {arrearsChurnStatusLabel(row.churnMgmtStatus)}
                         </span>
                       )}
                     </td>

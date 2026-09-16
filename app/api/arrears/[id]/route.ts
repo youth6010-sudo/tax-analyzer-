@@ -66,6 +66,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const body = (await req.json()) as {
       managerName?: string;
       mgmtCategory?: string;
+      churnMgmtStatus?: string;
       memo?: string;
       cmsNote?: string;
       balance?: number;
@@ -78,6 +79,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       const item = await patchArrearsEntry(id, user.name || user.loginId || '', {
         managerName: body.managerName,
         mgmtCategory: body.mgmtCategory,
+        churnMgmtStatus: body.churnMgmtStatus,
         memo: body.memo,
         cmsNote: body.cmsNote,
         balance: body.balance,

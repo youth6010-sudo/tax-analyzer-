@@ -50,6 +50,11 @@ import {
 } from '@/app/utils/corpFeeClientCache';
 import type { CorpFeeEntry } from '@/lib/review/corpFeeTypes';
 import { buildCorpRevenueByClientId } from '@/lib/review/corpFeeTypes';
+import {
+  buildArrearsRecoveryRefs,
+  emptyArrearsRecoveryRefs,
+  type ArrearsRecoveryRefs,
+} from '@/app/utils/arrearsRecoveryHighlight';
 
 export default function ClientsPage() {
   return (
@@ -90,6 +95,9 @@ function ClientsPageContent() {
     return cached?.primaryLinksByKey ?? {};
   });
   const [clientOrderVersion, setClientOrderVersion] = useState(0);
+  const [recoveryRefs, setRecoveryRefs] = useState<ArrearsRecoveryRefs>(() =>
+    emptyArrearsRecoveryRefs(),
+  );
   // 담당자 표시 순서(사용자가 자유롭게 변경 · 브라우저에 저장)
   const [managerOrder, setManagerOrder] = useLocalStorage<string[]>(
     'clients.managerOrder.v1',
@@ -134,13 +142,19 @@ function ClientsPageContent() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data?.user?.name) setCurrentUserName(String(data.user.name).trim());
-        if (data?.isMaster) setCanEditAll(true);
-      })
-      .catch(() => {});
+    const applyMe = (data: { user?: { name?: string }; isMaster?: boolean } | null) => {
+      if (data?.user?.name) setCurrentUserName(String(data.user.name).trim());
+      setCanEditAll(!!data?.isMaster);
+    };
+    const loadMe = () => {
+      fetch('/api/auth/me')
+        .then(r => (r.ok ? r.json() : null))
+        .then(applyMe)
+        .catch(() => applyMe(null));
+    };
+    loadMe();
+    window.addEventListener('portal:auth-changed', loadMe);
+    return () => window.removeEventListener('portal:auth-changed', loadMe);
   }, []);
 
   const loadCorpFeeIndex = useCallback(async () => {
@@ -164,10 +178,23 @@ function ClientsPageContent() {
     }
   }, []);
 
+  const loadRecoveryRefs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/arrears/recovery-clients', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as { clientIds?: string[]; companyKeys?: string[] };
+      setRecoveryRefs(buildArrearsRecoveryRefs(data));
+    } catch {
+      /* 미수 미배포 시 무시 */
+    }
+  }, []);
+
   const load = useCallback(async () => {
+    // 관리자(전체 조회)는 항상 전체 수임처 — URL mineOnly·bootstrap(내 담당) 무시
+    const mineOnly = state.mineOnly && !canEditAll;
     // 포털 bootstrap은 비관리자 기준 본인 담당만 포함.
     // 「전체」조회(mineOnly=false)는 항상 API로 전체 수임처를 가져와야 함.
-    if (state.mineOnly && !state.includeChurned && isPortalBootstrapFresh()) {
+    if (mineOnly && !state.includeChurned && isPortalBootstrapFresh()) {
       const cached = getPortalClients();
       if (cached.length > 0) {
         setFetchedClients(cached);
@@ -176,7 +203,7 @@ function ClientsPageContent() {
       }
     }
     const params = new URLSearchParams();
-    if (state.mineOnly) params.set('mine', '1');
+    if (mineOnly) params.set('mine', '1');
     if (state.includeChurned) params.set('includeChurned', '1');
     setFetching(true);
     try {
@@ -220,12 +247,13 @@ function ClientsPageContent() {
     } finally {
       setFetching(false);
     }
-  }, [state.mineOnly, state.includeChurned]);
+  }, [state.mineOnly, state.includeChurned, canEditAll]);
 
   useEffect(() => {
     void load();
     void loadCorpFeeIndex();
-  }, [load, loadCorpFeeIndex]);
+    void loadRecoveryRefs();
+  }, [load, loadCorpFeeIndex, loadRecoveryRefs]);
 
   const handleFeeImported = useCallback(
     (matched: FeeImportMatch[]) => {
@@ -507,8 +535,10 @@ function ClientsPageContent() {
   );
 
   const mainStats = useMemo(() => countMainCategoryClients(filtered), [filtered]);
+  /** 관리자: 화면에 보이는 담당 칩과 무관하게 필터된 전체. 일반: 내 담당만 */
   const feeExportClients = useMemo(() => {
-    if (canEditAll || !currentUserName) return filtered;
+    if (canEditAll) return filtered;
+    if (!currentUserName) return filtered;
     const mine = new Set(getManagerMatchNames(currentUserName));
     return filtered.filter(c => mine.has((c.manager ?? '').trim()));
   }, [filtered, canEditAll, currentUserName]);
@@ -699,6 +729,7 @@ function ClientsPageContent() {
           corpRevenueByClientId={corpRevenueByClientId}
           orderVersion={clientOrderVersion}
           onClientOrderChange={() => setClientOrderVersion(v => v + 1)}
+          recoveryRefs={recoveryRefs}
         />
       )}
     </PortalPageShell>

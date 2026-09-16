@@ -33,6 +33,8 @@ export const LIST_INTAKE_KEYS = [
   'vatFilingFees',
   /** 법인 결산월 (수임처 목록 6월말 등 배지) */
   'fiscalYearEndMonth',
+  /** 다야 포트폴리오(이관 포함) — 목록 상호 파란색 */
+  'dayaHighlight',
 ] as const;
 
 /** 부가세 검토표(진행도·연간) API 전용 — 목록 slim에 넣지 않음 */

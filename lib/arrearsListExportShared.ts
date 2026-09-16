@@ -3,6 +3,8 @@
  */
 import {
   arrearsCategoryLabel,
+  arrearsChurnStatusLabel,
+  type ArrearsChurnStatus,
   type ArrearsEntryDto,
   type ArrearsManagerTotal,
   type ArrearsMgmtCategory,
@@ -16,6 +18,7 @@ export type ArrearsListExportItem = {
   reasonSummary?: string;
   managerName: string;
   mgmtCategory: ArrearsMgmtCategory | string;
+  churnMgmtStatus: ArrearsChurnStatus | string;
   memo: string;
 };
 
@@ -26,6 +29,7 @@ export type ArrearsListSheetRow = {
   '미수 사유': string;
   담당: string;
   관리: string;
+  해임: string;
   메모: string;
 };
 
@@ -49,6 +53,7 @@ export function toArrearsListSheetRow(item: ArrearsListExportItem): ArrearsListS
     '미수 사유': item.reasonSummary || '',
     담당: item.managerName || '',
     관리: arrearsCategoryLabel(item.mgmtCategory),
+    해임: arrearsChurnStatusLabel(item.churnMgmtStatus),
     메모: item.memo || '',
   };
 }
@@ -98,6 +103,7 @@ export function toArrearsListExportItem(item: ArrearsEntryDto): ArrearsListExpor
     reasonSummary: item.reasonSummary,
     managerName: item.managerName,
     mgmtCategory: item.mgmtCategory,
+    churnMgmtStatus: item.churnMgmtStatus,
     memo: item.memo || '',
   };
 }

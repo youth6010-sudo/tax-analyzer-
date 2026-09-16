@@ -66,6 +66,7 @@ function toEntryDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     credit: row.credit,
     managerName: row.managerName,
     mgmtCategory: (row.mgmtCategory || '') as ArrearsMgmtCategory,
+    churnMgmtStatus: (row.churnMgmtStatus || '') as ArrearsEntryDto['churnMgmtStatus'],
     cmsNote: row.cmsNote,
     memo: row.memo,
     asOfDate: row.asOfDate,

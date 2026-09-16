@@ -32,6 +32,20 @@ function parseCategoryParams(sp: URLSearchParams): string[] | undefined {
   return out.length ? [...new Set(out)] : undefined;
 }
 
+function parseChurnStatusParams(sp: URLSearchParams): string[] | undefined {
+  const raw = sp.getAll('churnStatus').flatMap(v => v.split(','));
+  if (raw.length === 0) return undefined;
+  if (raw.some(v => v.trim() === 'all') && raw.length === 1) return undefined;
+  const out: string[] = [];
+  for (const v of raw) {
+    const t = v.trim();
+    if (!t || t === 'all') continue;
+    if (t === 'none' || t === '__none__') out.push('');
+    else out.push(t);
+  }
+  return out.length ? [...new Set(out)] : undefined;
+}
+
 function xlsxResponse(buf: Buffer, asOfDate: string) {
   const filename = arrearsListExportFilename(asOfDate);
   return new NextResponse(new Uint8Array(buf), {
@@ -60,6 +74,7 @@ function normalizeExportItems(raw: unknown): ArrearsListExportItem[] {
       reasonSummary: r.reasonSummary != null ? String(r.reasonSummary) : undefined,
       managerName: String(r.managerName ?? ''),
       mgmtCategory: String(r.mgmtCategory ?? ''),
+      churnMgmtStatus: String(r.churnMgmtStatus ?? ''),
       memo: String(r.memo ?? ''),
     });
   }
@@ -107,6 +122,7 @@ export async function GET(req: Request) {
     const sp = new URL(req.url).searchParams;
     const managers = parseMultiParam(sp, 'manager');
     const categories = parseCategoryParams(sp);
+    const churnStatuses = parseChurnStatusParams(sp);
     const q = sp.get('q')?.trim() || undefined;
     const nonzero = sp.get('nonzero') === '1' || sp.get('nonzero') === 'true';
     const churnedOnly =
@@ -117,6 +133,7 @@ export async function GET(req: Request) {
     const result = await listArrearsEntries({
       managers: managers.length ? managers : undefined,
       categories,
+      churnStatuses,
       q,
       nonzero: nonzero || undefined,
       churnedOnly: churnedOnly || undefined,

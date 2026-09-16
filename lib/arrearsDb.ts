@@ -1,7 +1,12 @@
 import { and, asc, desc, eq, exists, gte, ilike, inArray, like, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines, clients } from '@/db/schema';
-import type { ArrearsEntryDto, ArrearsManagerTotal, ArrearsMgmtCategory } from '@/app/types/arrears';
+import type {
+  ArrearsChurnStatus,
+  ArrearsEntryDto,
+  ArrearsManagerTotal,
+  ArrearsMgmtCategory,
+} from '@/app/types/arrears';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
@@ -15,6 +20,7 @@ import {
 } from '@/lib/arrearsBalanceLock';
 import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
+import { companyNameMatchKey } from '@/app/utils/arrearsRecoveryHighlight';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -39,6 +45,7 @@ function toDto(row: typeof arrearsEntries.$inferSelect): ArrearsEntryDto {
     credit: row.credit,
     managerName: row.managerName,
     mgmtCategory: (row.mgmtCategory || '') as ArrearsMgmtCategory,
+    churnMgmtStatus: (row.churnMgmtStatus || '') as ArrearsChurnStatus,
     cmsNote: row.cmsNote,
     memo: row.memo,
     asOfDate: row.asOfDate,
@@ -247,6 +254,32 @@ function normalizeCompanyName(name: string): string {
   return name.replace(/\s+/g, '').trim().toLowerCase();
 }
 
+/**
+ * 수임처관리 하이라이트용 — 채권회수(recovery) 항목의 연결 수임처 id·상호 키
+ */
+export async function listArrearsRecoveryRefs(): Promise<{
+  clientIds: string[];
+  companyKeys: string[];
+}> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      clientId: arrearsEntries.clientId,
+      companyName: arrearsEntries.companyName,
+    })
+    .from(arrearsEntries)
+    .where(eq(arrearsEntries.mgmtCategory, 'recovery'));
+
+  const clientIds = new Set<string>();
+  const companyKeys = new Set<string>();
+  for (const r of rows) {
+    if (r.clientId) clientIds.add(r.clientId);
+    const key = companyNameMatchKey(r.companyName);
+    if (key) companyKeys.add(key);
+  }
+  return { clientIds: [...clientIds], companyKeys: [...companyKeys] };
+}
+
 export type ClientMatchIndex = {
   byBiz: Map<string, { id: string; companyName: string; manager: string }>;
   byName: Map<string, { id: string; companyName: string; manager: string }>;
@@ -314,6 +347,8 @@ export interface ListArrearsFilters {
   category?: string;
   /** 관리분류 다중 필터. '' = 미분류. 비어 있으면 전체 */
   categories?: string[];
+  /** 해임 구분 다중 필터. '' = 미지정. 비어 있으면 전체 */
+  churnStatuses?: string[];
   q?: string;
   /** true면 잔액 ≠ 0 */
   nonzero?: boolean;
@@ -366,6 +401,14 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
   } else if (categoryFilter.length > 1) {
     conditions.push(or(...categoryFilter.map(c => eq(arrearsEntries.mgmtCategory, c)))!);
   }
+
+  const churnFilter = (filters.churnStatuses ?? []).filter((n, i, arr) => arr.indexOf(n) === i);
+  if (churnFilter.length === 1) {
+    conditions.push(eq(arrearsEntries.churnMgmtStatus, churnFilter[0]));
+  } else if (churnFilter.length > 1) {
+    conditions.push(or(...churnFilter.map(c => eq(arrearsEntries.churnMgmtStatus, c)))!);
+  }
+
   if (filters.nonzero) {
     // 「0원인것도 보기」 OFF → 잔액 ≠ 0만 (수동 0원 고정 행은 예외)
     const alwaysListed = [...ARREARS_ALWAYS_LISTED_CODES];
@@ -482,6 +525,7 @@ export async function getArrearsEntryById(id: string) {
 }
 
 const VALID_CATEGORIES = new Set(['', 'recovery', 'bad', 'long', 'temp', 'cms']);
+const VALID_CHURN_STATUSES = new Set(['', 'pending', 'done', 'confirmed', 'deferred', 'special']);
 
 export async function patchArrearsEntry(
   id: string,
@@ -489,6 +533,7 @@ export async function patchArrearsEntry(
   patch: {
     managerName?: string;
     mgmtCategory?: string;
+    churnMgmtStatus?: string;
     memo?: string;
     cmsNote?: string;
     letterDate?: string;
@@ -525,6 +570,11 @@ export async function patchArrearsEntry(
     const cat = patch.mgmtCategory.trim();
     if (!VALID_CATEGORIES.has(cat)) throw new Error('관리분류가 올바르지 않습니다.');
     updates.mgmtCategory = cat;
+  }
+  if (patch.churnMgmtStatus !== undefined) {
+    const st = patch.churnMgmtStatus.trim();
+    if (!VALID_CHURN_STATUSES.has(st)) throw new Error('해임 구분이 올바르지 않습니다.');
+    updates.churnMgmtStatus = st;
   }
   if (patch.memo !== undefined) {
     updates.memo = patch.memo;

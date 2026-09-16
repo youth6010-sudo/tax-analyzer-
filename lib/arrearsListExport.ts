@@ -50,10 +50,11 @@ export async function buildArrearsListWorkbook(
     { header: '미수 사유', key: 'reason', width: 36 },
     { header: '담당', key: 'manager', width: 10 },
     { header: '관리', key: 'category', width: 10 },
+    { header: '해임', key: 'churn', width: 10 },
     { header: '메모', key: 'memo', width: 24 },
   ];
   // 코드·사유·메모 등 — 날짜/숫자 자동변환 방지 (텍스트)
-  for (const key of ['code', 'name', 'reason', 'manager', 'category', 'memo'] as const) {
+  for (const key of ['code', 'name', 'reason', 'manager', 'category', 'churn', 'memo'] as const) {
     ws.getColumn(key).numFmt = '@';
   }
 
@@ -76,6 +77,7 @@ export async function buildArrearsListWorkbook(
       reason: '',
       manager: '',
       category: '',
+      churn: '',
       memo: '',
     });
     applyTextCell(row.getCell('code'), sheet.코드);
@@ -83,12 +85,13 @@ export async function buildArrearsListWorkbook(
     applyTextCell(row.getCell('reason'), sheet['미수 사유']);
     applyTextCell(row.getCell('manager'), sheet.담당);
     applyTextCell(row.getCell('category'), sheet.관리);
+    applyTextCell(row.getCell('churn'), sheet.해임);
     applyTextCell(row.getCell('memo'), sheet.메모);
     row.getCell('balance').numFmt = FMT_AMT;
     row.font = { name: '맑은 고딕', size: 10 };
     const fillArgb = arrearsListRowFillArgb(item);
     if (fillArgb) {
-      for (let c = 1; c <= 7; c++) {
+      for (let c = 1; c <= 8; c++) {
         const cell = row.getCell(c);
         cell.fill = solidFill(fillArgb);
         cell.font = { name: '맑은 고딕', size: 10 };
@@ -103,6 +106,7 @@ export async function buildArrearsListWorkbook(
     reason: '',
     manager: '',
     category: '',
+    churn: '',
     memo: '',
   });
   applyTextCell(totalRow.getCell('name'), '총미수');
@@ -112,7 +116,7 @@ export async function buildArrearsListWorkbook(
     meta.asOfDate ? `기준일 ${meta.asOfDate}` : '',
   );
   totalRow.getCell('balance').numFmt = FMT_AMT;
-  for (let c = 1; c <= 7; c++) {
+  for (let c = 1; c <= 8; c++) {
     totalRow.getCell(c).fill = solidFill('FFFEF3C7');
     totalRow.getCell(c).font = { bold: true, name: '맑은 고딕', size: 10 };
   }

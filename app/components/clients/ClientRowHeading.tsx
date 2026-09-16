@@ -19,6 +19,8 @@ type Props = {
   companyTitle: string;
   expanded: boolean;
   isChurned?: boolean;
+  /** 다야 포트폴리오 — 상호 파란색 */
+  dayaHighlight?: boolean;
   /** @deprecated entityBadge 대신 badges 사용 */
   entityBadge?: string;
   badges?: ClientRowBadge[];
@@ -36,6 +38,7 @@ export default function ClientRowHeading({
   companyTitle,
   expanded,
   isChurned,
+  dayaHighlight,
   entityBadge,
   badges,
   ntsClosed,
@@ -76,7 +79,11 @@ export default function ClientRowHeading({
       className={[
         nameButtonClass,
         'w-full text-xs text-left min-w-0 flex items-center gap-1',
-        isChurned ? 'line-through decoration-red-300/80 text-slate-500' : '',
+        isChurned
+          ? 'line-through decoration-red-300/80 text-slate-500'
+          : dayaHighlight
+            ? 'text-blue-600 hover:text-blue-800'
+            : 'text-slate-900 hover:text-blue-800',
       ].join(' ')}
       title={companyTitle}
       aria-label={`${companyTitle} — ${hint}`}

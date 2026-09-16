@@ -27,6 +27,13 @@ import {
 } from '@/app/utils/clientListPrefs';
 import { useLocalStorage } from '@/app/tools/notice-generator/_lib/useLocalStorage';
 import { useLongPressListReorder } from '@/app/utils/useLongPressListReorder';
+import { isDayaHighlightedClient } from '@/app/utils/dayaHighlight';
+import {
+  buildArrearsRecoveryRefs,
+  emptyArrearsRecoveryRefs,
+  isArrearsRecoveryClient,
+  type ArrearsRecoveryRefs,
+} from '@/app/utils/arrearsRecoveryHighlight';
 
 type SortKey = ClientSortKey;
 
@@ -62,6 +69,7 @@ function ClientList({
   allClients,
   sort,
   onOrderChange,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   clients: ClientWithChurn[];
   excludedIds: Set<string>;
@@ -73,6 +81,7 @@ function ClientList({
   allClients: ClientWithChurn[];
   sort: SortKey;
   onOrderChange: () => void;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const ids = useMemo(() => clients.map(c => c.id), [clients]);
   const handleCommit = useCallback(
@@ -104,6 +113,8 @@ function ClientList({
         const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
         const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
         const nameProps = getItemProps(c.id);
+        const dayaName = !isChurned && isDayaHighlightedClient(c);
+        const recoveryRow = !isChurned && isArrearsRecoveryClient(c, recoveryRefs);
         return (
           <li key={c.id}>
             <Link
@@ -111,9 +122,11 @@ function ClientList({
               onClick={e => {
                 if (consumeClick()) e.preventDefault();
               }}
-              className={`flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70 ${
-                excluded || isChurned ? 'opacity-60' : ''
-              }`}
+              className={[
+                'flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70',
+                recoveryRow ? 'bg-[#fecaca] hover:bg-[#fca5a5]' : '',
+                excluded || isChurned ? 'opacity-60' : '',
+              ].join(' ')}
             >
               <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
                 {i + 1}
@@ -126,7 +139,9 @@ function ClientList({
                     className={`font-semibold touch-none select-none ${nameProps.className ?? ''} ${
                       excluded || isChurned
                         ? 'text-slate-400 line-through decoration-slate-400'
-                        : 'text-slate-800'
+                        : dayaName
+                          ? 'text-blue-600'
+                          : 'text-slate-800'
                     }`}
                   >
                     {c.companyName || '(이름 없음)'}
@@ -202,6 +217,7 @@ function SectionCard({
   allClients,
   sort,
   onOrderChange,
+  recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   label: string;
   dotClass: string;
@@ -217,6 +233,7 @@ function SectionCard({
   allClients: ClientWithChurn[];
   sort: SortKey;
   onOrderChange: () => void;
+  recoveryRefs?: ArrearsRecoveryRefs;
 }) {
   const total = clients.length;
   const excl = clients.reduce((n, c) => n + (excludedIds.has(c.id) ? 1 : 0), 0);
@@ -243,6 +260,7 @@ function SectionCard({
             allClients={allClients}
             sort={sort}
             onOrderChange={onOrderChange}
+            recoveryRefs={recoveryRefs}
           />
         ) : (
           <p className="px-1 py-5 text-center text-sm text-slate-400">불러오는 중…</p>
@@ -267,10 +285,31 @@ export default function MyClientsBoard() {
   const [ntsChecking, setNtsChecking] = useState(false);
   const [ntsError, setNtsError] = useState('');
   const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
+  const [recoveryRefs, setRecoveryRefs] = useState<ArrearsRecoveryRefs>(() =>
+    emptyArrearsRecoveryRefs(),
+  );
   const taxFilter = useDashboardTaxFilter();
 
   useEffect(() => {
     return subscribePortal(() => setChurnRecords(getPortalChurnRecords()));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchWithTimeout('/api/arrears/recovery-clients', { cache: 'no-store' }, 15_000)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data) return;
+        setRecoveryRefs(
+          buildArrearsRecoveryRefs(data as { clientIds?: string[]; companyKeys?: string[] }),
+        );
+      })
+      .catch(() => {
+        /* 미수 API 미배포 시 무시 */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -491,6 +530,7 @@ export default function MyClientsBoard() {
     allClients: clients,
     sort,
     onOrderChange: bumpOrder,
+    recoveryRefs,
   };
 
   const toggleBtn = (key: SortKey, text: string) => (

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { arrearsChurnStatusFromLabel } from '@/app/types/arrears';
 import { ARREARS_MANAGER_CODE_MAP } from '@/lib/arrearsImportFilenames';
 
 export type ParsedStatusRow = {
@@ -6,6 +7,7 @@ export type ParsedStatusRow = {
   companyName: string;
   managerName: string;
   mgmtCategory: string;
+  churnMgmtStatus: string;
   balance: number;
   carryIn: number;
   debit: number;
@@ -109,6 +111,7 @@ export function parseArrearsStatusWorkbook(
   const iMgr = colIndex(headers, '담당');
   const iCms = colIndex(headers, 'CMS');
   const iMgmt = colIndex(headers, '관리');
+  const iChurn = colIndex(headers, '해임');
   const iPast = colIndex(headers, '과거일정');
 
   const out: ParsedStatusRow[] = [];
@@ -131,6 +134,7 @@ export function parseArrearsStatusWorkbook(
       companyName,
       managerName,
       mgmtCategory: iMgmt >= 0 ? parseMgmtCategory(row[iMgmt]) : '',
+      churnMgmtStatus: iChurn >= 0 ? arrearsChurnStatusFromLabel(cellStr(row[iChurn])) : '',
       balance,
       carryIn: iCarry >= 0 ? cellMoney(row[iCarry]) : 0,
       debit: debitCols.length ? cellMoney(row[debitCols[0]]) : 0,
