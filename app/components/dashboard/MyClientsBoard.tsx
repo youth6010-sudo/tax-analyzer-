@@ -36,6 +36,7 @@ import {
 } from '@/app/utils/arrearsRecoveryHighlight';
 import {
   buildRelatedGroups,
+  displayPrimaryInSection,
   sameSectionMembers,
 } from '@/lib/relatedCompanyGroups';
 
@@ -190,17 +191,22 @@ function ClientList({
     const sameCount = g
       ? sameSectionMembers(g, displayClients, sectionLabel).length
       : 0;
+    const primaryName = g?.displayPrimaryName || '';
+    const isDisplayPrimary = Boolean(g && g.displayPrimaryId && c.id === g.displayPrimaryId);
+    const primaryInSection = g
+      ? displayPrimaryInSection(g, displayClients, sectionLabel)
+      : false;
+    // 분류가 갈린 연관: 대표 외 업체명 옆에 대표상호. 같은 분류만의 그룹(2+)은 덩어리만.
     let primaryBeside: string | null = null;
-    // 같은 분류 안 그룹(2+)은 덩어리로만 표시. 분류가 갈린 연관만 옆에 대표상호.
-    if (
-      g &&
-      g.primaryId &&
-      g.primaryName &&
-      c.id !== g.primaryId &&
-      sameCount < 2
-    ) {
-      primaryBeside = g.primaryName;
+    if (g && primaryName && !isDisplayPrimary) {
+      if (!primaryInSection || sameCount < 2) {
+        primaryBeside = primaryName;
+      }
     }
+    // 다른 분류 연관이 있거나 이 분류에 혼자일 때 대표에 「대표」 배지
+    const showRepBadge =
+      Boolean(g && isDisplayPrimary) &&
+      (sameCount < 2 || (g?.memberIds.length ?? 0) > sameCount);
 
     return (
       <li key={c.id}>
@@ -233,6 +239,12 @@ function ClientList({
               >
                 {c.companyName || '(이름 없음)'}
               </span>
+              {primaryBeside ? (
+                <span className="text-xs font-medium text-teal-700">
+                  {' · '}
+                  {primaryBeside}
+                </span>
+              ) : null}
               {(c.representative || c.businessNo) && (
                 <span
                   className={`text-xs font-normal ${
@@ -244,16 +256,11 @@ function ClientList({
                 </span>
               )}
             </span>
-            {primaryBeside ? (
-              <span className="mt-0.5 block truncate text-[10px] font-medium text-teal-700">
-                대표 · {primaryBeside}
-              </span>
-            ) : null}
             {closureDate && (
               <span className="block truncate text-xs text-slate-400">{closureDate}</span>
             )}
           </span>
-          {g && g.primaryId && c.id === g.primaryId ? (
+          {showRepBadge ? (
             <span className="shrink-0 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
               대표
             </span>
