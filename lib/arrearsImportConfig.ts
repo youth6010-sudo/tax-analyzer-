@@ -1,10 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * 공문 반영 컷오프 동결일.
+ * - 이 날까지 공문 내역은 유지
+ * - 거래처별 현황 업로드는 이 날 **이후**(9월~)만 공문에 추가
+ * - 목록 「기준일」(statusAsOfDate)은 별도로 수정 가능
+ */
+export const ARREARS_FROZEN_LETTER_CUTOFF = '2026.08.31';
+
+/** @deprecated 목록 기준일은 수정 가능 — 컷오프만 동결 */
+export const ARREARS_FROZEN_AS_OF_DATE = ARREARS_FROZEN_LETTER_CUTOFF;
+
 export type ArrearsImportConfig = {
-  /** 현황표 기준일 YYYY.MM.DD */
+  /** 현황표·목록 기준일 YYYY.MM.DD (수정 가능) */
   statusAsOfDate: string;
-  /** 공문 고정 cutoff — 이 날짜 이후 내역만 거래처별 상세에서 추가 */
+  /** 공문 cutoff — 동결. 이 날짜 이후 내역만 거래처별 상세에서 추가 */
   letterCutoffDate: string;
   updatedAt: string;
 };
@@ -13,7 +24,7 @@ const CONFIG_PATH = path.join(process.cwd(), 'data', 'arrears-import-config.json
 
 const DEFAULTS: ArrearsImportConfig = {
   statusAsOfDate: '2026.08.31',
-  letterCutoffDate: '2026.07.27',
+  letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
   updatedAt: '',
 };
 
@@ -22,19 +33,22 @@ export function readArrearsImportConfig(): ArrearsImportConfig {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<ArrearsImportConfig>;
     return {
       statusAsOfDate: normalizeDotDate(raw.statusAsOfDate) || DEFAULTS.statusAsOfDate,
-      letterCutoffDate: normalizeDotDate(raw.letterCutoffDate) || DEFAULTS.letterCutoffDate,
+      letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
       updatedAt: raw.updatedAt || '',
     };
   } catch {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF };
   }
 }
 
-export function writeArrearsImportConfig(patch: Partial<ArrearsImportConfig>): ArrearsImportConfig {
+export function writeArrearsImportConfig(
+  patch?: Partial<ArrearsImportConfig>,
+): ArrearsImportConfig {
   const cur = readArrearsImportConfig();
   const next: ArrearsImportConfig = {
-    statusAsOfDate: normalizeDotDate(patch.statusAsOfDate) || cur.statusAsOfDate,
-    letterCutoffDate: normalizeDotDate(patch.letterCutoffDate) || cur.letterCutoffDate,
+    statusAsOfDate:
+      normalizeDotDate(patch?.statusAsOfDate) || cur.statusAsOfDate || DEFAULTS.statusAsOfDate,
+    letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
     updatedAt: new Date().toISOString(),
   };
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });

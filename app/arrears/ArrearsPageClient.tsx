@@ -102,6 +102,15 @@ function defaultYear() {
   return String(new Date().getFullYear());
 }
 
+/** 목록 기준일 → <input type="date"> 값 (YYYY-MM-DD) */
+function toDateInputValue(s: string): string {
+  const t = String(s || '')
+    .trim()
+    .replace(/\./g, '-');
+  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
+
 export default function ArrearsPageClient() {
   const router = useRouter();
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
@@ -109,6 +118,8 @@ export default function ArrearsPageClient() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [totalLinesOpen, setTotalLinesOpen] = useState(0);
   const [asOfDate, setAsOfDate] = useState('');
+  const [asOfDraft, setAsOfDraft] = useState('');
+  const [asOfSaving, setAsOfSaving] = useState(false);
   const [canManage, setCanManage] = useState(false);
   /** 총미수 목록 엑셀 — 관리자·인디·찰리 */
   const [canExportList, setCanExportList] = useState(false);
@@ -242,7 +253,9 @@ export default function ArrearsPageClient() {
         setTotals((data as { totalsByManager: ArrearsManagerTotal[] }).totalsByManager || []);
         setTotalBalance((data as { totalBalance?: number }).totalBalance || 0);
         setTotalLinesOpen((data as { totalLinesOpen?: number }).totalLinesOpen || 0);
-        setAsOfDate((data as { asOfDate?: string }).asOfDate || '');
+        const nextAsOf = (data as { asOfDate?: string }).asOfDate || '';
+        setAsOfDate(nextAsOf);
+        if (mode === 'full') setAsOfDraft(toDateInputValue(nextAsOf));
         setCanManage(!!(data as { canManage?: boolean }).canManage);
         setCanExportList(!!(data as { canExportList?: boolean }).canExportList);
         setViewerName((data as { viewerName?: string }).viewerName?.trim() || '');
@@ -824,6 +837,33 @@ export default function ArrearsPageClient() {
     }
   };
 
+  const saveAsOfDate = async () => {
+    const next = toDateInputValue(asOfDraft);
+    if (!next) {
+      setError('기준일을 입력해 주세요.');
+      return;
+    }
+    if (next === toDateInputValue(asOfDate)) return;
+    setAsOfSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/arrears/import-config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusAsOfDate: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || '기준일 저장 실패');
+      setAsOfDate(next);
+      setAsOfDraft(next);
+      await load('full');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '기준일 저장 실패');
+    } finally {
+      setAsOfSaving(false);
+    }
+  };
+
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full space-y-4 py-4`}>
@@ -971,9 +1011,39 @@ export default function ArrearsPageClient() {
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-800">
-            기준일 {asOfDate || '—'}
-          </span>
+          {canManage && editMode ? (
+            <form
+              className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1"
+              onSubmit={e => {
+                e.preventDefault();
+                void saveAsOfDate();
+              }}
+            >
+              <label htmlFor="arrears-as-of-date" className="text-xs font-semibold text-slate-600">
+                기준일
+              </label>
+              <input
+                id="arrears-as-of-date"
+                type="date"
+                className={`${portalInput} !px-2 !py-1 text-sm tabular-nums`}
+                value={asOfDraft}
+                onChange={e => setAsOfDraft(e.target.value)}
+                disabled={asOfSaving}
+              />
+              <button
+                type="submit"
+                className={`${portalBtnSecondary} !px-2.5 !py-1 text-xs`}
+                disabled={asOfSaving || !asOfDraft || asOfDraft === toDateInputValue(asOfDate)}
+                title="엑셀 없이 목록·공문 표시 기준일만 변경 (공문 추가 컷오프는 08.31 유지)"
+              >
+                {asOfSaving ? '저장 중…' : '저장'}
+              </button>
+            </form>
+          ) : (
+            <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-800">
+              기준일 {asOfDate || '—'}
+            </span>
+          )}
           <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-900 tabular-nums">
             총미수 {formatArrearsWon(displayTotalBalance)}원
             {listFiltered ? (

@@ -21,6 +21,7 @@ import {
 import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import { companyNameMatchKey } from '@/app/utils/arrearsRecoveryHighlight';
+import { applyArrearsManagerToClient } from '@/lib/intakeManagerSync';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -603,6 +604,24 @@ export async function patchArrearsEntry(
     if (!Number.isFinite(patch.balance)) throw new Error('잔액이 올바르지 않습니다.');
     updates.balance = Math.round(patch.balance);
     updates.source = 'manual';
+  }
+
+  // 미수 담당 → 수임처 담당 연동 (+ clientId 연결)
+  if (
+    patch.managerName !== undefined &&
+    patch.managerName.trim() !== (existing.managerName || '').trim()
+  ) {
+    const linkedClientId = await applyArrearsManagerToClient(
+      {
+        clientId: existing.clientId,
+        externalCode: existing.externalCode,
+        companyName: existing.companyName,
+      },
+      patch.managerName.trim(),
+    );
+    if (linkedClientId && !existing.clientId) {
+      updates.clientId = linkedClientId;
+    }
   }
 
   const [row] = await db

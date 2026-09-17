@@ -37,6 +37,9 @@ export const DETAIL_SKIP_KEYS = new Set([
   'incomeTypes',
   'yearEndTypes',
   'fiscalYearEndMonth',
+  /** 상단 수임처정보에서 표시·수정 */
+  'relatedCompanies',
+  'taxKind',
   ...MAIN_META_INTAKE_KEYS,
 ]);
 

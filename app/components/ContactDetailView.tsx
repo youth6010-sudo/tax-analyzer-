@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   BusinessEntityType,
   ContactRecord,
@@ -17,9 +17,20 @@ import {
 } from '../types/contact';
 import { TAX_TYPES } from '../config/taxTypes';
 import type { TaxTypeId } from '../config/taxTypes';
+import type { ClientSearchResult } from '@/app/types/client';
 import BackButton from './BackButton';
 import { formatPhoneWithContactName } from '@/app/utils/clientPhone';
 import { formatIdField } from '@/app/utils/idFormat';
+import {
+  normalizeClientTaxKind,
+  ntsTaxTypeBadgeClass,
+} from '@/app/utils/ntsStatus';
+import {
+  hydratePortal,
+  prefetchSearchIndex,
+  searchPortalClients,
+} from '@/app/utils/portalStore';
+import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 import {
   portalAlertError,
   portalBtnDanger,
@@ -33,6 +44,8 @@ import { canChangeAssignedManager } from '@/lib/intakeManagerGate';
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
   TAX_TYPES.map(t => [t.id, t.label]),
 );
+
+const TAX_KIND_OPTIONS = ['일반', '간이', '면세'] as const;
 
 interface ContactDetailViewProps {
   contact: ContactRecord;
@@ -49,6 +62,178 @@ interface ContactDetailViewProps {
   onSaveRef?: React.MutableRefObject<((opts?: { skipRefresh?: boolean }) => Promise<void>) | null>;
   /** 통합 저장용 — 현재 편집 폼 스냅샷 */
   getFormRef?: React.MutableRefObject<(() => ContactUpdatePayload) | null>;
+  /** intakeData.taxKind — 일반/간이/면세 배지 */
+  taxKind?: string;
+  /** intakeData.relatedCompanies — 수정 모드에서만 편집 */
+  relatedCompanies?: string;
+  onRelatedCompaniesChange?: (value: string) => void;
+  onTaxKindChange?: (value: string) => void;
+}
+
+function parseRelatedNames(raw: string): string[] {
+  return String(raw || '')
+    .split(/[,，、;/|]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function joinRelatedNames(names: string[]): string {
+  return [...new Set(names.map(n => n.trim()).filter(Boolean))].join(', ');
+}
+
+/** 등록된 수임처만 고르는 관계회사 선택 */
+function RelatedCompanyPicker({
+  value,
+  excludeClientId,
+  excludeCompanyName,
+  onChange,
+}: {
+  value: string;
+  excludeClientId?: string;
+  excludeCompanyName?: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = parseRelatedNames(value);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ClientSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    hydratePortal();
+    void prefetchSearchIndex();
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const picked = new Set(parseRelatedNames(value));
+      const excludeName = (excludeCompanyName || '').trim();
+      const filterHit = (c: ClientSearchResult) =>
+        c.id !== excludeClientId &&
+        c.companyName.trim() !== excludeName &&
+        !picked.has(c.companyName.trim());
+
+      const local = searchPortalClients(q).filter(filterHit);
+      setResults(local);
+      setLoading(true);
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      fetch(`/api/clients/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+        .then(async r => {
+          if (!r.ok) throw new Error('검색 실패');
+          return r.json();
+        })
+        .then(data => {
+          const api = ((data.clients ?? []) as ClientSearchResult[]).filter(filterHit);
+          setResults(mergeClientSearchResults(local, api));
+        })
+        .catch(err => {
+          if (err?.name === 'AbortError') return;
+          setResults(local);
+        })
+        .finally(() => setLoading(false));
+    }, 150);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, excludeClientId, excludeCompanyName, value]);
+
+  const addName = (name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    onChange(joinRelatedNames([...selected, n]));
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+  };
+
+  const removeName = (name: string) => {
+    onChange(joinRelatedNames(selected.filter(s => s !== name)));
+  };
+
+  return (
+    <div ref={rootRef} className="space-y-1">
+      {selected.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {selected.map(name => (
+            <span
+              key={name}
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-800"
+            >
+              <span className="truncate">{name}</span>
+              <button
+                type="button"
+                className="shrink-0 text-slate-400 hover:text-rose-600"
+                onClick={() => removeName(name)}
+                aria-label={`${name} 제거`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="relative">
+        <input
+          type="search"
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="수임처 검색해 추가"
+          className={`${portalInput} w-full font-semibold !py-1 !text-xs`}
+        />
+        {open && query.trim() ? (
+          <ul className="absolute z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            {loading && results.length === 0 ? (
+              <li className="px-2.5 py-1.5 text-[11px] text-slate-500">검색 중…</li>
+            ) : results.length === 0 ? (
+              <li className="px-2.5 py-1.5 text-[11px] text-slate-500">등록된 수임처만 선택할 수 있습니다</li>
+            ) : (
+              results.slice(0, 12).map(c => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-col items-start px-2.5 py-1.5 text-left hover:bg-slate-50"
+                    onMouseDown={e => {
+                      e.preventDefault();
+                      addName(c.companyName);
+                    }}
+                  >
+                    <span className="text-xs font-semibold text-slate-900">{c.companyName}</span>
+                    {c.businessNo ? (
+                      <span className="font-mono text-[10px] text-slate-500">{c.businessNo}</span>
+                    ) : null}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function toFormState(contact: ContactRecord): ContactUpdatePayload {
@@ -103,6 +288,10 @@ export default function ContactDetailView({
   hideEditButton = false,
   onSaveRef,
   getFormRef,
+  taxKind = '',
+  relatedCompanies = '',
+  onRelatedCompaniesChange,
+  onTaxKindChange,
 }: ContactDetailViewProps) {
   const router = useRouter();
   const [contact, setContact] = useState(initial);
@@ -273,6 +462,9 @@ export default function ContactDetailView({
   );
 
   const flat = variant === 'flat';
+  const taxKindLabel =
+    normalizeClientTaxKind(taxKind) ||
+    (TAX_KIND_OPTIONS.includes(taxKind as (typeof TAX_KIND_OPTIONS)[number]) ? taxKind : '');
 
   return (
     <div className={flat ? '' : 'space-y-4'}>
@@ -292,6 +484,28 @@ export default function ContactDetailView({
               {BUSINESS_ENTITY_LABEL[(isEditing ? form.businessEntityType : contact.businessEntityType) as BusinessEntityType]}
             </span>
           )}
+          {flat &&
+            (isEditing && onTaxKindChange ? (
+              <select
+                value={taxKindLabel || ''}
+                onChange={e => onTaxKindChange(e.target.value)}
+                className={`${portalInput} !w-auto !py-0.5 !px-2 text-xs font-semibold`}
+                aria-label="과세유형"
+              >
+                <option value="">과세유형</option>
+                {TAX_KIND_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            ) : taxKindLabel ? (
+              <span
+                className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${ntsTaxTypeBadgeClass(taxKindLabel)}`}
+              >
+                {taxKindLabel}
+              </span>
+            ) : null)}
         </div>
         <div className="flex shrink-0 items-center gap-2">
         {!canEdit || hideEditButton ? null : !isEditing ? (
@@ -549,6 +763,23 @@ export default function ContactDetailView({
             </div>
             );
           })}
+          {flat ? (
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium text-slate-400">관계회사명</p>
+              {isEditing && onRelatedCompaniesChange ? (
+                <RelatedCompanyPicker
+                  value={relatedCompanies}
+                  excludeClientId={contact.id}
+                  excludeCompanyName={contact.companyName}
+                  onChange={onRelatedCompaniesChange}
+                />
+              ) : (
+                <p className="text-xs font-semibold break-all text-slate-900">
+                  {displayValue(relatedCompanies)}
+                </p>
+              )}
+            </div>
+          ) : null}
         </div>
       </article>
     </div>

@@ -429,7 +429,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
               </p>
             ) : item?.source === 'status' ? (
               <p className="mt-1 text-[11px] text-slate-500">
-                잔액은 거래처(잔액)현황표 기준 · {item.asOfDate || '—'} 이전은 공문, 이후는 거래처별 상세 반영
+                잔액은 거래처(잔액)현황표 기준 · {item.asOfDate || '—'}까지 공문 고정, 이후(9월~)는 거래처별 상세 반영
               </p>
             ) : null}
             {editing ? (

@@ -6,6 +6,7 @@ import {
   isArrearsLetterProtected,
 } from '@/lib/arrearsBalanceLock';
 import {
+  ARREARS_FROZEN_LETTER_CUTOFF,
   isAfterCutoff,
   normalizeDotDate,
   readArrearsImportConfig,
@@ -204,10 +205,9 @@ function groupTxByCode(txs: ParsedClientDetailTx[]): Map<string, ParsedClientDet
 
 export async function previewClientDetailImport(
   buffer: Buffer,
-  cutoffOverride?: string,
+  _cutoffOverride?: string,
 ): Promise<ClientDetailImportPreview> {
-  const cfg = readArrearsImportConfig();
-  const cutoffDate = normalizeDotDate(cutoffOverride) || cfg.letterCutoffDate;
+  const cutoffDate = ARREARS_FROZEN_LETTER_CUTOFF;
   const txs = parseArrearsClientDetailWorkbook(buffer).filter(t =>
     isAfterCutoff(t.eventDate, cutoffDate),
   );
@@ -235,10 +235,9 @@ export async function previewClientDetailImport(
 export async function applyClientDetailImport(
   buffer: Buffer,
   actorName: string,
-  cutoffOverride?: string,
+  _cutoffOverride?: string,
 ): Promise<ClientDetailImportResult> {
-  const cfg = readArrearsImportConfig();
-  const cutoffDate = normalizeDotDate(cutoffOverride) || cfg.letterCutoffDate;
+  const cutoffDate = ARREARS_FROZEN_LETTER_CUTOFF;
   writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
 
   // 거래처별 말잔 저장 — 현황표와 같으면 목록 「불일치」제외
@@ -521,7 +520,8 @@ export function skipImmediateMonthlyRecoveryTxs<
   return txs.filter((_, i) => !drop.has(i));
 }
 
-/** 공문 letter 줄 중 cutoff 월 이후 월별 기장료 — 거래처별 상세로 대체 */
+/** 공문 letter 줄 중 cutoff 달보다 이후 월별 기장료 — 거래처별 상세로 대체.
+ * 동결일(예: 08.31)이 속한 달(8월)까지는 유지, 다음 달(9월~)만 제거. */
 function isPostCutoffLetterMonth(desc: string, cutoffDot: string): boolean {
   const d = String(desc || '').replace(/\s+/g, '');
   const m = d.match(/(20\d{2}|\d{2})년(?:기타수수료)?(\d{1,2})월/);
@@ -533,6 +533,6 @@ function isPostCutoffLetterMonth(desc: string, cutoffDot: string): boolean {
   const cy = Number(cut.slice(0, 4));
   const cm = Number(cut.slice(5, 7));
   if (y > cy) return true;
-  if (y === cy && mo >= cm) return true;
+  if (y === cy && mo > cm) return true;
   return false;
 }

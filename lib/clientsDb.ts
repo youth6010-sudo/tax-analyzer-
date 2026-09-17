@@ -22,6 +22,7 @@ import { syncMainCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import {
+  applyManagerToLinkedArrears,
   applyManagerToLinkedInquiries,
   nextManagerAfterChange,
   type ManagerActor,
@@ -584,6 +585,11 @@ export async function updateClientIntake(
         newManager: nextManager,
       });
       await applyManagerToLinkedInquiries(id, nextManager);
+      const douzoneCode = String(mergedIntake.douzoneCode ?? '').trim();
+      await applyManagerToLinkedArrears(id, nextManager, {
+        douzoneCode,
+        companyName: row.companyName || existing.companyName || '',
+      });
     }
   }
 
@@ -699,6 +705,11 @@ export async function updateClient(
       changedByUserId,
     });
     await applyManagerToLinkedInquiries(id, nextManager);
+    const douzoneCode = String(mergedIntake.douzoneCode ?? '').trim();
+    await applyManagerToLinkedArrears(id, nextManager, {
+      douzoneCode,
+      companyName: row.companyName || existing.companyName || '',
+    });
   }
 
   return clientToRecord(row);

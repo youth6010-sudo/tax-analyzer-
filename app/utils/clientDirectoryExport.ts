@@ -58,14 +58,8 @@ export function clientNtsTaxTypeLabel(client: ClientRecord): string {
 }
 
 export function buildDirectoryExportRows(clients: readonly ClientRecord[]): DirectoryExportRow[] {
-  const sorted = [...clients].sort((a, b) => {
-    const ma = a.manager?.trim() || '';
-    const mb = b.manager?.trim() || '';
-    if (ma !== mb) return ma.localeCompare(mb, 'ko');
-    return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
-  });
-
-  return sorted.map(c => {
+  // 호출측이 넘긴 화면 표시 순서를 그대로 유지 (재정렬하지 않음)
+  return clients.map(c => {
     const address =
       typeof c.intakeData?.address === 'string' ? c.intakeData.address.trim() : '';
     const mobileFromIntake =

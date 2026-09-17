@@ -131,6 +131,10 @@ export default function ClientDetailPage({
   const [unifiedEditing, setUnifiedEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [relatedCompanies, setRelatedCompanies] = useState(
+    () => String(client.intakeData?.relatedCompanies ?? ''),
+  );
+  const [taxKind, setTaxKind] = useState(() => String(client.intakeData?.taxKind ?? ''));
   const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
   const contactFormRef = useRef<(() => ContactUpdatePayload) | null>(null);
   const metaPatchRef = useRef<(() => { intakeData: Record<string, unknown>; category: string }) | null>(
@@ -141,7 +145,10 @@ export default function ClientDetailPage({
   const clientAddress = typeof intakeData.address === 'string' ? intakeData.address.trim() : '';
 
   useEffect(() => {
-    setIntakeData(client.intakeData ?? {});
+    const next = client.intakeData ?? {};
+    setIntakeData(next);
+    setRelatedCompanies(String(next.relatedCompanies ?? ''));
+    setTaxKind(String(next.taxKind ?? ''));
   }, [client.id, client.intakeData]);
 
   useEffect(() => {
@@ -180,6 +187,8 @@ export default function ClientDetailPage({
       const intakeDataPatch = {
         ...meta.intakeData,
         category: category || null,
+        relatedCompanies: relatedCompanies.trim() || null,
+        taxKind: taxKind.trim() || null,
       };
 
       const res = await fetch(`/api/clients/${client.id}`, {
@@ -201,6 +210,10 @@ export default function ClientDetailPage({
         markPortalClientsFresh();
         if (data.client.intakeData) {
           setIntakeData(data.client.intakeData as Record<string, unknown>);
+          setRelatedCompanies(
+            String((data.client.intakeData as Record<string, unknown>).relatedCompanies ?? ''),
+          );
+          setTaxKind(String((data.client.intakeData as Record<string, unknown>).taxKind ?? ''));
         }
       }
 
@@ -241,6 +254,8 @@ export default function ClientDetailPage({
                 onClick={() => {
                   setUnifiedEditing(false);
                   setSaveError('');
+                  setRelatedCompanies(String(intakeData.relatedCompanies ?? ''));
+                  setTaxKind(String(intakeData.taxKind ?? ''));
                 }}
                 disabled={saving}
                 className={portalBtnSecondary}
@@ -268,6 +283,10 @@ export default function ClientDetailPage({
           forcedEditing={unifiedEditing}
           hideEditButton
           getFormRef={contactFormRef}
+          taxKind={taxKind}
+          relatedCompanies={relatedCompanies}
+          onRelatedCompaniesChange={canEdit ? setRelatedCompanies : undefined}
+          onTaxKindChange={canEdit ? setTaxKind : undefined}
           titleAside={<ClientContactsPanel clientId={client.id} canEdit={canEdit && unifiedEditing} inline />}
         />
 

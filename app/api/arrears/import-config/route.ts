@@ -28,6 +28,7 @@ export async function GET() {
   }
 }
 
+/** 목록 기준일(statusAsOfDate)만 수정. 공문 cutoff는 서버에서 동결 유지. */
 export async function PATCH(req: Request) {
   try {
     const user = await requireUser();
@@ -36,21 +37,18 @@ export async function PATCH(req: Request) {
     }
     const body = (await req.json().catch(() => ({}))) as {
       statusAsOfDate?: string;
-      letterCutoffDate?: string;
     };
-    const config = writeArrearsImportConfig({
-      statusAsOfDate: body.statusAsOfDate ? normalizeDotDate(body.statusAsOfDate) : undefined,
-      letterCutoffDate: body.letterCutoffDate ? normalizeDotDate(body.letterCutoffDate) : undefined,
-    });
-
-    // 조회 기준일 = 사용자가 입력한 기준일
-    if (body.statusAsOfDate) {
-      const asOfIso = toIsoDate(config.statusAsOfDate);
-      const actor = user.name?.trim() || 'import-config';
-      await getDb()
-        .update(arrearsEntries)
-        .set({ asOfDate: asOfIso, updatedBy: actor, updatedAt: new Date() });
+    const asOfRaw = String(body.statusAsOfDate ?? '').trim();
+    if (!asOfRaw || !normalizeDotDate(asOfRaw)) {
+      return NextResponse.json({ error: '기준일을 확인해 주세요. (예: 2026.08.31)' }, { status: 400 });
     }
+
+    const config = writeArrearsImportConfig({ statusAsOfDate: asOfRaw });
+    const asOfIso = toIsoDate(config.statusAsOfDate);
+    const actor = user.name?.trim() || 'import-config';
+    await getDb()
+      .update(arrearsEntries)
+      .set({ asOfDate: asOfIso, updatedBy: actor, updatedAt: new Date() });
 
     return NextResponse.json(config, NO_STORE);
   } catch (e) {

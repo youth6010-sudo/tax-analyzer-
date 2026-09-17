@@ -46,7 +46,7 @@ async function main() {
 
   console.log('2) 거래처별 상세', detailPath);
   const detailBuf = fs.readFileSync(detailPath);
-  const d = await applyClientDetailImport(detailBuf, 'apply-baseline', '2026.07.27');
+  const d = await applyClientDetailImport(detailBuf, 'apply-baseline', '2026.08.31');
   console.log('  applied', d.applied, 'linesAdded', d.linesAdded, 'skippedInactive', d.skippedInactive);
 
   console.log('done');
