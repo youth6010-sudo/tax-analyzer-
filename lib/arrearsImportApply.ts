@@ -5,6 +5,7 @@ import {
   isArrearsBalanceLocked,
   isArrearsLetterProtected,
 } from '@/lib/arrearsBalanceLock';
+import { syncArrearsManagersFromLinkedClients } from '@/lib/intakeManagerSync';
 import {
   ARREARS_FROZEN_LETTER_CUTOFF,
   isAfterCutoff,
@@ -112,6 +113,7 @@ export async function applyStatusImport(
     const [prev] = await db
       .select({
         id: arrearsEntries.id,
+        clientId: arrearsEntries.clientId,
         mgmtCategory: arrearsEntries.mgmtCategory,
         churnMgmtStatus: arrearsEntries.churnMgmtStatus,
         managerName: arrearsEntries.managerName,
@@ -134,7 +136,8 @@ export async function applyStatusImport(
         updatedBy: actorName,
         updatedAt: new Date(),
       };
-      if (row.managerName) patch.managerName = row.managerName;
+      // 수임처 연결분 담당은 수임처 담당이 우선 — 현황표 코드로 덮지 않음
+      if (row.managerName && !prev.clientId) patch.managerName = row.managerName;
       if (row.mgmtCategory && row.mgmtCategory !== (prev.mgmtCategory || '')) {
         patch.mgmtCategory = row.mgmtCategory;
         categoryUpdated += 1;
@@ -178,6 +181,9 @@ export async function applyStatusImport(
   await db
     .update(arrearsEntries)
     .set({ asOfDate: asOfIso, updatedBy: actorName, updatedAt: new Date() });
+
+  // 연결 수임처 담당으로 미수 담당 재맞춤 (현황표 담당코드 덮어쓰기 방지 후 보정)
+  await syncArrearsManagersFromLinkedClients();
 
   const totalBalance = parsed.rows.reduce((s, r) => s + r.balance, 0);
   const overageStripped = await stripOverageUnpaidMonthLines(actorName);

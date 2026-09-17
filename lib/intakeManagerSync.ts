@@ -67,7 +67,7 @@ export async function applyManagerToClient(clientId: string, managerName: string
 
 /**
  * 수임처 담당 변경 → 연결 미수 entry 담당 동기화
- * (clientId 연결 + 세무사랑 코드/상호 매칭)
+ * (clientId 연결 + 세무사랑 코드/상호 soft 매칭)
  */
 export async function applyManagerToLinkedArrears(
   clientId: string,
@@ -86,21 +86,81 @@ export async function applyManagerToLinkedArrears(
     .where(eq(arrearsEntries.clientId, clientId));
 
   if (code) {
+    const codeKey = code.replace(/^0+/, '') || code;
     await db
       .update(arrearsEntries)
       .set({ managerName: mgr, updatedAt: now, clientId })
-      .where(eq(arrearsEntries.externalCode, code));
+      .where(
+        sql`regexp_replace(${arrearsEntries.externalCode}, '^0+', '') = ${codeKey}
+            OR ${arrearsEntries.externalCode} = ${code}`,
+      );
   }
 
   if (name) {
-    const compact = name.replace(/\s+/g, '').toLowerCase();
-    if (compact) {
-      await db
-        .update(arrearsEntries)
-        .set({ managerName: mgr, updatedAt: now, clientId })
-        .where(sql`lower(replace(${arrearsEntries.companyName}, ' ', '')) = ${compact}`);
+    const soft = companySoftKey(name);
+    if (soft) {
+      const rows = await db
+        .select({
+          id: arrearsEntries.id,
+          companyName: arrearsEntries.companyName,
+          clientId: arrearsEntries.clientId,
+        })
+        .from(arrearsEntries);
+      const ids = rows
+        .filter(r => !r.clientId || r.clientId === clientId)
+        .filter(r => companySoftKey(r.companyName) === soft)
+        .map(r => r.id);
+      if (ids.length) {
+        await db
+          .update(arrearsEntries)
+          .set({ managerName: mgr, updatedAt: now, clientId })
+          .where(inArray(arrearsEntries.id, ids));
+      }
     }
   }
+}
+
+/** 상호 매칭용 — 공백·㈜·주식회사 제거 */
+export function companySoftKey(s: string): string {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/㈜/g, '')
+    .replace(/\(주\)/g, '')
+    .replace(/주식회사/g, '')
+    .replace(/股份/g, '');
+}
+
+/**
+ * 연결(client_id)된 미수 담당을 수임처 담당으로 일괄 맞춤.
+ * 현황표 업로드가 담당을 덮어쓴 뒤에도 호출해 수임처 기준을 유지한다.
+ */
+export async function syncArrearsManagersFromLinkedClients(): Promise<number> {
+  const db = getDb();
+  const mismatched = await db
+    .select({
+      id: arrearsEntries.id,
+      clientManager: clients.manager,
+    })
+    .from(arrearsEntries)
+    .innerJoin(clients, eq(arrearsEntries.clientId, clients.id))
+    .where(
+      sql`coalesce(${arrearsEntries.managerName}, '') IS DISTINCT FROM coalesce(${clients.manager}, '')`,
+    );
+
+  if (!mismatched.length) return 0;
+  const now = new Date();
+  for (const row of mismatched) {
+    await db
+      .update(arrearsEntries)
+      .set({
+        managerName: (row.clientManager || '').trim(),
+        updatedAt: now,
+      })
+      .where(eq(arrearsEntries.id, row.id));
+  }
+  return mismatched.length;
 }
 
 /** 미수 entry → 연결 수임처 id 찾기 */
