@@ -48,8 +48,6 @@ import { useStaffAcceptMap } from '@/app/components/clients/useStaffAcceptMap';
 import ClientRowHeading, { type ClientRowBadge } from '@/app/components/clients/ClientRowHeading';
 import ClientFeeCell from '@/app/components/clients/ClientFeeCell';
 import ClientRowExpandPanel from '@/app/components/clients/ClientRowExpandPanel';
-import RelatedCompaniesChip from '@/app/components/clients/RelatedCompaniesChip';
-import { companySoftKey, parseRelatedNames } from '@/lib/relatedCompanies';
 
 const COLUMN_GAP = 10;
 
@@ -195,7 +193,6 @@ function ClientRosterRow({
   consumeReorderClick,
   showNtsClosed,
   recoveryRefs = emptyArrearsRecoveryRefs(),
-  relatedIdBySoft,
 }: {
   client: ClientRecord;
   index: number;
@@ -213,7 +210,6 @@ function ClientRosterRow({
   consumeReorderClick?: () => boolean;
   showNtsClosed?: boolean;
   recoveryRefs?: ArrearsRecoveryRefs;
-  relatedIdBySoft?: Map<string, string>;
 }) {
   const isChurned = c.status === 'churned';
   const rep = dash(c.representative);
@@ -243,10 +239,6 @@ function ClientRosterRow({
   );
   const dayaName = !isChurned && isDayaHighlightedClient(c);
   const recoveryRow = !isChurned && isArrearsRecoveryClient(c, recoveryRefs);
-  const relatedLinks = parseRelatedNames(String(c.intakeData?.relatedCompanies ?? '')).map(name => ({
-    name,
-    id: relatedIdBySoft?.get(companySoftKey(name)) ?? null,
-  }));
 
   return (
     <li
@@ -267,9 +259,8 @@ function ClientRosterRow({
         {index + 1}
       </span>
 
-      <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <ClientRowHeading
+      <div className="min-w-0 overflow-hidden">
+        <ClientRowHeading
             companyName={<Highlight text={c.companyName} query={query} />}
             companyTitle={c.companyName}
             expanded={expanded}
@@ -284,8 +275,6 @@ function ClientRosterRow({
             reorderProps={reorderProps}
             consumeReorderClick={consumeReorderClick}
           />
-        </div>
-        <RelatedCompaniesChip links={relatedLinks} />
       </div>
 
       {showFee && (
@@ -343,7 +332,6 @@ function EntityPanel({
   heightKey,
   onPanelHeightChange,
   recoveryRefs = emptyArrearsRecoveryRefs(),
-  relatedIdBySoft,
 }: {
   title: string;
   variant: 'personal' | 'corporate' | 'other';
@@ -364,7 +352,6 @@ function EntityPanel({
   heightKey: RosterEntityHeightKey;
   onPanelHeightChange: (key: RosterEntityHeightKey, height: number) => void;
   recoveryRefs?: ArrearsRecoveryRefs;
-  relatedIdBySoft?: Map<string, string>;
 }) {
   const feeSum = sumClientFees(clients);
   const s = variant === 'other' && title === SINGO_DAERI ? PANEL.singo : PANEL[variant];
@@ -497,7 +484,6 @@ function EntityPanel({
                   consumeReorderClick={consumeClick}
                   showNtsClosed={clientNeedsNtsAttention(c, churnRecords)}
                   recoveryRefs={recoveryRefs}
-                  relatedIdBySoft={relatedIdBySoft}
                 />
               ))}
             </ul>
@@ -643,7 +629,6 @@ function ManagerSection({
   canToggleAccept = false,
   onToggleAccept,
   recoveryRefs = emptyArrearsRecoveryRefs(),
-  relatedIdBySoft,
 }: {
   manager: string;
   clients: ClientRecord[];
@@ -665,7 +650,6 @@ function ManagerSection({
   canToggleAccept?: boolean;
   onToggleAccept?: (kind: 'individual' | 'corporate') => void;
   recoveryRefs?: ArrearsRecoveryRefs;
-  relatedIdBySoft?: Map<string, string>;
 }) {
   const realName = STAFF_REAL_NAMES[manager];
   const { personal, corporate, otherCategories } = splitManagerClientsByCategory(clients);
@@ -747,7 +731,6 @@ function ManagerSection({
           heightKey="corporate"
           onPanelHeightChange={onEntityHeightChange}
           recoveryRefs={recoveryRefs}
-          relatedIdBySoft={relatedIdBySoft}
         />
         <EntityPanel
           title="개인"
@@ -768,7 +751,6 @@ function ManagerSection({
           heightKey="personal"
           onPanelHeightChange={onEntityHeightChange}
           recoveryRefs={recoveryRefs}
-          relatedIdBySoft={relatedIdBySoft}
         />
         <MainCategorySummary
           personal={personal}
@@ -797,7 +779,6 @@ function ManagerSection({
             heightKey="other"
             onPanelHeightChange={onEntityHeightChange}
             recoveryRefs={recoveryRefs}
-            relatedIdBySoft={relatedIdBySoft}
           />
         ))}
       </div>
@@ -1120,14 +1101,6 @@ export default function ManagerRosterGrid({
     setEntityHeights(prev => ({ ...prev, [key]: height }));
   }, []);
 
-  const relatedIdBySoft = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of clients) {
-      const soft = companySoftKey(c.companyName);
-      if (soft && !map.has(soft)) map.set(soft, c.id);
-    }
-    return map;
-  }, [clients]);
 
   // visibleManagers는 호출부에서 사용자가 지정한 순서대로 전달된다 → 그 순서를 그대로 유지
   const managerGroups = useMemo(() => {
@@ -1192,7 +1165,6 @@ export default function ManagerRosterGrid({
             canToggleAccept={canToggle(mgr.manager)}
             onToggleAccept={kind => void toggle(mgr.manager, kind)}
             recoveryRefs={recoveryRefs}
-            relatedIdBySoft={relatedIdBySoft}
           />
           <RosterColumnResizeHandle columnWidth={columnWidth} onResize={setColumnWidth} />
         </div>

@@ -32,7 +32,7 @@ import { relatedNamesEqual } from '@/lib/relatedCompanies';
 import {
   afterRelatedCompaniesChanged,
   syncManagerToRelatedCompanies,
-  syncRelatedCompanyLinks,
+  syncRelatedCompanyGroupMesh,
 } from '@/lib/relatedCompaniesSync';
 
 export type ClientPatch = ContactUpdatePayload & {
@@ -608,6 +608,12 @@ export async function updateClientIntake(
       prevRelated,
       nextRelated,
       (patch.manager !== undefined ? patch.manager : existing.manager || '').trim(),
+      String(mergedIntake.relatedPrimaryId ?? '').trim() ||
+        (mergedIntake.relatedPrimary === true ||
+        mergedIntake.relatedPrimary === 'Y' ||
+        mergedIntake.relatedPrimary === '1'
+          ? id
+          : null),
     );
   }
 
@@ -713,8 +719,27 @@ export async function updateClient(
   const relatedChanged = !relatedNamesEqual(prevRelated, nextRelated);
   const managerChanged = nextManager !== (existing.manager || '').trim();
 
-  if (relatedChanged) {
-    await syncRelatedCompanyLinks(id, prevRelated, nextRelated);
+  const prevPrimaryId = String(existing.intakeData?.relatedPrimaryId ?? '').trim();
+  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
+  if (
+    !nextPrimaryId &&
+    (mergedIntake.relatedPrimary === true ||
+      mergedIntake.relatedPrimary === 'Y' ||
+      mergedIntake.relatedPrimary === 'y' ||
+      mergedIntake.relatedPrimary === '1' ||
+      mergedIntake.relatedPrimary === 1)
+  ) {
+    nextPrimaryId = id;
+  }
+  const primaryChanged = prevPrimaryId !== nextPrimaryId;
+
+  if (relatedChanged || primaryChanged) {
+    await syncRelatedCompanyGroupMesh(
+      id,
+      prevRelated,
+      nextRelated,
+      nextPrimaryId || null,
+    );
   }
 
   if (managerChanged) {
@@ -811,12 +836,25 @@ export async function updateClientDetail(
 
   const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
   const nextRelated = String(mergedIntake.relatedCompanies ?? '');
-  if (!relatedNamesEqual(prevRelated, nextRelated)) {
-    await afterRelatedCompaniesChanged(
+  const relatedChanged = !relatedNamesEqual(prevRelated, nextRelated);
+  const prevPrimaryId = String(existing.intakeData?.relatedPrimaryId ?? '').trim();
+  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
+  if (
+    !nextPrimaryId &&
+    (mergedIntake.relatedPrimary === true ||
+      mergedIntake.relatedPrimary === 'Y' ||
+      mergedIntake.relatedPrimary === '1')
+  ) {
+    nextPrimaryId = id;
+  }
+  const primaryChanged = prevPrimaryId !== nextPrimaryId;
+
+  if (relatedChanged || primaryChanged) {
+    await syncRelatedCompanyGroupMesh(
       id,
       prevRelated,
       nextRelated,
-      (existing.manager || '').trim(),
+      nextPrimaryId || null,
     );
   }
 

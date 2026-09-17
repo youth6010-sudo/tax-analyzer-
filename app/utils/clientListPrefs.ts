@@ -198,10 +198,22 @@ export function writeManagerClientOrder(manager: string, ids: string[]): void {
 }
 
 /**
+ * 커스텀 순서가 현재 목록을 빠짐없이 덮는지 (이관 후 누락 있으면 false).
+ * 신고접수검토 세목 전용 순서에만 사용 — 수임처/내 수임처 커스텀 순서는 건드리지 않음.
+ */
+export function isCompleteClientOrder(
+  clients: readonly { id: string }[],
+  customOrder?: string[] | null,
+): boolean {
+  if (!customOrder?.length) return false;
+  const known = new Set(customOrder);
+  return clients.every(c => known.has(c.id));
+}
+
+/**
  * 수임처관리와 동일한 표시 순서.
- * - 커스텀 순서 있으면 그대로
+ * - 커스텀 순서 있으면 그대로 (드래그 순서 유지)
  * - 없으면 법인 → 개인 → 기타 대분류, 각 그룹 내 이름/코드 정렬
- *   (신고대상확인이 이름순으로 개인·법인을 섞지 않도록)
  */
 export function applyManagerRosterDisplayOrder(
   clients: ClientRecord[],
@@ -273,8 +285,11 @@ export function applyManagerScopedClientOrder(
   return result;
 }
 
-/** 신고대상확인 전용 순서 — 담당자·세목별 (수임처 관리·대시보드와 분리) */
-export const FILING_CHECK_CLIENT_ORDER_STORAGE_KEY = 'filingCheck.clientOrder.v1';
+/**
+ * 신고대상확인 전용 순서 — 담당자·세목별 (수임처 관리·대시보드와 분리).
+ * v2: 다야 이관 등으로 엉킨 v1 커스텀을 버리고 수임처관리 순서를 다시 기준으로 씀.
+ */
+export const FILING_CHECK_CLIENT_ORDER_STORAGE_KEY = 'filingCheck.clientOrder.v2';
 
 export type FilingCheckClientOrderStore = Record<string, string[]>;
 
@@ -370,7 +385,7 @@ export function applyFilingCheckOrderToRows<T extends { id: string; manager?: st
 
   const sortOneManager = (list: T[], manager: string): T[] => {
     const custom = readFilingCheckClientOrder(manager, taxType);
-    if (custom?.length) return applyIdDisplayOrder(list, custom);
+    if (isCompleteClientOrder(list, custom)) return applyIdDisplayOrder(list, custom);
     return applyIdDisplayOrder(list, readManagerClientOrder(manager));
   };
 
@@ -423,26 +438,35 @@ export function commitFilingCheckClientReorder(
   const store = readFilingCheckClientOrderStore();
   const existing = store[scopeKey];
   const managerFallback = readManagerClientOrder(manager);
+  // 이관 등으로 세목 커스텀이 목록을 못 덮으면 수임처관리 순서를 기준으로 다시 씀
+  const baseOrder = isCompleteClientOrder(allTargetsInScope, existing)
+    ? existing!
+    : managerFallback;
   const fullOrder = applyManagerRosterDisplayOrder(
     allTargetsInScope,
     sort,
-    existing?.length ? existing : managerFallback,
+    baseOrder,
   ).map(c => c.id);
   writeFilingCheckClientOrder(manager, taxType, mergeSubsetIntoOrder(fullOrder, reorderedSubsetIds));
 }
 
-/** 신고대상확인 목록 순서 — 전용 순서 우선, 없으면 수임처관리(법인→개인) 순서를 초기값으로 사용 */
+/** 신고대상확인 목록 순서 — 전용 순서가 목록을 완전히 덮을 때만 사용, 아니면 수임처관리 순 */
 export function applyFilingCheckClientOrder(
   clients: ClientRecord[],
   sort: ClientSortKey,
   manager: string,
   taxType: string,
 ): ClientRecord[] {
+  const roster = applyManagerRosterDisplayOrder(
+    clients,
+    sort,
+    readManagerClientOrder(manager),
+  );
   const custom = readFilingCheckClientOrder(manager, taxType);
-  if (custom?.length) {
+  if (isCompleteClientOrder(clients, custom)) {
     return applyClientDisplayOrder(clients, sort, custom);
   }
-  return applyManagerRosterDisplayOrder(clients, sort, readManagerClientOrder(manager));
+  return roster;
 }
 
 /** 담당자 전체 보기 — 담당자별 신고대상확인 순서(없으면 수임처관리)를 이어 붙임 */

@@ -134,6 +134,13 @@ export default function ClientDetailPage({
   const [relatedCompanies, setRelatedCompanies] = useState(
     () => String(client.intakeData?.relatedCompanies ?? ''),
   );
+  const [relatedPrimaryId, setRelatedPrimaryId] = useState<string | null>(() => {
+    const id = String(client.intakeData?.relatedPrimaryId ?? '').trim();
+    if (id) return id;
+    const v = client.intakeData?.relatedPrimary;
+    if (v === true || v === 'Y' || v === 'y' || v === '1' || v === 1) return client.id;
+    return null;
+  });
   const [taxKind, setTaxKind] = useState(() => String(client.intakeData?.taxKind ?? ''));
   const [churnRecords, setChurnRecords] = useState(() => getPortalChurnRecords());
   const contactFormRef = useRef<(() => ContactUpdatePayload) | null>(null);
@@ -148,6 +155,14 @@ export default function ClientDetailPage({
     const next = client.intakeData ?? {};
     setIntakeData(next);
     setRelatedCompanies(String(next.relatedCompanies ?? ''));
+    const pid = String(next.relatedPrimaryId ?? '').trim();
+    if (pid) setRelatedPrimaryId(pid);
+    else {
+      const v = next.relatedPrimary;
+      setRelatedPrimaryId(
+        v === true || v === 'Y' || v === 'y' || v === '1' || v === 1 ? client.id : null,
+      );
+    }
     setTaxKind(String(next.taxKind ?? ''));
   }, [client.id, client.intakeData]);
 
@@ -175,6 +190,11 @@ export default function ClientDetailPage({
         category: String(client.intakeData?.category ?? ''),
       };
 
+      if (relatedCompanies.trim() && !relatedPrimaryId) {
+        setSaveError('연관업체가 있으면 대표를 ★로 지정해야 합니다.');
+        return;
+      }
+
       const { entity, category } = resolveEntityAndCategory(
         {
           entity: client.businessEntityType || '',
@@ -188,6 +208,8 @@ export default function ClientDetailPage({
         ...meta.intakeData,
         category: category || null,
         relatedCompanies: relatedCompanies.trim() || null,
+        relatedPrimaryId: relatedPrimaryId || null,
+        relatedPrimary: relatedPrimaryId === client.id ? true : null,
         taxKind: taxKind.trim() || null,
       };
 
@@ -255,6 +277,16 @@ export default function ClientDetailPage({
                   setUnifiedEditing(false);
                   setSaveError('');
                   setRelatedCompanies(String(intakeData.relatedCompanies ?? ''));
+                  const pid = String(intakeData.relatedPrimaryId ?? '').trim();
+                  if (pid) setRelatedPrimaryId(pid);
+                  else {
+                    const v = intakeData.relatedPrimary;
+                    setRelatedPrimaryId(
+                      v === true || v === 'Y' || v === 'y' || v === '1' || v === 1
+                        ? client.id
+                        : null,
+                    );
+                  }
                   setTaxKind(String(intakeData.taxKind ?? ''));
                 }}
                 disabled={saving}
@@ -286,6 +318,8 @@ export default function ClientDetailPage({
           taxKind={taxKind}
           relatedCompanies={relatedCompanies}
           onRelatedCompaniesChange={canEdit ? setRelatedCompanies : undefined}
+          relatedPrimaryId={relatedPrimaryId}
+          onRelatedPrimaryIdChange={canEdit ? setRelatedPrimaryId : undefined}
           onTaxKindChange={canEdit ? setTaxKind : undefined}
           titleAside={<ClientContactsPanel clientId={client.id} canEdit={canEdit && unifiedEditing} inline />}
         />

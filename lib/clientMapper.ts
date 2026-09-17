@@ -35,8 +35,12 @@ export const LIST_INTAKE_KEYS = [
   'fiscalYearEndMonth',
   /** 다야 포트폴리오(이관 포함) — 목록 상호 파란색 */
   'dayaHighlight',
-  /** 관계회사명 — 목록 「관계 N」칩 */
+  /** 관계회사명 — 목록·대시보드 그룹 */
   'relatedCompanies',
+  /** 관계 그룹 대표 여부(레거시) */
+  'relatedPrimary',
+  /** 관계 그룹 대표 client id */
+  'relatedPrimaryId',
 ] as const;
 
 /** 부가세 검토표(진행도·연간) API 전용 — 목록 slim에 넣지 않음 */

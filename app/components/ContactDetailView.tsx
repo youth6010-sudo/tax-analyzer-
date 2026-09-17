@@ -70,6 +70,9 @@ interface ContactDetailViewProps {
   /** intakeData.relatedCompanies — 수정 모드에서만 편집 */
   relatedCompanies?: string;
   onRelatedCompaniesChange?: (value: string) => void;
+  /** 관계 그룹 대표 client id (핀) */
+  relatedPrimaryId?: string | null;
+  onRelatedPrimaryIdChange?: (id: string | null) => void;
   onTaxKindChange?: (value: string) => void;
 }
 
@@ -107,23 +110,30 @@ function RelatedCompaniesReadout({ value }: { value: string }) {
   );
 }
 
-/** 등록된 수임처만 고르는 관계회사 선택 */
+/** 등록된 수임처만 고르는 관계회사 선택 + 핀으로 대표 지정 */
 function RelatedCompanyPicker({
   value,
   excludeClientId,
   excludeCompanyName,
+  primaryId,
   onChange,
+  onPrimaryIdChange,
 }: {
   value: string;
   excludeClientId?: string;
   excludeCompanyName?: string;
+  primaryId: string | null;
   onChange: (value: string) => void;
+  onPrimaryIdChange?: (primaryId: string | null) => void;
 }) {
   const selected = parseRelatedNames(value);
+  const selfName = (excludeCompanyName || '').trim();
+  const selfId = excludeClientId || '';
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [idBySoft, setIdBySoft] = useState<Map<string, string>>(() => new Map());
   const rootRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -131,7 +141,14 @@ function RelatedCompanyPicker({
   useEffect(() => {
     hydratePortal();
     void prefetchSearchIndex();
-  }, []);
+    const map = new Map<string, string>();
+    for (const c of getPortalClients()) {
+      const soft = companySoftKey(c.companyName);
+      if (soft && !map.has(soft)) map.set(soft, c.id);
+    }
+    if (selfId && selfName) map.set(companySoftKey(selfName), selfId);
+    setIdBySoft(map);
+  }, [selfId, selfName]);
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -171,6 +188,14 @@ function RelatedCompanyPicker({
         .then(data => {
           const api = ((data.clients ?? []) as ClientSearchResult[]).filter(filterHit);
           setResults(mergeClientSearchResults(local, api));
+          setIdBySoft(prev => {
+            const next = new Map(prev);
+            for (const c of [...local, ...api]) {
+              const soft = companySoftKey(c.companyName);
+              if (soft) next.set(soft, c.id);
+            }
+            return next;
+          });
         })
         .catch(err => {
           if (err?.name === 'AbortError') return;
@@ -183,9 +208,16 @@ function RelatedCompanyPicker({
     };
   }, [query, excludeClientId, excludeCompanyName, value]);
 
-  const addName = (name: string) => {
+  const addName = (name: string, id?: string) => {
     const n = name.trim();
     if (!n) return;
+    if (id) {
+      setIdBySoft(prev => {
+        const next = new Map(prev);
+        next.set(companySoftKey(n), id);
+        return next;
+      });
+    }
     onChange(joinRelatedNames([...selected, n]));
     setQuery('');
     setResults([]);
@@ -193,30 +225,72 @@ function RelatedCompanyPicker({
   };
 
   const removeName = (name: string) => {
+    const removedId = idBySoft.get(companySoftKey(name));
     onChange(joinRelatedNames(selected.filter(s => s !== name)));
+    if (removedId && primaryId === removedId) onPrimaryIdChange?.(null);
   };
 
+  type Chip = { id: string; name: string; isSelf: boolean };
+  const chips: Chip[] = [];
+  if (selfId && selfName) {
+    chips.push({ id: selfId, name: selfName, isSelf: true });
+  }
+  for (const name of selected) {
+    const id = idBySoft.get(companySoftKey(name)) || `name:${companySoftKey(name)}`;
+    chips.push({ id, name, isSelf: false });
+  }
+
+  const canPin = selected.length > 0;
+
   return (
-    <div ref={rootRef} className="space-y-1">
-      {selected.length > 0 ? (
+    <div ref={rootRef} className="space-y-1.5">
+      {chips.length > 0 ? (
         <div className="flex flex-wrap gap-1">
-          {selected.map(name => (
-            <span
-              key={name}
-              className="inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-800"
-            >
-              <span className="truncate">{name}</span>
-              <button
-                type="button"
-                className="shrink-0 text-slate-400 hover:text-rose-600"
-                onClick={() => removeName(name)}
-                aria-label={`${name} 제거`}
+          {chips.map(chip => {
+            const pinned = canPin && primaryId === chip.id;
+            return (
+              <span
+                key={chip.id}
+                className={`inline-flex max-w-full items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${
+                  pinned
+                    ? 'border-teal-400 bg-teal-50 text-teal-900'
+                    : 'border-slate-200 bg-slate-50 text-slate-800'
+                }`}
               >
-                ×
-              </button>
-            </span>
-          ))}
+                {canPin ? (
+                  <button
+                    type="button"
+                    className={`shrink-0 rounded px-0.5 text-[12px] leading-none ${
+                      pinned ? 'text-teal-700' : 'text-slate-300 hover:text-amber-500'
+                    }`}
+                    title={pinned ? '대표' : '대표로 지정'}
+                    onClick={() => onPrimaryIdChange?.(pinned ? null : chip.id)}
+                    aria-label={`${chip.name} 대표 핀`}
+                  >
+                    {pinned ? '★' : '☆'}
+                  </button>
+                ) : null}
+                <span className="truncate">
+                  {chip.name}
+                  {chip.isSelf ? ' (현재)' : ''}
+                </span>
+                {!chip.isSelf ? (
+                  <button
+                    type="button"
+                    className="shrink-0 text-slate-400 hover:text-rose-600"
+                    onClick={() => removeName(chip.name)}
+                    aria-label={`${chip.name} 제거`}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
+      ) : null}
+      {canPin && !primaryId ? (
+        <p className="text-[10px] text-amber-700">연관업체 중 대표를 ★로 지정하세요 (1곳만)</p>
       ) : null}
       <div className="relative">
         <input
@@ -244,7 +318,7 @@ function RelatedCompanyPicker({
                     className="flex w-full flex-col items-start px-2.5 py-1.5 text-left hover:bg-slate-50"
                     onMouseDown={e => {
                       e.preventDefault();
-                      addName(c.companyName);
+                      addName(c.companyName, c.id);
                     }}
                   >
                     <span className="text-xs font-semibold text-slate-900">{c.companyName}</span>
@@ -317,6 +391,8 @@ export default function ContactDetailView({
   taxKind = '',
   relatedCompanies = '',
   onRelatedCompaniesChange,
+  relatedPrimaryId = null,
+  onRelatedPrimaryIdChange,
   onTaxKindChange,
 }: ContactDetailViewProps) {
   const router = useRouter();
@@ -793,14 +869,25 @@ export default function ContactDetailView({
             <div className="min-w-0">
               <p className="text-[10px] font-medium text-slate-400">관계회사명</p>
               {isEditing && onRelatedCompaniesChange ? (
-                <RelatedCompanyPicker
-                  value={relatedCompanies}
-                  excludeClientId={contact.id}
-                  excludeCompanyName={contact.companyName}
-                  onChange={onRelatedCompaniesChange}
-                />
+                <div className="space-y-1.5">
+                  <RelatedCompanyPicker
+                    value={relatedCompanies}
+                    excludeClientId={contact.id}
+                    excludeCompanyName={contact.companyName}
+                    primaryId={relatedPrimaryId}
+                    onChange={onRelatedCompaniesChange}
+                    onPrimaryIdChange={onRelatedPrimaryIdChange}
+                  />
+                </div>
               ) : (
-                <RelatedCompaniesReadout value={relatedCompanies} />
+                <div className="space-y-1">
+                  <RelatedCompaniesReadout value={relatedCompanies} />
+                  {relatedPrimaryId === contact.id ? (
+                    <span className="inline-flex rounded bg-teal-100 px-1.5 py-px text-[10px] font-bold text-teal-800">
+                      관계 그룹 대표
+                    </span>
+                  ) : null}
+                </div>
               )}
             </div>
           ) : null}

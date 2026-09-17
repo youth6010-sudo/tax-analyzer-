@@ -34,6 +34,10 @@ import {
   isArrearsRecoveryClient,
   type ArrearsRecoveryRefs,
 } from '@/app/utils/arrearsRecoveryHighlight';
+import {
+  buildRelatedGroups,
+  sameSectionMembers,
+} from '@/lib/relatedCompanyGroups';
 
 type SortKey = ClientSortKey;
 
@@ -45,7 +49,6 @@ function compareByName(a: ClientRecord, b: ClientRecord): number {
   return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
 }
 
-// 코드(intakeData.douzoneCode = "코드") 순 — 비어있으면 뒤로
 function compareByCode(a: ClientRecord, b: ClientRecord): number {
   const ca = getClientDouzoneCode(a);
   const cb = getClientDouzoneCode(b);
@@ -60,6 +63,7 @@ function compareByCode(a: ClientRecord, b: ClientRecord): number {
 
 function ClientList({
   clients,
+  sectionLabel,
   excludedIds,
   summaryIds,
   ntsClosedIds,
@@ -72,6 +76,8 @@ function ClientList({
   recoveryRefs = emptyArrearsRecoveryRefs(),
 }: {
   clients: ClientWithChurn[];
+  /** 법인 | 개인 | 신고대리 | 기타 */
+  sectionLabel: string;
   excludedIds: Set<string>;
   summaryIds: Set<string>;
   ntsClosedIds: Set<string>;
@@ -94,111 +100,235 @@ function ClientList({
   );
   const { orderedIds, getItemProps, consumeClick } = useLongPressListReorder(ids, handleCommit);
   const byId = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
-  const displayClients = orderedIds
-    .map(id => byId.get(id))
-    .filter((c): c is ClientWithChurn => !!c);
+
+  const { byClientId } = useMemo(() => buildRelatedGroups(allClients), [allClients]);
+
+  const canChunkGroup =
+    sectionLabel === '법인' ||
+    sectionLabel === '개인' ||
+    sectionLabel === SINGO_DAERI;
+
+  const displayClients = useMemo(() => {
+    const ordered = orderedIds
+      .map(id => byId.get(id))
+      .filter((c): c is ClientWithChurn => !!c);
+    if (!canChunkGroup) return ordered;
+
+    const emitted = new Set<string>();
+    const out: ClientWithChurn[] = [];
+    for (const c of ordered) {
+      if (emitted.has(c.id)) continue;
+      const g = byClientId.get(c.id);
+      if (!g) {
+        out.push(c);
+        emitted.add(c.id);
+        continue;
+      }
+      const same = sameSectionMembers(g, ordered, sectionLabel);
+      if (same.length < 2) {
+        out.push(c);
+        emitted.add(c.id);
+        continue;
+      }
+      const sameIds = new Set(same.map(x => x.id));
+      for (const x of ordered) {
+        if (sameIds.has(x.id) && !emitted.has(x.id)) {
+          out.push(x);
+          emitted.add(x.id);
+        }
+      }
+    }
+    return out;
+  }, [orderedIds, byId, byClientId, canChunkGroup, sectionLabel]);
+
+  type Chunk =
+    | { kind: 'group'; groupId: string; items: ClientWithChurn[]; count: number }
+    | { kind: 'single'; items: [ClientWithChurn] };
+
+  const chunks = useMemo(() => {
+    const result: Chunk[] = [];
+    let i = 0;
+    while (i < displayClients.length) {
+      const c = displayClients[i]!;
+      const g = byClientId.get(c.id);
+      if (canChunkGroup && g) {
+        const same = sameSectionMembers(g, displayClients, sectionLabel);
+        if (same.length >= 2) {
+          const sameIds = new Set(same.map(x => x.id));
+          const run: ClientWithChurn[] = [];
+          while (i < displayClients.length && sameIds.has(displayClients[i]!.id)) {
+            run.push(displayClients[i]!);
+            i += 1;
+          }
+          result.push({ kind: 'group', groupId: g.groupId, items: run, count: run.length });
+          continue;
+        }
+      }
+      result.push({ kind: 'single', items: [c] });
+      i += 1;
+    }
+    return result;
+  }, [displayClients, byClientId, canChunkGroup, sectionLabel]);
 
   if (clients.length === 0) {
     return <p className="px-1 py-5 text-center text-sm text-slate-400">담당 수임처가 없습니다.</p>;
   }
-  return (
-    <ol className="divide-y divide-slate-100">
-      {displayClients.map((c, i) => {
-        const excluded = excludedIds.has(c.id);
-        const summary = summaryIds.has(c.id);
-        const ntsClosed = ntsClosedIds.has(c.id);
-        const isChurned = c.status === 'churned';
-        const ntsCode = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
-        const ntsClosedLabel = ntsCode === '02' ? '휴업' : ntsCode === '03' ? '폐업' : '폐업/휴업';
-        const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
-        const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
-        const nameProps = getItemProps(c.id);
-        const dayaName = !isChurned && isDayaHighlightedClient(c);
-        const recoveryRow = !isChurned && isArrearsRecoveryClient(c, recoveryRefs);
-        return (
-          <li key={c.id}>
-            <Link
-              href={`/clients/${c.id}`}
-              onClick={e => {
-                if (consumeClick()) e.preventDefault();
-              }}
-              className={[
-                'flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70',
-                recoveryRow ? 'bg-[#fecaca] hover:bg-[#fca5a5]' : '',
-                excluded || isChurned ? 'opacity-60' : '',
-              ].join(' ')}
-            >
-              <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
-                {i + 1}
+
+  const renderRow = (c: ClientWithChurn, i: number) => {
+    const excluded = excludedIds.has(c.id);
+    const summary = summaryIds.has(c.id);
+    const ntsClosed = ntsClosedIds.has(c.id);
+    const isChurned = c.status === 'churned';
+    const ntsCode = ntsOverride[c.id] ?? c.nts?.statusCode ?? '';
+    const ntsClosedLabel = ntsCode === '02' ? '휴업' : ntsCode === '03' ? '폐업' : '폐업/휴업';
+    const closureKind = showClosureMeta ? getClientClosureKind(c, ntsCode) : null;
+    const closureDate = showClosureMeta ? formatClientClosureDate(c) : '';
+    const nameProps = getItemProps(c.id);
+    const dayaName = !isChurned && isDayaHighlightedClient(c);
+    const recoveryRow = !isChurned && isArrearsRecoveryClient(c, recoveryRefs);
+    const g = byClientId.get(c.id);
+    const sameCount = g
+      ? sameSectionMembers(g, displayClients, sectionLabel).length
+      : 0;
+    let primaryBeside: string | null = null;
+    // 같은 분류 안 그룹(2+)은 덩어리로만 표시. 분류가 갈린 연관만 옆에 대표상호.
+    if (
+      g &&
+      g.primaryId &&
+      g.primaryName &&
+      c.id !== g.primaryId &&
+      sameCount < 2
+    ) {
+      primaryBeside = g.primaryName;
+    }
+
+    return (
+      <li key={c.id}>
+        <Link
+          href={`/clients/${c.id}`}
+          onClick={e => {
+            if (consumeClick()) e.preventDefault();
+          }}
+          className={[
+            'flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/70',
+            recoveryRow ? 'bg-[#fecaca] hover:bg-[#fca5a5]' : '',
+            excluded || isChurned ? 'opacity-60' : '',
+          ].join(' ')}
+        >
+          <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-blue-400">
+            {i + 1}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm">
+              <span
+                {...nameProps}
+                title="꾹 눌러 순서 변경"
+                className={`font-semibold touch-none select-none ${nameProps.className ?? ''} ${
+                  excluded || isChurned
+                    ? 'text-slate-400 line-through decoration-slate-400'
+                    : dayaName
+                      ? 'text-blue-600'
+                      : 'text-slate-800'
+                }`}
+              >
+                {c.companyName || '(이름 없음)'}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">
-                  <span
-                    {...nameProps}
-                    title="꾹 눌러 순서 변경"
-                    className={`font-semibold touch-none select-none ${nameProps.className ?? ''} ${
-                      excluded || isChurned
-                        ? 'text-slate-400 line-through decoration-slate-400'
-                        : dayaName
-                          ? 'text-blue-600'
-                          : 'text-slate-800'
-                    }`}
-                  >
-                    {c.companyName || '(이름 없음)'}
-                  </span>
-                  {(c.representative || c.businessNo) && (
-                    <span
-                      className={`text-xs font-normal ${
-                        excluded || isChurned ? 'text-slate-300' : 'text-slate-400'
-                      }`}
-                    >
-                      {' · '}
-                      {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                </span>
-                {closureDate && (
-                  <span className="block truncate text-xs text-slate-400">{closureDate}</span>
-                )}
-              </span>
-              {showClosureMeta && closureKind && (
+              {(c.representative || c.businessNo) && (
                 <span
-                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                    closureKind === '해임'
-                      ? 'bg-red-200 text-red-900'
-                      : closureKind === '휴업'
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-red-100 text-red-700'
+                  className={`text-xs font-normal ${
+                    excluded || isChurned ? 'text-slate-300' : 'text-slate-400'
                   }`}
                 >
-                  {closureKind === '해임' ? '유출' : closureKind}
+                  {' · '}
+                  {[c.representative, c.businessNo].filter(Boolean).join(' · ')}
                 </span>
               )}
-              {!showClosureMeta && isChurned && (
-                <span className="shrink-0 rounded-full bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
-                  유출
+            </span>
+            {primaryBeside ? (
+              <span className="mt-0.5 block truncate text-[10px] font-medium text-teal-700">
+                대표 · {primaryBeside}
+              </span>
+            ) : null}
+            {closureDate && (
+              <span className="block truncate text-xs text-slate-400">{closureDate}</span>
+            )}
+          </span>
+          {g && g.primaryId && c.id === g.primaryId ? (
+            <span className="shrink-0 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+              대표
+            </span>
+          ) : null}
+          {showClosureMeta && closureKind && (
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                closureKind === '해임'
+                  ? 'bg-red-200 text-red-900'
+                  : closureKind === '휴업'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-red-100 text-red-700'
+              }`}
+            >
+              {closureKind === '해임' ? '유출' : closureKind}
+            </span>
+          )}
+          {!showClosureMeta && isChurned && (
+            <span className="shrink-0 rounded-full bg-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-900">
+              유출
+            </span>
+          )}
+          {ntsClosed && (
+            <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+              {ntsClosedLabel}
+            </span>
+          )}
+          {summary && (
+            <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+              합계표제출
+            </span>
+          )}
+          {excluded && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+              제외
+            </span>
+          )}
+        </Link>
+      </li>
+    );
+  };
+
+  let rowIndex = 0;
+  return (
+    <div className="space-y-2">
+      {chunks.map((chunk, chunkIdx) => {
+        const startIndex = chunks
+          .slice(0, chunkIdx)
+          .reduce((n, ch) => n + ch.items.length, 0);
+        if (chunk.kind === 'group') {
+          return (
+            <div
+              key={`g-${chunk.groupId}-${startIndex}`}
+              className="overflow-hidden rounded-xl border border-teal-200/90 bg-teal-50/40"
+            >
+              <div className="flex items-center gap-1.5 border-b border-teal-100/80 px-2.5 py-1">
+                <span className="text-[10px] font-bold text-teal-800">관계그룹</span>
+                <span className="text-[10px] font-semibold tabular-nums text-teal-700/80">
+                  {chunk.count}곳
                 </span>
-              )}
-              {ntsClosed && (
-                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                  {ntsClosedLabel}
-                </span>
-              )}
-              {summary && (
-                <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
-                  합계표제출
-                </span>
-              )}
-              {excluded && (
-                <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
-                  제외
-                </span>
-              )}
-            </Link>
-          </li>
+              </div>
+              <ol className="divide-y divide-teal-100/70">
+                {chunk.items.map((c, j) => renderRow(c, startIndex + j))}
+              </ol>
+            </div>
+          );
+        }
+        const c = chunk.items[0]!;
+        return (
+          <ol key={c.id} className="divide-y divide-slate-100">
+            {renderRow(c, startIndex)}
+          </ol>
         );
       })}
-    </ol>
+    </div>
   );
 }
 
@@ -251,6 +381,7 @@ function SectionCard({
         {ready ? (
           <ClientList
             clients={clients}
+            sectionLabel={label}
             excludedIds={excludedIds}
             summaryIds={summaryIds}
             ntsClosedIds={ntsClosedIds}
