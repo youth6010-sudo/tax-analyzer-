@@ -29,6 +29,7 @@ import {
   hydratePortal,
   prefetchSearchIndex,
   searchPortalClients,
+  getPortalClients,
 } from '@/app/utils/portalStore';
 import { mergeClientSearchResults } from '@/app/utils/searchNormalize';
 import {
@@ -39,6 +40,8 @@ import {
   portalCard,
   portalInput,
 } from '@/app/components/portal/uiClasses';
+import { joinRelatedNames, parseRelatedNames, companySoftKey } from '@/lib/relatedCompanies';
+import Link from 'next/link';
 import { canChangeAssignedManager } from '@/lib/intakeManagerGate';
 
 const TAX_LABEL: Record<string, string> = Object.fromEntries(
@@ -70,15 +73,38 @@ interface ContactDetailViewProps {
   onTaxKindChange?: (value: string) => void;
 }
 
-function parseRelatedNames(raw: string): string[] {
-  return String(raw || '')
-    .split(/[,，、;/|]+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-
-function joinRelatedNames(names: string[]): string {
-  return [...new Set(names.map(n => n.trim()).filter(Boolean))].join(', ');
+/** 조회 모드 — 등록 수임처면 상세 링크 */
+function RelatedCompaniesReadout({ value }: { value: string }) {
+  const names = parseRelatedNames(value);
+  if (!names.length) {
+    return <p className="text-xs font-semibold break-all text-slate-900">—</p>;
+  }
+  const portal = getPortalClients();
+  const bySoft = new Map(
+    portal.map(c => [companySoftKey(c.companyName), c] as const),
+  );
+  return (
+    <p className="text-xs font-semibold break-all text-slate-900">
+      {names.map((name, i) => {
+        const hit = bySoft.get(companySoftKey(name));
+        return (
+          <span key={`${name}-${i}`}>
+            {i > 0 ? ', ' : null}
+            {hit ? (
+              <Link
+                href={`/clients/${hit.id}`}
+                className="text-blue-700 underline-offset-2 hover:underline"
+              >
+                {name}
+              </Link>
+            ) : (
+              name
+            )}
+          </span>
+        );
+      })}
+    </p>
+  );
 }
 
 /** 등록된 수임처만 고르는 관계회사 선택 */
@@ -774,9 +800,7 @@ export default function ContactDetailView({
                   onChange={onRelatedCompaniesChange}
                 />
               ) : (
-                <p className="text-xs font-semibold break-all text-slate-900">
-                  {displayValue(relatedCompanies)}
-                </p>
+                <RelatedCompaniesReadout value={relatedCompanies} />
               )}
             </div>
           ) : null}

@@ -1,6 +1,10 @@
 import type { ClientRecord } from '@/app/types/client';
 import type { BusinessEntityType } from '@/app/types/contact';
-import { getClientCategory, NON_BUSINESS_CATEGORY } from '@/app/utils/clientsGrouping';
+import {
+  getClientCategory,
+  NON_BUSINESS_CATEGORY,
+  UNUSED_CATEGORY,
+} from '@/app/utils/clientsGrouping';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
 
 export function clientBizNoKey(client: Pick<ClientRecord, 'businessNo'>): string {
@@ -35,10 +39,22 @@ export function duplicateIdKind(
   return null;
 }
 
+/** 미사용 = 중복 처리 완료 — 중복 확인에서 제외 */
+export function isUnusedForDuplicateCheck(
+  client: Pick<ClientRecord, 'businessEntityType' | 'intakeData'>,
+): boolean {
+  return getClientCategory(client as ClientRecord) === UNUSED_CATEGORY;
+}
+
 /** 중복 판별 키 — 구분·대분류에 따라 번호 쌍이 달라진다 */
 export function clientDuplicateKey(
-  client: Pick<ClientRecord, 'businessNo' | 'corporateNo' | 'residentNo' | 'businessEntityType' | 'intakeData'>,
+  client: Pick<
+    ClientRecord,
+    'businessNo' | 'corporateNo' | 'residentNo' | 'businessEntityType' | 'intakeData'
+  >,
 ): string | null {
+  if (isUnusedForDuplicateCheck(client)) return null;
+
   const biz = clientBizNoKey(client);
   if (biz.length !== 10) return null;
 
@@ -78,6 +94,7 @@ export function isDuplicateBizNoClient(
   >,
   counts: Map<string, number>,
 ): boolean {
+  if (isUnusedForDuplicateCheck(client)) return false;
   const key = clientDuplicateKey(client);
   if (!key) return false;
   return (counts.get(key) ?? 0) > 1;

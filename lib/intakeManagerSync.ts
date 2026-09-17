@@ -3,6 +3,7 @@ import { getDb } from '@/db';
 import { recordClientManagerChange } from '@/lib/clientManagerHistoryDb';
 import { arrearsEntries, clients, intakeInquiries, users } from '@/db/schema';
 import { getManagerMatchNames, managerNamesMatch } from '@/app/utils/managerMatch';
+import { companySoftKey } from '@/lib/relatedCompanies';
 
 export {
   assertCanChangeAssignedManager,
@@ -11,6 +12,8 @@ export {
   resolveLinkedManager,
   type ManagerActor,
 } from '@/lib/intakeManagerGate';
+
+export { companySoftKey } from '@/lib/relatedCompanies';
 
 async function findAssignedUserId(managerName: string): Promise<string | null> {
   const names = getManagerMatchNames(managerName);
@@ -118,18 +121,6 @@ export async function applyManagerToLinkedArrears(
       }
     }
   }
-}
-
-/** 상호 매칭용 — 공백·㈜·주식회사 제거 */
-export function companySoftKey(s: string): string {
-  return String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/㈜/g, '')
-    .replace(/\(주\)/g, '')
-    .replace(/주식회사/g, '')
-    .replace(/股份/g, '');
 }
 
 /**

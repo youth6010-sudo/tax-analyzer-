@@ -18,7 +18,7 @@ import {
   dedupeClientsForChurnSearch,
   filterClientsForChurnRegistration,
 } from '@/app/utils/churnMatch';
-import { syncMainCategory, SINGO_DAERI } from '@/app/utils/clientsGrouping';
+import { syncMainCategory, SINGO_DAERI, getClientCategory, UNUSED_CATEGORY } from '@/app/utils/clientsGrouping';
 import { getManagerMatchNames } from '@/app/utils/managerMatch';
 import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import {
@@ -28,6 +28,12 @@ import {
   type ManagerActor,
 } from '@/lib/intakeManagerSync';
 import { recordClientManagerChange } from '@/lib/clientManagerHistoryDb';
+import { relatedNamesEqual } from '@/lib/relatedCompanies';
+import {
+  afterRelatedCompaniesChanged,
+  syncManagerToRelatedCompanies,
+  syncRelatedCompanyLinks,
+} from '@/lib/relatedCompaniesSync';
 
 export type ClientPatch = ContactUpdatePayload & {
   intakeData?: Record<string, unknown>;
@@ -590,7 +596,19 @@ export async function updateClientIntake(
         douzoneCode,
         companyName: row.companyName || existing.companyName || '',
       });
+      await syncManagerToRelatedCompanies(id, nextManager);
     }
+  }
+
+  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
+  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
+  if (!relatedNamesEqual(prevRelated, nextRelated)) {
+    await afterRelatedCompaniesChanged(
+      id,
+      prevRelated,
+      nextRelated,
+      (patch.manager !== undefined ? patch.manager : existing.manager || '').trim(),
+    );
   }
 
   return clientToRecord(row);
@@ -690,7 +708,16 @@ export async function updateClient(
 
   if (!row) throw new Error('NOT_FOUND');
 
-  if (nextManager !== (existing.manager || '').trim()) {
+  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
+  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
+  const relatedChanged = !relatedNamesEqual(prevRelated, nextRelated);
+  const managerChanged = nextManager !== (existing.manager || '').trim();
+
+  if (relatedChanged) {
+    await syncRelatedCompanyLinks(id, prevRelated, nextRelated);
+  }
+
+  if (managerChanged) {
     let changedByUserId: string | null = null;
     if (actor?.loginId || actor?.name) {
       const byLogin = actor.loginId
@@ -710,6 +737,10 @@ export async function updateClient(
       douzoneCode,
       companyName: row.companyName || existing.companyName || '',
     });
+  }
+
+  if (managerChanged || relatedChanged) {
+    await syncManagerToRelatedCompanies(id, nextManager);
   }
 
   return clientToRecord(row);
@@ -777,6 +808,18 @@ export async function updateClientDetail(
     .returning();
 
   if (!row) throw new Error('NOT_FOUND');
+
+  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
+  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
+  if (!relatedNamesEqual(prevRelated, nextRelated)) {
+    await afterRelatedCompaniesChanged(
+      id,
+      prevRelated,
+      nextRelated,
+      (existing.manager || '').trim(),
+    );
+  }
+
   return clientToRecord(row);
 }
 
@@ -1587,7 +1630,9 @@ export async function findClientsByBusinessNo(
           AND regexp_replace(${clients.corporateNo}, '[^0-9]', '', 'g') = ${corpDigits}`,
       )
       .orderBy(asc(clients.createdAt));
-    return rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
+    return rows
+      .map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]))
+      .filter(c => getClientCategory(c) !== UNUSED_CATEGORY);
   }
 
   if (resDigits.length !== 13) return [];
@@ -1599,7 +1644,9 @@ export async function findClientsByBusinessNo(
         AND regexp_replace(${clients.residentNo}, '[^0-9]', '', 'g') = ${resDigits}`,
     )
     .orderBy(asc(clients.createdAt));
-  return rows.map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]));
+  return rows
+    .map(row => clientToListRecord(row as Parameters<typeof clientToListRecord>[0]))
+    .filter(c => getClientCategory(c) !== UNUSED_CATEGORY);
 }
 
 export async function deleteClientById(id: string) {

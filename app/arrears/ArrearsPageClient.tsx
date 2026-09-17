@@ -130,6 +130,13 @@ export default function ArrearsPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+  /** 수정 모드: 행별 미저장 초안 — 저장 버튼으로만 PATCH */
+  const [rowDrafts, setRowDrafts] = useState<
+    Record<
+      string,
+      Partial<Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'churnMgmtStatus' | 'memo'>>
+    >
+  >({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [matchOpen, setMatchOpen] = useState(false);
   const [feeImportOpen, setFeeImportOpen] = useState(false);
@@ -318,6 +325,81 @@ export default function ArrearsPageClient() {
     },
     [load],
   );
+
+  const setRowDraft = useCallback(
+    (
+      id: string,
+      patch: Partial<Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'churnMgmtStatus' | 'memo'>>,
+    ) => {
+      setRowDrafts(prev => {
+        const base = items.find(r => r.id === id);
+        const merged = { ...prev[id], ...patch };
+        if (!base) return { ...prev, [id]: merged };
+        const cleaned: Partial<
+          Pick<ArrearsEntryDto, 'managerName' | 'mgmtCategory' | 'churnMgmtStatus' | 'memo'>
+        > = {};
+        if (merged.managerName !== undefined && merged.managerName !== base.managerName) {
+          cleaned.managerName = merged.managerName;
+        }
+        if (merged.mgmtCategory !== undefined && merged.mgmtCategory !== base.mgmtCategory) {
+          cleaned.mgmtCategory = merged.mgmtCategory;
+        }
+        if (
+          merged.churnMgmtStatus !== undefined &&
+          merged.churnMgmtStatus !== base.churnMgmtStatus
+        ) {
+          cleaned.churnMgmtStatus = merged.churnMgmtStatus;
+        }
+        if (merged.memo !== undefined && merged.memo !== base.memo) {
+          cleaned.memo = merged.memo;
+        }
+        if (!Object.keys(cleaned).length) {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        }
+        return { ...prev, [id]: cleaned };
+      });
+    },
+    [items],
+  );
+
+  const rowField = useCallback(
+    <K extends 'managerName' | 'mgmtCategory' | 'churnMgmtStatus' | 'memo'>(
+      row: ArrearsEntryDto,
+      key: K,
+    ): ArrearsEntryDto[K] => {
+      const draft = rowDrafts[row.id];
+      if (draft && key in draft && draft[key] !== undefined) {
+        return draft[key] as ArrearsEntryDto[K];
+      }
+      return row[key];
+    },
+    [rowDrafts],
+  );
+
+  const saveRowDraft = useCallback(
+    async (id: string) => {
+      const draft = rowDrafts[id];
+      if (!draft || !Object.keys(draft).length) return;
+      await patchRow(id, draft);
+      setRowDrafts(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    },
+    [rowDrafts, patchRow],
+  );
+
+  const saveAllRowDrafts = useCallback(async () => {
+    const ids = Object.keys(rowDrafts);
+    for (const id of ids) {
+      await saveRowDraft(id);
+    }
+  }, [rowDrafts, saveRowDraft]);
+
+  const dirtyDraftCount = Object.keys(rowDrafts).length;
 
   const openManual = (channel: ManualChannel, entryId = '') => {
     setManualChannel(channel);
@@ -895,6 +977,7 @@ export default function ArrearsPageClient() {
                     if (v) {
                       setMatchOpen(false);
                       setFeeImportOpen(false);
+                      setRowDrafts({});
                       return false;
                     }
                     return true;
@@ -1169,7 +1252,7 @@ export default function ArrearsPageClient() {
         ) : null}
 
         {totals.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-4">
             {totals.map(t => {
               const name = t.managerName;
               const selectable =
@@ -1201,7 +1284,7 @@ export default function ArrearsPageClient() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-nowrap items-start gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex shrink-0 flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">담당 (다중선택)</span>
@@ -1215,7 +1298,7 @@ export default function ArrearsPageClient() {
                 </button>
               ) : null}
             </div>
-            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+            <div className="grid grid-cols-4 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
               {[
                 ...ARREARS_MANAGER_NAMES,
                 ...managerFilterOptions.filter(
@@ -1377,7 +1460,19 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <div className="flex flex-col justify-end gap-1.5 self-stretch pb-0.5 text-sm text-slate-700">
+          <div className="flex min-w-[12rem] flex-1 flex-col items-center justify-end self-stretch px-2">
+            <label className="flex w-full max-w-sm flex-col gap-1 text-center text-xs font-medium text-slate-600">
+              검색
+              <input
+                className={`${portalInput} py-2 text-left`}
+                placeholder="상호·코드·사업자번호"
+                value={q}
+                onChange={e => setQ(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="flex shrink-0 flex-col justify-end gap-1.5 self-stretch pb-0.5 text-sm text-slate-700">
             <label className="flex items-center gap-2 whitespace-nowrap">
               <input
                 type="checkbox"
@@ -1410,18 +1505,9 @@ export default function ArrearsPageClient() {
             </label>
           </div>
 
-          <label className="flex min-w-[10rem] max-w-xs flex-1 flex-col gap-1 self-end text-xs font-medium text-slate-600">
-            검색
-            <input
-              className={`${portalInput} py-2`}
-              placeholder="상호·코드·사업자번호"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-            />
-          </label>
           <button
             type="button"
-            className={`${portalBtnSecondary} self-end py-2`}
+            className={`${portalBtnSecondary} shrink-0 self-end py-2`}
             onClick={() => void load('full')}
           >
             새로고침
@@ -1429,6 +1515,28 @@ export default function ArrearsPageClient() {
         </div>
 
         {error ? <div className={portalAlertError}>{error}</div> : null}
+
+        {editMode && dirtyDraftCount > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 shadow-sm">
+            <span className="font-medium">미저장 변경 {dirtyDraftCount}건</span>
+            <button
+              type="button"
+              className={`${portalBtnPrimary} py-1.5`}
+              disabled={savingId !== null}
+              onClick={() => void saveAllRowDrafts()}
+            >
+              {savingId ? '저장 중…' : '모두 저장'}
+            </button>
+            <button
+              type="button"
+              className={`${portalBtnSecondary} py-1.5`}
+              disabled={savingId !== null}
+              onClick={() => setRowDrafts({})}
+            >
+              취소
+            </button>
+          </div>
+        ) : null}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-left text-sm">
@@ -1765,9 +1873,9 @@ export default function ArrearsPageClient() {
                       {editMode ? (
                         <select
                           className={`${portalInput} py-1 text-xs min-w-[5.5rem] bg-white/80`}
-                          value={row.managerName}
+                          value={rowField(row, 'managerName')}
                           disabled={savingId === row.id}
-                          onChange={e => void patchRow(row.id, { managerName: e.target.value })}
+                          onChange={e => setRowDraft(row.id, { managerName: e.target.value })}
                         >
                           <option value="">미지정</option>
                           {managerFilterOptions.map(n => (
@@ -1775,8 +1883,11 @@ export default function ArrearsPageClient() {
                               {n}
                             </option>
                           ))}
-                          {row.managerName && !managerFilterOptions.includes(row.managerName) ? (
-                            <option value={row.managerName}>{row.managerName}</option>
+                          {rowField(row, 'managerName') &&
+                          !managerFilterOptions.includes(rowField(row, 'managerName')) ? (
+                            <option value={rowField(row, 'managerName')}>
+                              {rowField(row, 'managerName')}
+                            </option>
                           ) : null}
                         </select>
                       ) : (
@@ -1786,11 +1897,11 @@ export default function ArrearsPageClient() {
                     <td className="px-3 py-2">
                       {editMode ? (
                         <select
-                          className={`${portalInput} py-1 text-xs min-w-[6rem] bg-white/80 ${arrearsCategoryChipClass(row.mgmtCategory)}`}
-                          value={row.mgmtCategory}
+                          className={`${portalInput} py-1 text-xs min-w-[6rem] bg-white/80 ${arrearsCategoryChipClass(rowField(row, 'mgmtCategory'))}`}
+                          value={rowField(row, 'mgmtCategory')}
                           disabled={savingId === row.id}
                           onChange={e =>
-                            void patchRow(row.id, {
+                            setRowDraft(row.id, {
                               mgmtCategory: e.target.value as ArrearsEntryDto['mgmtCategory'],
                             })
                           }
@@ -1813,11 +1924,11 @@ export default function ArrearsPageClient() {
                     <td className="px-3 py-2">
                       {editMode ? (
                         <select
-                          className={`${portalInput} py-1 text-xs min-w-[5.5rem] bg-white/80 ${arrearsChurnStatusChipClass(row.churnMgmtStatus)}`}
-                          value={row.churnMgmtStatus}
+                          className={`${portalInput} py-1 text-xs min-w-[5.5rem] bg-white/80 ${arrearsChurnStatusChipClass(rowField(row, 'churnMgmtStatus'))}`}
+                          value={rowField(row, 'churnMgmtStatus')}
                           disabled={savingId === row.id}
                           onChange={e =>
-                            void patchRow(row.id, {
+                            setRowDraft(row.id, {
                               churnMgmtStatus: e.target.value as ArrearsEntryDto['churnMgmtStatus'],
                             })
                           }
@@ -1841,16 +1952,9 @@ export default function ArrearsPageClient() {
                       {editMode ? (
                         <input
                           className={`${portalInput} py-1 text-xs w-full min-w-[8rem] bg-white/80`}
-                          defaultValue={row.memo}
-                          key={`${row.id}:${row.updatedAt}:memo`}
+                          value={rowField(row, 'memo')}
                           disabled={savingId === row.id}
-                          onBlur={e => {
-                            const next = e.target.value;
-                            if (next !== row.memo) void patchRow(row.id, { memo: next });
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
+                          onChange={e => setRowDraft(row.id, { memo: e.target.value })}
                         />
                       ) : (
                         <span className="text-slate-600 text-xs">{row.memo || '—'}</span>
@@ -1858,7 +1962,17 @@ export default function ArrearsPageClient() {
                     </td>
                     {editMode ? (
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1">
+                          {rowDrafts[row.id] ? (
+                            <button
+                              type="button"
+                              className="rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-950 hover:bg-amber-100"
+                              disabled={savingId === row.id}
+                              onClick={() => void saveRowDraft(row.id)}
+                            >
+                              {savingId === row.id ? '저장 중…' : '저장'}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
