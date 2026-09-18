@@ -206,10 +206,10 @@ function renderPlRow(row: ComputedReportRow): string {
     <td class="num col-amt-w">${prior}</td>
     <td class="pct col-sect">${pr}</td>
     <td class="num col-amt-w">${cur}</td>
-    <td class="pct col-inner">${cr}</td>
+    <td class="pct">${cr}</td>
     <td class="basis col-sect">${escapeHtml(ib)}</td>
     <td class="num col-amt-w${assumeCls}">${ann}</td>
-    <td class="pct col-inner${assumeCls}">${ar}</td>
+    <td class="pct${assumeCls}">${ar}</td>
     <td class="basis${assumeCls}">${escapeHtml(cb)}</td>
   </tr>`;
 }
@@ -343,13 +343,13 @@ export function buildInterimClosingReportHtml(
         <th class="k" colspan="3">${escapeHtml(annLabel)}</th>
       </tr>
       <tr>
-        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub">${escapeHtml(spacedLabel('금액'))}</th>
         <th class="k sub col-sect">비율(%)</th>
-        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
-        <th class="k sub col-inner">비율(%)</th>
+        <th class="k sub">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub">비율(%)</th>
         <th class="k sub col-sect">${escapeHtml(spacedLabel('입력기준'))}</th>
-        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
-        <th class="k sub col-inner">비율(%)</th>
+        <th class="k sub">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub">비율(%)</th>
         <th class="k sub">${escapeHtml(spacedLabel('환산기준'))}</th>
       </tr>
     </thead>`;
@@ -463,7 +463,7 @@ export function buildInterimClosingReportHtml(
   .page{position:relative;width:210mm;min-height:297mm;padding:6mm 6.5mm 11mm;background:#fff;page-break-after:always}
   .accent{height:3px;background:#001f60;margin-bottom:6px}
   /* 본표 3구간(과목+전기 | 당기 | 환산 = 40|30|30)과 동일 열선 — 좌:제목 / 중:당기칸 / 우:환산칸 */
-  .top{display:grid;grid-template-columns:40fr 30fr 30fr;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
+  .top{display:grid;grid-template-columns:40% 30% 30%;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
   .brand{padding:6px 10px 4px 0;display:flex;flex-direction:column;justify-content:center;min-width:0;gap:2px}
   .brand h1{display:flex;align-items:center;gap:0.28em;margin:0;padding:0;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#001544;font-family:"Malgun Gothic","맑은 고딕",sans-serif;line-height:1.15}
   .brand h1 .yr{display:inline-flex;align-items:center;height:1.15em;font-size:20px;font-weight:800;line-height:1;position:relative;top:-0.12em}
@@ -501,11 +501,9 @@ export function buildInterimClosingReportHtml(
   .pl th.sub{background:#001f60;color:#fff;font-size:7.5px;font-weight:600;white-space:nowrap}
   .pl tbody td{border:none;background-clip:padding-box}
   .pl tbody tr.sec td{background:#d6e6f5;background-clip:padding-box;font-weight:800;color:#001f60;border-top:0.45px solid #9aa8bc;border-bottom:0.45px solid #9aa8bc}
-  /* 구분선 a/b/c 동일 (과목|전기|당기|환산) */
+  /* 구분선 a/b/c만 (과목|전기|당기|환산) — 금액·비율 사이 선 없음 */
   .pl .col-sect{border-right:0.6px solid #9aa8bc !important}
   .pl th.col-sect{border-right:0.6px solid #9aa8bc !important}
-  .pl .col-inner{border-right:0.45px solid #9aa8bc !important}
-  .pl th.col-inner{border-right:0.45px solid #9aa8bc !important}
   .pl .subj{text-align:left;overflow:hidden;white-space:nowrap;padding-left:3px;border-right:0.6px solid #9aa8bc !important}
   .pl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .pl .col-amt-w{width:15%}
@@ -513,12 +511,12 @@ export function buildInterimClosingReportHtml(
   .pl .basis{text-align:center;font-size:7.5px;white-space:nowrap;color:#222}
   .pl tr.sub td.subj{padding-left:8px;color:#222}
   .pl td.hl-assume{border-top:none;border-bottom:none}
-  /* 하단: 본표 3구간 비율 유지 + 열 사이 여백 */
-  .foot{display:grid;grid-template-columns:40fr 30fr 30fr;gap:0 10px;align-items:stretch;margin-top:14px;border:none}
-  .foot-col{min-width:0;padding:0;border:none}
-  .foot-col.mid-stack{padding:0 6px;box-sizing:border-box}
-  .foot-col.aside{padding-left:0}
-  .foot-col:first-child{padding-right:0}
+  /* 하단·상단: 본표 과목+전기|당기|환산(40|30|30)과 동일 열선 */
+  .foot{display:grid;grid-template-columns:40% 30% 30%;gap:0;align-items:stretch;margin-top:14px;border:none;width:100%}
+  .foot-col{min-width:0;padding:0;border:none;box-sizing:border-box}
+  .foot-col.mid-stack{padding:0}
+  .foot-col.aside{padding:0}
+  .foot-col:first-child{padding:0}
   .foot h4{color:#fff;text-align:center;padding:3px 0;margin:0;font-size:9px;font-weight:800;letter-spacing:0.06em;background:#001f60}
   .foot h4.navy{background:#001f60}
   .foot h4.purple{background:#001f60}
