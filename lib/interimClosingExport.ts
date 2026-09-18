@@ -193,19 +193,23 @@ function renderPlRow(row: ComputedReportRow): string {
   const isAssume = cbRaw === '가정치';
   const cls = [isSec ? 'sec' : '', isSub ? 'sub' : ''].filter(Boolean).join(' ');
   // 대분류(Ⅰ·Ⅱ…)만 표기, 계정과목코드는 미표시
-  const subj = isSec
-    ? `${escapeHtml(code)} ${escapeHtml(name)}`.trim()
-    : escapeHtml(name);
+  const subjText = isSec ? `${code} ${name}`.trim() : name;
+  const subj = escapeHtml(subjText);
+  // 긴 과목명은 글자 축소로 칸 안에 전부 표시 (... 말줄임 없음)
+  const subjLen = subjText.replace(/\s+/g, '').length;
+  const subjFs =
+    subjLen >= 20 ? '6.2px' : subjLen >= 16 ? '6.8px' : subjLen >= 13 ? '7.3px' : '';
+  const subjStyle = subjFs ? ` style="font-size:${subjFs}"` : '';
   const assumeCls = isAssume ? ' hl-assume' : '';
   return `<tr class="${cls}">
-    <td class="subj">${subj}</td>
-    <td class="num col-amt">${prior}</td>
-    <td class="pct col-prior-end">${pr}</td>
-    <td class="num col-amt">${cur}</td>
-    <td class="pct col-amt">${cr}</td>
-    <td class="basis col-ib">${escapeHtml(ib)}</td>
-    <td class="num col-amt${assumeCls}">${ann}</td>
-    <td class="pct col-amt${assumeCls}">${ar}</td>
+    <td class="subj"${subjStyle}>${subj}</td>
+    <td class="num col-amt-w">${prior}</td>
+    <td class="pct col-sect">${pr}</td>
+    <td class="num col-amt-w">${cur}</td>
+    <td class="pct col-inner">${cr}</td>
+    <td class="basis col-sect">${escapeHtml(ib)}</td>
+    <td class="num col-amt-w${assumeCls}">${ann}</td>
+    <td class="pct col-inner${assumeCls}">${ar}</td>
     <td class="basis${assumeCls}">${escapeHtml(cb)}</td>
   </tr>`;
 }
@@ -333,19 +337,19 @@ export function buildInterimClosingReportHtml(
 
   const theadHtml = `<thead>
       <tr>
-        <th class="k k-subj" rowspan="2">${escapeHtml(spacedLabel('과목'))}</th>
-        <th class="k" colspan="2">${escapeHtml(priorLabel)}</th>
-        <th class="k" colspan="3">${escapeHtml(currentLabel)}</th>
+        <th class="k k-subj col-sect" rowspan="2">${escapeHtml(spacedLabel('과목'))}</th>
+        <th class="k col-sect" colspan="2">${escapeHtml(priorLabel)}</th>
+        <th class="k col-sect" colspan="3">${escapeHtml(currentLabel)}</th>
         <th class="k" colspan="3">${escapeHtml(annLabel)}</th>
       </tr>
       <tr>
-        <th class="k sub col-amt">${escapeHtml(spacedLabel('금액'))}</th>
-        <th class="k sub col-prior-end">비율(%)</th>
-        <th class="k sub col-amt">${escapeHtml(spacedLabel('금액'))}</th>
-        <th class="k sub col-amt">비율(%)</th>
-        <th class="k sub col-ib">${escapeHtml(spacedLabel('입력기준'))}</th>
-        <th class="k sub col-amt">${escapeHtml(spacedLabel('금액'))}</th>
-        <th class="k sub col-amt">비율(%)</th>
+        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub col-sect">비율(%)</th>
+        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub col-inner">비율(%)</th>
+        <th class="k sub col-sect">${escapeHtml(spacedLabel('입력기준'))}</th>
+        <th class="k sub col-inner">${escapeHtml(spacedLabel('금액'))}</th>
+        <th class="k sub col-inner">비율(%)</th>
         <th class="k sub">${escapeHtml(spacedLabel('환산기준'))}</th>
       </tr>
     </thead>`;
@@ -438,10 +442,10 @@ export function buildInterimClosingReportHtml(
   ${headerHtml}
   <table class="pl${isLast ? ' pl-last' : ''}">
     <colgroup>
-      <col style="width:15%"/>
-      <col style="width:16%"/><col style="width:7%"/>
-      <col style="width:16%"/><col style="width:7%"/><col style="width:8%"/>
-      <col style="width:16%"/><col style="width:7%"/><col style="width:8%"/>
+      <col class="c-subj" style="width:18%"/>
+      <col class="c-amt" style="width:15%"/><col class="c-pct" style="width:7%"/>
+      <col class="c-amt" style="width:15%"/><col class="c-pct" style="width:7%"/><col class="c-basis" style="width:8%"/>
+      <col class="c-amt" style="width:15%"/><col class="c-pct" style="width:7%"/><col class="c-basis" style="width:8%"/>
     </colgroup>
     ${theadHtml}
     <tbody>${tbody}</tbody>
@@ -458,12 +462,12 @@ export function buildInterimClosingReportHtml(
   body{font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;background:#fff;color:#000;font-size:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{position:relative;width:210mm;min-height:297mm;padding:6mm 6.5mm 11mm;background:#fff;page-break-after:always}
   .accent{height:3px;background:#001f60;margin-bottom:6px}
-  /* 본표 3구간(과목+전기 | 당기 | 환산 = 38|31|31)과 동일 열선 — 좌:제목 / 중:당기칸 / 우:환산칸 */
-  .top{display:grid;grid-template-columns:38fr 31fr 31fr;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
+  /* 본표 3구간(과목+전기 | 당기 | 환산 = 40|30|30)과 동일 열선 — 좌:제목 / 중:당기칸 / 우:환산칸 */
+  .top{display:grid;grid-template-columns:40fr 30fr 30fr;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
   .brand{padding:6px 10px 4px 0;display:flex;flex-direction:column;justify-content:center;min-width:0;gap:2px}
-  .brand h1{display:flex;align-items:center;gap:0.3em;margin:0;padding:0;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#001544;font-family:"Malgun Gothic","맑은 고딕",sans-serif;line-height:1}
-  .brand h1 .yr{display:inline-block;font-size:20px;font-weight:800;line-height:1;transform:translateY(-0.06em)}
-  .brand h1 .ttl{display:inline-block;font-size:20px;font-weight:800;line-height:1.2}
+  .brand h1{display:flex;align-items:center;gap:0.28em;margin:0;padding:0;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#001544;font-family:"Malgun Gothic","맑은 고딕",sans-serif;line-height:1.15}
+  .brand h1 .yr{display:inline-flex;align-items:center;height:1.15em;font-size:20px;font-weight:800;line-height:1;position:relative;top:-0.12em}
+  .brand h1 .ttl{display:inline-flex;align-items:center;height:1.15em;font-size:20px;font-weight:800;line-height:1.15}
   .brand .sub{font-size:11px;color:#002060;margin-top:4px;font-style:italic;line-height:1.3}
   .brand .meta{margin-top:10px;font-size:12px;line-height:1.75;color:#002060}
   .brand .meta b{font-weight:700}
@@ -493,26 +497,24 @@ export function buildInterimClosingReportHtml(
   .pl th,.pl td{padding:3px 2px;font-size:8px;line-height:1.35;height:16px;border:none;overflow:hidden;background-clip:padding-box}
   .pl th{color:#fff;font-weight:700;text-align:center;vertical-align:middle;background:#001f60;padding:4px 2px;font-size:8px}
   .pl th.k{background:#001f60;color:#fff}
-  .pl th.k-subj{width:15%}
+  .pl th.k-subj{width:18%}
   .pl th.sub{background:#001f60;color:#fff;font-size:7.5px;font-weight:600;white-space:nowrap}
   .pl tbody td{border:none;background-clip:padding-box}
   .pl tbody tr.sec td{background:#d6e6f5;background-clip:padding-box;font-weight:800;color:#001f60;border-top:0.45px solid #9aa8bc;border-bottom:0.45px solid #9aa8bc}
-  /* 구분선: 과목|전기|당기|환산 + 금액|비율 동일 회색 */
-  .pl .subj{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:3px;border-right:0.5px solid #9aa8bc !important}
-  .pl th.k:first-child{border-right:0.5px solid #9aa8bc !important}
-  .pl .col-amt{border-right:0.5px solid #9aa8bc !important}
-  .pl th.col-amt{border-right:0.5px solid #9aa8bc !important}
-  .pl .col-prior-end{border-right:0.5px solid #9aa8bc !important}
-  .pl th.col-prior-end{border-right:0.5px solid #9aa8bc !important}
-  .pl .col-ib{border-right:0.5px solid #9aa8bc !important}
-  .pl th.col-ib{border-right:0.5px solid #9aa8bc !important}
+  /* 구분선 a/b/c 동일 (과목|전기|당기|환산) */
+  .pl .col-sect{border-right:0.6px solid #9aa8bc !important}
+  .pl th.col-sect{border-right:0.6px solid #9aa8bc !important}
+  .pl .col-inner{border-right:0.45px solid #9aa8bc !important}
+  .pl th.col-inner{border-right:0.45px solid #9aa8bc !important}
+  .pl .subj{text-align:left;overflow:hidden;white-space:nowrap;padding-left:3px;border-right:0.6px solid #9aa8bc !important}
   .pl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pl .col-amt-w{width:15%}
   .pl .pct{text-align:center;color:#222;white-space:nowrap;font-size:7.5px}
   .pl .basis{text-align:center;font-size:7.5px;white-space:nowrap;color:#222}
-  .pl tr.sub td.subj{padding-left:10px;color:#222}
+  .pl tr.sub td.subj{padding-left:8px;color:#222}
   .pl td.hl-assume{border-top:none;border-bottom:none}
   /* 하단: 본표 3구간 비율 유지 + 열 사이 여백 */
-  .foot{display:grid;grid-template-columns:38fr 31fr 31fr;gap:0 10px;align-items:stretch;margin-top:14px;border:none}
+  .foot{display:grid;grid-template-columns:40fr 30fr 30fr;gap:0 10px;align-items:stretch;margin-top:14px;border:none}
   .foot-col{min-width:0;padding:0;border:none}
   .foot-col.mid-stack{padding:0 6px;box-sizing:border-box}
   .foot-col.aside{padding-left:0}
