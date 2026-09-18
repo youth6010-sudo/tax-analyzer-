@@ -806,8 +806,9 @@ export default function InterimClosingPageClient() {
       >
         <div className="border-b border-[#9aa8bc] px-3 py-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="m-0 text-base font-bold leading-none tracking-tight text-[#001f60]">
-              {payload.year} 손익분석 보고서
+            <h2 className="m-0 flex items-center gap-[0.3em] text-lg font-bold leading-none tracking-tight text-[#001f60]">
+              <span className="inline-block translate-y-[-0.06em] leading-none">{payload.year}</span>
+              <span className="leading-snug">손익분석 보고서</span>
             </h2>
             <span className="text-[11px] text-slate-500">
               {payload.companyName || '회사명'} · Annual Profit & Loss Overview

@@ -319,7 +319,7 @@ export function buildInterimClosingReportHtml(
   const headerHtml = `<div class="accent"></div>
   <div class="top">
     <div class="brand">
-        <h1>${escapeHtml(String(payload.year))} 손익분석 보고서</h1>
+        <h1><span class="yr">${escapeHtml(String(payload.year))}</span><span class="ttl">손익분석 보고서</span></h1>
       <div class="sub">Annual Profit &amp; Loss Overview</div>
       <div class="meta">
         <div><b>회사명 :</b> ${escapeHtml(payload.companyName || '')}</div>
@@ -460,10 +460,12 @@ export function buildInterimClosingReportHtml(
   .accent{height:3px;background:#001f60;margin-bottom:6px}
   /* 본표 3구간(과목+전기 | 당기 | 환산 = 38|31|31)과 동일 열선 — 좌:제목 / 중:당기칸 / 우:환산칸 */
   .top{display:grid;grid-template-columns:38fr 31fr 31fr;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
-  .brand{padding:10px 8px 4px 0;display:flex;flex-direction:column;justify-content:center;min-width:0}
-  .brand h1{margin:0;padding:0;font-size:15px;font-weight:800;letter-spacing:-0.02em;color:#001544;font-family:"Malgun Gothic","맑은 고딕",sans-serif;line-height:1.35}
-  .brand .sub{font-size:8px;color:#002060;margin-top:3px;font-style:italic}
-  .brand .meta{margin-top:12px;font-size:9px;line-height:1.6;color:#002060}
+  .brand{padding:6px 10px 4px 0;display:flex;flex-direction:column;justify-content:center;min-width:0;gap:2px}
+  .brand h1{display:flex;align-items:center;gap:0.3em;margin:0;padding:0;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#001544;font-family:"Malgun Gothic","맑은 고딕",sans-serif;line-height:1}
+  .brand h1 .yr{display:inline-block;font-size:20px;font-weight:800;line-height:1;transform:translateY(-0.06em)}
+  .brand h1 .ttl{display:inline-block;font-size:20px;font-weight:800;line-height:1.2}
+  .brand .sub{font-size:11px;color:#002060;margin-top:4px;font-style:italic;line-height:1.3}
+  .brand .meta{margin-top:10px;font-size:12px;line-height:1.75;color:#002060}
   .brand .meta b{font-weight:700}
   /* 화면 입력칸과 유사한 상단 박스 */
   .box{border:0.5px solid #9aa8bc;align-self:stretch;min-width:0;overflow:hidden;background:#fff}
