@@ -714,6 +714,27 @@ export const arrearsLetterLedgerLinks = pgTable(
   ],
 );
 
+/** 가결산 저장 스냅샷 — 저장 시점별 불러오기 */
+export const interimClosingSaves = pgTable(
+  'interim_closing_saves',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+    companyName: text('company_name').notNull().default(''),
+    year: integer('year').notNull(),
+    baseMonth: integer('base_month').notNull().default(6),
+    manager: text('manager').notNull().default(''),
+    payload: jsonb('payload').notNull().$type<Record<string, unknown>>().default({}),
+    savedBy: text('saved_by').notNull().default(''),
+    savedByUserId: uuid('saved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  t => [
+    index('interim_closing_saves_client_year_idx').on(t.clientId, t.year),
+    index('interim_closing_saves_saved_at_idx').on(t.savedAt),
+  ],
+);
+
 export type ClientFeeImportPending = typeof clientFeeImportPending.$inferSelect;
 export type ClientFeeChange = typeof clientFeeChanges.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -739,6 +760,7 @@ export type DutyWeek = typeof dutyWeeks.$inferSelect;
 export type ArrearsEntry = typeof arrearsEntries.$inferSelect;
 export type ArrearsLetterLine = typeof arrearsLetterLines.$inferSelect;
 export type ArrearsLetterLedgerLink = typeof arrearsLetterLedgerLinks.$inferSelect;
+export type InterimClosingSave = typeof interimClosingSaves.$inferSelect;
 export type ReviewGridPatch = typeof reviewGridPatches.$inferSelect;
 export type ReviewClientLink = typeof reviewClientLinks.$inferSelect;
 export type ReviewGridNewRow = typeof reviewGridNewRows.$inferSelect;

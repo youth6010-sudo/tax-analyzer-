@@ -129,6 +129,13 @@ export default function SidebarNavIcon({ name, className = 'h-4 w-4' }: Props) {
           <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
         </svg>
       );
+    case 'interim-closing':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 3v18h18" />
+          <path d="M7 14v4M12 10v8M17 6v12" />
+        </svg>
+      );
     case 'nhis-branches':
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -215,6 +222,7 @@ const HREF_ICON: Record<string, string> = {
   '/bluehole': 'bluehole',
   '/clients/filing-check': 'filing-check',
   '/tools/notice-generator': 'notice-generator',
+  '/tools/interim-closing': 'interim-closing',
   '/tools/nhis-branches': 'nhis-branches',
   '/tax/comprehensive': 'comprehensive',
   '/gacha': 'gacha',

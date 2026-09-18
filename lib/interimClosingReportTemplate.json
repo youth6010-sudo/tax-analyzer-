@@ -1,0 +1,4634 @@
+[
+  {
+    "r": 12,
+    "code": "과    목",
+    "name": "",
+    "inputBasis": "입력기준",
+    "convertBasis": "환산기준",
+    "kind": "label"
+  },
+  {
+    "r": 14,
+    "code": "Ⅰ.",
+    "name": "매출액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 15,
+    "code": "401",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 16,
+    "code": "402",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 17,
+    "code": "403",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 18,
+    "code": "404",
+    "name": "제품매출",
+    "inputBasis": "",
+    "convertBasis": "가정치",
+    "kind": "account"
+  },
+  {
+    "r": 19,
+    "code": "405",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 20,
+    "code": "406",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 21,
+    "code": "407",
+    "name": "공사수입금",
+    "inputBasis": "",
+    "convertBasis": "가정치",
+    "kind": "account"
+  },
+  {
+    "r": 22,
+    "code": "408",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 23,
+    "code": "409",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 24,
+    "code": "410",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 25,
+    "code": "411",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 26,
+    "code": "412",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 27,
+    "code": "413",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 28,
+    "code": "414",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 29,
+    "code": "415",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 30,
+    "code": "416",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 31,
+    "code": "417",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 32,
+    "code": "418",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 33,
+    "code": "419",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 34,
+    "code": "420",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 35,
+    "code": "421",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 36,
+    "code": "422",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 37,
+    "code": "423",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 38,
+    "code": "424",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 39,
+    "code": "425",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 40,
+    "code": "426",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 41,
+    "code": "427",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 42,
+    "code": "428",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 43,
+    "code": "429",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 44,
+    "code": "430",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 45,
+    "code": "Ⅱ.",
+    "name": "매출원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 46,
+    "code": "451",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 50,
+    "code": "455",
+    "name": "제품매출원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 51,
+    "code": "",
+    "name": "기초제품재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 52,
+    "code": "",
+    "name": "당기제품제조원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 53,
+    "code": "",
+    "name": "기말제품재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 54,
+    "code": "452",
+    "name": "도급공사매출원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 55,
+    "code": "453",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 56,
+    "code": "454",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 57,
+    "code": "456",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 58,
+    "code": "457",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 59,
+    "code": "458",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 60,
+    "code": "459",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 61,
+    "code": "460",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 62,
+    "code": "461",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 63,
+    "code": "462",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 64,
+    "code": "463",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 65,
+    "code": "464",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 66,
+    "code": "465",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 67,
+    "code": "466",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 68,
+    "code": "467",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 69,
+    "code": "468",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 70,
+    "code": "469",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 71,
+    "code": "470",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 72,
+    "code": "501",
+    "name": "원재료비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 73,
+    "code": "",
+    "name": "기초원재료재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 74,
+    "code": "",
+    "name": "당기원재료매입액",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "sub"
+  },
+  {
+    "r": 75,
+    "code": "",
+    "name": "기말원재료재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 76,
+    "code": "502",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 77,
+    "code": "",
+    "name": "노무비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 78,
+    "code": "503",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 79,
+    "code": "504",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 80,
+    "code": "505",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 81,
+    "code": "506",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 82,
+    "code": "507",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 83,
+    "code": "508",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 84,
+    "code": "509",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 85,
+    "code": "510",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 86,
+    "code": "",
+    "name": "경비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 87,
+    "code": "511",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 88,
+    "code": "512",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 89,
+    "code": "513",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 90,
+    "code": "514",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 91,
+    "code": "515",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 92,
+    "code": "516",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 93,
+    "code": "517",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 94,
+    "code": "518",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 95,
+    "code": "519",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 96,
+    "code": "520",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 97,
+    "code": "521",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 98,
+    "code": "522",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 99,
+    "code": "523",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 100,
+    "code": "524",
+    "name": "운반비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 101,
+    "code": "525",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 102,
+    "code": "526",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 103,
+    "code": "527",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 104,
+    "code": "528",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 105,
+    "code": "529",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 106,
+    "code": "530",
+    "name": "소모품비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 107,
+    "code": "531",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 108,
+    "code": "532",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 109,
+    "code": "533",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 110,
+    "code": "534",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 111,
+    "code": "535",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 112,
+    "code": "536",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 113,
+    "code": "537",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 114,
+    "code": "538",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 115,
+    "code": "539",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 116,
+    "code": "540",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 117,
+    "code": "541",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 118,
+    "code": "542",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 119,
+    "code": "543",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 120,
+    "code": "544",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 121,
+    "code": "545",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 122,
+    "code": "546",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 123,
+    "code": "547",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 124,
+    "code": "548",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 125,
+    "code": "549",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 126,
+    "code": "550",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 127,
+    "code": "551",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 128,
+    "code": "552",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 129,
+    "code": "553",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 130,
+    "code": "554",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 131,
+    "code": "555",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 132,
+    "code": "556",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 133,
+    "code": "557",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 134,
+    "code": "558",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 135,
+    "code": "559",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 136,
+    "code": "560",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 137,
+    "code": "561",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 138,
+    "code": "562",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 139,
+    "code": "563",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 140,
+    "code": "564",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 141,
+    "code": "565",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 142,
+    "code": "566",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 143,
+    "code": "567",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 144,
+    "code": "568",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 145,
+    "code": "569",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 146,
+    "code": "570",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 147,
+    "code": "571",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 148,
+    "code": "572",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 149,
+    "code": "573",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 150,
+    "code": "574",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 151,
+    "code": "575",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 152,
+    "code": "576",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 153,
+    "code": "577",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 154,
+    "code": "578",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 155,
+    "code": "579",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 156,
+    "code": "580",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 157,
+    "code": "581",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 158,
+    "code": "582",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 159,
+    "code": "583",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 160,
+    "code": "584",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 161,
+    "code": "585",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 162,
+    "code": "586",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 163,
+    "code": "587",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 164,
+    "code": "588",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 165,
+    "code": "589",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 166,
+    "code": "590",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 167,
+    "code": "591",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 168,
+    "code": "592",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 169,
+    "code": "593",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 170,
+    "code": "594",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 171,
+    "code": "595",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 172,
+    "code": "596",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 173,
+    "code": "597",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 174,
+    "code": "598",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 175,
+    "code": "599",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 176,
+    "code": "600",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 177,
+    "code": "",
+    "name": "당기제품 제조원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 178,
+    "code": "601",
+    "name": "원재료비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 179,
+    "code": "",
+    "name": "기초원재료(도급)재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 180,
+    "code": "",
+    "name": "당기원재료(도급)매입액",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "sub"
+  },
+  {
+    "r": 181,
+    "code": "",
+    "name": "기말원재료(도급)재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 182,
+    "code": "602",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 183,
+    "code": "",
+    "name": "노무비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 184,
+    "code": "603",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 185,
+    "code": "604",
+    "name": "임금",
+    "inputBasis": "",
+    "convertBasis": "가정치",
+    "kind": "account"
+  },
+  {
+    "r": 186,
+    "code": "605",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 187,
+    "code": "606",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 188,
+    "code": "607",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 189,
+    "code": "608",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 190,
+    "code": "609",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 191,
+    "code": "610",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 192,
+    "code": "",
+    "name": "경비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 193,
+    "code": "611",
+    "name": "복리후생비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 194,
+    "code": "612",
+    "name": "여비교통비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 195,
+    "code": "613",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 196,
+    "code": "614",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 197,
+    "code": "615",
+    "name": "가스수도료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 198,
+    "code": "616",
+    "name": "전력비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 199,
+    "code": "617",
+    "name": "세금과공과금",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 200,
+    "code": "618",
+    "name": "감가상각비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 201,
+    "code": "619",
+    "name": "임차료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 202,
+    "code": "620",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 203,
+    "code": "621",
+    "name": "보험료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 204,
+    "code": "622",
+    "name": "차량유지비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 205,
+    "code": "623",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 206,
+    "code": "624",
+    "name": "잡자재대",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 207,
+    "code": "625",
+    "name": "교육훈련비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 208,
+    "code": "626",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 209,
+    "code": "627",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 210,
+    "code": "628",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 211,
+    "code": "629",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 212,
+    "code": "630",
+    "name": "소모품비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 213,
+    "code": "631",
+    "name": "지급수수료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 214,
+    "code": "632",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 215,
+    "code": "633",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 216,
+    "code": "634",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 217,
+    "code": "635",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 218,
+    "code": "636",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 219,
+    "code": "637",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 220,
+    "code": "638",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 221,
+    "code": "639",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 222,
+    "code": "640",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 223,
+    "code": "641",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 224,
+    "code": "642",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 225,
+    "code": "643",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 226,
+    "code": "644",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 227,
+    "code": "645",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 228,
+    "code": "646",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 229,
+    "code": "647",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 230,
+    "code": "648",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 231,
+    "code": "649",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 232,
+    "code": "650",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 233,
+    "code": "",
+    "name": "당기공사원가",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 234,
+    "code": "651",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 235,
+    "code": "652",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 237,
+    "code": "653",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 238,
+    "code": "654",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 239,
+    "code": "655",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 240,
+    "code": "656",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 241,
+    "code": "657",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 242,
+    "code": "658",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 243,
+    "code": "659",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 244,
+    "code": "660",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 246,
+    "code": "661",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 247,
+    "code": "662",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 248,
+    "code": "663",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 249,
+    "code": "664",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 250,
+    "code": "665",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 251,
+    "code": "666",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 252,
+    "code": "667",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 253,
+    "code": "668",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 254,
+    "code": "669",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 255,
+    "code": "670",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 256,
+    "code": "671",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 257,
+    "code": "672",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 258,
+    "code": "673",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 259,
+    "code": "674",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 260,
+    "code": "675",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 261,
+    "code": "676",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 262,
+    "code": "677",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 263,
+    "code": "678",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 264,
+    "code": "679",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 265,
+    "code": "680",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 266,
+    "code": "681",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 267,
+    "code": "682",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 268,
+    "code": "683",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 269,
+    "code": "684",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 270,
+    "code": "685",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 271,
+    "code": "686",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 272,
+    "code": "687",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 273,
+    "code": "688",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 274,
+    "code": "689",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 275,
+    "code": "690",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 276,
+    "code": "691",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 277,
+    "code": "692",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 278,
+    "code": "693",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 279,
+    "code": "694",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 280,
+    "code": "695",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 281,
+    "code": "696",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 282,
+    "code": "697",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 283,
+    "code": "698",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 284,
+    "code": "699",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 285,
+    "code": "700",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 287,
+    "code": "701",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 291,
+    "code": "702",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 293,
+    "code": "703",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 294,
+    "code": "704",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 295,
+    "code": "705",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 296,
+    "code": "706",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 297,
+    "code": "707",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 298,
+    "code": "708",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 299,
+    "code": "709",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 300,
+    "code": "710",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 301,
+    "code": "743",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 303,
+    "code": "711",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 304,
+    "code": "712",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 305,
+    "code": "713",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 306,
+    "code": "714",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 307,
+    "code": "715",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 308,
+    "code": "716",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 309,
+    "code": "717",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 310,
+    "code": "718",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 311,
+    "code": "719",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 312,
+    "code": "720",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 313,
+    "code": "721",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 314,
+    "code": "722",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 315,
+    "code": "723",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 316,
+    "code": "724",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 317,
+    "code": "725",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 318,
+    "code": "726",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 319,
+    "code": "727",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 320,
+    "code": "728",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 321,
+    "code": "729",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 322,
+    "code": "730",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 323,
+    "code": "731",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 324,
+    "code": "732",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 325,
+    "code": "733",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 326,
+    "code": "734",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 327,
+    "code": "735",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 328,
+    "code": "736",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 329,
+    "code": "737",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 330,
+    "code": "738",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 331,
+    "code": "739",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 332,
+    "code": "740",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 333,
+    "code": "741",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 334,
+    "code": "742",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 335,
+    "code": "744",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 336,
+    "code": "745",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 337,
+    "code": "746",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 338,
+    "code": "747",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 339,
+    "code": "748",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 340,
+    "code": "749",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 341,
+    "code": "750",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 343,
+    "code": "751",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 347,
+    "code": "752",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 349,
+    "code": "753",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 350,
+    "code": "754",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 351,
+    "code": "755",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 352,
+    "code": "756",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 353,
+    "code": "757",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 354,
+    "code": "758",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 355,
+    "code": "759",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 356,
+    "code": "760",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 358,
+    "code": "761",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 359,
+    "code": "762",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 360,
+    "code": "763",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 361,
+    "code": "764",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 362,
+    "code": "765",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 363,
+    "code": "766",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 364,
+    "code": "767",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 365,
+    "code": "768",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 366,
+    "code": "769",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 367,
+    "code": "770",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 368,
+    "code": "771",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 369,
+    "code": "772",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 370,
+    "code": "773",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 371,
+    "code": "774",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 372,
+    "code": "775",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 373,
+    "code": "776",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 374,
+    "code": "777",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 375,
+    "code": "778",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 376,
+    "code": "779",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 377,
+    "code": "780",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 378,
+    "code": "781",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 379,
+    "code": "782",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 380,
+    "code": "783",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 381,
+    "code": "784",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 382,
+    "code": "785",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 383,
+    "code": "786",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 384,
+    "code": "787",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 385,
+    "code": "788",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 386,
+    "code": "789",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 387,
+    "code": "790",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 388,
+    "code": "791",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 389,
+    "code": "792",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 390,
+    "code": "793",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 391,
+    "code": "794",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 392,
+    "code": "795",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 393,
+    "code": "796",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 394,
+    "code": "797",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 395,
+    "code": "798",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 396,
+    "code": "799",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 397,
+    "code": "800",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 399,
+    "code": "Ⅲ.",
+    "name": "매출총이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 400,
+    "code": "Ⅳ.",
+    "name": "판매비및일반관리비",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 401,
+    "code": "801",
+    "name": "임원급여",
+    "inputBasis": "",
+    "convertBasis": "가정치",
+    "kind": "account"
+  },
+  {
+    "r": 402,
+    "code": "802",
+    "name": "직원급여",
+    "inputBasis": "",
+    "convertBasis": "가정치",
+    "kind": "account"
+  },
+  {
+    "r": 403,
+    "code": "803",
+    "name": "상여금",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 404,
+    "code": "804",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 405,
+    "code": "805",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 406,
+    "code": "806",
+    "name": "퇴직급여",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 407,
+    "code": "807",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 408,
+    "code": "808",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 409,
+    "code": "809",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 410,
+    "code": "810",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 411,
+    "code": "811",
+    "name": "복리후생비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 412,
+    "code": "812",
+    "name": "여비교통비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 413,
+    "code": "813",
+    "name": "접대비(기업업무추진비)",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 414,
+    "code": "814",
+    "name": "통신비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 415,
+    "code": "815",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 416,
+    "code": "816",
+    "name": "전력비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 417,
+    "code": "817",
+    "name": "세금과공과금",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 418,
+    "code": "818",
+    "name": "감가상각비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 419,
+    "code": "819",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 420,
+    "code": "820",
+    "name": "수선비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 421,
+    "code": "821",
+    "name": "보험료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 422,
+    "code": "822",
+    "name": "차량유지비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 423,
+    "code": "823",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 424,
+    "code": "824",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 425,
+    "code": "825",
+    "name": "교육훈련비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 426,
+    "code": "826",
+    "name": "도서인쇄비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 427,
+    "code": "827",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 428,
+    "code": "828",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 429,
+    "code": "829",
+    "name": "사무용품비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 430,
+    "code": "830",
+    "name": "소모품비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 431,
+    "code": "831",
+    "name": "지급수수료",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 432,
+    "code": "832",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 433,
+    "code": "833",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 434,
+    "code": "834",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 435,
+    "code": "835",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 436,
+    "code": "836",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 437,
+    "code": "837",
+    "name": "건물관리비",
+    "inputBasis": "",
+    "convertBasis": "역산",
+    "kind": "account"
+  },
+  {
+    "r": 438,
+    "code": "838",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 439,
+    "code": "839",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 440,
+    "code": "840",
+    "name": "무형고정자산상각",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 441,
+    "code": "841",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 442,
+    "code": "842",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 443,
+    "code": "843",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 444,
+    "code": "844",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 445,
+    "code": "845",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 446,
+    "code": "846",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 447,
+    "code": "847",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 448,
+    "code": "848",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 449,
+    "code": "849",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 450,
+    "code": "850",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 451,
+    "code": "851",
+    "name": "렌트료",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 452,
+    "code": "852",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 453,
+    "code": "853",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 454,
+    "code": "854",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 455,
+    "code": "855",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 456,
+    "code": "856",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 457,
+    "code": "857",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 458,
+    "code": "858",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 459,
+    "code": "859",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 460,
+    "code": "860",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 461,
+    "code": "861",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 462,
+    "code": "862",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 463,
+    "code": "863",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 464,
+    "code": "864",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 465,
+    "code": "865",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 466,
+    "code": "866",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 467,
+    "code": "867",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 468,
+    "code": "868",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 469,
+    "code": "869",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 470,
+    "code": "870",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 471,
+    "code": "871",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 472,
+    "code": "872",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 473,
+    "code": "873",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 474,
+    "code": "874",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 475,
+    "code": "875",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 476,
+    "code": "876",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 477,
+    "code": "877",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 478,
+    "code": "878",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 479,
+    "code": "879",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 480,
+    "code": "880",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 481,
+    "code": "881",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 482,
+    "code": "882",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 483,
+    "code": "883",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 484,
+    "code": "884",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 485,
+    "code": "885",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 486,
+    "code": "886",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 487,
+    "code": "887",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 488,
+    "code": "888",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 489,
+    "code": "889",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 490,
+    "code": "890",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 491,
+    "code": "891",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 492,
+    "code": "892",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 493,
+    "code": "893",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 494,
+    "code": "894",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 495,
+    "code": "895",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 496,
+    "code": "896",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 497,
+    "code": "897",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 498,
+    "code": "898",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 499,
+    "code": "899",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 500,
+    "code": "900",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 501,
+    "code": "Ⅴ.",
+    "name": "영업이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 502,
+    "code": "Ⅵ.",
+    "name": "영업외수익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 503,
+    "code": "901",
+    "name": "이자수익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 504,
+    "code": "902",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 505,
+    "code": "903",
+    "name": "배당금수익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 506,
+    "code": "904",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 507,
+    "code": "905",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 508,
+    "code": "906",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 509,
+    "code": "907",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 510,
+    "code": "908",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 511,
+    "code": "909",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 512,
+    "code": "910",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 513,
+    "code": "911",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 514,
+    "code": "912",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 515,
+    "code": "913",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 516,
+    "code": "914",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 517,
+    "code": "915",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 518,
+    "code": "916",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 519,
+    "code": "917",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 520,
+    "code": "918",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 521,
+    "code": "919",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 522,
+    "code": "920",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 523,
+    "code": "921",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 524,
+    "code": "922",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 525,
+    "code": "923",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 526,
+    "code": "924",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 527,
+    "code": "925",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 528,
+    "code": "926",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 529,
+    "code": "927",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 530,
+    "code": "928",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 531,
+    "code": "929",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 532,
+    "code": "930",
+    "name": "잡이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 533,
+    "code": "931",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 534,
+    "code": "932",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 535,
+    "code": "933",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 536,
+    "code": "934",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 537,
+    "code": "935",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 538,
+    "code": "936",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 539,
+    "code": "937",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 540,
+    "code": "938",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 541,
+    "code": "939",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 542,
+    "code": "940",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 543,
+    "code": "941",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 544,
+    "code": "942",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 545,
+    "code": "943",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 546,
+    "code": "944",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 547,
+    "code": "945",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 548,
+    "code": "946",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 549,
+    "code": "947",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 550,
+    "code": "948",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 551,
+    "code": "949",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 552,
+    "code": "950",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 553,
+    "code": "Ⅶ.",
+    "name": "영업외비용",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 554,
+    "code": "951",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 555,
+    "code": "952",
+    "name": "외환차손",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 556,
+    "code": "953",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 557,
+    "code": "954",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 558,
+    "code": "955",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 559,
+    "code": "956",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 560,
+    "code": "957",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 561,
+    "code": "958",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 562,
+    "code": "959",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 563,
+    "code": "960",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 564,
+    "code": "961",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 565,
+    "code": "962",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 566,
+    "code": "963",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 567,
+    "code": "964",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 568,
+    "code": "965",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 569,
+    "code": "966",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 570,
+    "code": "967",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 571,
+    "code": "968",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 572,
+    "code": "969",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 573,
+    "code": "970",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 574,
+    "code": "971",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 575,
+    "code": "972",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 576,
+    "code": "973",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 577,
+    "code": "974",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 578,
+    "code": "975",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 579,
+    "code": "976",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 580,
+    "code": "977",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 581,
+    "code": "978",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 582,
+    "code": "979",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 583,
+    "code": "980",
+    "name": "잡손실",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 584,
+    "code": "981",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 585,
+    "code": "982",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 586,
+    "code": "983",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 587,
+    "code": "984",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 588,
+    "code": "985",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 589,
+    "code": "986",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 590,
+    "code": "987",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 591,
+    "code": "988",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 592,
+    "code": "989",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 593,
+    "code": "990",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 594,
+    "code": "991",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 595,
+    "code": "992",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 596,
+    "code": "993",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 597,
+    "code": "994",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 598,
+    "code": "995",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 599,
+    "code": "996",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 600,
+    "code": "997",
+    "name": "",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 601,
+    "code": "Ⅷ.",
+    "name": "세금차감전이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 602,
+    "code": "Ⅸ.",
+    "name": "세금",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 603,
+    "code": "998",
+    "name": "법인세등",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 604,
+    "code": "999",
+    "name": "소득세등",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "account"
+  },
+  {
+    "r": 605,
+    "code": "Ⅹ.",
+    "name": "당기순이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "section"
+  },
+  {
+    "r": 607,
+    "code": "세          액          계          산",
+    "name": "",
+    "inputBasis": "   ⊙ 본 손익계산서는 2025년 1~10월 재무자료를 기준으로 작성하였으며, \r\n   ⊙ 11~12월 수치는 내부 추정치 및 경영계획을 기반으로 산출하였습니다.\r\n\r\n   ⊙ 본 자료는 경영 판단을 위한 참고 목적이며, \r\n   ⊙ 최종 손익은 재무제표 확정 시 조정될 수 있습니다.",
+    "convertBasis": "",
+    "kind": "label"
+  },
+  {
+    "r": 608,
+    "code": "",
+    "name": "당기순이익",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 609,
+    "code": "",
+    "name": "익금산입",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 610,
+    "code": "",
+    "name": "손금산입",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  }
+]

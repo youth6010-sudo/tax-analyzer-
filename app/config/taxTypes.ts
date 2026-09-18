@@ -43,6 +43,7 @@ export const TAX_MENU = [
     items: [
       { label: '신고접수검토', href: '/clients/filing-check' },
       { label: '안내문 생성기', href: '/tools/notice-generator' },
+      { label: '가결산', href: '/tools/interim-closing' },
     ],
   },
   {
