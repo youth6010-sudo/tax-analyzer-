@@ -7,6 +7,8 @@ import {
   isArrearsSkipClientDetail,
   isArrearsLetterContentFrozen,
 } from '@/lib/arrearsBalanceLock';
+import { classifyArrearsLetterComplexity } from '@/lib/arrearsLetterComplexity';
+import { isMonthBookkeepingChargeLine } from '@/lib/arrearsLetterComplexity';
 import { syncArrearsManagersFromLinkedClients } from '@/lib/intakeManagerSync';
 import {
   ARREARS_FROZEN_LETTER_CUTOFF,
@@ -295,13 +297,20 @@ export async function applyClientDetailImport(
     }
 
     const existing = await listLetterLines(entry.id);
-    // 유지: cutoff 이전 월·적요(출처 무관) + 수정모드 manual + 월패턴 없는 기존 줄
-    // 제거: cutoff 이후 월기장(9월~) · 임시 현황맞춤 줄 → 파일로 재구성
+    const complexity = classifyArrearsLetterComplexity(existing, entry.balance);
+
+    // 기장료만(simple_bk): 9월~ 거래가 있으면 기존 월기장·회수를 버리고 파일로 롤링 재구성
+    // 복잡미수: 8월까지 고정, 9월~만 추가/교체
     const keptFromExisting = existing.filter(l => {
       if (/현황맞춤|말잔맞춤/.test(String(l.description || '').replace(/\s+/g, ''))) {
         return false;
       }
       if (l.source === 'manual') return true;
+      if (complexity === 'simple_bk') {
+        // 이번 업로드 mid에 9월~ 거래가 있을 때만 롤링(기존 월 줄 제거)
+        if (codeTxs.length > 0) return false;
+        return true;
+      }
       // 9월~ 월별 기장만 제거하고, 8월까지(letter·ledger 포함)는 절대 지우지 않음
       if (isPostCutoffLetterMonth(l.description, cutoffDate)) return false;
       return true;
@@ -328,8 +337,14 @@ export async function applyClientDetailImport(
     // 현황표=거래처별 말잔이고, cutoff 이전 공문합도 이미 같으면
     // 9월 입금 등을 또 넣으면 이중반영되어 어긋남 → 추가 생략
     // 단, 기장 미납이 남아 있으면(훈테크·도리형) 매출·입금 쌍을 생략하지 않음
+    // 기장료만 롤링(simple_bk + 신규 tx)은 생략하지 않음
     const hasUnpaidBk = hasUnpaidMonthBookkeepingOnLetter(keptFromExisting);
-    if (endingMatchesStatus && openBefore === targetBal && !hasUnpaidBk) {
+    if (
+      complexity !== 'simple_bk' &&
+      endingMatchesStatus &&
+      openBefore === targetBal &&
+      !hasUnpaidBk
+    ) {
       if (removedCount > 0) {
         await replaceLetterLines(entry.id, actorName, base, { syncBalance: false });
         applied += 1;
@@ -407,17 +422,7 @@ export function summarizeBalanceAlignment(
 export { isArrearsBalanceLocked };
 
 /** 공문 letter 줄 — 월 기장료 청구(조정·성실·부가세·기타 제외) */
-export function isMonthBookkeepingChargeLine(desc: string, amount: number): boolean {
-  if (Math.round(amount || 0) <= 0) return false;
-  const d = String(desc || '').replace(/\s+/g, '');
-  if (!d) return false;
-  if (/전기이월|원장반영|입금|취소|반환/.test(d)) return false;
-  if (/조정|성실|부가세|양수도|선수금|기타/.test(d)) return false;
-  if (/(20\d{2}|\d{2})년\d{1,2}월/.test(d)) return true;
-  if (/^\d{1,2}월/.test(d) && /기장|수수료/.test(d)) return true;
-  if (/^\d{1,2}월$/.test(d)) return true;
-  return false;
-}
+export { isMonthBookkeepingChargeLine } from '@/lib/arrearsLetterComplexity';
 
 /** 공문에 기장료 미납이 한 달이라도 있는지 */
 export function hasUnpaidMonthBookkeepingOnLetter(
@@ -446,6 +451,7 @@ function isUnpaidMonthLedgerLine(l: {
  * import 후에도 공문합 > 현황이면, cutoff **이후**에 잘못 남은
  * 월기장(ledger) 줄만 끝에서부터 제거해 현황과 맞춤.
  * 8월 이전(동결 cutoff 포함) 내역은 절대 지우지 않음.
+ * 단, 기장료만(simple_bk)은 월 롤링을 위해 cutoff 이전 미납 월기장도 과다분이면 제거 가능.
  */
 export async function stripOverageUnpaidMonthLines(actorName: string): Promise<number> {
   const db = getDb();
@@ -463,6 +469,7 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
     }
 
     const lines = await listLetterLines(e.id);
+    const complexity = classifyArrearsLetterComplexity(lines, e.balance);
     const open = letterBalanceFromLines(lines);
     const bal = Math.round(e.balance);
     let over = open - bal;
@@ -486,8 +493,13 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
     for (let i = next.length - 1; i >= 0 && over > 0; i--) {
       const l = next[i]!;
       if (!isUnpaidMonthLedgerLine(l)) continue;
-      // 동결일 이전·당월(8월까지) 보호
-      if (!isPostCutoffLetterMonth(l.description, cutoffDate)) continue;
+      // 동결일 이전·당월(8월까지) 보호 — 기장료만(simple_bk)은 롤링 허용
+      if (
+        complexity !== 'simple_bk' &&
+        !isPostCutoffLetterMonth(l.description, cutoffDate)
+      ) {
+        continue;
+      }
       const amt = Math.round(l.amount);
       if (amt > over) continue;
       next.splice(i, 1);

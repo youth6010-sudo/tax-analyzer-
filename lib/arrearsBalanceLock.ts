@@ -21,9 +21,9 @@ export const ARREARS_LETTER_PROTECTED_CODES = new Set<string>(['00183', '00199']
 export const ARREARS_SKIP_CLIENT_DETAIL_CODES = new Set<string>(['00176']);
 
 /**
- * 공문 내용 동결 — trim/Neon 덮어쓰기·일괄 재조립 대상에서 제외.
- * 수동·확정 공문 줄을 절대 지우지 않음.
+ * 공문 내용 동결(코드 상수) — trim/Neon 덮어쓰기·일괄 재조립·과다 월기장 제거 대상에서 제외.
  * 00176 에스와이 · 00191 한빛 · 00152 로터스 · 01206 올바릇
+ * 추가 동결 목록: data/arrears-content-frozen-codes.json (오늘 확정 복잡미수)
  */
 export const ARREARS_LETTER_CONTENT_FROZEN_CODES = new Set<string>([
   '00176',
@@ -34,6 +34,28 @@ export const ARREARS_LETTER_CONTENT_FROZEN_CODES = new Set<string>([
 
 /** 잔액 0이어도 목록에 항상 표시 (공문 조회용) */
 export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
+
+let frozenCodesFromFile: Set<string> | null = null;
+
+function loadFrozenCodesFromFile(): Set<string> {
+  if (frozenCodesFromFile) return frozenCodesFromFile;
+  frozenCodesFromFile = new Set<string>();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const p = path.join(process.cwd(), 'data', 'arrears-content-frozen-codes.json');
+    if (fs.existsSync(p)) {
+      const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as { codes?: string[] };
+      for (const c of raw.codes || []) frozenCodesFromFile.add(String(c).trim());
+    }
+  } catch {
+    /* optional file */
+  }
+  return frozenCodesFromFile;
+}
+
 /**
  * 양수도로 구·신 코드가 나뉜 업체(참고용).
  * 공문에 「양수도」줄이 있으면 올린 공문 그대로 유지한다.
@@ -69,7 +91,6 @@ export function isArrearsTransferSplitCode(externalCode: string): boolean {
 }
 
 export function isArrearsBalanceLocked(externalCode: string): boolean {
-  // 원장 import 시에도 현황표 잔액을 덮지 않도록 보호 코드는 잠금으로 취급
   return isArrearsLetterProtected(externalCode);
 }
 
@@ -86,7 +107,8 @@ export function isArrearsLetterContentFrozen(externalCode: string): boolean {
   return (
     ARREARS_LETTER_CONTENT_FROZEN_CODES.has(code) ||
     ARREARS_LETTER_PROTECTED_CODES.has(code) ||
-    ARREARS_SKIP_CLIENT_DETAIL_CODES.has(code)
+    ARREARS_SKIP_CLIENT_DETAIL_CODES.has(code) ||
+    loadFrozenCodesFromFile().has(code)
   );
 }
 

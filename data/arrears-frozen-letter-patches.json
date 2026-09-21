@@ -1,5 +1,5 @@
 {
-  "asOf": "2026.08.31",
+  "asOf": "2026.09.21",
   "note": "저번주 수동 확정분. 공문 내용이 빠지면 ensure-frozen-letter-patches로 복구.",
   "codes": {
     "00176": {
@@ -14,7 +14,9 @@
           "paidDate": "25년 1월 1일",
           "source": "ledger",
           "position": "first",
-          "match": { "descriptionIncludes": "선수금" }
+          "match": {
+            "descriptionIncludes": "선수금"
+          }
         }
       ]
     },
@@ -29,7 +31,9 @@
           "paidDate": "9월 12일",
           "source": "letter",
           "position": "after-corp-adjust-24",
-          "match": { "blankPay": 1000000 }
+          "match": {
+            "blankPay": 1000000
+          }
         },
         {
           "id": "jul-2026-bk",
@@ -39,7 +43,9 @@
           "paidDate": "",
           "source": "ledger",
           "position": "append",
-          "match": { "descriptionIncludes": "2026년 7월" }
+          "match": {
+            "descriptionIncludes": "2026년 7월"
+          }
         },
         {
           "id": "aug-2026-bk",
@@ -49,7 +55,9 @@
           "paidDate": "",
           "source": "ledger",
           "position": "append",
-          "match": { "descriptionIncludes": "2026년 8월" }
+          "match": {
+            "descriptionIncludes": "2026년 8월"
+          }
         }
       ]
     },
@@ -69,7 +77,10 @@
           "paidDate": "7월 31일",
           "source": "letter",
           "position": "append",
-          "match": { "blankPay": 3000000, "paidDateIncludes": "7월 31" }
+          "match": {
+            "blankPay": 3000000,
+            "paidDateIncludes": "7월 31"
+          }
         },
         {
           "id": "sep15-242k",
@@ -79,7 +90,66 @@
           "paidDate": "9월 15일",
           "source": "letter",
           "position": "append",
-          "match": { "blankPay": 242000, "paidDateIncludes": "9월 15" }
+          "match": {
+            "blankPay": 242000,
+            "paidDateIncludes": "9월 15"
+          }
+        }
+      ]
+    },
+    "00183": {
+      "name": "오프라인",
+      "snapshotOnly": true,
+      "note": "잔액0·공문 고정. 거래처별 반영 제외(LETTER_PROTECTED).",
+      "lines": [
+        {
+          "description": "2020년 5월 조정수수료",
+          "amount": 605000,
+          "paidAmount": 605000,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "2021년 5월 조정수수료",
+          "amount": 694999,
+          "paidAmount": 195000,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "2022년 5월 조정수수료",
+          "amount": 825000,
+          "paidAmount": 0,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "2023년 5월 조정수수료",
+          "amount": 770000,
+          "paidAmount": 0,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "2023년 6월 기장료",
+          "amount": 110000,
+          "paidAmount": 0,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 1000000,
+          "paidDate": "",
+          "source": "letter"
+        },
+        {
+          "description": "",
+          "amount": 0,
+          "paidAmount": 110000,
+          "paidDate": "",
+          "source": "letter"
         }
       ]
     }

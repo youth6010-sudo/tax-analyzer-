@@ -141,6 +141,16 @@ for (const [code, cfg] of Object.entries(patches.codes || {})) {
     lines = verify.map(toInput);
   }
 
+  // snapshotOnly + lines: 공문이 비었으면 통째 복구 (오프라인 등)
+  if (cfg.snapshotOnly && Array.isArray(cfg.lines) && lines.length === 0 && APPLY) {
+    lines = cfg.lines.map(toInput);
+    await replaceLetterLines(e.id, 'inactive-arrears-seed', lines, { syncBalance: false });
+    item.applied = true;
+    item.missing = ['snapshot-restore'];
+    item.open = letterBalanceFromLines(lines);
+    item.match = item.open === bal;
+  }
+
   snapshot.codes[code] = {
     name: item.name,
     balance: bal,

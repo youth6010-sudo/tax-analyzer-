@@ -1825,12 +1825,16 @@ export default function ArrearsPageClient() {
                               title={
                                 row.balanceDiffForced
                                   ? `거래처원장과 상이(인디 확인) · 현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)}`
-                                  : (row.linesOpen ?? 0) === 0 && !row.balanceDiffForced
-                                    ? `공문·상세 없음(또는 상세합 0) · 현황표 잔액 ${formatArrearsWon(row.balance)} (불일치)`
-                                    : `현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`
+                                  : row.balanceDiffKind === 'ledger_only'
+                                    ? `원장만 · 현황표 잔액 ${formatArrearsWon(row.balance)} · 세부내역 없음`
+                                    : (row.linesOpen ?? 0) === 0 && !row.balanceDiffForced
+                                      ? `공문·상세 없음(또는 상세합 0) · 현황표 잔액 ${formatArrearsWon(row.balance)} (불일치)`
+                                      : `현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`
                               }
                             >
-                              {row.balanceDiffForced && !(row.balanceDiff ?? 0) ? (
+                              {row.balanceDiffKind === 'ledger_only' ? (
+                                <>원장만</>
+                              ) : row.balanceDiffForced && !(row.balanceDiff ?? 0) ? (
                                 <>불일치(원장)</>
                               ) : (
                                 <>
