@@ -511,12 +511,12 @@ export function buildInterimClosingReportHtml(
   .pl .basis{text-align:center;font-size:7.5px;white-space:nowrap;color:#222}
   .pl tr.sub td.subj{padding-left:8px;color:#222}
   .pl td.hl-assume{border-top:none;border-bottom:none}
-  /* 하단·상단: 본표 과목+전기|당기|환산(40|30|30)과 동일 열선 */
-  .foot{display:grid;grid-template-columns:40% 30% 30%;gap:0;align-items:stretch;margin-top:14px;border:none;width:100%}
+  /* 하단: 본표 비율 유지 + 열 사이·바깥쪽 여백 */
+  .foot{display:grid;grid-template-columns:minmax(0,40fr) minmax(0,30fr) minmax(0,30fr);gap:0 12px;align-items:stretch;margin-top:14px;border:none;width:100%;padding:0 4px;box-sizing:border-box}
   .foot-col{min-width:0;padding:0;border:none;box-sizing:border-box}
-  .foot-col.mid-stack{padding:0}
-  .foot-col.aside{padding:0}
-  .foot-col:first-child{padding:0}
+  .foot-col.mid-stack{padding:0 2px}
+  .foot-col.aside{padding-left:2px}
+  .foot-col:first-child{padding-right:2px}
   .foot h4{color:#fff;text-align:center;padding:3px 0;margin:0;font-size:9px;font-weight:800;letter-spacing:0.06em;background:#001f60}
   .foot h4.navy{background:#001f60}
   .foot h4.purple{background:#001f60}
