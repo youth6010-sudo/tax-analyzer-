@@ -77,6 +77,9 @@ const { applyStatusImport, applyClientDetailImport, isPostCutoffLetterMonth } = 
 const { ARREARS_FROZEN_LETTER_CUTOFF } = await import(
   pathToFileURL(path.join(root, 'lib/arrearsImportConfig.ts')).href
 );
+const { isArrearsLetterContentFrozen } = await import(
+  pathToFileURL(path.join(root, 'lib/arrearsBalanceLock.ts')).href
+);
 const { parseArrearsStatusWorkbook } = await import(
   pathToFileURL(path.join(root, 'lib/arrearsStatusParse.ts')).href
 );
@@ -89,6 +92,7 @@ console.log('\n--- strip post-cutoff (9월~) month lines ---');
 const entries = await db.select().from(arrearsEntries);
 let strippedSep = 0;
 for (const e of entries) {
+  if (isArrearsLetterContentFrozen(e.externalCode)) continue;
   const lines = await listLetterLines(e.id);
   const next = lines
     .filter(l => {

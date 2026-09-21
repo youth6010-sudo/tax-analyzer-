@@ -54,13 +54,6 @@ async function main() {
   }
 
   const next = [
-    ...lines.map((l) => ({
-      description: l.description,
-      amount: l.amount,
-      paidAmount: l.paidAmount,
-      paidDate: l.paidDate || "",
-      source: l.source as ArrearsLetterLineSource,
-    })),
     {
       description: "선수금 대체 분개",
       amount: 0,
@@ -68,6 +61,13 @@ async function main() {
       paidDate: "25년 1월 1일",
       source: "ledger" as ArrearsLetterLineSource,
     },
+    ...lines.map((l) => ({
+      description: l.description,
+      amount: l.amount,
+      paidAmount: l.paidAmount,
+      paidDate: l.paidDate || "",
+      source: l.source as ArrearsLetterLineSource,
+    })),
   ];
   console.log("open after", letterBalanceFromLines(next));
   if (!APPLY) {

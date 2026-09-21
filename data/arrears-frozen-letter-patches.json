@@ -1,0 +1,87 @@
+{
+  "asOf": "2026.08.31",
+  "note": "저번주 수동 확정분. 공문 내용이 빠지면 ensure-frozen-letter-patches로 복구.",
+  "codes": {
+    "00176": {
+      "name": "에스와이메탈",
+      "skipClientDetail": true,
+      "rules": [
+        {
+          "id": "advance-credit",
+          "description": "선수금 대체 분개",
+          "amount": 0,
+          "paidAmount": 220000,
+          "paidDate": "25년 1월 1일",
+          "source": "ledger",
+          "position": "first",
+          "match": { "descriptionIncludes": "선수금" }
+        }
+      ]
+    },
+    "00191": {
+      "name": "(유)한빛이텍",
+      "rules": [
+        {
+          "id": "blank-pay-1m",
+          "description": "",
+          "amount": 0,
+          "paidAmount": 1000000,
+          "paidDate": "9월 12일",
+          "source": "letter",
+          "position": "after-corp-adjust-24",
+          "match": { "blankPay": 1000000 }
+        },
+        {
+          "id": "jul-2026-bk",
+          "description": "2026년 7월",
+          "amount": 165000,
+          "paidAmount": 0,
+          "paidDate": "",
+          "source": "ledger",
+          "position": "append",
+          "match": { "descriptionIncludes": "2026년 7월" }
+        },
+        {
+          "id": "aug-2026-bk",
+          "description": "2026년 8월",
+          "amount": 165000,
+          "paidAmount": 0,
+          "paidDate": "",
+          "source": "ledger",
+          "position": "append",
+          "match": { "descriptionIncludes": "2026년 8월" }
+        }
+      ]
+    },
+    "00152": {
+      "name": "(주)로터스인베스트먼트-본점",
+      "note": "페리 07.27 공문 전체 + 7·8월 기장. 공문 통째 삭제 금지.",
+      "snapshotOnly": true
+    },
+    "01206": {
+      "name": "(주) 올바릇",
+      "rules": [
+        {
+          "id": "jul31-3m",
+          "description": "",
+          "amount": 0,
+          "paidAmount": 3000000,
+          "paidDate": "7월 31일",
+          "source": "letter",
+          "position": "append",
+          "match": { "blankPay": 3000000, "paidDateIncludes": "7월 31" }
+        },
+        {
+          "id": "sep15-242k",
+          "description": "",
+          "amount": 0,
+          "paidAmount": 242000,
+          "paidDate": "9월 15일",
+          "source": "letter",
+          "position": "append",
+          "match": { "blankPay": 242000, "paidDateIncludes": "9월 15" }
+        }
+      ]
+    }
+  }
+}

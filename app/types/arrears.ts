@@ -61,7 +61,8 @@ export type ArrearsEntryDto = {
   /** 원장잔액 − 내역미결합. 0이면 일치 */
   balanceDiff?: number;
   /**
-   * ok=일치, mismatch=잔액불일치, ledger_only=공문 없는 장기미수(원장 유지)
+   * ok=일치, mismatch=잔액불일치(공문 없는 잔액·원장만 포함)
+   * ledger_only=하위 호환(더 이상 신규 부여 안 함)
    */
   balanceDiffKind?: 'ok' | 'mismatch' | 'ledger_only';
   /** 현황=공문이어도 거래처원장과 달라 강제 불일치 표시 */

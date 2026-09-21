@@ -1819,13 +1819,15 @@ export default function ArrearsPageClient() {
                               유출
                             </Link>
                           ) : null}
-                          {row.balanceDiffKind === 'mismatch' ? (
+                          {row.balanceDiffKind === 'mismatch' || row.balanceDiffKind === 'ledger_only' ? (
                             <span
                               className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
                               title={
                                 row.balanceDiffForced
                                   ? `거래처원장과 상이(인디 확인) · 현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)}`
-                                  : `현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`
+                                  : (row.linesOpen ?? 0) === 0 && !row.balanceDiffForced
+                                    ? `공문·상세 없음(또는 상세합 0) · 현황표 잔액 ${formatArrearsWon(row.balance)} (불일치)`
+                                    : `현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`
                               }
                             >
                               {row.balanceDiffForced && !(row.balanceDiff ?? 0) ? (
@@ -1836,14 +1838,6 @@ export default function ArrearsPageClient() {
                                   {formatArrearsWon(row.balanceDiff ?? 0)}
                                 </>
                               )}
-                            </span>
-                          ) : null}
-                          {row.balanceDiffKind === 'ledger_only' ? (
-                            <span
-                              className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-800"
-                              title="공문 없음 · 내역합 0 · 원장 잔액 유지(장기미수)"
-                            >
-                              원장만 {formatArrearsWon(row.balance)}
                             </span>
                           ) : null}
                         </div>

@@ -14,9 +14,26 @@ export function isArrearsForceMismatch(externalCode: string): boolean {
  */
 export const ARREARS_LETTER_PROTECTED_CODES = new Set<string>(['00183', '00199']);
 
+/**
+ * 거래처별 상세 import 스킵 — 수동 확정한 기존 공문만 유지.
+ * 00176 에스와이메탈: 7/27 회수까지 기존 공문 + 선수금 대체. 7·8월 즉시입금 붙이지 않음.
+ */
+export const ARREARS_SKIP_CLIENT_DETAIL_CODES = new Set<string>(['00176']);
+
+/**
+ * 공문 내용 동결 — trim/Neon 덮어쓰기·일괄 재조립 대상에서 제외.
+ * 수동·확정 공문 줄을 절대 지우지 않음.
+ * 00176 에스와이 · 00191 한빛 · 00152 로터스 · 01206 올바릇
+ */
+export const ARREARS_LETTER_CONTENT_FROZEN_CODES = new Set<string>([
+  '00176',
+  '00191',
+  '00152',
+  '01206',
+]);
+
 /** 잔액 0이어도 목록에 항상 표시 (공문 조회용) */
 export const ARREARS_ALWAYS_LISTED_CODES = new Set<string>(['00183']);
-
 /**
  * 양수도로 구·신 코드가 나뉜 업체(참고용).
  * 공문에 「양수도」줄이 있으면 올린 공문 그대로 유지한다.
@@ -58,6 +75,19 @@ export function isArrearsBalanceLocked(externalCode: string): boolean {
 
 export function isArrearsLetterProtected(externalCode: string): boolean {
   return ARREARS_LETTER_PROTECTED_CODES.has(externalCode.trim());
+}
+
+export function isArrearsSkipClientDetail(externalCode: string): boolean {
+  return ARREARS_SKIP_CLIENT_DETAIL_CODES.has(String(externalCode || '').trim());
+}
+
+export function isArrearsLetterContentFrozen(externalCode: string): boolean {
+  const code = String(externalCode || '').trim();
+  return (
+    ARREARS_LETTER_CONTENT_FROZEN_CODES.has(code) ||
+    ARREARS_LETTER_PROTECTED_CODES.has(code) ||
+    ARREARS_SKIP_CLIENT_DETAIL_CODES.has(code)
+  );
 }
 
 export function isArrearsAlwaysListed(externalCode: string): boolean {

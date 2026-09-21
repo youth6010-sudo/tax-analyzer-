@@ -4,6 +4,8 @@ import { arrearsEntries } from '@/db/schema';
 import {
   isArrearsBalanceLocked,
   isArrearsLetterProtected,
+  isArrearsSkipClientDetail,
+  isArrearsLetterContentFrozen,
 } from '@/lib/arrearsBalanceLock';
 import { syncArrearsManagersFromLinkedClients } from '@/lib/intakeManagerSync';
 import {
@@ -267,7 +269,11 @@ export async function applyClientDetailImport(
   let linesAdded = 0;
 
   for (const [code, codeTxs] of byCode) {
-    if (isInactiveArrearsCode(code) || isArrearsLetterProtected(code)) {
+    if (
+      isInactiveArrearsCode(code) ||
+      isArrearsLetterProtected(code) ||
+      isArrearsSkipClientDetail(code)
+    ) {
       skippedInactive += 1;
       continue;
     }
@@ -448,7 +454,13 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
   let strippedEntries = 0;
 
   for (const e of entries) {
-    if (isArrearsLetterProtected(e.externalCode)) continue;
+    if (
+      isArrearsLetterProtected(e.externalCode) ||
+      isArrearsSkipClientDetail(e.externalCode) ||
+      isArrearsLetterContentFrozen(e.externalCode)
+    ) {
+      continue;
+    }
 
     const lines = await listLetterLines(e.id);
     const open = letterBalanceFromLines(lines);

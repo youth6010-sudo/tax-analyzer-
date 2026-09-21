@@ -259,7 +259,8 @@ export function clientDetailTxToLineInput(
       `${Number(tx.eventDate.slice(5, 7))}월 ${Number(tx.eventDate.slice(8, 10))}일`,
     );
     return {
-      description: tx.ledgerDescription.trim() || '입금',
+      // 공문 양식: 내역 공란 + 지급액·지급일시 (「입금」문구를 넣지 않음)
+      description: tx.ledgerDescription.trim(),
       amount: 0,
       paidAmount: tx.credit,
       paidDate,

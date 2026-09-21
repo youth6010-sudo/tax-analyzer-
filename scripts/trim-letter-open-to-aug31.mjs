@@ -40,7 +40,7 @@ const { listLetterLines, replaceLetterLines } = await import(
 const { letterBalanceFromLines } = await import(
   pathToFileURL(path.join(root, 'app/types/arrears.ts')).href
 );
-const { isArrearsLetterProtected } = await import(
+const { isArrearsLetterProtected, isArrearsLetterContentFrozen } = await import(
   pathToFileURL(path.join(root, 'lib/arrearsBalanceLock.ts')).href
 );
 const { hasUnpaidMonthBookkeepingOnLetter } = await import(
@@ -74,7 +74,7 @@ let trimmed = 0;
 
 for (const e of entries) {
   const code = String(e.externalCode || '').padStart(5, '0');
-  if (isArrearsLetterProtected(code)) continue;
+  if (isArrearsLetterProtected(code) || isArrearsLetterContentFrozen(code)) continue;
   if (!aug.has(code)) continue;
   const target = aug.get(code);
   const lines = await listLetterLines(e.id);

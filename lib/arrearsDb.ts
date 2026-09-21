@@ -492,10 +492,15 @@ export async function listArrearsEntries(filters: ListArrearsFilters = {}): Prom
       ? withTemp.filter(i => i.isChurned)
       : withTemp;
     if (filters.mismatchOnly) {
-      items = items.filter(i => i.balanceDiffKind === 'mismatch');
+      items = items.filter(i => i.balanceDiffKind === 'mismatch' || i.balanceDiffKind === 'ledger_only');
     }
     if (filters.ledgerOnly) {
-      items = items.filter(i => i.balanceDiffKind === 'ledger_only');
+      // 예전「원장만」: 상세합 0 · 잔액≠0 (지금은 불일치로 분류)
+      items = items.filter(
+        i =>
+          i.balanceDiffKind === 'ledger_only' ||
+          (i.balanceDiffKind === 'mismatch' && Math.round(i.linesOpen ?? 0) === 0 && Math.round(i.balance) !== 0),
+      );
     }
   }
   const totalMap = new Map<string, ArrearsManagerTotal>();
