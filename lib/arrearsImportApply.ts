@@ -321,7 +321,9 @@ export async function applyClientDetailImport(
 
     // 현황표=거래처별 말잔이고, cutoff 이전 공문합도 이미 같으면
     // 9월 입금 등을 또 넣으면 이중반영되어 어긋남 → 추가 생략
-    if (endingMatchesStatus && openBefore === targetBal) {
+    // 단, 기장 미납이 남아 있으면(훈테크·도리형) 매출·입금 쌍을 생략하지 않음
+    const hasUnpaidBk = hasUnpaidMonthBookkeepingOnLetter(keptFromExisting);
+    if (endingMatchesStatus && openBefore === targetBal && !hasUnpaidBk) {
       if (removedCount > 0) {
         await replaceLetterLines(entry.id, actorName, base, { syncBalance: false });
         applied += 1;
@@ -334,7 +336,7 @@ export async function applyClientDetailImport(
 
     // 월기장 청구+동일금액 입금 세트는 즉시회수로 보고 생략.
     // 단, 공문에 기장료 미납이 한 달이라도 있으면 이후 매출·회수는 모두 남김 (훈테크형).
-    const txs = hasUnpaidMonthBookkeepingOnLetter(keptFromExisting)
+    const txs = hasUnpaidBk
       ? codeTxs
       : skipImmediateMonthlyRecoveryTxs(codeTxs);
 

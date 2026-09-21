@@ -1,13 +1,15 @@
 /**
- * 08.31 고정본 재구성 → 9월만 추가
+ * 08.31 고정본 위에 9월만 추가
  *
- * 1) Neon 공문 복원 (8월까지 원본)
- * 2) 8/31 엑셀에 없는 가짜 7·8월 제거
- * 3) 9월~ 월기장 줄 제거 (있다면)
- * 4) 08.31 현황표로 잔액 고정
- * 5) 9/20 현황 + 거래처별만 추가
+ * ⛔ Neon 통째 복원 하지 않음 — 저번주(2026-09-15) 조정료·공문 확정본(LIVE)이 기준.
+ *
+ * 1) (선택) 8/31 엑셀에 없는 가짜 7·8월만 제거
+ * 2) 9월~ 월기장 줄 제거
+ * 3) 08.31 현황표로 잔액 고정
+ * 4) 9/20 현황 + 거래처별만 추가
  *
  * node --import tsx scripts/rebuild-aug31-then-sep20.mjs [--dry]
+ * FORCE_STRIP_JUL_AUG=1 이면 가짜 7·8월 제거도 실행
  */
 import fs from 'fs';
 import path from 'path';
@@ -51,17 +53,18 @@ for (const p of [status31, detail31, status20, detail20]) {
 }
 
 if (DRY) {
-  console.log('DRY — would rebuild aug31 then sep20');
+  console.log('DRY — would strip optional jul/aug, clear post-cutoff, apply aug31 then sep20 (NO Neon overwrite)');
   process.exit(0);
 }
 
-// 1) Neon 전체 공문 복원
-run('node', ['scripts/restore-all-letters-from-neon.mjs']);
+console.log('기준: 저번주 확정 LIVE 공문 (Neon 통째 복원 안 함)');
 
-// 2) 가짜 7·8월 제거
-run('node', ['--import', 'tsx', 'scripts/strip-jul-aug-not-in-aug31-excel.mjs', '--apply']);
-
-// 3~5) TS 모듈로 9월 줄 제거 + 08.31 잔액 + 9/20 반영
+// 1) 가짜 7·8월 제거 — 명시할 때만 (이미 확정본이면 건너뜀)
+if (process.env.FORCE_STRIP_JUL_AUG === '1') {
+  run('node', ['--import', 'tsx', 'scripts/strip-jul-aug-not-in-aug31-excel.mjs', '--apply']);
+} else {
+  console.log('skip strip-jul-aug (set FORCE_STRIP_JUL_AUG=1 to run)');
+}
 const { getDb } = await import(pathToFileURL(path.join(root, 'db/index.ts')).href);
 const { arrearsEntries } = await import(pathToFileURL(path.join(root, 'db/schema.ts')).href);
 const { listLetterLines, replaceLetterLines } = await import(

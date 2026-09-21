@@ -4,9 +4,10 @@ import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 
 /**
  * 공문 반영 컷오프 동결일.
- * - 이 날까지 공문 내역은 유지
+ * - 이 날까지 공문 내역은 유지 (저번주 확정본: 2026-09-15 조정료 원문 복구 이후 LIVE)
  * - 거래처별 현황 업로드는 이 날 **이후**(9월~)만 공문에 추가
  * - 목록 「기준일」(statusAsOfDate)은 별도로 수정 가능
+ * - Neon(PREV) 통째 덮어쓰기로 이 컷오프 이전 공문을 바꾸지 말 것
  */
 export const ARREARS_FROZEN_LETTER_CUTOFF = '2026.08.31';
 

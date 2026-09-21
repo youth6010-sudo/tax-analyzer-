@@ -1,9 +1,23 @@
 /**
  * Neon → 활성 DB 공문 전체 복원 (letter/ledger/payment 모두, 코드 매칭)
- * node scripts/restore-all-letters-from-neon.mjs
+ *
+ * ⛔ 금지: 저번주(2026-09-15) 법인조정료·공문 원문 확정본을 Neon이 덮어씀.
+ * 08.31 고정 기준은 Supabase LIVE(확정 작업 후)이며 Neon(PREV)이 아님.
+ * 강제 실행: FORCE_NEON_LETTER_OVERWRITE=1 node scripts/restore-all-letters-from-neon.mjs
  */
 import fs from 'node:fs';
 import postgres from 'postgres';
+
+if (process.env.FORCE_NEON_LETTER_OVERWRITE !== '1') {
+  console.error(
+    [
+      'BLOCKED: Neon 공문 통째 복원은 08.31 최종 확정본(저번주 조정료 원문 복구 이후 LIVE)을 깨뜨립니다.',
+      '확정본 기준 고정: 2026-09-15 adafe0c 이후 Supabase 공문. Neon은 PREV 스냅샷일 뿐.',
+      '정말 필요하면 FORCE_NEON_LETTER_OVERWRITE=1 로만 실행하세요.',
+    ].join('\n'),
+  );
+  process.exit(2);
+}
 
 const env = {};
 for (const line of fs.readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
