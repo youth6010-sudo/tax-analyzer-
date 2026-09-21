@@ -75,8 +75,6 @@ export type ClientDetailImportResult = {
   skippedNoEntry: number;
   linesAdded: number;
   overageStripped: number;
-  /** 현황=말잔이라 공문합을 맞춘 건수 */
-  aligned: number;
 };
 
 export async function previewStatusImport(
@@ -292,8 +290,11 @@ export async function applyClientDetailImport(
 
     const existing = await listLetterLines(entry.id);
     // 유지: cutoff 이전 공문(letter) + 수정모드 직접입력(manual)
-    // 제거 후 파일로 재구성: cutoff 이후 letter 월기장 · 이전 import의 ledger/payment/tax
+    // 제거: cutoff 이후 letter 월기장 · 이전 import의 ledger/payment/tax · 임시 현황맞춤 줄
     const keptFromExisting = existing.filter(l => {
+      if (/현황맞춤|말잔맞춤/.test(String(l.description || '').replace(/\s+/g, ''))) {
+        return false;
+      }
       if (l.source === 'manual') return true;
       if (
         l.source === 'letter' &&
@@ -374,9 +375,6 @@ export async function applyClientDetailImport(
   }
 
   const overageStripped = await stripOverageUnpaidMonthLines(actorName);
-  // 현황표 잔액 = 거래처별 말잔인 업체는 공문합도 그 금액으로 맞춤
-  // (엑셀 두 파일이 동의하는 잔액 — 원래 엑셀 불일치는 건드리지 않음)
-  const aligned = await alignLettersToMatchingEndings(actorName, endings);
 
   return {
     preview: false,
@@ -387,126 +385,7 @@ export async function applyClientDetailImport(
     skippedNoEntry,
     linesAdded,
     overageStripped,
-    aligned,
   };
-}
-
-/**
- * 현황표 잔액과 거래처별 말잔이 같은 업체만 공문합을 그 잔액에 맞춤.
- * 엑셀끼리 다른 업체(원래 불일치)는 그대로 둔다.
- */
-export async function alignLettersToMatchingEndings(
-  actorName: string,
-  endings: Record<string, number>,
-): Promise<number> {
-  const db = getDb();
-  const entries = await db.select().from(arrearsEntries);
-  let n = 0;
-  for (const e of entries) {
-    if (isInactiveArrearsCode(e.externalCode) || isArrearsLetterProtected(e.externalCode)) {
-      continue;
-    }
-    if (isIndieManagerName(e.managerName)) continue;
-    const end = endings[e.externalCode];
-    if (end == null) continue;
-    const target = Math.round(e.balance);
-    if (Math.round(end) !== target) continue;
-    if (await reconcileLetterOpenToTarget(e.id, actorName, target)) n += 1;
-  }
-  return n;
-}
-
-/** 공문 Σ(금액−지급)을 target에 맞추기 — 가능하면 최근 입금 취소/미납에 지급 반영, 부족분·초과분만 맞춤 줄 */
-export async function reconcileLetterOpenToTarget(
-  entryId: string,
-  actorName: string,
-  target: number,
-): Promise<boolean> {
-  const lines = await listLetterLines(entryId);
-  const t = Math.round(target);
-  const withoutAlign = lines.filter(
-    l =>
-      !/현황맞춤|말잔맞춤/.test(String(l.description || '').replace(/\s+/g, '')),
-  );
-  const open = letterBalanceFromLines(withoutAlign);
-  if (open === t) {
-    if (withoutAlign.length === lines.length) return false;
-    await replaceLetterLines(
-      entryId,
-      actorName || 'align-ending',
-      withoutAlign.map(l => ({
-        description: l.description,
-        amount: l.amount,
-        paidAmount: l.paidAmount,
-        paidDate: l.paidDate,
-        source: l.source,
-      })),
-      { syncBalance: false },
-    );
-    return true;
-  }
-
-  const next: ArrearsLetterLineInput[] = withoutAlign.map(l => ({
-    description: l.description,
-    amount: l.amount,
-    paidAmount: Math.round(l.paidAmount || 0),
-    paidDate: l.paidDate || '',
-    source: l.source,
-  }));
-  let gap = t - open;
-
-  if (gap > 0) {
-    // 공문합이 현황보다 작음 — 최근에 넣은 입금(이중반영)부터 되돌림
-    for (let i = next.length - 1; i >= 0 && gap > 0; i--) {
-      const l = next[i]!;
-      const paid = Math.round(l.paidAmount || 0);
-      const amt = Math.round(l.amount || 0);
-      if (amt !== 0 || paid <= 0) continue;
-      if (l.source !== 'payment' && String(l.description || '').trim() !== '') continue;
-      if (paid <= gap) {
-        gap -= paid;
-        next.splice(i, 1);
-      } else {
-        l.paidAmount = paid - gap;
-        gap = 0;
-      }
-    }
-    if (gap > 0) {
-      next.push({
-        description: '미수반영(현황맞춤)',
-        amount: gap,
-        paidAmount: 0,
-        paidDate: '',
-        source: 'ledger',
-      });
-    }
-  } else if (gap < 0) {
-    // 공문합이 현황보다 큼 — 미납 줄에 지급 반영
-    let need = -gap;
-    for (let i = next.length - 1; i >= 0 && need > 0; i--) {
-      const l = next[i]!;
-      const unpaid = Math.round(l.amount || 0) - Math.round(l.paidAmount || 0);
-      if (unpaid <= 0) continue;
-      const take = Math.min(unpaid, need);
-      l.paidAmount = Math.round(l.paidAmount || 0) + take;
-      if (!l.paidDate) l.paidDate = '';
-      need -= take;
-    }
-    if (need > 0) {
-      next.push({
-        description: '입금(현황맞춤)',
-        amount: 0,
-        paidAmount: need,
-        paidDate: '',
-        source: 'payment',
-      });
-    }
-  }
-
-  await replaceLetterLines(entryId, actorName || 'align-ending', next, {
-    syncBalance: false,
-  });
-  return true;
 }
 
 export async function getImportConfigForApi() {
