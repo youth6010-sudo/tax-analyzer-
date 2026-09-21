@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 
 /**
  * 공문 반영 컷오프 동결일.
@@ -20,6 +21,7 @@ export type ArrearsImportConfig = {
   updatedAt: string;
 };
 
+const CONFIG_KEY = 'arrears_import_config';
 const CONFIG_PATH = path.join(process.cwd(), 'data', 'arrears-import-config.json');
 
 const DEFAULTS: ArrearsImportConfig = {
@@ -28,31 +30,60 @@ const DEFAULTS: ArrearsImportConfig = {
   updatedAt: '',
 };
 
-export function readArrearsImportConfig(): ArrearsImportConfig {
+function normalizeConfig(raw: Partial<ArrearsImportConfig> | null | undefined): ArrearsImportConfig {
+  return {
+    statusAsOfDate: normalizeDotDate(raw?.statusAsOfDate) || DEFAULTS.statusAsOfDate,
+    letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
+    updatedAt: raw?.updatedAt || '',
+  };
+}
+
+function readFromFile(): ArrearsImportConfig {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<ArrearsImportConfig>;
-    return {
-      statusAsOfDate: normalizeDotDate(raw.statusAsOfDate) || DEFAULTS.statusAsOfDate,
-      letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
-      updatedAt: raw.updatedAt || '',
-    };
+    return normalizeConfig(raw);
   } catch {
     return { ...DEFAULTS, letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF };
   }
 }
 
-export function writeArrearsImportConfig(
+function writeToFile(next: ArrearsImportConfig): void {
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+}
+
+/** DB 우선, 없으면 로컬 파일(개발용) */
+export async function readArrearsImportConfig(): Promise<ArrearsImportConfig> {
+  try {
+    const fromDb = await getAppConfig<Partial<ArrearsImportConfig>>(CONFIG_KEY);
+    if (fromDb && (fromDb.statusAsOfDate || fromDb.updatedAt)) {
+      return normalizeConfig(fromDb);
+    }
+  } catch {
+    /* DB unavailable — file */
+  }
+  return readFromFile();
+}
+
+export async function writeArrearsImportConfig(
   patch?: Partial<ArrearsImportConfig>,
-): ArrearsImportConfig {
-  const cur = readArrearsImportConfig();
+): Promise<ArrearsImportConfig> {
+  const cur = await readArrearsImportConfig();
   const next: ArrearsImportConfig = {
     statusAsOfDate:
       normalizeDotDate(patch?.statusAsOfDate) || cur.statusAsOfDate || DEFAULTS.statusAsOfDate,
     letterCutoffDate: ARREARS_FROZEN_LETTER_CUTOFF,
     updatedAt: new Date().toISOString(),
   };
-  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+
+  await setAppConfig(CONFIG_KEY, next as unknown as Record<string, unknown>);
+
+  try {
+    writeToFile(next);
+  } catch {
+    /* Vercel read-only fs — DB write is enough */
+  }
+
   return next;
 }
 

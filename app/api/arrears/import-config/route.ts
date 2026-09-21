@@ -43,7 +43,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: '기준일을 확인해 주세요. (예: 2026.08.31)' }, { status: 400 });
     }
 
-    const config = writeArrearsImportConfig({ statusAsOfDate: asOfRaw });
+    const config = await writeArrearsImportConfig({ statusAsOfDate: asOfRaw });
     const asOfIso = toIsoDate(config.statusAsOfDate);
     const actor = user.name?.trim() || 'import-config';
     await getDb()

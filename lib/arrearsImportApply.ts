@@ -175,7 +175,7 @@ export async function applyStatusImport(
     }
   }
 
-  writeArrearsImportConfig({ statusAsOfDate: asOfDate });
+  await writeArrearsImportConfig({ statusAsOfDate: asOfDate });
 
   // 기준일: 현황표에 없는 업체(인디 등)도 동일 기준일로
   await db
@@ -244,7 +244,7 @@ export async function applyClientDetailImport(
   _cutoffOverride?: string,
 ): Promise<ClientDetailImportResult> {
   const cutoffDate = ARREARS_FROZEN_LETTER_CUTOFF;
-  writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
+  await writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
 
   // 거래처별 말잔 저장 — 현황표와 같으면 목록 「불일치」제외
   const endings = parseArrearsClientDetailEndings(buffer);
@@ -368,7 +368,7 @@ export async function applyClientDetailImport(
 }
 
 export async function getImportConfigForApi() {
-  return readArrearsImportConfig();
+  return await readArrearsImportConfig();
 }
 
 export function summarizeBalanceAlignment(
