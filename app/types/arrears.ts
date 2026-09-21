@@ -64,6 +64,8 @@ export type ArrearsEntryDto = {
    * ok=일치, mismatch=잔액불일치, ledger_only=공문 없는 장기미수(원장 유지)
    */
   balanceDiffKind?: 'ok' | 'mismatch' | 'ledger_only';
+  /** 현황=공문이어도 거래처원장과 달라 강제 불일치 표시 */
+  balanceDiffForced?: boolean;
   /** 연결 수임처가 유출(churned) 상태 */
   isChurned?: boolean;
 };

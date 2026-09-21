@@ -1,4 +1,14 @@
 /**
+ * 현황표·공문합이 같아도 「불일치」로 표시 — 실제 거래처원장과 다른 인디 확인분.
+ * 00131 티밸류매거진(주) · 00130 (주)티밸류홀딩스 · 00229 (주)예윤
+ */
+export const ARREARS_FORCE_MISMATCH_CODES = new Set<string>(['00130', '00131', '00229']);
+
+export function isArrearsForceMismatch(externalCode: string): boolean {
+  return ARREARS_FORCE_MISMATCH_CODES.has(String(externalCode || '').trim());
+}
+
+/**
  * 잔액은 「미수수수료 거래처(잔액)현황」기준.
  * 공문 줄합(거래처별 현황 반영)과 다르면 불일치로 표시. 공문 저장이 잔액을 덮지 않음.
  */

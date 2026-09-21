@@ -17,6 +17,7 @@ import {
   applyArrearsManualBalance,
   ARREARS_ALWAYS_LISTED_CODES,
   isArrearsBalanceLocked,
+  isArrearsForceMismatch,
 } from '@/lib/arrearsBalanceLock';
 import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
@@ -87,12 +88,17 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
      * 둘이 다르면 무조건 mismatch (양수도 등 의도적 차이 포함).
      */
     const balanceDiff = Math.round(item.balance) - linesOpen;
-    const balanceDiffKind = classifyBalanceDiff({
+    let balanceDiffKind = classifyBalanceDiff({
       ledgerBalance: item.balance,
       linesOpen,
       hasLetter: letterBy.get(item.id) === true,
     });
-    return { ...item, linesOpen, balanceDiff, balanceDiffKind };
+    const balanceDiffForced = isArrearsForceMismatch(item.externalCode);
+    // 현황=공문이어도 실제 거래처원장과 다른 인디 확인분 → 불일치 유지
+    if (balanceDiffForced && balanceDiffKind === 'ok') {
+      balanceDiffKind = 'mismatch';
+    }
+    return { ...item, linesOpen, balanceDiff, balanceDiffKind, balanceDiffForced };
   });
 }
 

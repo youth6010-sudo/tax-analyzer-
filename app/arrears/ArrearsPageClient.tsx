@@ -1822,10 +1822,20 @@ export default function ArrearsPageClient() {
                           {row.balanceDiffKind === 'mismatch' ? (
                             <span
                               className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-                              title={`현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`}
+                              title={
+                                row.balanceDiffForced
+                                  ? `거래처원장과 상이(인디 확인) · 현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)}`
+                                  : `현황표 ${formatArrearsWon(row.balance)} · 공문·상세합 ${formatArrearsWon(row.linesOpen ?? row.balance)} · 차이 ${formatArrearsWon(row.balanceDiff ?? 0)}`
+                              }
                             >
-                              불일치 {(row.balanceDiff ?? 0) > 0 ? '+' : ''}
-                              {formatArrearsWon(row.balanceDiff ?? 0)}
+                              {row.balanceDiffForced && !(row.balanceDiff ?? 0) ? (
+                                <>불일치(원장)</>
+                              ) : (
+                                <>
+                                  불일치 {(row.balanceDiff ?? 0) > 0 ? '+' : ''}
+                                  {formatArrearsWon(row.balanceDiff ?? 0)}
+                                </>
+                              )}
                             </span>
                           ) : null}
                           {row.balanceDiffKind === 'ledger_only' ? (
