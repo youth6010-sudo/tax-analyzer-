@@ -289,20 +289,16 @@ export async function applyClientDetailImport(
     }
 
     const existing = await listLetterLines(entry.id);
-    // 유지: cutoff 이전 공문(letter) + 수정모드 직접입력(manual)
-    // 제거: cutoff 이후 letter 월기장 · 이전 import의 ledger/payment/tax · 임시 현황맞춤 줄
+    // 유지: cutoff 이전 월·적요(출처 무관) + 수정모드 manual + 월패턴 없는 기존 줄
+    // 제거: cutoff 이후 월기장(9월~) · 임시 현황맞춤 줄 → 파일로 재구성
     const keptFromExisting = existing.filter(l => {
       if (/현황맞춤|말잔맞춤/.test(String(l.description || '').replace(/\s+/g, ''))) {
         return false;
       }
       if (l.source === 'manual') return true;
-      if (
-        l.source === 'letter' &&
-        !isPostCutoffLetterMonth(l.description, cutoffDate)
-      ) {
-        return true;
-      }
-      return false;
+      // 9월~ 월별 기장만 제거하고, 8월까지(letter·ledger 포함)는 절대 지우지 않음
+      if (isPostCutoffLetterMonth(l.description, cutoffDate)) return false;
+      return true;
     });
     const removedCount = existing.length - keptFromExisting.length;
     const letterDescs = keptFromExisting.map(l => l.description);
@@ -439,13 +435,14 @@ function isUnpaidMonthLedgerLine(l: {
 }
 
 /**
- * import 후에도 공문합 > 현황이면, 같은 달 매출·입금으로 넣지 말았어야 할
- * 월기장(ledger) 줄이 남은 경우로 보고 끝에서부터 제거해 현황과 맞춤.
- * (보호코드만 제외 — 업체별 예외 없음)
+ * import 후에도 공문합 > 현황이면, cutoff **이후**에 잘못 남은
+ * 월기장(ledger) 줄만 끝에서부터 제거해 현황과 맞춤.
+ * 8월 이전(동결 cutoff 포함) 내역은 절대 지우지 않음.
  */
 export async function stripOverageUnpaidMonthLines(actorName: string): Promise<number> {
   const db = getDb();
   const entries = await db.select().from(arrearsEntries);
+  const cutoffDate = ARREARS_FROZEN_LETTER_CUTOFF;
   let strippedEntries = 0;
 
   for (const e of entries) {
@@ -475,6 +472,8 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
     for (let i = next.length - 1; i >= 0 && over > 0; i--) {
       const l = next[i]!;
       if (!isUnpaidMonthLedgerLine(l)) continue;
+      // 동결일 이전·당월(8월까지) 보호
+      if (!isPostCutoffLetterMonth(l.description, cutoffDate)) continue;
       const amt = Math.round(l.amount);
       if (amt > over) continue;
       next.splice(i, 1);
