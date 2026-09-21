@@ -548,7 +548,7 @@ export function skipImmediateMonthlyRecoveryTxs<
 
 /** 공문 letter 줄 중 cutoff 달보다 이후 월별 기장료 — 거래처별 상세로 대체.
  * 동결일(예: 08.31)이 속한 달(8월)까지는 유지, 다음 달(9월~)만 제거. */
-function isPostCutoffLetterMonth(desc: string, cutoffDot: string): boolean {
+export function isPostCutoffLetterMonth(desc: string, cutoffDot: string): boolean {
   const d = String(desc || '').replace(/\s+/g, '');
   const m = d.match(/(20\d{2}|\d{2})년(?:기타수수료)?(\d{1,2})월/);
   if (!m) return false;
