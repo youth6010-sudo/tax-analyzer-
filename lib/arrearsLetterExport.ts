@@ -223,7 +223,7 @@ function appendArrearsLetterSheet(
         },
         ext: { width: HEADER_LOGO_W, height: HEADER_LOGO_H },
         editAs: 'oneCell',
-      } as ExcelJS.ImagePosition);
+      } as unknown as ExcelJS.ImagePosition);
     } else {
       const cell = row.getCell(2);
       cell.value = '세무법인청년들';
@@ -493,7 +493,7 @@ function appendArrearsLetterSheet(
       },
       ext: { width: FOOTER_LOGO_W, height: FOOTER_LOGO_H },
       editAs: 'oneCell',
-    } as ExcelJS.ImagePosition);
+    } as unknown as ExcelJS.ImagePosition);
   }
 
   // 인쇄 영역 고정 (A열~F열, 사용한 행까지) — 참고 파일과 동일하게 가로 1페이지 맞춤
