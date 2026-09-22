@@ -8314,7 +8314,7 @@
     "01206": {
       "name": "(주) 올바릇",
       "balance": 2825000,
-      "open": 2825000,
+      "open": 3067000,
       "kind": "complex",
       "lines": [
         {
@@ -8378,13 +8378,6 @@
           "amount": 0,
           "paidAmount": 3000000,
           "paidDate": "7월 31일",
-          "source": "letter"
-        },
-        {
-          "description": "",
-          "amount": 0,
-          "paidAmount": 242000,
-          "paidDate": "9월 15일",
           "source": "letter"
         }
       ]

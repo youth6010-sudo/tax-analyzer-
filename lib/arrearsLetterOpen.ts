@@ -1,5 +1,6 @@
 /**
  * 현황표 잔액 vs 공문합 — 업체별로 공문 줄 중 대사에서 제외할 행
+ * (올바릇 9/15는 공문에서도 제거함. 하위 호환용 가드만 유지)
  */
 export function isLineExcludedFromStatusOpen(
   externalCode: string,
@@ -10,7 +11,7 @@ export function isLineExcludedFromStatusOpen(
   const pd = String(line.paidDate || '').replace(/\s+/g, '');
   const desc = String(line.description || '').trim();
 
-  /** 올바릇: 기장 미수 없음 — 9/15 24.2만 입금은 공문에 보이되 잔액 대사에서 제외(불일치) */
+  /** 올바릇: 혹시 남은 9/15 24.2만 입금은 대사에서 제외 */
   if (code === '01206') {
     if (!desc && pay === 242000 && /9월15/.test(pd)) return true;
   }
