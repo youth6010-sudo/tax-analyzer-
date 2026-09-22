@@ -99,6 +99,7 @@ function visibleRows(rows: ComputedReportRow[]): ComputedReportRow[] {
   const out: ComputedReportRow[] = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
+    // 본표는 당기순이익(Ⅹ, excelRow 605)까지
     if (row.excelRow > 605) continue;
     if (row.kind === 'label') {
       const codeCompact = (row.code || '').replace(/\s+/g, '');
@@ -110,6 +111,19 @@ function visibleRows(rows: ComputedReportRow[]): ComputedReportRow[] {
       continue;
     }
     if (row.isSection) {
+      // Ⅷ 세금차감전이익 · Ⅸ 세금 · Ⅹ 당기순이익 — 본표 끝단은 항상 연결
+      const code = (row.code || '').replace(/\s+/g, '');
+      const isTail =
+        code.startsWith('Ⅷ') ||
+        code.startsWith('Ⅸ') ||
+        code.startsWith('Ⅹ') ||
+        row.excelRow === 601 ||
+        row.excelRow === 602 ||
+        row.excelRow === 605;
+      if (hasLinked && isTail) {
+        out.push(row);
+        continue;
+      }
       let hasChild = false;
       for (let j = i + 1; j < rows.length; j++) {
         const n = rows[j]!;
@@ -142,51 +156,44 @@ async function fetchLogoDataUrl(): Promise<string> {
 }
 
 /**
- * 페이지 분할: 중간과목 기준이 아니라 A4에 들어가는 만큼 채움.
- * 이어지는 장에도 상단 손익분석보고서 헤더(제목·KPI)가 반복됨.
- * 첫 장·이어지는 장·푸터 있는 마지막 장 행 수.
+ * 페이지 분할: 본표는 당기순이익까지 A4를 채우며 연결.
+ * 세액계산(푸터)은 한 덩어리 — 마지막 표와 같이 들어가면 같은 장, 넘치면 뒷장.
  */
-const ROWS_FIRST_PAGE = 30;
-const ROWS_PER_PAGE = 42;
-const ROWS_WITH_FOOTER = 14;
+type ReportPageChunk = {
+  rows: ComputedReportRow[];
+  showFooter: boolean;
+};
 
-function splitRowsForPages(
-  rows: ComputedReportRow[],
-  opts?: { first?: number; cont?: number; footer?: number },
-): ComputedReportRow[][] {
-  if (rows.length === 0) return [[]];
-  const first = opts?.first ?? ROWS_FIRST_PAGE;
-  const cont = opts?.cont ?? ROWS_PER_PAGE;
-  const footer = opts?.footer ?? ROWS_WITH_FOOTER;
+/** 측정 실패 시 폴백 */
+const ROWS_FIRST_PAGE = 48;
+const ROWS_PER_PAGE = 55;
+const ROWS_WITH_FOOTER = 18;
+const PAGE_H_MM = 297;
+const PAGE_FIT_TOL_MM = 2.5;
 
-  // 헤더+표+푸터가 한 장에 들어가려면 행이 매우 적을 때만
-  if (rows.length <= footer) return [rows];
-
+function splitRowsForPagesFallback(rows: ComputedReportRow[]): ReportPageChunk[] {
+  if (rows.length === 0) return [{ rows: [], showFooter: true }];
   const pages: ComputedReportRow[][] = [];
   let rest = rows.slice();
-
-  // 1페이지: 상단 헤더 박스 공간 확보 — 가능한 한 채움
-  if (rest.length > footer) {
-    const take = Math.min(first, Math.max(1, rest.length - footer));
+  if (rest.length > ROWS_WITH_FOOTER) {
+    const take = Math.min(ROWS_FIRST_PAGE, Math.max(1, rest.length - ROWS_WITH_FOOTER));
     pages.push(rest.slice(0, take));
     rest = rest.slice(take);
   }
-
-  while (rest.length > footer) {
-    const overflow = rest.length - cont;
+  while (rest.length > ROWS_WITH_FOOTER) {
+    const overflow = rest.length - ROWS_PER_PAGE;
     if (overflow <= 0) break;
-    if (overflow <= footer) {
-      // 남은 게 푸터 여유분만 넘으면 중간장에 cont만큼, 나머지는 마지막장
-      const take = Math.min(cont, rest.length - footer);
+    if (overflow <= ROWS_WITH_FOOTER) {
+      const take = Math.min(ROWS_PER_PAGE, rest.length - ROWS_WITH_FOOTER);
       pages.push(rest.slice(0, take));
       rest = rest.slice(take);
       break;
     }
-    pages.push(rest.slice(0, cont));
-    rest = rest.slice(cont);
+    pages.push(rest.slice(0, ROWS_PER_PAGE));
+    rest = rest.slice(ROWS_PER_PAGE);
   }
   if (rest.length) pages.push(rest);
-  return pages;
+  return pages.map((r, i) => ({ rows: r, showFooter: i === pages.length - 1 }));
 }
 
 function renderPlRow(row: ComputedReportRow): string {
@@ -239,7 +246,8 @@ export function buildInterimClosingReportHtml(
   computed: InterimClosingComputed,
   opts?: InterimClosingPdfOptions & {
     logoDataUrl?: string;
-    rowLimits?: { first?: number; cont?: number; footer?: number };
+    /** 미리 측정해 둔 페이지 청크 */
+    pageChunks?: ReportPageChunk[];
   },
 ): string {
   const m = payload.manual;
@@ -354,7 +362,8 @@ export function buildInterimClosingReportHtml(
     : `<div class="box mid kpi-box">${kpiTableHtml}</div>
     <div class="box pay">${payTableHtml}</div>`;
 
-  const headerHtml = `<div class="accent"></div>
+  /** 첫 장만: 남색 시작선 + 손익분석보고서~단위 */
+  const firstHeaderHtml = `<div class="accent"></div>
   <div class="top">
     <div class="brand">
         <h1><span class="yr">${escapeHtml(String(payload.year))}</span><span class="ttl">손익분석 보고서</span></h1>
@@ -420,7 +429,7 @@ export function buildInterimClosingReportHtml(
         <tr><td class="lab">${escapeHtml(spacedLabel('손금산입'))}</td><td class="num">${formatWon(tax.expenseInclusion)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('기부금한도초과'))}</td><td class="num">${formatWon(tax.donationExcess)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('과세표준'))}</td><td class="num">${formatWon(tax.taxBase)}</td></tr>
-        <tr><td class="lab">${escapeHtml(spacedLabel('(*)기본세율'))}</td><td class="num"><span class="rate">${escapeHtml(tax.rateLabel)}</span></td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('세율'))}</td><td class="num"><span class="rate">${escapeHtml(tax.rateLabel)}</span></td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('산출세액'))}</td><td class="num">${formatWon(tax.calculatedTax)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('세액감면'))}</td><td class="num">${formatWon(tax.taxReduction)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('세액공제'))}</td><td class="num">${formatWon(tax.taxCredit)}</td></tr>
@@ -482,17 +491,22 @@ export function buildInterimClosingReportHtml(
   </div>
   <div class="doc-end"></div>`;
 
-  const pageChunks = splitRowsForPages(rows, opts?.rowLimits);
+  const pageChunks: ReportPageChunk[] = opts?.pageChunks?.length
+    ? opts.pageChunks
+    : splitRowsForPagesFallback(rows);
   const totalPages = pageChunks.length;
 
   const pagesHtml = pageChunks
     .map((chunk, idx) => {
       const pageNo = idx + 1;
-      const isLast = pageNo === totalPages;
-      const tbody = chunk.map(renderPlRow).join('');
+      const isFirst = idx === 0;
+      const tbody = chunk.rows.map(renderPlRow).join('');
+      const hasTable = chunk.rows.length > 0;
       return `<div class="page" id="ic-report-page-${pageNo}">
-  ${headerHtml}
-  <table class="pl${isLast ? ' pl-last' : ''}">
+  ${isFirst ? firstHeaderHtml : ''}
+  ${
+    hasTable
+      ? `<table class="pl${chunk.showFooter ? ' pl-last' : ''}">
     <colgroup>
       <col class="c-subj" style="width:18%"/>
       <col class="c-amt" style="width:15%"/><col class="c-pct" style="width:7%"/>
@@ -501,8 +515,10 @@ export function buildInterimClosingReportHtml(
     </colgroup>
     ${theadHtml}
     <tbody>${tbody}</tbody>
-  </table>
-  ${isLast ? footerHtml : ''}
+  </table>`
+      : ''
+  }
+  ${chunk.showFooter ? footerHtml : ''}
   <div class="page-no">- ${pageNo} / ${totalPages} -</div>
 </div>`;
     })
@@ -619,10 +635,34 @@ async function captureElementToCanvas(el: HTMLElement): Promise<HTMLCanvasElemen
   });
 }
 
-async function htmlToPdfBlob(html: string): Promise<{
-  blob: Blob;
-  overflowed: boolean;
-}> {
+async function waitDocReady(doc: Document): Promise<void> {
+  await new Promise<void>(resolve => {
+    const done = () => resolve();
+    if (doc.fonts?.ready) doc.fonts.ready.then(done).catch(done);
+    else setTimeout(done, 80);
+  });
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+/** .page 실제 콘텐츠 높이(mm). overflow 클리핑 없이 측정 */
+function measurePageHeightMm(page: HTMLElement): number {
+  const prev = {
+    height: page.style.height,
+    maxHeight: page.style.maxHeight,
+    overflow: page.style.overflow,
+  };
+  page.style.height = 'auto';
+  page.style.maxHeight = 'none';
+  page.style.overflow = 'visible';
+  const w = page.offsetWidth || 1;
+  const hMm = (page.scrollHeight / w) * 210;
+  page.style.height = prev.height;
+  page.style.maxHeight = prev.maxHeight;
+  page.style.overflow = prev.overflow;
+  return hMm;
+}
+
+async function htmlToPdfBlob(html: string): Promise<Blob> {
   const iframe = document.createElement('iframe');
   iframe.style.cssText =
     'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none';
@@ -631,35 +671,198 @@ async function htmlToPdfBlob(html: string): Promise<{
   doc.open();
   doc.write(html);
   doc.close();
-
-  await new Promise<void>(resolve => {
-    const done = () => resolve();
-    if (doc.fonts?.ready) doc.fonts.ready.then(done).catch(done);
-    else setTimeout(done, 80);
-  });
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await waitDocReady(doc);
 
   const pages = Array.from(doc.querySelectorAll('.page')) as HTMLElement[];
-
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
-  let overflowed = false;
 
   for (let i = 0; i < pages.length; i++) {
     const canvas = await captureElementToCanvas(pages[i]!);
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const imgH = (canvas.height / canvas.width) * pageW;
-    if (imgH > pageH + 0.8) overflowed = true;
-    // A4보다 길어도 헤더 없는 캔버스 슬라이스는 하지 않음 — 행 수 줄여 재생성
-    const drawH = Math.min(imgH, pageH);
+    const imgH = Math.min((canvas.height / canvas.width) * pageW, pageH);
     if (i > 0) pdf.addPage();
-    pdf.addImage(imgData, 'JPEG', 0, 0, pageW, drawH);
+    pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH);
   }
 
   iframe.remove();
-  return { blob: pdf.output('blob'), overflowed };
+  return pdf.output('blob');
+}
+
+/**
+ * 1) 본표(당기순이익까지)를 A4에 최대한 채워 페이지 연결
+ *    — 첫 장만 손익분석보고서~단위 헤더, 이어지는 장은 표만
+ * 2) 세액계산 푸터는 한 덩어리 — 마지막 표와 같이 되면 같은 장, 넘치면 뒷장
+ *    — 남색 시작선은 첫 장, 끝선(doc-end)은 세액계산 있는 마지막 장
+ */
+async function packRowsByMeasuring(
+  payload: InterimClosingPayload,
+  computed: InterimClosingComputed,
+  rows: ComputedReportRow[],
+  opts: { logoDataUrl?: string; writtenAt?: string | null },
+): Promise<ReportPageChunk[]> {
+  if (rows.length === 0) return [{ rows: [], showFooter: true }];
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText =
+    'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument!;
+  const dummyRow = rows[0]!;
+
+  const measurePageAt = async (
+    chunks: ReportPageChunk[],
+    pageIndex: number,
+  ): Promise<number> => {
+    const html = buildInterimClosingReportHtml(payload, computed, {
+      writtenAt: opts.writtenAt,
+      logoDataUrl: opts.logoDataUrl,
+      pageChunks: chunks,
+    });
+    doc.open();
+    doc.write(html);
+    doc.close();
+    await waitDocReady(doc);
+    const pages = Array.from(doc.querySelectorAll('.page')) as HTMLElement[];
+    const page = pages[pageIndex];
+    if (!page) return PAGE_H_MM + 100;
+    return measurePageHeightMm(page);
+  };
+
+  /** pageKind: first=헤더 있는 첫 장, cont=헤더 없는 이어지는 장 */
+  const fits = async (
+    chunk: ReportPageChunk,
+    pageKind: 'first' | 'cont',
+    hasMoreAfter: boolean,
+  ): Promise<boolean> => {
+    let chunks: ReportPageChunk[];
+    let measureIdx: number;
+    if (pageKind === 'first') {
+      chunks = hasMoreAfter
+        ? [chunk, { rows: [dummyRow], showFooter: true }]
+        : [chunk];
+      measureIdx = 0;
+    } else {
+      // 더미 첫 장 + 측정 대상(이어지는 장)
+      chunks = hasMoreAfter
+        ? [
+            { rows: [dummyRow], showFooter: false },
+            chunk,
+            { rows: [dummyRow], showFooter: true },
+          ]
+        : [{ rows: [dummyRow], showFooter: false }, chunk];
+      measureIdx = 1;
+    }
+    const hMm = await measurePageAt(chunks, measureIdx);
+    return hMm <= PAGE_H_MM - PAGE_FIT_TOL_MM;
+  };
+
+  const maxFitRows = async (
+    candidates: ComputedReportRow[],
+    pageKind: 'first' | 'cont',
+    showFooter: boolean,
+  ): Promise<number> => {
+    if (candidates.length === 0) return 0;
+    const probe = async (n: number) =>
+      fits(
+        { rows: candidates.slice(0, n), showFooter },
+        pageKind,
+        !showFooter && n < candidates.length,
+      );
+    if (await probe(candidates.length)) return candidates.length;
+    let lo = 1;
+    let hi = candidates.length - 1;
+    let best = 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (await probe(mid)) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return best;
+  };
+
+  try {
+    const tableChunks: ComputedReportRow[][] = [];
+    let rest = rows.slice();
+
+    // 첫 장 (헤더 포함)
+    if (rest.length > 0) {
+      const n = await maxFitRows(rest, 'first', false);
+      if (n >= rest.length) {
+        tableChunks.push(rest);
+        rest = [];
+      } else {
+        const take = Math.max(1, n);
+        tableChunks.push(rest.slice(0, take));
+        rest = rest.slice(take);
+      }
+    }
+
+    // 이어지는 장 (헤더 없음 → 표 더 많이 채움)
+    while (rest.length > 0) {
+      const n = await maxFitRows(rest, 'cont', false);
+      if (n >= rest.length) {
+        tableChunks.push(rest);
+        rest = [];
+        break;
+      }
+      const take = Math.max(1, n);
+      tableChunks.push(rest.slice(0, take));
+      rest = rest.slice(take);
+    }
+    if (!tableChunks.length) tableChunks.push([]);
+
+    // 세액계산: 당기순이익(표 끝)과 한 공간에 들어가면 같이, 넘칠 때만 분리
+    const lastIdx = tableChunks.length - 1;
+    const lastRows = tableChunks[lastIdx]!;
+    const lastKind: 'first' | 'cont' = lastIdx === 0 ? 'first' : 'cont';
+
+    if (await fits({ rows: lastRows, showFooter: true }, lastKind, false)) {
+      return tableChunks.map((r, i) => ({
+        rows: r,
+        showFooter: i === lastIdx,
+      }));
+    }
+
+    // 표 전체가 세액계산과 같이 안 들어가면 — 끝부분(당기순이익 포함)만 세액계산과 같은 장에
+    let lo = 1;
+    let hi = lastRows.length;
+    let trailN = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const trail = lastRows.slice(lastRows.length - mid);
+      if (await fits({ rows: trail, showFooter: true }, 'cont', false)) {
+        trailN = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    if (trailN > 0 && trailN < lastRows.length) {
+      const head = lastRows.slice(0, lastRows.length - trailN);
+      const trail = lastRows.slice(lastRows.length - trailN);
+      return [
+        ...tableChunks.slice(0, lastIdx).map(r => ({ rows: r, showFooter: false })),
+        { rows: head, showFooter: false },
+        { rows: trail, showFooter: true },
+      ];
+    }
+
+    // 세액계산만으로도 한 장 — 표와 분리
+    return [
+      ...tableChunks.map(r => ({ rows: r, showFooter: false })),
+      { rows: [], showFooter: true },
+    ];
+  } finally {
+    iframe.remove();
+  }
 }
 
 /** PDF Blob — 엑셀 인쇄 양식 HTML 기반 */
@@ -670,26 +873,22 @@ export async function buildInterimClosingPdfBlob(
   opts?: InterimClosingPdfOptions,
 ): Promise<Blob> {
   const logoDataUrl = await fetchLogoDataUrl();
-  let first = ROWS_FIRST_PAGE;
-  let cont = ROWS_PER_PAGE;
-  let footer = ROWS_WITH_FOOTER;
-  let lastBlob: Blob | null = null;
-
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const html = buildInterimClosingReportHtml(payload, computed, {
-      writtenAt: opts?.writtenAt,
+  const rows = visibleRows(computed.rows);
+  let pageChunks: ReportPageChunk[];
+  try {
+    pageChunks = await packRowsByMeasuring(payload, computed, rows, {
       logoDataUrl,
-      rowLimits: { first, cont, footer },
+      writtenAt: opts?.writtenAt,
     });
-    const { blob, overflowed } = await htmlToPdfBlob(html);
-    lastBlob = blob;
-    if (!overflowed) return blob;
-    // 한 장에 안 들어가면 행 수를 줄여 다음 장으로 넘김 (헤더 반복 유지)
-    first = Math.max(16, first - 4);
-    cont = Math.max(22, cont - 4);
-    footer = Math.max(10, footer - 1);
+  } catch {
+    pageChunks = splitRowsForPagesFallback(rows);
   }
-  return lastBlob!;
+  const html = buildInterimClosingReportHtml(payload, computed, {
+    writtenAt: opts?.writtenAt,
+    logoDataUrl,
+    pageChunks,
+  });
+  return htmlToPdfBlob(html);
 }
 
 export async function downloadInterimClosingPdf(

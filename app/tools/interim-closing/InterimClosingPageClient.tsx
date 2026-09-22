@@ -1377,7 +1377,7 @@ export default function InterimClosingPageClient() {
                           { label: '손금산입', val: tax.expenseInclusion },
                           { label: '기부금한도초과', val: tax.donationExcess },
                           { label: '과세표준', val: tax.taxBase },
-                          { label: '(*)기본세율', val: null, rate: tax.rateLabel },
+                          { label: '세율', val: null, rate: tax.rateLabel },
                           { label: '산출세액', val: tax.calculatedTax },
                           { label: '세액감면', val: tax.taxReduction },
                           { label: '세액공제', val: tax.taxCredit },
