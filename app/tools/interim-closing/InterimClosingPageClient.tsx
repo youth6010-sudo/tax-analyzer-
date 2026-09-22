@@ -26,6 +26,9 @@ import {
   entityTypeFromClient,
   needsDepreciationCurrentInput,
   needsEndingInventoryInput,
+  isGimalAmountRow,
+  listEndingInventoryTargets,
+  endingInventoryKey,
   normalizeAssumptionRow,
   remainingAssumptionMonths,
   syncAssumptionsWithReport,
@@ -512,6 +515,7 @@ export default function InterimClosingPageClient() {
           ...loaded.manual,
           assumptions,
           specialNotes: loaded.manual?.specialNotes ?? '',
+          endingInventories: loaded.manual?.endingInventories || {},
         },
         rowCriteria: loaded.rowCriteria || {},
       });
@@ -599,6 +603,18 @@ export default function InterimClosingPageClient() {
 
   const tax = payload.manual.entityType === '개인' ? computed.personalTax : computed.corporateTax;
   const uploadedCount = STATEMENT_KINDS.filter(k => (payload.statements[k]?.length ?? 0) > 0).length;
+  const endingInventoryTargets = useMemo(
+    () => listEndingInventoryTargets(computed.rows),
+    [computed.rows],
+  );
+  const hasEndingInventoryValues = Object.values(payload.manual.endingInventories || {}).some(
+    v => Number(v) !== 0,
+  );
+  const showEndingInventoryInputs =
+    endingInventoryTargets.length > 0 ||
+    needsEndingInventoryInput(payload.statements) ||
+    hasEndingInventoryValues ||
+    !!payload.manual.endingInventoryCurrent;
 
   const loadClientSuggestions = useMemo(() => {
     if (loadCompany) return [];
@@ -875,10 +891,6 @@ export default function InterimClosingPageClient() {
                     ['purchaseAdj', '매입조정'],
                     ['extraCost', '추가인건비'],
                     ['otherCost', '기타비용'],
-                    ...(needsEndingInventoryInput(payload.statements) ||
-                    payload.manual.endingInventoryCurrent
-                      ? ([['endingInventoryCurrent', '기말재고']] as const)
-                      : []),
                     ...(needsDepreciationCurrentInput(payload.statements, '618')
                       ? ([['deprConstCurrent', '감가(공사)당기']] as const)
                       : []),
@@ -892,9 +904,7 @@ export default function InterimClosingPageClient() {
                     <td
                       className={`${sheetLabel} whitespace-nowrap`}
                       title={
-                        key === 'endingInventoryCurrent'
-                          ? '기말~ 계정은 기본 0원. 당기 기말재고를 여기(또는 본표)에 입력하면 매출원가에 반영됩니다.'
-                          : key === 'deprConstCurrent' || key === 'deprSgnaCurrent'
+                        key === 'deprConstCurrent' || key === 'deprSgnaCurrent'
                           ? '명세서 당기가 없어 직접 입력 (본표 당기 칸에서도 입력 가능)'
                           : undefined
                       }
@@ -910,18 +920,57 @@ export default function InterimClosingPageClient() {
                   </tr>
                   );
                 })}
+                {showEndingInventoryInputs
+                  ? (endingInventoryTargets.length
+                      ? endingInventoryTargets
+                      : [{ key: '_legacy', name: '기말재고액' }]
+                    ).map(target => {
+                      const nk = endingInventoryKey(target.name);
+                      const value =
+                        Number(payload.manual.endingInventories?.[nk] ?? 0) ||
+                        (endingInventoryTargets.length <= 1
+                          ? Number(payload.manual.endingInventoryCurrent) || 0
+                          : 0);
+                      return (
+                        <tr key={`gimal-${target.key}`}>
+                          <td
+                            className={`${sheetLabel} whitespace-nowrap`}
+                            title="기말**액은 본표에서 입력·환산 기준 미적용. 여기 금액을 당기·환산에 그대로 반영합니다."
+                          >
+                            {target.name}
+                          </td>
+                          <td className={sheetInput}>
+                            <MoneyCell
+                              value={value}
+                              onChange={n =>
+                                patchManual({
+                                  endingInventories: {
+                                    ...(payload.manual.endingInventories || {}),
+                                    [nk]: n,
+                                  },
+                                  endingInventoryCurrent: 0,
+                                })
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  : null}
                 </tbody>
               </table>
-              {(needsEndingInventoryInput(payload.statements) &&
+              {(showEndingInventoryInputs &&
+                !hasEndingInventoryValues &&
                 !payload.manual.endingInventoryCurrent) ||
               (needsDepreciationCurrentInput(payload.statements, '618') &&
                 !payload.manual.deprConstCurrent) ||
               (needsDepreciationCurrentInput(payload.statements, '818') &&
                 !payload.manual.deprSgnaCurrent) ? (
                 <p className="px-1 text-[10px] leading-snug text-[#001f60]">
-                  {needsEndingInventoryInput(payload.statements) &&
+                  {showEndingInventoryInputs &&
+                  !hasEndingInventoryValues &&
                   !payload.manual.endingInventoryCurrent
-                    ? '기말재고는 기본 0원입니다. 당기 기말이 있으면 「기말재고」에 입력하세요. '
+                    ? '기말**액은 기본 0원·기준 미적용입니다. 당기 기말이 있으면 기타비용 아래 해당 과목에 입력하세요. '
                     : null}
                   {(needsDepreciationCurrentInput(payload.statements, '618') &&
                     !payload.manual.deprConstCurrent) ||
@@ -1477,7 +1526,11 @@ export default function InterimClosingPageClient() {
                 {displayRows.map(row => {
                   const isSection = row.isSection;
                   const isLabel = row.kind === 'label';
-                  const canPickBasis = !isSection && !isLabel && !row.isComputed;
+                  const canPickBasis =
+                    !isSection &&
+                    !isLabel &&
+                    !row.isComputed &&
+                    !isGimalAmountRow(row.name);
                   return (
                     <tr
                       key={row.key}
@@ -1528,7 +1581,6 @@ export default function InterimClosingPageClient() {
                               payload.statements,
                               field === 'deprConstCurrent' ? '618' : '818',
                             );
-                          const isEndingInv = /기말/.test(String(row.name || '').replace(/\s+/g, ''));
                           if (canEditDepr && field) {
                             return (
                               <MoneyCell
@@ -1537,16 +1589,7 @@ export default function InterimClosingPageClient() {
                               />
                             );
                           }
-                          if (isEndingInv && !row.isSection) {
-                            return (
-                              <MoneyCell
-                                value={
-                                  payload.manual.endingInventoryCurrent || row.current
-                                }
-                                onChange={n => patchManual({ endingInventoryCurrent: n })}
-                              />
-                            );
-                          }
+                          // 기말**액: 본표는 표시만 — 입력은 기타비용 아래 원명 칸
                           return (
                             <div className="px-1 py-0.5 text-right tabular-nums">
                               {!isLabel ? formatWon(row.current) : ''}

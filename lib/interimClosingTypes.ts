@@ -80,9 +80,11 @@ export type InterimClosingManualInputs = {
   minTaxTarget: 'Y' | 'N';
   interimPayment: number;
   /**
-   * 기말재고 당기 수동입력 (명세서 기말이 없거나 0 강제 후 직접 반영).
-   * 상품→제품→원재료 기말 행 우선순위로 당기에 넣음.
+   * 기말**액 당기 수동입력 (기타비용 아래, 과목명 키). 본표 입력·환산 기준 미적용.
+   * 예: { "기말상품재고액": 1200000, "기말원재료재고액": 0 }
    */
+  endingInventories: Record<string, number>;
+  /** @deprecated 구저장본 호환 — endingInventories 로 이전 */
   endingInventoryCurrent: number;
   /** 12월 환산 입력 T10/T11 · 추가상여 M4/M8 */
   ownerSalaryAnnual: number;
@@ -316,6 +318,7 @@ export function defaultManualInputs(baseMonth = 6): InterimClosingManualInputs {
     specialNotes: '',
     deprConstCurrent: 0,
     deprSgnaCurrent: 0,
+    endingInventories: {},
     endingInventoryCurrent: 0,
   };
 }
@@ -378,6 +381,40 @@ export function depreciationManualField(
   if (c === '618') return 'deprConstCurrent';
   if (c === '818') return 'deprSgnaCurrent';
   return null;
+}
+
+/** 당기\*\*액 — 입력기준·환산기준 적용 (당기상품매입액, 당기원재료매입액 등) */
+export function isDanggiAmountRow(name: string | null | undefined): boolean {
+  const n = String(name || '').replace(/\s+/g, '');
+  return n.startsWith('당기') && n.endsWith('액');
+}
+
+/** 기말\*\*액 — 입력·환산 미적용, 기타비용 아래 원명으로만 당기 반영 */
+export function isGimalAmountRow(name: string | null | undefined): boolean {
+  const n = String(name || '').replace(/\s+/g, '');
+  return n.startsWith('기말') && n.endsWith('액');
+}
+
+/** 기말 수동입력 맵 키 (공백 제거 과목명) */
+export function endingInventoryKey(name: string | null | undefined): string {
+  return String(name || '').replace(/\s+/g, '');
+}
+
+/** 본표에 연결된 기말**액 행 — 기타비용 아래 입력 대상 */
+export function listEndingInventoryTargets(
+  rows: { key: string; name: string | null; linked?: boolean }[],
+): { key: string; name: string }[] {
+  const out: { key: string; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (!r.linked || !isGimalAmountRow(r.name)) continue;
+    const name = String(r.name || '').trim();
+    const nk = endingInventoryKey(name);
+    if (!nk || seen.has(nk)) continue;
+    seen.add(nk);
+    out.push({ key: r.key, name });
+  }
+  return out;
 }
 
 /**

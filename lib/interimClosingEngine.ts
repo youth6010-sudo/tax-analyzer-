@@ -9,7 +9,11 @@ import type {
   ReportTemplateRow,
   TaxEstimate,
 } from '@/lib/interimClosingTypes';
-import { assumptionMonthTotal } from '@/lib/interimClosingTypes';
+import {
+  assumptionMonthTotal,
+  endingInventoryKey,
+  isGimalAmountRow,
+} from '@/lib/interimClosingTypes';
 
 const TEMPLATE = reportTemplateJson as ReportTemplateRow[];
 
@@ -50,11 +54,14 @@ function assumptionExtra(
  * 다른 계정 합산·구성식 행 — 입력기준/환산기준 미적용, 구성요소 반영값만 합산.
  */
 const COMPUTED_FORMULA_ROWS = new Set([
-  14, 45, 46, 47, 48, 49, 50, 51, 52, 54, 72, 73, 77, 86, 177, 178, 183, 192, 233, 399, 400, 501, 502, 553, 601, 602, 605,
+  // 48 당기상품매입액은 명세서 연동 + 실적/역산 환산 가능 (에이엘엠텍 당기원재료매입과 동일)
+  14, 45, 46, 47, 49, 50, 51, 52, 54, 72, 73, 77, 86, 177, 178, 183, 192, 233, 399, 400, 501, 502, 553, 601, 602, 605,
 ]);
 
-function isComputedFormulaRow(excelRow: number, kind: string): boolean {
+function isComputedFormulaRow(excelRow: number, kind: string, name = ''): boolean {
   if (kind === 'section') return true;
+  // 기말**액: 입력·환산 미적용 (기타비용 기말재고액으로만 당기 반영)
+  if (isGimalAmountRow(name)) return true;
   return COMPUTED_FORMULA_ROWS.has(excelRow);
 }
 
@@ -80,27 +87,53 @@ function annualize(
   return current;
 }
 
-function personalIncomeTax(base: number): number {
-  if (base <= 0) return 0;
+function personalIncomeTax(base: number): { tax: number; rateLabel: string } {
+  if (base <= 0) return { tax: 0, rateLabel: '6%' };
   const b = base;
   let tax = 0;
-  if (b <= 14_000_000) tax = b * 0.06;
-  else if (b <= 50_000_000) tax = b * 0.15 - 1_260_000;
-  else if (b <= 88_000_000) tax = b * 0.24 - 5_760_000;
-  else if (b <= 150_000_000) tax = b * 0.35 - 15_440_000;
-  else if (b <= 300_000_000) tax = b * 0.38 - 19_940_000;
-  else if (b <= 500_000_000) tax = b * 0.4 - 25_940_000;
-  else if (b <= 1_000_000_000) tax = b * 0.42 - 35_940_000;
-  else tax = b * 0.45 - 65_940_000;
-  return Math.floor(tax);
+  let rateLabel = '6%';
+  if (b <= 14_000_000) {
+    tax = b * 0.06;
+    rateLabel = '6%';
+  } else if (b <= 50_000_000) {
+    tax = b * 0.15 - 1_260_000;
+    rateLabel = '15%';
+  } else if (b <= 88_000_000) {
+    tax = b * 0.24 - 5_760_000;
+    rateLabel = '24%';
+  } else if (b <= 150_000_000) {
+    tax = b * 0.35 - 15_440_000;
+    rateLabel = '35%';
+  } else if (b <= 300_000_000) {
+    tax = b * 0.38 - 19_940_000;
+    rateLabel = '38%';
+  } else if (b <= 500_000_000) {
+    tax = b * 0.4 - 25_940_000;
+    rateLabel = '40%';
+  } else if (b <= 1_000_000_000) {
+    tax = b * 0.42 - 35_940_000;
+    rateLabel = '42%';
+  } else {
+    tax = b * 0.45 - 65_940_000;
+    rateLabel = '45%';
+  }
+  return { tax: Math.floor(tax), rateLabel };
 }
 
 function corporateTax(base: number): { tax: number; rateLabel: string } {
-  if (base <= 0) return { tax: 0, rateLabel: '9%' };
-  if (base < 200_000_000) {
-    return { tax: Math.round(base * 0.09), rateLabel: '9%' };
+  // 2026.1.1 이후 개시 사업연도 — 영리법인 각사업연도 소득
+  // 2억 이하 10% / 2억超~200억 20%−2천만 / 200억超~3,000억 22%−4.2억 / 3,000억超 25%−94.2억
+  if (base <= 0) return { tax: 0, rateLabel: '10%' };
+  if (base <= 200_000_000) {
+    return { tax: Math.round(base * 0.1), rateLabel: '10%' };
   }
-  return { tax: Math.round(base * 0.19 - 20_000_000), rateLabel: '19%' };
+  if (base <= 20_000_000_000) {
+    return { tax: Math.round(base * 0.2 - 20_000_000), rateLabel: '20%' };
+  }
+  if (base <= 300_000_000_000) {
+    return { tax: Math.round(base * 0.22 - 420_000_000), rateLabel: '22%' };
+  }
+  return { tax: Math.round(base * 0.25 - 9_420_000_000), rateLabel: '25%' };
 }
 
 function earnedIncomeDeduction(salary: number, extraDeduction: number): number {
@@ -158,7 +191,7 @@ export function computeInterimClosing(
   const rawRows: ComputedReportRow[] = TEMPLATE.map(t => {
     const key = String(t.r);
     const criteria = payload.rowCriteria[key];
-    const computedRow = isComputedFormulaRow(t.r, t.kind);
+    const computedRow = isComputedFormulaRow(t.r, t.kind, t.name);
     // 사용자 rowCriteria 우선, 없으면 템플릿(엑셀 N/J열) 기본값
     // 합계·수식 행은 기준 미적용
     let convertBasis = '';
@@ -172,6 +205,11 @@ export function computeInterimClosing(
         rawInput === '입력기준' || rawInput === '' || rawInput === '-'
           ? '실적'
           : rawInput;
+    }
+    // 기말**액: 기준 칸 비움 (기타비용에서만 조정)
+    if (isGimalAmountRow(t.name)) {
+      convertBasis = '';
+      inputBasis = '';
     }
 
     let prior = 0;
@@ -331,7 +369,7 @@ export function computeInterimClosing(
   const forceEndingInventoryZero = () => {
     for (const row of rawRows) {
       const n = (row.name || '').replace(/\s+/g, '');
-      // 「기말~」은 가결산 기본 0 (당기 미확정). 수동 endingInventoryCurrent 로만 채움.
+      // 「기말~」은 가결산 기본 0 (당기 미확정). 수동 endingInventories 로만 채움.
       if (n.includes('기말')) {
         row.prior = 0;
         row.current = 0;
@@ -340,33 +378,59 @@ export function computeInterimClosing(
     }
   };
 
-  /** 기타비용 옆 「기말재고」수동값 → 상품/제품/원재료 기말 당기에 반영 */
+  /** 원가 부모가 있으면 기말**액 행을 연결 (기타비용 입력 대상) */
+  const forceLinkEndingInventoryRows = () => {
+    const linkIf = (endExcel: number, parentExcel: number, fallbackName: string) => {
+      const parent = byExcelRow.get(parentExcel);
+      const end = byExcelRow.get(endExcel);
+      if (!end || !parent) return;
+      if (!(parent.linked || parent.prior || parent.current)) return;
+      end.linked = true;
+      if (!end.name) end.name = fallbackName;
+    };
+    linkIf(49, 46, '기말상품재고액');
+    linkIf(53, 50, '기말제품재고액');
+    linkIf(75, 72, '기말원재료재고액');
+    linkIf(181, 178, '기말원재료(도급)재고액');
+  };
+
+  /** 기타비용 아래 기말**액(원명) 수동값 → 해당 행 당기·환산에 반영 */
   const applyEndingInventoryManual = () => {
-    const v = num(manual.endingInventoryCurrent);
-    if (!v) return;
-    const prefer = [
-      byExcelRow.get(49), // 기말상품재고액
-      byExcelRow.get(53), // 기말제품재고액
-      byExcelRow.get(75), // 기말원재료재고액
-      byExcelRow.get(181), // 기말원재료(도급)
-    ];
-    const target =
-      prefer.find(r => r && /상품/.test((r.name || '').replace(/\s+/g, ''))) ||
-      prefer.find(r => r && /제품/.test((r.name || '').replace(/\s+/g, ''))) ||
-      prefer.find(r => r && /원재료/.test((r.name || '').replace(/\s+/g, ''))) ||
-      prefer.find(Boolean);
-    if (!target) return;
-    target.current = v;
-    target.annualized = target.isComputed
-      ? v
-      : annualize(v, target.convertBasis, target.name || '기말재고', manual);
-    target.linked = true;
+    const map: Record<string, number> = { ...(manual.endingInventories || {}) };
+    // 구저장본: 단일 endingInventoryCurrent → 첫 연결 기말 행
+    const legacy = num(manual.endingInventoryCurrent);
+    if (legacy && !Object.values(map).some(v => num(v))) {
+      const prefer = [
+        byExcelRow.get(49),
+        byExcelRow.get(53),
+        byExcelRow.get(75),
+        byExcelRow.get(181),
+      ];
+      const target =
+        prefer.find(r => r && /상품/.test((r.name || '').replace(/\s+/g, ''))) ||
+        prefer.find(r => r && /제품/.test((r.name || '').replace(/\s+/g, ''))) ||
+        prefer.find(r => r && /원재료/.test((r.name || '').replace(/\s+/g, ''))) ||
+        prefer.find(Boolean);
+      if (target?.name) map[endingInventoryKey(target.name)] = legacy;
+    }
+
+    for (const row of rawRows) {
+      if (!isGimalAmountRow(row.name)) continue;
+      const nk = endingInventoryKey(row.name);
+      const v = num(map[nk]);
+      if (!v) continue;
+      row.current = v;
+      // 기말**액은 환산기준 미적용 — 당기=환산
+      row.annualized = v;
+      row.linked = true;
+    }
   };
 
   /** 엑셀 원가 구성식 재계산 (리아.xlsm H50/L50/H177/L177/H233/L233 …) */
   const recalcCostFormulas = () => {
     applyDepreciationManual();
     forceEndingInventoryZero();
+    forceLinkEndingInventoryRows();
     applyEndingInventoryManual();
 
     // 기초제품재고액(51): 전기=기초제품, 당기=기초제품+기초재공품 (엑셀 G51)
@@ -444,7 +508,10 @@ export function computeInterimClosing(
         if (endRow) {
           endRow.name = '기말상품재고액';
           endRow.prior = 0;
-          if (!num(manual.endingInventoryCurrent)) {
+          const endKey = endingInventoryKey(endRow.name);
+          const hasManual =
+            num(manual.endingInventories?.[endKey]) || num(manual.endingInventoryCurrent);
+          if (!hasManual) {
             endRow.current = 0;
             endRow.annualized = 0;
           }
@@ -609,6 +676,7 @@ export function computeInterimClosing(
     }
 
     forceEndingInventoryZero();
+    forceLinkEndingInventoryRows();
     applyEndingInventoryManual();
     // 기말 수동 반영 후 원가 부모 재계산
     {
@@ -938,7 +1006,7 @@ function estimatePersonalTax(
   const deductionAmount = num(manual.deductionAmount);
   const incomeAmount = netIncome + incomeInclusion - expenseInclusion;
   const taxBase = incomeAmount - deductionAmount;
-  const calculatedTax = personalIncomeTax(taxBase);
+  const { tax: calculatedTax, rateLabel } = personalIncomeTax(taxBase);
   const taxReduction = Math.round(calculatedTax * num(manual.reductionRate));
   const taxCredit = num(manual.taxCredit);
   const minTax =
@@ -965,7 +1033,7 @@ function estimatePersonalTax(
     determinedTax: Math.round(determinedTax),
     interimPayment,
     payable: Math.round(determinedTax - interimPayment),
-    rateLabel: '종합소득세율',
+    rateLabel,
   };
 }
 

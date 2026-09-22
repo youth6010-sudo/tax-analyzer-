@@ -3,7 +3,11 @@ import type {
   InterimClosingComputed,
   InterimClosingPayload,
 } from '@/lib/interimClosingTypes';
-import { remainingAssumptionMonths } from '@/lib/interimClosingTypes';
+import {
+  endingInventoryKey,
+  listEndingInventoryTargets,
+  remainingAssumptionMonths,
+} from '@/lib/interimClosingTypes';
 import { computeOwnerTaxBases } from '@/lib/interimClosingEngine';
 
 export type InterimClosingPdfOptions = {
@@ -137,34 +141,49 @@ async function fetchLogoDataUrl(): Promise<string> {
   }
 }
 
-/** 헤더 아래 PL 가용 행 수 (푸터 없는 페이지 / 푸터 있는 마지막 페이지) */
-const ROWS_PER_PAGE = 48;
-const ROWS_WITH_FOOTER = 28;
+/**
+ * 페이지 분할: 중간과목 기준이 아니라 A4에 들어가는 만큼 채움.
+ * 이어지는 장에도 상단 손익분석보고서 헤더(제목·KPI)가 반복됨.
+ * 첫 장·이어지는 장·푸터 있는 마지막 장 행 수.
+ */
+const ROWS_FIRST_PAGE = 30;
+const ROWS_PER_PAGE = 42;
+const ROWS_WITH_FOOTER = 14;
 
-function splitRowsForPages(rows: ComputedReportRow[]): ComputedReportRow[][] {
+function splitRowsForPages(
+  rows: ComputedReportRow[],
+  opts?: { first?: number; cont?: number; footer?: number },
+): ComputedReportRow[][] {
   if (rows.length === 0) return [[]];
-  // 헤더+표+푸터가 한 장에 들어가는 경우
-  if (rows.length <= ROWS_WITH_FOOTER) return [rows];
+  const first = opts?.first ?? ROWS_FIRST_PAGE;
+  const cont = opts?.cont ?? ROWS_PER_PAGE;
+  const footer = opts?.footer ?? ROWS_WITH_FOOTER;
+
+  // 헤더+표+푸터가 한 장에 들어가려면 행이 매우 적을 때만
+  if (rows.length <= footer) return [rows];
 
   const pages: ComputedReportRow[][] = [];
   let rest = rows.slice();
 
-  while (rest.length > ROWS_WITH_FOOTER) {
-    const overflow = rest.length - ROWS_PER_PAGE;
-    if (overflow <= 0) {
-      // 남은 행이 풀페이지 이하인데 푸터 공간 필요 → 마지막 장에 ROWS_WITH_FOOTER 남김
-      const leave = ROWS_WITH_FOOTER;
-      pages.push(rest.slice(0, rest.length - leave));
-      rest = rest.slice(rest.length - leave);
+  // 1페이지: 상단 헤더 박스 공간 확보 — 가능한 한 채움
+  if (rest.length > footer) {
+    const take = Math.min(first, Math.max(1, rest.length - footer));
+    pages.push(rest.slice(0, take));
+    rest = rest.slice(take);
+  }
+
+  while (rest.length > footer) {
+    const overflow = rest.length - cont;
+    if (overflow <= 0) break;
+    if (overflow <= footer) {
+      // 남은 게 푸터 여유분만 넘으면 중간장에 cont만큼, 나머지는 마지막장
+      const take = Math.min(cont, rest.length - footer);
+      pages.push(rest.slice(0, take));
+      rest = rest.slice(take);
       break;
     }
-    if (overflow <= ROWS_WITH_FOOTER) {
-      pages.push(rest.slice(0, ROWS_PER_PAGE));
-      rest = rest.slice(ROWS_PER_PAGE);
-      break;
-    }
-    pages.push(rest.slice(0, ROWS_PER_PAGE));
-    rest = rest.slice(ROWS_PER_PAGE);
+    pages.push(rest.slice(0, cont));
+    rest = rest.slice(cont);
   }
   if (rest.length) pages.push(rest);
   return pages;
@@ -218,7 +237,10 @@ function renderPlRow(row: ComputedReportRow): string {
 export function buildInterimClosingReportHtml(
   payload: InterimClosingPayload,
   computed: InterimClosingComputed,
-  opts?: InterimClosingPdfOptions & { logoDataUrl?: string },
+  opts?: InterimClosingPdfOptions & {
+    logoDataUrl?: string;
+    rowLimits?: { first?: number; cont?: number; footer?: number };
+  },
 ): string {
   const m = payload.manual;
   const tax = m.entityType === '개인' ? computed.personalTax : computed.corporateTax;
@@ -273,6 +295,17 @@ export function buildInterimClosingReportHtml(
   const refNote =
     '본 자료는 경영 판단을 위한 참고 목적이며, 최종 손익은 재무제표 확정 시 조정될 수 있습니다.';
 
+  const endingInvTargets = listEndingInventoryTargets(computed.rows);
+  const endingInvRowsHtml = endingInvTargets
+    .map(t => {
+      const nk = endingInventoryKey(t.name);
+      const v =
+        Number(m.endingInventories?.[nk] ?? 0) ||
+        (endingInvTargets.length <= 1 ? Number(m.endingInventoryCurrent) || 0 : 0);
+      return `<tr><td class="lab">${escapeHtml(spacedLabel(t.name))}</td><td class="val">${formatWon(v)}</td></tr>`;
+    })
+    .join('');
+
   const kpiTableHtml = `<table>
         <tr class="kpi-emph"><td class="lab">${escapeHtml(spacedLabel('당기순이익'))}</td><td class="val">${formatWon(computed.kpi.netIncome)}</td></tr>
         <tr class="kpi-emph"><td class="lab">${escapeHtml(spacedLabel('영업이익률'))}</td><td class="val">${formatPctHeader(computed.kpi.operatingMargin)}</td></tr>
@@ -282,6 +315,7 @@ export function buildInterimClosingReportHtml(
         <tr><td class="lab">${escapeHtml(spacedLabel('매입조정'))}</td><td class="val">${formatWon(m.purchaseAdj)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('추가인건비'))}</td><td class="val">${formatWon(m.extraCost)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('기타비용'))}</td><td class="val">${formatWon(m.otherCost)}</td></tr>
+        ${endingInvRowsHtml}
         <tr class="kpi-emph"><td class="lab">${escapeHtml(spacedLabel('차이조정'))}</td><td class="val">${formatWon(computed.kpi.totalAdj)}</td></tr>
         <tr class="kpi-emph"><td class="lab">${escapeHtml(spacedLabel('조정후 이익'))}</td><td class="val">${formatWon(computed.kpi.adjustedProfit)}</td></tr>
       </table>`;
@@ -448,7 +482,7 @@ export function buildInterimClosingReportHtml(
   </div>
   <div class="doc-end"></div>`;
 
-  const pageChunks = splitRowsForPages(rows);
+  const pageChunks = splitRowsForPages(rows, opts?.rowLimits);
   const totalPages = pageChunks.length;
 
   const pagesHtml = pageChunks
@@ -478,7 +512,7 @@ export function buildInterimClosingReportHtml(
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;background:#fff;color:#000;font-size:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .page{position:relative;width:210mm;min-height:297mm;padding:6mm 6.5mm 11mm;background:#fff;page-break-after:always}
+  .page{position:relative;width:210mm;height:297mm;max-height:297mm;overflow:hidden;padding:6mm 6.5mm 11mm;background:#fff;page-break-after:always;page-break-inside:avoid}
   .accent{height:3px;background:#001f60;margin-bottom:6px}
   /* 본표 3구간(과목+전기 | 당기 | 환산 = 40|30|30)과 동일 열선 — 좌:제목 / 중:당기칸 / 우:환산칸 */
   .top{display:grid;grid-template-columns:40% 30% 30%;gap:0;margin-bottom:6px;align-items:stretch;width:100%}
@@ -585,7 +619,10 @@ async function captureElementToCanvas(el: HTMLElement): Promise<HTMLCanvasElemen
   });
 }
 
-async function htmlToPdfBlob(html: string): Promise<Blob> {
+async function htmlToPdfBlob(html: string): Promise<{
+  blob: Blob;
+  overflowed: boolean;
+}> {
   const iframe = document.createElement('iframe');
   iframe.style.cssText =
     'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none';
@@ -608,24 +645,21 @@ async function htmlToPdfBlob(html: string): Promise<Blob> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
+  let overflowed = false;
 
   for (let i = 0; i < pages.length; i++) {
     const canvas = await captureElementToCanvas(pages[i]!);
-    const imgH = (canvas.height / canvas.width) * pageW;
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const imgH = (canvas.height / canvas.width) * pageW;
+    if (imgH > pageH + 0.8) overflowed = true;
+    // A4보다 길어도 헤더 없는 캔버스 슬라이스는 하지 않음 — 행 수 줄여 재생성
+    const drawH = Math.min(imgH, pageH);
     if (i > 0) pdf.addPage();
-    if (imgH <= pageH + 0.3) {
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH);
-    } else {
-      const scale = pageH / imgH;
-      const drawW = pageW * scale;
-      const x = (pageW - drawW) / 2;
-      pdf.addImage(imgData, 'JPEG', x, 0, drawW, pageH);
-    }
+    pdf.addImage(imgData, 'JPEG', 0, 0, pageW, drawH);
   }
 
   iframe.remove();
-  return pdf.output('blob');
+  return { blob: pdf.output('blob'), overflowed };
 }
 
 /** PDF Blob — 엑셀 인쇄 양식 HTML 기반 */
@@ -636,11 +670,26 @@ export async function buildInterimClosingPdfBlob(
   opts?: InterimClosingPdfOptions,
 ): Promise<Blob> {
   const logoDataUrl = await fetchLogoDataUrl();
-  const html = buildInterimClosingReportHtml(payload, computed, {
-    writtenAt: opts?.writtenAt,
-    logoDataUrl,
-  });
-  return htmlToPdfBlob(html);
+  let first = ROWS_FIRST_PAGE;
+  let cont = ROWS_PER_PAGE;
+  let footer = ROWS_WITH_FOOTER;
+  let lastBlob: Blob | null = null;
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const html = buildInterimClosingReportHtml(payload, computed, {
+      writtenAt: opts?.writtenAt,
+      logoDataUrl,
+      rowLimits: { first, cont, footer },
+    });
+    const { blob, overflowed } = await htmlToPdfBlob(html);
+    lastBlob = blob;
+    if (!overflowed) return blob;
+    // 한 장에 안 들어가면 행 수를 줄여 다음 장으로 넘김 (헤더 반복 유지)
+    first = Math.max(16, first - 4);
+    cont = Math.max(22, cont - 4);
+    footer = Math.max(10, footer - 1);
+  }
+  return lastBlob!;
 }
 
 export async function downloadInterimClosingPdf(
