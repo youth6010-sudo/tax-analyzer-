@@ -266,10 +266,34 @@
   {
     "r": 46,
     "code": "451",
-    "name": "",
+    "name": "상품매출원가",
     "inputBasis": "",
     "convertBasis": "",
     "kind": "account"
+  },
+  {
+    "r": 47,
+    "code": "",
+    "name": "기초상품재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 48,
+    "code": "",
+    "name": "당기상품매입액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
+  },
+  {
+    "r": 49,
+    "code": "",
+    "name": "기말상품재고액",
+    "inputBasis": "",
+    "convertBasis": "",
+    "kind": "sub"
   },
   {
     "r": 50,

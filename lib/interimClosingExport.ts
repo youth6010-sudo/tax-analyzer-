@@ -366,15 +366,13 @@ export function buildInterimClosingReportHtml(
         <tr><td class="lab">${escapeHtml(spacedLabel('추가인건비'))}</td><td class="num">${dashWon(m.extraLabor)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('추가직원상여'))}</td><td class="num">${dashWon(m.extraBonus)}</td></tr>`;
 
-  const footerHtml = `<div class="foot">
-    <div class="foot-col">
-      <h4 class="navy">${escapeHtml(spacedLabel('세액계산'))}</h4>
-      <table class="taxbox">
-        <colgroup><col class="c1"/><col class="c2"/></colgroup>
-        <tr><td class="lab">${escapeHtml(spacedLabel('당기순이익'))}</td><td class="num">${formatWon(tax.netIncome)}</td></tr>
-        <tr><td class="lab">${escapeHtml(spacedLabel('익금산입'))}</td><td class="num">${formatWon(tax.incomeInclusion)}</td></tr>
-        <tr><td class="lab">${escapeHtml(spacedLabel('손금산입'))}</td><td class="num">${formatWon(tax.expenseInclusion)}</td></tr>
-        <tr><td class="lab">${escapeHtml(spacedLabel('기부금한도초과'))}</td><td class="num">${formatWon(tax.donationExcess)}</td></tr>
+  const taxRowsHtml =
+    m.entityType === '개인'
+      ? `<tr><td class="lab">${escapeHtml(spacedLabel('당기순이익'))}</td><td class="num">${formatWon(tax.netIncome)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('수입금액산입'))}</td><td class="num">${formatWon(tax.incomeInclusion)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('필요경비산입'))}</td><td class="num">${formatWon(tax.expenseInclusion)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('소득금액'))}</td><td class="num">${formatWon(tax.incomeAmount)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('소득공제'))}</td><td class="num">${formatWon(tax.deductionAmount)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('과세표준'))}</td><td class="num">${formatWon(tax.taxBase)}</td></tr>
         <tr><td class="lab">산출세액 (<span class="rate">${escapeHtml(tax.rateLabel)}</span>)</td><td class="num">${formatWon(tax.calculatedTax)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('세액감면'))}</td><td class="num">${formatWon(tax.taxReduction)}</td></tr>
@@ -382,7 +380,27 @@ export function buildInterimClosingReportHtml(
         <tr><td class="lab">${escapeHtml(spacedLabel('최저한세'))}</td><td class="num">${formatWon(tax.minTax)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('결정세액'))}</td><td class="num">${formatWon(tax.determinedTax)}</td></tr>
         <tr><td class="lab">${escapeHtml(spacedLabel('중간예납'))}</td><td class="num">${formatWon(tax.interimPayment)}</td></tr>
-        <tr class="hl"><td class="lab">${escapeHtml(spacedLabel('차가감납부세액'))}</td><td class="num red">${formatWon(tax.payable)}</td></tr>
+        <tr class="hl"><td class="lab">${escapeHtml(spacedLabel('차가감납부세액'))}</td><td class="num red">${formatWon(tax.payable)}</td></tr>`
+      : `<tr><td class="lab">${escapeHtml(spacedLabel('당기순이익'))}</td><td class="num">${formatWon(tax.netIncome)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('익금산입'))}</td><td class="num">${formatWon(tax.incomeInclusion)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('손금산입'))}</td><td class="num">${formatWon(tax.expenseInclusion)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('기부금한도초과'))}</td><td class="num">${formatWon(tax.donationExcess)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('과세표준'))}</td><td class="num">${formatWon(tax.taxBase)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('(*)기본세율'))}</td><td class="num"><span class="rate">${escapeHtml(tax.rateLabel)}</span></td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('산출세액'))}</td><td class="num">${formatWon(tax.calculatedTax)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('세액감면'))}</td><td class="num">${formatWon(tax.taxReduction)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('세액공제'))}</td><td class="num">${formatWon(tax.taxCredit)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('최저한세'))}</td><td class="num">${formatWon(tax.minTax)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('결정세액'))}</td><td class="num">${formatWon(tax.determinedTax)}</td></tr>
+        <tr><td class="lab">${escapeHtml(spacedLabel('중간예납'))}</td><td class="num">${formatWon(tax.interimPayment)}</td></tr>
+        <tr class="hl"><td class="lab">${escapeHtml(spacedLabel('차가감납부세액'))}</td><td class="num red">${formatWon(tax.payable)}</td></tr>`;
+
+  const footerHtml = `<div class="foot">
+    <div class="foot-col">
+      <h4 class="navy">${escapeHtml(spacedLabel('세액계산'))}</h4>
+      <table class="taxbox">
+        <colgroup><col class="c1"/><col class="c2"/></colgroup>
+        ${taxRowsHtml}
       </table>
     </div>
     <div class="foot-col mid-stack">

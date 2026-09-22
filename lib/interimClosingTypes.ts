@@ -73,11 +73,17 @@ export type InterimClosingManualInputs = {
   incomeInclusion: number;
   expenseInclusion: number;
   donationExcess: number;
+  /** 개인 세금추정 — 소득공제 (법인 미사용) */
   deductionAmount: number;
   reductionRate: number;
   taxCredit: number;
   minTaxTarget: 'Y' | 'N';
   interimPayment: number;
+  /**
+   * 기말재고 당기 수동입력 (명세서 기말이 없거나 0 강제 후 직접 반영).
+   * 상품→제품→원재료 기말 행 우선순위로 당기에 넣음.
+   */
+  endingInventoryCurrent: number;
   /** 12월 환산 입력 T10/T11 · 추가상여 M4/M8 */
   ownerSalaryAnnual: number;
   execSalaryAnnual: number;
@@ -141,7 +147,11 @@ export type TaxEstimate = {
   netIncome: number;
   incomeInclusion: number;
   expenseInclusion: number;
+  /** 개인: 소득금액 / 법인: 과세표준과 동일하게 둘 수 있음 */
   incomeAmount: number;
+  /** 개인 소득공제 (법인 0) */
+  deductionAmount: number;
+  /** 법인 기부금한도초과 (개인 0) */
   donationExcess: number;
   taxBase: number;
   calculatedTax: number;
@@ -306,6 +316,7 @@ export function defaultManualInputs(baseMonth = 6): InterimClosingManualInputs {
     specialNotes: '',
     deprConstCurrent: 0,
     deprSgnaCurrent: 0,
+    endingInventoryCurrent: 0,
   };
 }
 
@@ -367,4 +378,35 @@ export function depreciationManualField(
   if (c === '618') return 'deprConstCurrent';
   if (c === '818') return 'deprSgnaCurrent';
   return null;
+}
+
+/**
+ * 기말* 계정이 명세서에 전기만 있고 당기가 비었거나,
+ * 상품/제품 매출원가 구성이 있으면 기말재고 수동입력 대상.
+ */
+export function needsEndingInventoryInput(
+  statements: Partial<Record<string, AccountLine[]>> | undefined,
+): boolean {
+  if (!statements) return false;
+  for (const lines of Object.values(statements)) {
+    if (!Array.isArray(lines)) continue;
+    for (const l of lines) {
+      const n = String(l.name || '').replace(/\s+/g, '');
+      if (!n.includes('기말')) continue;
+      if (stmtNum(l.prior) !== 0 && stmtNum(l.current) === 0) return true;
+      if (/기말(상품|제품|원재료)/.test(n) && stmtNum(l.prior) !== 0) return true;
+    }
+  }
+  // 상품매출원가만 있어도 기말 수동입력 가능하도록
+  for (const lines of Object.values(statements)) {
+    if (!Array.isArray(lines)) continue;
+    for (const l of lines) {
+      const n = String(l.name || '').replace(/\s+/g, '');
+      const c = codeKey(l.code);
+      if (c === '451' || n.includes('상품매출원가') || n.includes('제품매출원가')) {
+        if (stmtNum(l.prior) || stmtNum(l.current)) return true;
+      }
+    }
+  }
+  return false;
 }

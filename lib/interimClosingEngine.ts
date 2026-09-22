@@ -50,7 +50,7 @@ function assumptionExtra(
  * 다른 계정 합산·구성식 행 — 입력기준/환산기준 미적용, 구성요소 반영값만 합산.
  */
 const COMPUTED_FORMULA_ROWS = new Set([
-  14, 45, 50, 51, 52, 54, 72, 73, 77, 86, 177, 178, 183, 192, 233, 399, 400, 501, 502, 553, 601, 602, 605,
+  14, 45, 46, 47, 48, 49, 50, 51, 52, 54, 72, 73, 77, 86, 177, 178, 183, 192, 233, 399, 400, 501, 502, 553, 601, 602, 605,
 ]);
 
 function isComputedFormulaRow(excelRow: number, kind: string): boolean {
@@ -331,7 +331,8 @@ export function computeInterimClosing(
   const forceEndingInventoryZero = () => {
     for (const row of rawRows) {
       const n = (row.name || '').replace(/\s+/g, '');
-      if (n.includes('기말') && n.includes('재고')) {
+      // 「기말~」은 가결산 기본 0 (당기 미확정). 수동 endingInventoryCurrent 로만 채움.
+      if (n.includes('기말')) {
         row.prior = 0;
         row.current = 0;
         row.annualized = 0;
@@ -339,10 +340,34 @@ export function computeInterimClosing(
     }
   };
 
+  /** 기타비용 옆 「기말재고」수동값 → 상품/제품/원재료 기말 당기에 반영 */
+  const applyEndingInventoryManual = () => {
+    const v = num(manual.endingInventoryCurrent);
+    if (!v) return;
+    const prefer = [
+      byExcelRow.get(49), // 기말상품재고액
+      byExcelRow.get(53), // 기말제품재고액
+      byExcelRow.get(75), // 기말원재료재고액
+      byExcelRow.get(181), // 기말원재료(도급)
+    ];
+    const target =
+      prefer.find(r => r && /상품/.test((r.name || '').replace(/\s+/g, ''))) ||
+      prefer.find(r => r && /제품/.test((r.name || '').replace(/\s+/g, ''))) ||
+      prefer.find(r => r && /원재료/.test((r.name || '').replace(/\s+/g, ''))) ||
+      prefer.find(Boolean);
+    if (!target) return;
+    target.current = v;
+    target.annualized = target.isComputed
+      ? v
+      : annualize(v, target.convertBasis, target.name || '기말재고', manual);
+    target.linked = true;
+  };
+
   /** 엑셀 원가 구성식 재계산 (리아.xlsm H50/L50/H177/L177/H233/L233 …) */
   const recalcCostFormulas = () => {
     applyDepreciationManual();
     forceEndingInventoryZero();
+    applyEndingInventoryManual();
 
     // 기초제품재고액(51): 전기=기초제품, 당기=기초제품+기초재공품 (엑셀 G51)
     {
@@ -370,7 +395,74 @@ export function computeInterimClosing(
       }
     }
 
-    forceEndingInventoryZero();
+    // 상품매출원가(451) = 기초상품 + 당기상품매입 - 기말상품
+    {
+      const parent = byExcelRow.get(46);
+      const beginRow = byExcelRow.get(47);
+      const purchaseRow = byExcelRow.get(48);
+      const endRow = byExcelRow.get(49);
+      const hit =
+        lookupByCode(byCode, '451') ||
+        lookupByName(byName, '상품매출원가');
+      const active =
+        !!hit &&
+        (num(hit.prior) !== 0 ||
+          num(hit.current) !== 0 ||
+          /상품/.test(String(hit.name || '').replace(/\s+/g, '')));
+
+      if (parent && (active || parent.linked || parent.prior || parent.current)) {
+        if (hit?.name) parent.name = hit.name;
+        else if (!parent.name) parent.name = '상품매출원가';
+
+        const beginPrior = nameAmt(['기초상품재고액', '기초상품'], 'prior');
+        const beginCurrent = nameAmt(['기초상품재고액', '기초상품'], 'current');
+        let purchPrior = nameAmt(
+          ['당기상품매입액', '상품매입액', '상품매입', '당기상품매입'],
+          'prior',
+        );
+        let purchCurrent = nameAmt(
+          ['당기상품매입액', '상품매입액', '상품매입', '당기상품매입'],
+          'current',
+        );
+        // 명세서에 매입 세부가 없으면 상품매출원가 − 기초 로 역산
+        // (기말은 가결산 기본 0 → 수동 기말재고 입력 시 매출원가가 줄어들도록 역산에 기말 미포함)
+        if (!purchPrior && hit) {
+          purchPrior = num(hit.prior) - beginPrior;
+        }
+        if (!purchCurrent && hit) {
+          purchCurrent = num(hit.current) - beginCurrent;
+        }
+
+        if (beginRow) {
+          beginRow.name = '기초상품재고액';
+          setAmt(beginRow, beginPrior, beginCurrent);
+        }
+        if (purchaseRow) {
+          purchaseRow.name = '당기상품매입액';
+          setAmt(purchaseRow, purchPrior, purchCurrent);
+        }
+        if (endRow) {
+          endRow.name = '기말상품재고액';
+          endRow.prior = 0;
+          if (!num(manual.endingInventoryCurrent)) {
+            endRow.current = 0;
+            endRow.annualized = 0;
+          }
+          endRow.linked = true;
+        }
+
+        setAmt(
+          parent,
+          (beginRow?.prior ?? 0) + (purchaseRow?.prior ?? 0) - (endRow?.prior ?? 0),
+          (beginRow?.current ?? 0) + (purchaseRow?.current ?? 0) - (endRow?.current ?? 0),
+          (beginRow?.annualized ?? 0) +
+            (purchaseRow?.annualized ?? 0) -
+            (endRow?.annualized ?? 0),
+        );
+        if (beginRow) beginRow.linked = true;
+        if (purchaseRow) purchaseRow.linked = true;
+      }
+    }
 
     // 원재료비(501) = 기초 + 매입 - 기말
     {
@@ -517,6 +609,46 @@ export function computeInterimClosing(
     }
 
     forceEndingInventoryZero();
+    applyEndingInventoryManual();
+    // 기말 수동 반영 후 원가 부모 재계산
+    {
+      const goods = byExcelRow.get(46);
+      if (goods && (goods.linked || goods.name)) {
+        setAmt(
+          goods,
+          amt(47, 'prior') + amt(48, 'prior') - amt(49, 'prior'),
+          amt(47, 'current') + amt(48, 'current') - amt(49, 'current'),
+          amt(47, 'annualized') + amt(48, 'annualized') - amt(49, 'annualized'),
+        );
+      }
+      const prod = byExcelRow.get(50);
+      if (prod) {
+        setAmt(
+          prod,
+          amt(51, 'prior') + amt(52, 'prior') - amt(53, 'prior'),
+          amt(51, 'current') + amt(52, 'current') - amt(53, 'current'),
+          amt(51, 'annualized') + amt(52, 'annualized') - amt(53, 'annualized'),
+        );
+      }
+      const mat = byExcelRow.get(72);
+      if (mat) {
+        setAmt(
+          mat,
+          amt(73, 'prior') + amt(74, 'prior') - amt(75, 'prior'),
+          amt(73, 'current') + amt(74, 'current') - amt(75, 'current'),
+          amt(73, 'annualized') + amt(74, 'annualized') - amt(75, 'annualized'),
+        );
+      }
+      const constMat = byExcelRow.get(178);
+      if (constMat) {
+        setAmt(
+          constMat,
+          amt(179, 'prior') + amt(180, 'prior') - amt(181, 'prior'),
+          amt(179, 'current') + amt(180, 'current') - amt(181, 'current'),
+          amt(179, 'annualized') + amt(180, 'annualized') - amt(181, 'annualized'),
+        );
+      }
+    }
   };
 
   recalcCostFormulas();
@@ -800,11 +932,12 @@ function estimatePersonalTax(
   netIncome: number,
   manual: InterimClosingManualInputs,
 ): TaxEstimate {
+  // 개인: NI + 수입금액산입 − 필요경비산입 = 소득금액 → − 소득공제 = 과세표준
   const incomeInclusion = num(manual.incomeInclusion);
   const expenseInclusion = num(manual.expenseInclusion);
+  const deductionAmount = num(manual.deductionAmount);
   const incomeAmount = netIncome + incomeInclusion - expenseInclusion;
-  const donationExcess = num(manual.donationExcess);
-  const taxBase = incomeAmount - donationExcess;
+  const taxBase = incomeAmount - deductionAmount;
   const calculatedTax = personalIncomeTax(taxBase);
   const taxReduction = Math.round(calculatedTax * num(manual.reductionRate));
   const taxCredit = num(manual.taxCredit);
@@ -822,7 +955,8 @@ function estimatePersonalTax(
     incomeInclusion,
     expenseInclusion,
     incomeAmount,
-    donationExcess,
+    deductionAmount,
+    donationExcess: 0,
     taxBase,
     calculatedTax,
     taxReduction,
@@ -839,6 +973,7 @@ function estimateCorporateTax(
   netIncome: number,
   manual: InterimClosingManualInputs,
 ): TaxEstimate {
+  // 법인: NI + 익금산입 − 손금산입 + 기부금한도초과 = 과세표준
   const incomeInclusion = num(manual.incomeInclusion);
   const expenseInclusion = num(manual.expenseInclusion);
   const donationExcess = num(manual.donationExcess);
@@ -855,6 +990,7 @@ function estimateCorporateTax(
     incomeInclusion,
     expenseInclusion,
     incomeAmount: taxBase,
+    deductionAmount: 0,
     donationExcess,
     taxBase,
     calculatedTax,

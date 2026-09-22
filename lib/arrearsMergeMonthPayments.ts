@@ -169,39 +169,37 @@ function attachChamwolPayments<
       }
     }
 
-    const want = prevMonth(refY, pm);
+    // 당월(지급월=청구월) 우선, 없으면 차월(지급월−1)
+    const wantSame = { y: refY, m: pm };
+    const wantCham = prevMonth(refY, pm);
 
-    let best = -1;
-    for (let ci = 0; ci < next.length; ci++) {
-      if (ci === pi) continue;
-      const ch = next[ci]!;
-      if (!isMonthChargeRow(ch)) continue;
-      if (Math.round(ch.amount) !== payAmt) continue;
-      const ym = chargeYearMonth(ch.description || '');
-      if (!ym) continue;
-      if (ym.m === want.m && (ym.y === want.y || ym.y === want.y - 1 || ym.y === want.y + 1)) {
-        // 같은 월이면 연도 가장 가까운 것
-        if (ym.y === want.y) {
-          best = ci;
-          break;
+    function findCharge(want: { y: number; m: number }): number {
+      let best = -1;
+      for (let ci = 0; ci < next.length; ci++) {
+        if (ci === pi) continue;
+        const ch = next[ci]!;
+        if (!isMonthChargeRow(ch)) continue;
+        if (Math.round(ch.amount) !== payAmt) continue;
+        const ym = chargeYearMonth(ch.description || '');
+        if (!ym) continue;
+        if (ym.m === want.m && (ym.y === want.y || ym.y === want.y - 1 || ym.y === want.y + 1)) {
+          if (ym.y === want.y) return ci;
+          if (best < 0) best = ci;
         }
-        if (best < 0) best = ci;
       }
-    }
-
-    // 연도 매칭 실패 시: 앞쪽에 있는 동액 미납 월기장 중 월이 want.m 인 것
-    if (best < 0) {
+      if (best >= 0) return best;
       for (let ci = pi - 1; ci >= 0; ci--) {
         const ch = next[ci]!;
         if (!isMonthChargeRow(ch)) continue;
         if (Math.round(ch.amount) !== payAmt) continue;
         const ym = chargeYearMonth(ch.description || '');
-        if (ym && ym.m === want.m) {
-          best = ci;
-          break;
-        }
+        if (ym && ym.m === want.m) return ci;
       }
+      return -1;
     }
+
+    let best = findCharge(wantSame);
+    if (best < 0) best = findCharge(wantCham);
 
     if (best < 0) continue;
     next[best] = {

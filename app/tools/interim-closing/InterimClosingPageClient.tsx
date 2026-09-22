@@ -25,10 +25,12 @@ import {
   emptyPayload,
   entityTypeFromClient,
   needsDepreciationCurrentInput,
+  needsEndingInventoryInput,
   normalizeAssumptionRow,
   remainingAssumptionMonths,
   syncAssumptionsWithReport,
 } from '@/lib/interimClosingTypes';
+import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
 
 type ClientOption = {
   id: string;
@@ -174,6 +176,7 @@ function MoneyCell({
 }
 
 export default function InterimClosingPageClient() {
+  const isMaster = useIsMasterUser();
   const [payload, setPayload] = useState<InterimClosingPayload>(() => emptyPayload());
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientId, setClientId] = useState('');
@@ -231,8 +234,11 @@ export default function InterimClosingPageClient() {
     });
   }, [computed.rows]);
 
+  // 인디·관리자(전체조회): 전 수임처 / 일반: 내 담당만
   useEffect(() => {
-    void fetch('/api/clients?mine=1', { cache: 'no-store' })
+    if (isMaster === null) return;
+    const url = isMaster ? '/api/clients' : '/api/clients?mine=1';
+    void fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
         const list = Array.isArray(d?.clients) ? d.clients : Array.isArray(d) ? d : [];
@@ -255,7 +261,7 @@ export default function InterimClosingPageClient() {
         );
       })
       .catch(() => {});
-  }, []);
+  }, [isMaster]);
 
   const applyClient = useCallback((c: ClientOption) => {
     const entityType = entityTypeFromClient({
@@ -667,7 +673,7 @@ export default function InterimClosingPageClient() {
           <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">수임처 검색</span>
           <input
             className="w-full border border-slate-200 px-2 py-1 font-semibold"
-            placeholder="내 수임처 상호 검색"
+            placeholder={isMaster ? '전체 수임처 상호 검색' : '내 수임처 상호 검색'}
             value={clientQuery}
             onChange={e => {
               const q = e.target.value;
@@ -869,6 +875,10 @@ export default function InterimClosingPageClient() {
                     ['purchaseAdj', '매입조정'],
                     ['extraCost', '추가인건비'],
                     ['otherCost', '기타비용'],
+                    ...(needsEndingInventoryInput(payload.statements) ||
+                    payload.manual.endingInventoryCurrent
+                      ? ([['endingInventoryCurrent', '기말재고']] as const)
+                      : []),
                     ...(needsDepreciationCurrentInput(payload.statements, '618')
                       ? ([['deprConstCurrent', '감가(공사)당기']] as const)
                       : []),
@@ -882,7 +892,9 @@ export default function InterimClosingPageClient() {
                     <td
                       className={`${sheetLabel} whitespace-nowrap`}
                       title={
-                        key === 'deprConstCurrent' || key === 'deprSgnaCurrent'
+                        key === 'endingInventoryCurrent'
+                          ? '기말~ 계정은 기본 0원. 당기 기말재고를 여기(또는 본표)에 입력하면 매출원가에 반영됩니다.'
+                          : key === 'deprConstCurrent' || key === 'deprSgnaCurrent'
                           ? '명세서 당기가 없어 직접 입력 (본표 당기 칸에서도 입력 가능)'
                           : undefined
                       }
@@ -900,12 +912,23 @@ export default function InterimClosingPageClient() {
                 })}
                 </tbody>
               </table>
-              {(needsDepreciationCurrentInput(payload.statements, '618') &&
+              {(needsEndingInventoryInput(payload.statements) &&
+                !payload.manual.endingInventoryCurrent) ||
+              (needsDepreciationCurrentInput(payload.statements, '618') &&
                 !payload.manual.deprConstCurrent) ||
               (needsDepreciationCurrentInput(payload.statements, '818') &&
                 !payload.manual.deprSgnaCurrent) ? (
                 <p className="px-1 text-[10px] leading-snug text-[#001f60]">
-                  감가상각비는 전기만 있고 당기가 없습니다. 당기 칸에 직접 입력하세요.
+                  {needsEndingInventoryInput(payload.statements) &&
+                  !payload.manual.endingInventoryCurrent
+                    ? '기말재고는 기본 0원입니다. 당기 기말이 있으면 「기말재고」에 입력하세요. '
+                    : null}
+                  {(needsDepreciationCurrentInput(payload.statements, '618') &&
+                    !payload.manual.deprConstCurrent) ||
+                  (needsDepreciationCurrentInput(payload.statements, '818') &&
+                    !payload.manual.deprSgnaCurrent)
+                    ? '감가상각비는 전기만 있고 당기가 없습니다. 당기 칸에 직접 입력하세요.'
+                    : null}
                 </p>
               ) : null}
 
@@ -1089,16 +1112,25 @@ export default function InterimClosingPageClient() {
                 {MID_COLGROUP}
                 <tbody>
                   {(
-                    [
-                      ['incomeInclusion', '수입금액산입'],
-                      ['expenseInclusion', '필요경비산입'],
-                      ['donationExcess', '기부금한도초과'],
-                      ['deductionAmount', '소득공제'],
-                      ['reductionRate', '감면율'],
-                      ['taxCredit', '세액공제'],
-                      ['minTaxTarget', '최저한세대상'],
-                      ['interimPayment', '중간예납'],
-                    ] as const
+                    payload.manual.entityType === '개인'
+                      ? ([
+                          ['incomeInclusion', '수입금액산입'],
+                          ['expenseInclusion', '필요경비산입'],
+                          ['deductionAmount', '소득공제'],
+                          ['reductionRate', '감면율'],
+                          ['taxCredit', '세액공제'],
+                          ['minTaxTarget', '최저한세대상'],
+                          ['interimPayment', '중간예납'],
+                        ] as const)
+                      : ([
+                          ['incomeInclusion', '익금산입'],
+                          ['expenseInclusion', '손금산입'],
+                          ['donationExcess', '기부금한도초과'],
+                          ['reductionRate', '감면율'],
+                          ['taxCredit', '세액공제'],
+                          ['minTaxTarget', '최저한세대상'],
+                          ['interimPayment', '중간예납'],
+                        ] as const)
                   ).map(([key, label]) => (
                     <tr key={key}>
                       <td className={`${sheetLabel} whitespace-nowrap`}>{label}</td>
@@ -1274,25 +1306,41 @@ export default function InterimClosingPageClient() {
                 {RIGHT_COLGROUP_2}
                 <tbody>
                   {(
-                    [
-                      { label: '당기순이익', val: tax.netIncome },
-                      { label: '수입/익금산입', val: tax.incomeInclusion },
-                      { label: '필요경비/손금산입', val: tax.expenseInclusion },
-                      { label: '소득금액', val: tax.incomeAmount },
-                      { label: '기부금한도초과', val: tax.donationExcess },
-                      { label: '과세표준', val: tax.taxBase },
-                      { label: '산출세액', val: tax.calculatedTax, rate: tax.rateLabel },
-                      { label: '세액감면', val: tax.taxReduction },
-                      { label: '세액공제', val: tax.taxCredit },
-                      { label: '최저한세', val: tax.minTax },
-                      { label: '결정세액', val: tax.determinedTax },
-                      { label: '중간예납', val: tax.interimPayment },
-                      { label: '차가감납부세액', val: tax.payable },
-                    ] as const
+                    payload.manual.entityType === '개인'
+                      ? ([
+                          { label: '당기순이익', val: tax.netIncome },
+                          { label: '수입금액산입', val: tax.incomeInclusion },
+                          { label: '필요경비산입', val: tax.expenseInclusion },
+                          { label: '소득금액', val: tax.incomeAmount },
+                          { label: '소득공제', val: tax.deductionAmount },
+                          { label: '과세표준', val: tax.taxBase },
+                          { label: '산출세액', val: tax.calculatedTax, rate: tax.rateLabel },
+                          { label: '세액감면', val: tax.taxReduction },
+                          { label: '세액공제', val: tax.taxCredit },
+                          { label: '최저한세', val: tax.minTax },
+                          { label: '결정세액', val: tax.determinedTax },
+                          { label: '중간예납', val: tax.interimPayment },
+                          { label: '차가감납부세액', val: tax.payable },
+                        ] as const)
+                      : ([
+                          { label: '당기순이익', val: tax.netIncome },
+                          { label: '익금산입', val: tax.incomeInclusion },
+                          { label: '손금산입', val: tax.expenseInclusion },
+                          { label: '기부금한도초과', val: tax.donationExcess },
+                          { label: '과세표준', val: tax.taxBase },
+                          { label: '(*)기본세율', val: null, rate: tax.rateLabel },
+                          { label: '산출세액', val: tax.calculatedTax },
+                          { label: '세액감면', val: tax.taxReduction },
+                          { label: '세액공제', val: tax.taxCredit },
+                          { label: '최저한세', val: tax.minTax },
+                          { label: '결정세액', val: tax.determinedTax },
+                          { label: '중간예납', val: tax.interimPayment },
+                          { label: '차가감납부세액', val: tax.payable },
+                        ] as const)
                   ).map((row, i, arr) => (
                     <tr key={row.label}>
                       <td className={`${sheetLabel} whitespace-nowrap`}>
-                        {'rate' in row && row.rate ? (
+                        {'rate' in row && row.rate && row.val != null ? (
                           <>
                             {row.label} (
                             <span className="font-bold text-red-600">{row.rate}</span>)
@@ -1306,7 +1354,11 @@ export default function InterimClosingPageClient() {
                           i === arr.length - 1 ? `${sheetEmph} text-red-600` : ''
                         }`}
                       >
-                        {formatWon(row.val)}
+                        {'rate' in row && row.rate && row.val == null ? (
+                          <span className="font-bold text-red-600">{row.rate}</span>
+                        ) : (
+                          formatWon(row.val ?? 0)
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1470,17 +1522,28 @@ export default function InterimClosingPageClient() {
                       >
                         {(() => {
                           const field = depreciationManualField(row.code);
-                          const canEdit =
+                          const canEditDepr =
                             !!field &&
                             needsDepreciationCurrentInput(
                               payload.statements,
                               field === 'deprConstCurrent' ? '618' : '818',
                             );
-                          if (canEdit && field) {
+                          const isEndingInv = /기말/.test(String(row.name || '').replace(/\s+/g, ''));
+                          if (canEditDepr && field) {
                             return (
                               <MoneyCell
                                 value={payload.manual[field] || row.current}
                                 onChange={n => patchManual({ [field]: n })}
+                              />
+                            );
+                          }
+                          if (isEndingInv && !row.isSection) {
+                            return (
+                              <MoneyCell
+                                value={
+                                  payload.manual.endingInventoryCurrent || row.current
+                                }
+                                onChange={n => patchManual({ endingInventoryCurrent: n })}
                               />
                             );
                           }
