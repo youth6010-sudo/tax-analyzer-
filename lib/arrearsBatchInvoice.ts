@@ -4,7 +4,7 @@
 import { inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { arrearsEntries, arrearsLetterLines } from '@/db/schema';
-import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
+import { formatArrearsReasonSummary } from '@/lib/arrearsReasonSummary';
 
 export type BatchInvoiceRow = {
   entryId: string;
@@ -67,40 +67,35 @@ export async function buildBatchInvoiceRows(entryIds: string[]): Promise<BatchIn
       arrearsEntryId: arrearsLetterLines.arrearsEntryId,
       description: arrearsLetterLines.description,
       amount: arrearsLetterLines.amount,
+      paidAmount: arrearsLetterLines.paidAmount,
       sortOrder: arrearsLetterLines.sortOrder,
     })
     .from(arrearsLetterLines)
     .where(inArray(arrearsLetterLines.arrearsEntryId, ids));
 
   const descsByEntry = new Map<string, string[]>();
-  const chargeDescsByEntry = new Map<string, string[]>();
+  const linesByEntry = new Map<string, typeof lines>();
   for (const l of lines) {
     const desc = (l.description || '').trim();
-    if (!desc) continue;
-    const all = descsByEntry.get(l.arrearsEntryId) ?? [];
-    all.push(desc);
-    descsByEntry.set(l.arrearsEntryId, all);
-    if (Math.round(l.amount) > 0) {
-      const ch = chargeDescsByEntry.get(l.arrearsEntryId) ?? [];
-      if (ch.length < 3 && !ch.includes(desc)) ch.push(desc);
-      chargeDescsByEntry.set(l.arrearsEntryId, ch);
+    if (desc) {
+      const all = descsByEntry.get(l.arrearsEntryId) ?? [];
+      all.push(desc);
+      descsByEntry.set(l.arrearsEntryId, all);
     }
+    const arr = linesByEntry.get(l.arrearsEntryId) ?? [];
+    arr.push(l);
+    linesByEntry.set(l.arrearsEntryId, arr);
   }
 
   const rows: BatchInvoiceRow[] = [];
   for (const id of ids) {
     const e = byId.get(id);
     if (!e) continue;
-    const charges = chargeDescsByEntry.get(id) ?? [];
     const asOf = e.letterDate || e.asOfDate;
-    const formattedCharges = charges.map((desc, i) =>
-      formatArrearsChargeLabel(desc, {
-        asOfDate: asOf,
-        prevDescription: i > 0 ? charges[i - 1] : undefined,
-      }),
-    );
-    const reasonSummary =
-      formattedCharges.join(' · ') || (e.memo || '').trim() || '—';
+    const reasonSummary = formatArrearsReasonSummary(linesByEntry.get(id) ?? [], {
+      asOfDate: asOf,
+      memo: e.memo,
+    });
     const remark = remarkFromDescriptions(descsByEntry.get(id) ?? [], reasonSummary);
     rows.push({
       entryId: e.id,

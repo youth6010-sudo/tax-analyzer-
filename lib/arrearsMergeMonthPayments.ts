@@ -24,7 +24,8 @@ function isMonthChargeRow(l: { description?: string; amount?: number; paidAmount
   return isMonthBookkeepingChargeLine(l.description || '', l.amount || 0);
 }
 
-/** 지급-only 줄을 바로 앞·뒤 월 기장료 줄에 붙임 (6월 양식) */
+/** 지급-only 줄을 바로 앞·뒤 월 기장료 줄에 붙임 (6월 양식).
+ * 이미 같은 금액이 기장 줄에 붙어 있으면 중복 지급 줄만 제거. */
 export function mergeMonthlyBookkeepingPaymentRows<
   T extends ArrearsLetterLineInput & { description: string; amount: number; paidAmount: number; paidDate?: string },
 >(lines: T[]): T[] {
@@ -34,6 +35,28 @@ export function mergeMonthlyBookkeepingPaymentRows<
   let i = 0;
   while (i < lines.length) {
     const cur = lines[i]!;
+
+    // 이미 지급이 붙은 월 기장 바로 다음의 동액 지급-only → 중복 제거
+    if (
+      Math.round(cur.amount) > 0 &&
+      Math.round(cur.paidAmount || 0) === Math.round(cur.amount) &&
+      isMonthBookkeepingChargeLine(cur.description || '', cur.amount) &&
+      i + 1 < lines.length
+    ) {
+      const next = lines[i + 1]!;
+      if (
+        isPaymentOnlyRow(next) &&
+        Math.round(next.paidAmount || 0) === Math.round(cur.amount)
+      ) {
+        out.push({
+          ...cur,
+          paidDate: cur.paidDate || next.paidDate || '',
+        });
+        i += 2;
+        continue;
+      }
+    }
+
     if (isPaymentOnlyRow(cur) && i + 1 < lines.length) {
       const next = lines[i + 1]!;
       if (

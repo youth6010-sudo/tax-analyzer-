@@ -12,7 +12,7 @@ import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
 import { monthlyBookkeepingFeeFromIntake } from '@/lib/arrearsMonthlyBookkeeping';
-import { formatArrearsChargeLabel } from '@/lib/arrearsLineLabel';
+import { formatArrearsReasonSummary } from '@/lib/arrearsReasonSummary';
 import {
   applyArrearsManualBalance,
   ARREARS_ALWAYS_LISTED_CODES,
@@ -130,7 +130,7 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   });
 }
 
-/** entry별 최근 청구(금액>0) 설명 1~2개 → 사유 요약 */
+/** entry별 미수 청구 중 금액 큰 순 최대 2개 → 사유 요약 */
 async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsEntryDto[]> {
   if (!items.length) return items;
   const db = getDb();
@@ -140,40 +140,32 @@ async function attachReasonSummaries(items: ArrearsEntryDto[]): Promise<ArrearsE
       arrearsEntryId: arrearsLetterLines.arrearsEntryId,
       description: arrearsLetterLines.description,
       amount: arrearsLetterLines.amount,
+      paidAmount: arrearsLetterLines.paidAmount,
       sortOrder: arrearsLetterLines.sortOrder,
     })
     .from(arrearsLetterLines)
     .where(inArray(arrearsLetterLines.arrearsEntryId, ids))
-    .orderBy(desc(arrearsLetterLines.sortOrder));
+    .orderBy(asc(arrearsLetterLines.sortOrder), asc(arrearsLetterLines.id));
 
-  const chargesByEntry = new Map<string, string[]>();
+  const linesByEntry = new Map<string, typeof lines>();
   for (const line of lines) {
-    if (Math.round(line.amount) <= 0) continue;
-    const desc = (line.description || '').trim();
-    if (!desc) continue;
-    const list = chargesByEntry.get(line.arrearsEntryId) ?? [];
-    if (list.length >= 2) continue;
-    if (!list.includes(desc)) list.push(desc);
-    chargesByEntry.set(line.arrearsEntryId, list);
+    const list = linesByEntry.get(line.arrearsEntryId) ?? [];
+    list.push(line);
+    linesByEntry.set(line.arrearsEntryId, list);
   }
 
   return items.map(item => {
-    const charges = chargesByEntry.get(item.id);
-    if (charges?.length) {
-      if (isArrearsBalanceLocked(item.externalCode)) {
-        return { ...item, reasonSummary: charges.join(' · ') };
-      }
-      const asOf = item.asOfDate || item.letterDate;
-      const formatted = charges.map((desc, i) =>
-        formatArrearsChargeLabel(desc, {
-          asOfDate: asOf,
-          prevDescription: i > 0 ? charges[i - 1] : undefined,
-        }),
-      );
-      return { ...item, reasonSummary: formatted.join(' · ') };
-    }
-    const memo = (item.memo || '').trim();
-    return { ...item, reasonSummary: memo || '—' };
+    const entryLines = linesByEntry.get(item.id) ?? [];
+    const asOf = item.asOfDate || item.letterDate;
+    return {
+      ...item,
+      reasonSummary: formatArrearsReasonSummary(entryLines, {
+        asOfDate: asOf,
+        memo: item.memo,
+        // 오프라인·하나비 등 잠금: 공문 원문 그대로
+        useRawDesc: isArrearsBalanceLocked(item.externalCode),
+      }),
+    };
   });
 }
 
