@@ -21,7 +21,7 @@ import {
   isLetterCorpFeeDescription,
   inheritYearForMonthFeeDesc,
 } from '@/lib/arrearsLedgerDetailParse';
-import { mergeMonthlyBookkeepingPaymentRows } from '@/lib/arrearsMergeMonthPayments';
+import { mergeMonthlyBookkeepingPaymentRows, normalizeLetterLineYears } from '@/lib/arrearsMergeMonthPayments';
 import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
@@ -137,7 +137,12 @@ export async function replaceLetterLines(
   entryId: string,
   actorName: string,
   lines: ArrearsLetterLineInput[],
-  opts?: { syncBalance?: boolean; letterDate?: string; skipMonthPaymentMerge?: boolean },
+  opts?: {
+    syncBalance?: boolean;
+    letterDate?: string;
+    skipMonthPaymentMerge?: boolean;
+    skipYearNormalize?: boolean;
+  },
 ): Promise<{
   item: ArrearsEntryDto;
   lines: ArrearsLetterLineDto[];
@@ -169,9 +174,13 @@ export async function replaceLetterLines(
     // 지급-only 행(내역 비움) 허용 — 사무실 공문 양식과 동일
     .filter(l => l.description || l.amount || l.paidAmount);
 
-  const merged = (opts?.skipMonthPaymentMerge
+  const yearNormalized = opts?.skipYearNormalize
     ? normalized
-    : mergeMonthlyBookkeepingPaymentRows(normalized)
+    : normalizeLetterLineYears(normalized);
+
+  const merged = (opts?.skipMonthPaymentMerge
+    ? yearNormalized
+    : mergeMonthlyBookkeepingPaymentRows(yearNormalized)
   ).map((l, i) => ({ ...l, sortOrder: i }));
 
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));

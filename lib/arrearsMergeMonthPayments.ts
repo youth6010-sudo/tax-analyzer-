@@ -24,10 +24,41 @@ function isMonthChargeRow(l: { description?: string; amount?: number; paidAmount
   return isMonthBookkeepingChargeLine(l.description || '', l.amount || 0);
 }
 
-/** 지급-only 줄을 바로 앞·뒤 월 기장료 줄에 붙임 (6월 양식).
- * 이미 같은 금액이 기장 줄에 붙어 있으면 중복 지급 줄만 제거. */
+/** 적요에서 YYYY-MM (또는 월만) */
+function chargeYearMonth(desc: string): { y: number; m: number } | null {
+  const d = norm(desc);
+  const m = d.match(/(20\d{2}|\d{2})년(?:기타수수료)?(\d{1,2})월/);
+  if (!m) return null;
+  let y = Number(m[1]);
+  if (y < 100) y += 2000;
+  return { y, m: Number(m[2]) };
+}
+
+/** 지급일시 "N월 D일" → 월 */
+function paidMonth(paidDate: string): number | null {
+  const pd = String(paidDate || '').replace(/\s+/g, '');
+  const m = pd.match(/^(\d{1,2})월/);
+  return m ? Number(m[1]) : null;
+}
+
+/** 차월: 지급월 M → 청구월 M-1 */
+function prevMonth(y: number, m: number): { y: number; m: number } {
+  if (m <= 1) return { y: y - 1, m: 12 };
+  return { y, m: m - 1 };
+}
+
+/**
+ * 지급-only 줄을 월 기장료 줄에 붙임 (6월 양식).
+ * - 인접 쌍 우선
+ * - 남는 지급은 차월(지급월의 직전 월 미납 기장)에 붙임
+ */
 export function mergeMonthlyBookkeepingPaymentRows<
-  T extends ArrearsLetterLineInput & { description: string; amount: number; paidAmount: number; paidDate?: string },
+  T extends ArrearsLetterLineInput & {
+    description: string;
+    amount: number;
+    paidAmount: number;
+    paidDate?: string;
+  },
 >(lines: T[]): T[] {
   if (lines.length < 2) return lines;
 
@@ -36,7 +67,8 @@ export function mergeMonthlyBookkeepingPaymentRows<
   while (i < lines.length) {
     const cur = lines[i]!;
 
-    // 이미 지급이 붙은 월 기장 바로 다음의 동액 지급-only → 중복 제거
+    // 이미 지급이 붙은 월 기장 바로 다음의 **동일 지급일** 동액 지급-only → 중복 제거
+    // (차월 지급이 다음 달 줄 뒤에 오는 경우는 지우지 않음 — 2차 차월 부착)
     if (
       Math.round(cur.amount) > 0 &&
       Math.round(cur.paidAmount || 0) === Math.round(cur.amount) &&
@@ -44,9 +76,14 @@ export function mergeMonthlyBookkeepingPaymentRows<
       i + 1 < lines.length
     ) {
       const next = lines[i + 1]!;
+      const curPd = String(cur.paidDate || '').replace(/\s+/g, '');
+      const nextPd = String(next.paidDate || '').replace(/\s+/g, '');
       if (
         isPaymentOnlyRow(next) &&
-        Math.round(next.paidAmount || 0) === Math.round(cur.amount)
+        Math.round(next.paidAmount || 0) === Math.round(cur.amount) &&
+        curPd &&
+        nextPd &&
+        curPd === nextPd
       ) {
         out.push({
           ...cur,
@@ -89,5 +126,116 @@ export function mergeMonthlyBookkeepingPaymentRows<
     out.push(cur);
     i += 1;
   }
-  return out;
+
+  // 2차: 남은 지급-only → 차월(지급월−1) 미납 기장에 붙이기
+  return attachChamwolPayments(out);
+}
+
+function attachChamwolPayments<
+  T extends ArrearsLetterLineInput & {
+    description: string;
+    amount: number;
+    paidAmount: number;
+    paidDate?: string;
+  },
+>(lines: T[]): T[] {
+  const next = lines.map(l => ({ ...l }));
+  const usedPay = new Set<number>();
+
+  for (let pi = 0; pi < next.length; pi++) {
+    const pay = next[pi]!;
+    if (!isPaymentOnlyRow(pay)) continue;
+    const pm = paidMonth(pay.paidDate || '');
+    if (pm == null) continue;
+    const payAmt = Math.round(pay.paidAmount || 0);
+
+    // 지급월 기준 연도: 앞쪽 청구 줄 우선
+    let refY = new Date().getFullYear();
+    for (let j = pi - 1; j >= 0; j--) {
+      const ym = chargeYearMonth(next[j]!.description || '');
+      if (ym) {
+        refY = ym.y;
+        // 지급월이 청구월보다 작으면(1월 지급·12월 청구류) 연도 보정은 want에서 처리
+        break;
+      }
+    }
+    if (refY === new Date().getFullYear()) {
+      for (let j = pi + 1; j < next.length; j++) {
+        const ym = chargeYearMonth(next[j]!.description || '');
+        if (ym) {
+          refY = ym.y;
+          break;
+        }
+      }
+    }
+
+    const want = prevMonth(refY, pm);
+
+    let best = -1;
+    for (let ci = 0; ci < next.length; ci++) {
+      if (ci === pi) continue;
+      const ch = next[ci]!;
+      if (!isMonthChargeRow(ch)) continue;
+      if (Math.round(ch.amount) !== payAmt) continue;
+      const ym = chargeYearMonth(ch.description || '');
+      if (!ym) continue;
+      if (ym.m === want.m && (ym.y === want.y || ym.y === want.y - 1 || ym.y === want.y + 1)) {
+        // 같은 월이면 연도 가장 가까운 것
+        if (ym.y === want.y) {
+          best = ci;
+          break;
+        }
+        if (best < 0) best = ci;
+      }
+    }
+
+    // 연도 매칭 실패 시: 앞쪽에 있는 동액 미납 월기장 중 월이 want.m 인 것
+    if (best < 0) {
+      for (let ci = pi - 1; ci >= 0; ci--) {
+        const ch = next[ci]!;
+        if (!isMonthChargeRow(ch)) continue;
+        if (Math.round(ch.amount) !== payAmt) continue;
+        const ym = chargeYearMonth(ch.description || '');
+        if (ym && ym.m === want.m) {
+          best = ci;
+          break;
+        }
+      }
+    }
+
+    if (best < 0) continue;
+    next[best] = {
+      ...next[best]!,
+      paidAmount: payAmt,
+      paidDate: pay.paidDate || next[best]!.paidDate || '',
+      source: (next[best]!.source || pay.source) as T['source'],
+    };
+    usedPay.add(pi);
+  }
+
+  return next.filter((_, idx) => !usedPay.has(idx));
+}
+
+/**
+ * 적요의 2자리 연도 → 4자리 (25년 → 2025년). 지급일시는 그대로.
+ */
+export function normalizeLetterDescriptionYears(description: string): string {
+  const raw = String(description || '');
+  if (!raw) return raw;
+  // 「25년」「26년」등 — 이미 4자리면 유지. 앞에 숫자가 더 있으면 스킵
+  return raw.replace(/(?<!\d)(\d{2})년/g, (_m, yy) => {
+    const n = Number(yy);
+    if (!Number.isFinite(n) || n >= 100) return `${yy}년`;
+    // 70 이상은 19xx 로 보지 않음(미수 공문은 주로 2000년대). 00~69 → 20xx
+    return `${2000 + n}년`;
+  });
+}
+
+export function normalizeLetterLineYears<
+  T extends { description?: string; amount?: number; paidAmount?: number; paidDate?: string },
+>(lines: T[]): T[] {
+  return lines.map(l => ({
+    ...l,
+    description: normalizeLetterDescriptionYears(l.description || ''),
+  }));
 }
