@@ -689,6 +689,32 @@ export async function updateClient(
     nextAssignedUserId = assignee?.id ?? null;
   }
 
+  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
+  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
+  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
+  if (
+    !nextPrimaryId &&
+    (mergedIntake.relatedPrimary === true ||
+      mergedIntake.relatedPrimary === 'Y' ||
+      mergedIntake.relatedPrimary === 'y' ||
+      mergedIntake.relatedPrimary === '1' ||
+      mergedIntake.relatedPrimary === 1)
+  ) {
+    nextPrimaryId = id;
+  }
+  // 연관업체가 있으면 대표 필수 — 없으면 현재 수임처
+  if (nextRelated.trim() && !nextPrimaryId) {
+    nextPrimaryId = id;
+  }
+  if (nextRelated.trim() && nextPrimaryId) {
+    mergedIntake = {
+      ...mergedIntake,
+      relatedPrimaryId: nextPrimaryId,
+      ...(nextPrimaryId === id ? { relatedPrimary: true } : {}),
+    };
+    if (nextPrimaryId !== id) delete mergedIntake.relatedPrimary;
+  }
+
   const [row] = await db
     .update(clients)
     .set({
@@ -714,23 +740,10 @@ export async function updateClient(
 
   if (!row) throw new Error('NOT_FOUND');
 
-  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
-  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
   const relatedChanged = !relatedNamesEqual(prevRelated, nextRelated);
   const managerChanged = nextManager !== (existing.manager || '').trim();
 
   const prevPrimaryId = String(existing.intakeData?.relatedPrimaryId ?? '').trim();
-  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
-  if (
-    !nextPrimaryId &&
-    (mergedIntake.relatedPrimary === true ||
-      mergedIntake.relatedPrimary === 'Y' ||
-      mergedIntake.relatedPrimary === 'y' ||
-      mergedIntake.relatedPrimary === '1' ||
-      mergedIntake.relatedPrimary === 1)
-  ) {
-    nextPrimaryId = id;
-  }
   const primaryChanged = prevPrimaryId !== nextPrimaryId;
 
   if (relatedChanged || primaryChanged) {
@@ -818,6 +831,31 @@ export async function updateClientDetail(
     syncCategory: entityChanged || categoryChanged,
   });
 
+  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
+  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
+  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
+  if (
+    !nextPrimaryId &&
+    (mergedIntake.relatedPrimary === true ||
+      mergedIntake.relatedPrimary === 'Y' ||
+      mergedIntake.relatedPrimary === '1')
+  ) {
+    nextPrimaryId = id;
+  }
+  if (nextRelated.trim() && !nextPrimaryId) {
+    nextPrimaryId = id;
+    mergedIntake = {
+      ...mergedIntake,
+      relatedPrimaryId: id,
+      relatedPrimary: true,
+    };
+  } else if (nextPrimaryId && nextPrimaryId === id) {
+    mergedIntake = { ...mergedIntake, relatedPrimaryId: nextPrimaryId, relatedPrimary: true };
+  } else if (nextPrimaryId) {
+    mergedIntake = { ...mergedIntake, relatedPrimaryId: nextPrimaryId };
+    delete mergedIntake.relatedPrimary;
+  }
+
   const [row] = await db
     .update(clients)
     .set({
@@ -834,19 +872,8 @@ export async function updateClientDetail(
 
   if (!row) throw new Error('NOT_FOUND');
 
-  const prevRelated = String(existing.intakeData?.relatedCompanies ?? '');
-  const nextRelated = String(mergedIntake.relatedCompanies ?? '');
   const relatedChanged = !relatedNamesEqual(prevRelated, nextRelated);
   const prevPrimaryId = String(existing.intakeData?.relatedPrimaryId ?? '').trim();
-  let nextPrimaryId = String(mergedIntake.relatedPrimaryId ?? '').trim();
-  if (
-    !nextPrimaryId &&
-    (mergedIntake.relatedPrimary === true ||
-      mergedIntake.relatedPrimary === 'Y' ||
-      mergedIntake.relatedPrimary === '1')
-  ) {
-    nextPrimaryId = id;
-  }
   const primaryChanged = prevPrimaryId !== nextPrimaryId;
 
   if (relatedChanged || primaryChanged) {

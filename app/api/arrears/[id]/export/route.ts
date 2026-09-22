@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
@@ -25,11 +25,13 @@ export async function GET(_req: Request, ctx: Ctx) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
     }
 
+    const full = new URL(req.url).searchParams.get('full') === '1';
     const wb = buildArrearsLetterWorkbook([
       {
         companyName: detail.item.companyName,
         letterDate: detail.letterAsOfDate,
         entryBalance: detail.letterBalance,
+        includeFullHistory: full,
         lines: detail.lines.map(l => ({
           description: l.description,
           amount: l.amount,

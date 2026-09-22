@@ -196,17 +196,15 @@ function ClientList({
     const primaryInSection = g
       ? displayPrimaryInSection(g, displayClients, sectionLabel)
       : false;
-    // 분류가 갈린 연관: 대표 외 업체명 옆에 대표상호. 같은 분류만의 그룹(2+)은 덩어리만.
+    // 대표로 지정(또는 표시 대표)이면 항상 「대표」 배지
+    const showRepBadge = Boolean(g && isDisplayPrimary);
+    // 핀 지정·분류외 연관: 대표 외 상호 옆에 대표회사명
     let primaryBeside: string | null = null;
     if (g && primaryName && !isDisplayPrimary) {
-      if (!primaryInSection || sameCount < 2) {
+      if (g.primaryPinned || !primaryInSection || sameCount < 2) {
         primaryBeside = primaryName;
       }
     }
-    // 다른 분류 연관이 있거나 이 분류에 혼자일 때 대표에 「대표」 배지
-    const showRepBadge =
-      Boolean(g && isDisplayPrimary) &&
-      (sameCount < 2 || (g?.memberIds.length ?? 0) > sameCount);
 
     return (
       <li key={c.id}>

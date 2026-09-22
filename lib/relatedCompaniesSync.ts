@@ -32,6 +32,34 @@ function relatedPeerRank(c: ClientLite): number {
   return 0;
 }
 
+/** 연관그룹 대표 자동 지정 — 법인 > 개인 > 신고대리 > 기타, 같으면 상호순 */
+function pickDefaultRelatedPrimary(
+  memberIds: string[],
+  byId: Map<string, ClientLite>,
+  preferredId?: string | null,
+): string | null {
+  if (memberIds.length < 2) return null;
+  if (preferredId && memberIds.includes(preferredId)) return preferredId;
+
+  const rank = (c: ClientLite) => {
+    const cat = String(c.intakeData?.category ?? '').trim();
+    if (cat === '법인') return 0;
+    if (cat === '개인') return 1;
+    if (cat === '신고대리') return 2;
+    return 3;
+  };
+
+  const members = memberIds
+    .map(id => byId.get(id))
+    .filter((x): x is ClientLite => !!x)
+    .sort((a, b) => {
+      const d = rank(a) - rank(b);
+      if (d !== 0) return d;
+      return (a.companyName || '').localeCompare(b.companyName || '', 'ko');
+    });
+  return members[0]?.id ?? null;
+}
+
 async function loadClientIndex(): Promise<{
   byId: Map<string, ClientLite>;
   bySoft: Map<string, ClientLite[]>;
@@ -139,8 +167,11 @@ export async function syncRelatedCompanyGroupMesh(
 
   let pinned =
     primaryId && nextMembers.has(primaryId) ? primaryId : null;
-  // 대표가 그룹 밖이면 미지정 (자동 지정하지 않음)
   if (pinned && !nextMembers.has(pinned)) pinned = null;
+  // 연관업체가 있으면 대표는 무조건 1곳 (미지정 허용 안 함)
+  if (nextMembers.size >= 2 && !pinned) {
+    pinned = pickDefaultRelatedPrimary(nextList, byId, sourceId);
+  }
   if (nextMembers.size < 2) pinned = null;
 
   const memberName = (id: string) => (byId.get(id)?.companyName || '').trim();
@@ -296,7 +327,10 @@ export async function applyRelatedPrimaryToGroup(
     }
   }
 
-  const pinned = primaryId && groupIds.has(primaryId) ? primaryId : null;
+  const pinned =
+    primaryId && groupIds.has(primaryId)
+      ? primaryId
+      : pickDefaultRelatedPrimary([...groupIds], byId, sourceId);
   if (groupIds.size < 2) {
     for (const id of groupIds) {
       const peer = byId.get(id);

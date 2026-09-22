@@ -190,9 +190,10 @@ export default function ClientDetailPage({
         category: String(client.intakeData?.category ?? ''),
       };
 
-      if (relatedCompanies.trim() && !relatedPrimaryId) {
-        setSaveError('연관업체가 있으면 대표를 ★로 지정해야 합니다.');
-        return;
+      let primaryId = relatedPrimaryId;
+      if (relatedCompanies.trim() && !primaryId) {
+        primaryId = client.id;
+        setRelatedPrimaryId(client.id);
       }
 
       const { entity, category } = resolveEntityAndCategory(
@@ -208,8 +209,8 @@ export default function ClientDetailPage({
         ...meta.intakeData,
         category: category || null,
         relatedCompanies: relatedCompanies.trim() || null,
-        relatedPrimaryId: relatedPrimaryId || null,
-        relatedPrimary: relatedPrimaryId === client.id ? true : null,
+        relatedPrimaryId: primaryId || null,
+        relatedPrimary: primaryId === client.id ? true : null,
         taxKind: taxKind.trim() || null,
       };
 
@@ -231,11 +232,17 @@ export default function ClientDetailPage({
         patchPortalClient(client.id, data.client);
         markPortalClientsFresh();
         if (data.client.intakeData) {
-          setIntakeData(data.client.intakeData as Record<string, unknown>);
-          setRelatedCompanies(
-            String((data.client.intakeData as Record<string, unknown>).relatedCompanies ?? ''),
-          );
-          setTaxKind(String((data.client.intakeData as Record<string, unknown>).taxKind ?? ''));
+          const intake = data.client.intakeData as Record<string, unknown>;
+          setIntakeData(intake);
+          setRelatedCompanies(String(intake.relatedCompanies ?? ''));
+          const pid = String(intake.relatedPrimaryId ?? '').trim();
+          if (pid) setRelatedPrimaryId(pid);
+          else if (intake.relatedPrimary === true || intake.relatedPrimary === 'Y') {
+            setRelatedPrimaryId(client.id);
+          } else {
+            setRelatedPrimaryId(null);
+          }
+          setTaxKind(String(intake.taxKind ?? ''));
         }
       }
 

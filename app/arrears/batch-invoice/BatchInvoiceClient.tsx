@@ -15,7 +15,7 @@ import {
   ARREARS_LETTER_ADDR,
   ARREARS_LETTER_BANK,
   ARREARS_LETTER_TEL,
-} from '@/lib/arrearsLetterExport';
+} from '@/lib/arrearsLetterExportShared';
 
 type Row = {
   entryId: string;

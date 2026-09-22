@@ -219,6 +219,10 @@ function RelatedCompanyPicker({
       });
     }
     onChange(joinRelatedNames([...selected, n]));
+    // 연관 추가 시 대표 미지정이면 현재 수임처를 대표로
+    if (!primaryId && onPrimaryIdChange) {
+      onPrimaryIdChange(selfId || id || null);
+    }
     setQuery('');
     setResults([]);
     setOpen(false);
@@ -226,8 +230,17 @@ function RelatedCompanyPicker({
 
   const removeName = (name: string) => {
     const removedId = idBySoft.get(companySoftKey(name));
-    onChange(joinRelatedNames(selected.filter(s => s !== name)));
-    if (removedId && primaryId === removedId) onPrimaryIdChange?.(null);
+    const nextSelected = selected.filter(s => s !== name);
+    onChange(joinRelatedNames(nextSelected));
+    if (!onPrimaryIdChange) return;
+    if (nextSelected.length === 0) {
+      onPrimaryIdChange(null);
+      return;
+    }
+    // 대표를 제거했으면 현재 수임처로 재지정 (연관이 남아 있으면 대표 필수)
+    if (removedId && primaryId === removedId) {
+      onPrimaryIdChange(selfId || null);
+    }
   };
 
   type Chip = { id: string; name: string; isSelf: boolean };
@@ -263,8 +276,11 @@ function RelatedCompanyPicker({
                     className={`shrink-0 rounded px-0.5 text-[12px] leading-none ${
                       pinned ? 'text-teal-700' : 'text-slate-300 hover:text-amber-500'
                     }`}
-                    title={pinned ? '대표' : '대표로 지정'}
-                    onClick={() => onPrimaryIdChange?.(pinned ? null : chip.id)}
+                    title={pinned ? '대표 (변경 시 다른 업체 ★)' : '대표로 지정'}
+                    onClick={() => {
+                      if (pinned) return; // 연관업체 있으면 대표 해제 불가 — 다른 곳으로만 변경
+                      onPrimaryIdChange?.(chip.id);
+                    }}
                     aria-label={`${chip.name} 대표 핀`}
                   >
                     {pinned ? '★' : '☆'}
@@ -290,7 +306,11 @@ function RelatedCompanyPicker({
         </div>
       ) : null}
       {canPin && !primaryId ? (
-        <p className="text-[10px] text-amber-700">연관업체 중 대표를 ★로 지정하세요 (1곳만)</p>
+        <p className="text-[10px] text-amber-700">
+          연관업체가 있으면 대표를 ★로 꼭 지정해야 합니다 (저장 시 자동 지정될 수 있음)
+        </p>
+      ) : canPin && primaryId ? (
+        <p className="text-[10px] text-slate-500">대표는 ★ 1곳 · 다른 업체의 ☆를 누르면 변경됩니다</p>
       ) : null}
       <div className="relative">
         <input
