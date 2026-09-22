@@ -23,6 +23,7 @@ import { ensureInactiveArrearsEntries } from '@/lib/arrearsInactiveSeed';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import { companyNameMatchKey } from '@/app/utils/arrearsRecoveryHighlight';
 import { applyArrearsManagerToClient } from '@/lib/intakeManagerSync';
+import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
 
 /** 수동 지정 유지 — 자동 일시 분류로 덮지 않음 */
 const ARREARS_CATEGORY_LOCK = new Set(['recovery', 'bad', 'long', 'cms']);
@@ -78,6 +79,33 @@ async function attachLineOpenBalances(items: ArrearsEntryDto[]): Promise<Arrears
   for (const s of sums) {
     openBy.set(s.arrearsEntryId, Math.round(Number(s.total) || 0));
     letterBy.set(s.arrearsEntryId, Boolean(s.hasLetter));
+  }
+
+  /** 업체별 대사 제외 줄(올바릇 9/15 등) — SQL 합계 보정 */
+  const needRecalc = items.filter(i => i.externalCode === '01206');
+  if (needRecalc.length) {
+    const recalcIds = needRecalc.map(i => i.id);
+    const detailLines = await db
+      .select({
+        arrearsEntryId: arrearsLetterLines.arrearsEntryId,
+        description: arrearsLetterLines.description,
+        amount: arrearsLetterLines.amount,
+        paidAmount: arrearsLetterLines.paidAmount,
+        paidDate: arrearsLetterLines.paidDate,
+      })
+      .from(arrearsLetterLines)
+      .where(inArray(arrearsLetterLines.arrearsEntryId, recalcIds))
+      .orderBy(asc(arrearsLetterLines.sortOrder), asc(arrearsLetterLines.id));
+    const byEntry = new Map<string, typeof detailLines>();
+    for (const l of detailLines) {
+      const arr = byEntry.get(l.arrearsEntryId) ?? [];
+      arr.push(l);
+      byEntry.set(l.arrearsEntryId, arr);
+    }
+    for (const item of needRecalc) {
+      const lines = byEntry.get(item.id) ?? [];
+      openBy.set(item.id, letterOpenForStatusMatch(item.externalCode, lines));
+    }
   }
 
   return items.map(item => {

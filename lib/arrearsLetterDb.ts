@@ -21,6 +21,8 @@ import {
   isLetterCorpFeeDescription,
   inheritYearForMonthFeeDesc,
 } from '@/lib/arrearsLedgerDetailParse';
+import { mergeMonthlyBookkeepingPaymentRows } from '@/lib/arrearsMergeMonthPayments';
+import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
 import { getArrearsEntryById } from '@/lib/arrearsDb';
 import { getArrearsGlobalAsOfDate } from '@/lib/arrearsAsOfDate';
 import {
@@ -135,7 +137,7 @@ export async function replaceLetterLines(
   entryId: string,
   actorName: string,
   lines: ArrearsLetterLineInput[],
-  opts?: { syncBalance?: boolean; letterDate?: string },
+  opts?: { syncBalance?: boolean; letterDate?: string; skipMonthPaymentMerge?: boolean },
 ): Promise<{
   item: ArrearsEntryDto;
   lines: ArrearsLetterLineDto[];
@@ -167,11 +169,16 @@ export async function replaceLetterLines(
     // 지급-only 행(내역 비움) 허용 — 사무실 공문 양식과 동일
     .filter(l => l.description || l.amount || l.paidAmount);
 
+  const merged = (opts?.skipMonthPaymentMerge
+    ? normalized
+    : mergeMonthlyBookkeepingPaymentRows(normalized)
+  ).map((l, i) => ({ ...l, sortOrder: i }));
+
   await db.delete(arrearsLetterLines).where(eq(arrearsLetterLines.arrearsEntryId, entryId));
 
-  if (normalized.length) {
+  if (merged.length) {
     await db.insert(arrearsLetterLines).values(
-      normalized.map(l => ({
+      merged.map(l => ({
         arrearsEntryId: entryId,
         sortOrder: l.sortOrder,
         description: l.description,
@@ -185,7 +192,8 @@ export async function replaceLetterLines(
     );
   }
 
-  const letterBalance = letterBalanceFromLines(normalized);
+  const letterBalance = letterBalanceFromLines(merged);
+  const statusOpen = letterOpenForStatusMatch(existing.externalCode, merged);
   const updates: Partial<typeof arrearsEntries.$inferInsert> = {
     updatedBy: actor,
     updatedAt: now,
@@ -211,7 +219,7 @@ export async function replaceLetterLines(
     item,
     lines: saved,
     letterBalance,
-    balanceDiff: item.balance - letterBalance,
+    balanceDiff: Math.round(item.balance) - statusOpen,
   };
 }
 

@@ -35,6 +35,7 @@ import { isIndieManagerName } from '@/lib/arrearsImportFilenames';
 import { listLetterLines, replaceLetterLines } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
 import { letterBalanceFromLines } from '@/app/types/arrears';
+import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
 
 export type StatusImportPreview = {
   preview: true;
@@ -413,9 +414,12 @@ export async function getImportConfigForApi() {
 
 export function summarizeBalanceAlignment(
   balance: number,
-  lines: Array<{ amount: number; paidAmount: number }>,
+  lines: Array<{ amount: number; paidAmount: number; description?: string; paidDate?: string }>,
+  externalCode?: string,
 ): { linesOpen: number; diff: number } {
-  const linesOpen = letterBalanceFromLines(lines);
+  const linesOpen = externalCode
+    ? letterOpenForStatusMatch(externalCode, lines)
+    : letterBalanceFromLines(lines);
   return { linesOpen, diff: Math.round(balance) - linesOpen };
 }
 
