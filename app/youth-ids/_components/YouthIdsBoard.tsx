@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { portalEmptyState, portalInput } from '@/app/components/portal/uiClasses';
 import type { YouthIdCategory, YouthIdEntry } from '@/lib/youthIds';
 import { newYouthIdCategoryId } from '@/lib/youthIds';
@@ -342,12 +342,12 @@ export default function YouthIdsBoard({
   );
 }
 
-const DUTY_ASSIGNMENTS: ReadonlyArray<{ who: string; duties: string }> = [
+const DUTY_ASSIGNMENTS: ReadonlyArray<{ who: string; duties: string; lineBreak?: boolean }> = [
   { who: '인디', duties: '세금계산서 발행(~10일)' },
   { who: '블루', duties: '공용메일관리' },
   { who: '윈터', duties: '커피머신 / 화분 관리' },
   { who: '리아', duties: '팩스 관리' },
-  { who: '찰리', duties: '우편함 확인, 파쇄기 관리, 비품관리 및 주문' },
+  { who: '찰리', duties: '우편함 확인, 파쇄기 관리, 비품관리 및 주문', lineBreak: true },
   { who: '페리&찰리', duties: '세모리포트 보고서 검증(18일), 4대보험 수집(21~25일), TP백업' },
 ];
 
@@ -357,9 +357,12 @@ function DutyAssignments() {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] leading-snug text-slate-700">
         <span className="font-bold text-amber-800">업무분장</span>
         {DUTY_ASSIGNMENTS.map(d => (
-          <span key={d.who} className="whitespace-nowrap">
-            <b className="text-slate-900">{d.who}</b> : {d.duties}
-          </span>
+          <Fragment key={d.who}>
+            {d.lineBreak ? <span className="basis-full" aria-hidden /> : null}
+            <span className="whitespace-nowrap">
+              <b className="text-slate-900">{d.who}</b> : {d.duties}
+            </span>
+          </Fragment>
         ))}
       </div>
     </div>
