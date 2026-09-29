@@ -11,7 +11,7 @@ type Props = {
   categoryLabel: string;
   staffNames: string[];
   initial?: YouthIdEntry | null;
-  /** 일반 직원: 담당을 본인/공용만 */
+  /** 일반 직원: 담당을 본인으로 고정 */
   lockOwnerToMe?: boolean;
   me?: string;
   onClose: () => void;
@@ -44,7 +44,7 @@ export default function YouthIdEntryModal({
     setTitle(initial?.title ?? '');
     const initialOwner = initial?.owner ?? '';
     if (lockOwnerToMe) {
-      setOwner(initialOwner === me ? me : initialOwner ? me : '');
+      setOwner(me);
     } else {
       setOwner(initialOwner);
     }
@@ -65,8 +65,7 @@ export default function YouthIdEntryModal({
         secret: f.secret ? true : undefined,
       }))
       .filter(f => f.label);
-    let nextOwner = owner.trim() || null;
-    if (lockOwnerToMe && nextOwner && nextOwner !== me) nextOwner = me || null;
+    const nextOwner = lockOwnerToMe ? me || null : owner.trim() || null;
     onSave({
       id: initial?.id ?? newYouthIdEntryId(t),
       title: t,
@@ -103,13 +102,14 @@ export default function YouthIdEntryModal({
           </label>
 
           <label className="block text-xs font-semibold text-slate-600">
-            담당 (비우면 공용)
+            {lockOwnerToMe ? '담당 (본인 항목만 추가·수정 가능)' : '담당 (비우면 공용)'}
             <select
               className={`${portalInput} mt-1`}
               value={owner}
+              disabled={lockOwnerToMe}
               onChange={e => setOwner(e.target.value)}
             >
-              <option value="">공용</option>
+              {lockOwnerToMe ? null : <option value="">공용</option>}
               {staffNames.map(n => (
                 <option key={n} value={n}>
                   {n}

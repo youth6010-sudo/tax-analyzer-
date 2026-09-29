@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import type { SessionData } from '@/lib/session';
 import { getSessionOptions } from '@/lib/session';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 import {
   assertYouthIdsIpAllowed,
   isYouthIdsPath,
@@ -56,7 +57,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.next();
     const session = await getIronSession<SessionData>(request, response, getSessionOptions());
 
-    if (!session.user) {
+    if (!session.user || isRetiredStaff(session.user.name)) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('next', pathname);
       return NextResponse.redirect(loginUrl);

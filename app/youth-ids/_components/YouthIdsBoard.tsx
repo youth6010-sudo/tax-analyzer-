@@ -136,8 +136,9 @@ export default function YouthIdsBoard({
   );
 
   const upsertEntry = async (catId: string, entry: YouthIdEntry) => {
-    if (!canEditAll && entry.owner && entry.owner !== me) {
-      setSaveError('본인 또는 공용 항목만 수정할 수 있습니다.');
+    const prevOwner = categories.find(c => c.id === catId)?.entries.find(e => e.id === entry.id)?.owner;
+    if (!canEditAll && (entry.owner !== me || (prevOwner !== undefined && prevOwner !== me))) {
+      setSaveError('본인 항목만 수정할 수 있습니다.');
       return;
     }
     const next = categories.map(cat => {
@@ -154,8 +155,8 @@ export default function YouthIdsBoard({
 
   const deleteEntry = async (catId: string, entryId: string) => {
     const target = categories.find(c => c.id === catId)?.entries.find(e => e.id === entryId);
-    if (!canEditAll && target?.owner && target.owner !== me) {
-      setSaveError('본인 또는 공용 항목만 삭제할 수 있습니다.');
+    if (!canEditAll && target?.owner !== me) {
+      setSaveError('본인 항목만 삭제할 수 있습니다.');
       return;
     }
     if (!window.confirm('이 항목을 삭제할까요?')) return;
@@ -260,7 +261,7 @@ export default function YouthIdsBoard({
         >
           {editMode ? '편집 중 ✓' : '편집'}
         </button>
-        {editMode ? (
+        {editMode && canEditAll ? (
           <button
             type="button"
             disabled={saving}
@@ -456,7 +457,7 @@ function SectionTable({
             <tbody>
               {cat.entries.map(e => {
                 const mine = e.owner === me;
-                const canEditRow = canEditAll || !e.owner || e.owner === me;
+                const canEditRow = canEditAll || e.owner === me;
                 return (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td

@@ -6,11 +6,12 @@ import {
   isDataViewer,
   isDeveloperAdmin,
 } from '@/lib/masterAccess';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 
 export async function GET() {
   try {
     const session = await getServerSession();
-    if (!session.user) {
+    if (!session.user || isRetiredStaff(session.user.name)) {
       return NextResponse.json({ user: null }, { status: 401 });
     }
     const user = session.user;

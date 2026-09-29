@@ -78,9 +78,10 @@ export function visibleForUser(doc: YouthIdDoc, nickname: string): YouthIdCatego
 }
 
 /**
- * PUT 병합: 화면에 안 보이던(타인 owner) 항목은 기존 그대로 유지하고, 보이던 항목만 incoming으로 교체.
- * - 일반 직원: 본인·공용만 반영, 타인 명의로 바꿀 수 없음
- * - 전체 편집 권한: 보이던 항목의 담당 변경 허용. 전체보기(fullView)에서 저장할 때만 incoming 통째 저장
+ * PUT 병합
+ * - 일반 직원: 본인 항목만 추가·수정·삭제. 공용·타인 항목은 기존 그대로, 새 항목은 본인 명의
+ * - 전체 편집 권한: 화면에 안 보이던(타인) 항목은 유지하고 보이던 항목만 교체(담당 변경 허용).
+ *   전체보기(fullView)에서 저장할 때만 incoming 통째 저장
  */
 export function mergeYouthIdDocForUser(
   existing: YouthIdDoc,
@@ -95,31 +96,42 @@ export function mergeYouthIdDocForUser(
   const incomingEntryIds = new Set(
     incoming.categories.flatMap(c => (c.entries ?? []).map(e => e.id)),
   );
+  const lockedIds = new Set(
+    existing.categories.flatMap(c =>
+      (c.entries ?? []).filter(e => e.owner !== nickname).map(e => e.id),
+    ),
+  );
   const acceptIncoming = (entries: YouthIdEntry[]) =>
     canEditAll
       ? entries
       : entries
-          .filter(e => isVisibleEntry(e, nickname))
-          .map(e => ({
-            ...e,
-            // 타인으로 위장 불가
-            owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
-          }));
+          .filter(e => !lockedIds.has(e.id) && (!e.owner || e.owner === nickname))
+          .map(e => ({ ...e, owner: nickname }));
   const result: YouthIdCategory[] = [];
   const seen = new Set<string>();
 
   for (const cat of existing.categories) {
     seen.add(cat.id);
     const inc = incomingById.get(cat.id);
-    const others = (cat.entries ?? []).filter(
-      e => !isVisibleEntry(e, nickname) && !(canEditAll && incomingEntryIds.has(e.id)),
-    );
-    const nextVisible = acceptIncoming(inc?.entries ?? []);
+    const isKept = (e: YouthIdEntry) =>
+      canEditAll
+        ? !isVisibleEntry(e, nickname) && !incomingEntryIds.has(e.id)
+        : e.owner !== nickname;
+    const editable = new Map(acceptIncoming(inc?.entries ?? []).map(e => [e.id, e]));
+    const entries: YouthIdEntry[] = [];
+    for (const e of cat.entries ?? []) {
+      if (isKept(e)) entries.push(e);
+      else if (editable.has(e.id)) {
+        entries.push(editable.get(e.id)!);
+        editable.delete(e.id);
+      }
+    }
+    entries.push(...editable.values());
     result.push({
       id: cat.id,
-      label: inc?.label?.trim() || cat.label,
-      icon: inc?.icon ?? cat.icon,
-      entries: [...others, ...nextVisible],
+      label: (canEditAll && inc?.label?.trim()) || cat.label,
+      icon: canEditAll ? (inc?.icon ?? cat.icon) : cat.icon,
+      entries,
     });
   }
 

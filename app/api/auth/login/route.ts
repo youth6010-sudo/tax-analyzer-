@@ -12,6 +12,7 @@ import {
   isAlwaysAdminModeLogin,
 } from '@/lib/masterAccess';
 import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 
 export async function POST(request: Request) {
   try {
@@ -37,6 +38,10 @@ export async function POST(request: Request) {
 
     if (!user || !(await bcrypt.compare(pin, user.pinHash))) {
       return NextResponse.json({ error: '아이디 또는 PIN이 올바르지 않습니다.' }, { status: 401 });
+    }
+
+    if (isRetiredStaff(user.name)) {
+      return NextResponse.json({ error: '퇴사 처리된 계정입니다.' }, { status: 403 });
     }
 
     await clearRateLimit(`login:${loginId}`);

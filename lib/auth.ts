@@ -19,6 +19,7 @@ export {
 } from './masterAccess';
 
 import { canUseCharlieFeatures, isPortalAdmin } from './masterAccess';
+import { isRetiredStaff } from './retiredStaff';
 
 export async function getServerSession() {
   const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());
@@ -27,7 +28,7 @@ export async function getServerSession() {
 
 export async function requireUser() {
   const session = await getServerSession();
-  if (!session.user) {
+  if (!session.user || isRetiredStaff(session.user.name)) {
     throw new Error('UNAUTHORIZED');
   }
   return session.user;
@@ -36,7 +37,7 @@ export async function requireUser() {
 /** 서버 페이지용 — 미인증 시 500 대신 로그인으로 이동 */
 export async function requireUserPage() {
   const session = await getServerSession();
-  if (!session.user) {
+  if (!session.user || isRetiredStaff(session.user.name)) {
     redirect('/login');
   }
   return session.user;
