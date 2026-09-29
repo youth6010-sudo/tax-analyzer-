@@ -78,32 +78,43 @@ export function visibleForUser(doc: YouthIdDoc, nickname: string): YouthIdCatego
 }
 
 /**
- * 일반 직원 PUT: 타인 owner 항목은 유지하고, 본인·공용만 incoming으로 교체.
- * 전체 편집 권한(canEditAll)이면 incoming 그대로 저장.
+ * PUT 병합: 화면에 안 보이던(타인 owner) 항목은 기존 그대로 유지하고, 보이던 항목만 incoming으로 교체.
+ * - 일반 직원: 본인·공용만 반영, 타인 명의로 바꿀 수 없음
+ * - 전체 편집 권한: 보이던 항목의 담당 변경 허용. 전체보기(fullView)에서 저장할 때만 incoming 통째 저장
  */
 export function mergeYouthIdDocForUser(
   existing: YouthIdDoc,
   incoming: YouthIdDoc,
   nickname: string,
   canEditAll: boolean,
+  fullView = false,
 ): YouthIdDoc {
-  if (canEditAll) return incoming;
+  if (canEditAll && fullView) return incoming;
 
   const incomingById = new Map(incoming.categories.map(c => [c.id, c]));
+  const incomingEntryIds = new Set(
+    incoming.categories.flatMap(c => (c.entries ?? []).map(e => e.id)),
+  );
+  const acceptIncoming = (entries: YouthIdEntry[]) =>
+    canEditAll
+      ? entries
+      : entries
+          .filter(e => isVisibleEntry(e, nickname))
+          .map(e => ({
+            ...e,
+            // 타인으로 위장 불가
+            owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
+          }));
   const result: YouthIdCategory[] = [];
   const seen = new Set<string>();
 
   for (const cat of existing.categories) {
     seen.add(cat.id);
     const inc = incomingById.get(cat.id);
-    const others = (cat.entries ?? []).filter(e => !isVisibleEntry(e, nickname));
-    const nextVisible = (inc?.entries ?? [])
-      .filter(e => isVisibleEntry(e, nickname))
-      .map(e => ({
-        ...e,
-        // 타인으로 위장 불가
-        owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
-      }));
+    const others = (cat.entries ?? []).filter(
+      e => !isVisibleEntry(e, nickname) && !(canEditAll && incomingEntryIds.has(e.id)),
+    );
+    const nextVisible = acceptIncoming(inc?.entries ?? []);
     result.push({
       id: cat.id,
       label: inc?.label?.trim() || cat.label,
@@ -114,12 +125,7 @@ export function mergeYouthIdDocForUser(
 
   for (const cat of incoming.categories) {
     if (seen.has(cat.id)) continue;
-    const entries = (cat.entries ?? [])
-      .filter(e => isVisibleEntry(e, nickname))
-      .map(e => ({
-        ...e,
-        owner: e.owner && e.owner !== nickname ? nickname : e.owner ?? null,
-      }));
+    const entries = acceptIncoming(cat.entries ?? []);
     result.push({
       id: cat.id,
       label: cat.label,

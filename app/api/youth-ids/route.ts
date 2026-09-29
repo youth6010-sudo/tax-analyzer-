@@ -82,8 +82,7 @@ export async function PUT(request: NextRequest) {
     const existing = await loadYouthIdsAsync();
     const canEditAll = canEditAllYouthIds(user.name);
     const wantAll = request.nextUrl.searchParams.get('view') === 'all';
-    // 전체보기 화면에서 일반 직원이 저장하면 타인 항목이 incoming에 섞여 오므로, 본인·공용만 반영됨
-    const merged = mergeYouthIdDocForUser(existing, incoming, user.name, canEditAll);
+    const merged = mergeYouthIdDocForUser(existing, incoming, user.name, canEditAll, wantAll);
     const saved = await saveYouthIdsAsync(merged);
 
     const categories = wantAll ? saved.categories : visibleForUser(saved, user.name);

@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties
 import { portalEmptyState, portalInput } from '@/app/components/portal/uiClasses';
 import type { YouthIdCategory, YouthIdEntry } from '@/lib/youthIds';
 import { newYouthIdCategoryId } from '@/lib/youthIds';
+import { isLightManagerChipColor, MANAGER_COLOR_BY_NAME } from '@/lib/calendarManagerColors';
 import YouthIdEntryModal from './YouthIdEntryModal';
 
 type Props = {
@@ -344,26 +345,44 @@ export default function YouthIdsBoard({
 
 const DUTY_ASSIGNMENTS: ReadonlyArray<{ who: string; duties: string; lineBreak?: boolean }> = [
   { who: '인디', duties: '세금계산서 발행(~10일)' },
-  { who: '블루', duties: '공용메일관리' },
+  { who: '페리', duties: '채권 관리' },
+  { who: '블루', duties: '공용메일 관리' },
   { who: '윈터', duties: '커피머신 / 화분 관리' },
   { who: '리아', duties: '팩스 관리' },
-  { who: '찰리', duties: '우편함 확인, 파쇄기 관리, 비품관리 및 주문', lineBreak: true },
-  { who: '페리&찰리', duties: '세모리포트 보고서 검증(18일), 4대보험 수집(21~25일), TP백업' },
+  {
+    who: '찰리',
+    duties:
+      '우편함 확인, 파쇄기 관리, 비품관리 및 주문, 세모리포트 보고서 검증(18일), 4대보험 수집(21~25일), TP백업',
+    lineBreak: true,
+  },
 ];
 
 function DutyAssignments() {
   return (
-    <div className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] leading-snug text-slate-700">
-        <span className="font-bold text-amber-800">업무분장</span>
-        {DUTY_ASSIGNMENTS.map(d => (
-          <Fragment key={d.who}>
-            {d.lineBreak ? <span className="basis-full" aria-hidden /> : null}
-            <span className="whitespace-nowrap">
-              <b className="text-slate-900">{d.who}</b> : {d.duties}
-            </span>
-          </Fragment>
-        ))}
+    <div className="flex min-w-0 flex-1 items-center gap-2.5 px-1">
+      <span className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-amber-100 text-[10px] font-extrabold leading-tight text-amber-800">
+        <span>업무</span>
+        <span>분장</span>
+      </span>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-snug text-slate-700">
+        {DUTY_ASSIGNMENTS.map(d => {
+          const chip = MANAGER_COLOR_BY_NAME[d.who] ?? 'bg-slate-500';
+          return (
+            <Fragment key={d.who}>
+              {d.lineBreak ? <span className="basis-full" aria-hidden /> : null}
+              <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                <span
+                  className={`rounded px-1.5 py-px text-[10px] font-bold ${chip} ${
+                    isLightManagerChipColor(chip) ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
+                  {d.who}
+                </span>
+                {d.duties}
+              </span>
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );
