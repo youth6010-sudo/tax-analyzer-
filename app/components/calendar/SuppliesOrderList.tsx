@@ -58,7 +58,7 @@ export default function SuppliesOrderList() {
         <div>
           <h2 className="text-lg font-bold text-slate-900">비품 주문 목록</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            요청일과 다야 주문완료일(완료처리일)을 확인합니다. 캘린더에는 표시되지 않습니다.
+            요청일과 찰리 주문완료일(완료처리일)을 확인합니다. 캘린더에는 표시되지 않습니다.
           </p>
         </div>
         <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">

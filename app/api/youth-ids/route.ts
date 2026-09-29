@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { isDataViewer, isDeveloperAdmin, requireUser } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
 import { assertYouthIdsIpAllowed } from '@/lib/youthIdsAccess';
 import { loadYouthIdsAsync, parseYouthIdDoc, saveYouthIdsAsync } from '@/lib/youthIdsDb';
 import {
+  canEditAllYouthIds,
   mergeYouthIdDocForUser,
   visibleForUser,
   type YouthIdDoc,
@@ -43,23 +44,14 @@ export async function GET(request: NextRequest) {
 
     const doc = await loadYouthIdsAsync();
     const wantAll = request.nextUrl.searchParams.get('view') === 'all';
-    const canViewAll = isDataViewer(user);
-
-    if (wantAll && !canViewAll) {
-      return NextResponse.json(
-        { error: '전체보기는 권한이 있는 계정만 가능합니다.' },
-        { status: 403 },
-      );
-    }
-
-    const categories = wantAll && canViewAll ? doc.categories : visibleForUser(doc, user.name);
+    const categories = wantAll ? doc.categories : visibleForUser(doc, user.name);
 
     return NextResponse.json(
       {
         categories,
-        canViewAll,
-        canEditAll: isDeveloperAdmin(user),
-        view: wantAll && canViewAll ? 'all' : 'mine',
+        canViewAll: true,
+        canEditAll: canEditAllYouthIds(user.name),
+        view: wantAll ? 'all' : 'mine',
       },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
@@ -88,17 +80,18 @@ export async function PUT(request: NextRequest) {
     }
 
     const existing = await loadYouthIdsAsync();
-    const canEditAll = isDeveloperAdmin(user);
+    const canEditAll = canEditAllYouthIds(user.name);
+    const wantAll = request.nextUrl.searchParams.get('view') === 'all';
+    // 전체보기 화면에서 일반 직원이 저장하면 타인 항목이 incoming에 섞여 오므로, 본인·공용만 반영됨
     const merged = mergeYouthIdDocForUser(existing, incoming, user.name, canEditAll);
     const saved = await saveYouthIdsAsync(merged);
 
-    const wantAll = request.nextUrl.searchParams.get('view') === 'all' && isDataViewer(user);
     const categories = wantAll ? saved.categories : visibleForUser(saved, user.name);
 
     return NextResponse.json({
       ok: true,
       doc: { categories },
-      canViewAll: isDataViewer(user),
+      canViewAll: true,
       canEditAll,
     });
   } catch (e) {

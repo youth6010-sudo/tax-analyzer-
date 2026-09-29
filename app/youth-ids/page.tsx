@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import PortalPageShell, { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
-import { isDataViewer, isDeveloperAdmin, requireUserPage } from '@/lib/auth';
+import { requireUserPage } from '@/lib/auth';
 import { assertYouthIdsIpAllowed } from '@/lib/youthIdsAccess';
 import { isYouthIdsConfiguredAsync, loadYouthIdsAsync } from '@/lib/youthIdsDb';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
-import { visibleForUser } from '@/lib/youthIds';
+import { canEditAllYouthIds, visibleForUser } from '@/lib/youthIds';
 import YouthIdsBoard from './_components/YouthIdsBoard';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +32,7 @@ export default async function YouthIdsPage() {
   const doc = await loadYouthIdsAsync();
   const configured = await isYouthIdsConfiguredAsync();
   const staffNames = await listCalendarTeamMembers();
-  const canViewAll = isDataViewer(user);
-  const canEditAll = isDeveloperAdmin(user);
+  const canEditAll = canEditAllYouthIds(user.name);
   const categories = visibleForUser(doc, user.name);
 
   return (
@@ -41,9 +40,9 @@ export default async function YouthIdsPage() {
       <PortalPageHeader
         title="청년들 ID"
         description={
-          canViewAll
-            ? `회사 계좌 · 계정 · 자료 모음 — 기본은 ${user.name}님 계정+공용, '전체보기'로 모두 볼 수 있어요. 편집으로 항목 추가·수정 가능.`
-            : `회사 계좌 · 계정 · 자료 모음 — ${user.name}님 계정+공용만 표시됩니다. 편집으로 본인·공용 항목을 추가·수정할 수 있어요.`
+          canEditAll
+            ? `회사 계좌 · 계정 · 자료 모음 — 기본은 ${user.name}님 계정+공용, '전체보기'로 모두 볼 수 있어요. 편집으로 전체 항목 추가·수정 가능.`
+            : `회사 계좌 · 계정 · 자료 모음 — 기본은 ${user.name}님 계정+공용, '전체보기'로 모두 볼 수 있어요. 편집은 본인·공용 항목만 가능.`
         }
         icon="🔐"
       />
@@ -52,7 +51,7 @@ export default async function YouthIdsPage() {
         me={user.name}
         configured={configured}
         staffNames={staffNames}
-        canViewAll={canViewAll}
+        canViewAll
         canEditAll={canEditAll}
       />
     </PortalPageShell>

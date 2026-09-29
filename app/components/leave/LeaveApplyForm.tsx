@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import type { LeaveHalfSlot, LeaveKind } from '@/app/types/leave';
+import { LEAVE_DEFAULT_SUBSTITUTE_LABEL } from '@/lib/leaveSubstitute';
 
 /** 휴가 종류·기간으로 신청 내용 초안 생성 */
 export function buildLeaveBodyDraft(
@@ -153,7 +154,7 @@ export default function LeaveApplyForm({
     <div className="space-y-3">
       <p className="text-[11px] text-slate-500">
         팀원이면 팀장 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로 결재 요청됩니다.
-        업무대체자는 필수이며, 기본은 블루↔다야 · 페리↔윈터 · 리아↔찰리입니다. 기본 대체자도 같은
+        업무대체자는 필수이며, 기본은 {LEAVE_DEFAULT_SUBSTITUTE_LABEL}입니다. 기본 대체자도 같은
         기간 연차면 다른 사람을 지정합니다.
       </p>
       <div className="flex flex-wrap gap-3 text-xs font-semibold text-slate-700">

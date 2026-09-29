@@ -80,7 +80,7 @@ function ensureForcedAssignees(
   owner: string,
 ): string[] {
   if (isSuppliesOrderTaxType(taxType)) {
-    // 비품은 다야만 — 이전 구분(시스템개선 등)에서 남은 협업자 이어받지 않음
+    // 비품은 찰리만 — 이전 구분(시스템개선 등)에서 남은 협업자 이어받지 않음
     if (managerNamesMatch(owner, SUPPLIES_ORDER_ASSIGNEE)) return [];
     return [SUPPLIES_ORDER_ASSIGNEE];
   }
@@ -1009,7 +1009,7 @@ export default function PersonalChecklistAddForm({
             </div>
             <p className="mt-1 text-[10px] text-slate-400">
               {isSupplies
-                ? '비품 주문 요청은 다야만 협업자로 고정됩니다.'
+                ? '비품 주문 요청은 찰리만 협업자로 고정됩니다.'
                 : isImprovement
                   ? '시스템 개선 요청은 리아·찰리만 고정 협업자이며, 다야는 제외됩니다. 한 명이 처리하면 완료됩니다.'
                   : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}

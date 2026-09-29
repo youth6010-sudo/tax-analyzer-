@@ -269,6 +269,7 @@ export default function YouthIdsBoard({
             + 묶음
           </button>
         ) : null}
+        <DutyAssignments />
         <span className="ml-auto text-xs text-slate-500">
           {saving || loadingView ? (
             saving ? '저장 중…' : '불러오는 중…'
@@ -337,6 +338,30 @@ export default function YouthIdsBoard({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+const DUTY_ASSIGNMENTS: ReadonlyArray<{ who: string; duties: string }> = [
+  { who: '인디', duties: '세금계산서 발행(~10일)' },
+  { who: '블루', duties: '공용메일관리' },
+  { who: '윈터', duties: '커피머신 / 화분 관리' },
+  { who: '리아', duties: '팩스 관리' },
+  { who: '찰리', duties: '우편함 확인, 파쇄기 관리, 비품관리 및 주문' },
+  { who: '페리&찰리', duties: '세모리포트 보고서 검증(18일), 4대보험 수집(21~25일), TP백업' },
+];
+
+function DutyAssignments() {
+  return (
+    <div className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] leading-snug text-slate-700">
+        <span className="font-bold text-amber-800">업무분장</span>
+        {DUTY_ASSIGNMENTS.map(d => (
+          <span key={d.who} className="whitespace-nowrap">
+            <b className="text-slate-900">{d.who}</b> : {d.duties}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

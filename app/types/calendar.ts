@@ -15,7 +15,10 @@ export type ChecklistTaxType =
 export type StoredChecklistTaxType = Exclude<ChecklistTaxType, 'other' | 'leave'> | '';
 
 /** 비품주문요청 — 기본 협업자 */
-export const SUPPLIES_ORDER_ASSIGNEE = '다야';
+export const SUPPLIES_ORDER_ASSIGNEE = '찰리';
+
+/** 이전 비품 담당 — 기존 요청의 주문완료일 조회용 */
+export const SUPPLIES_ORDER_LEGACY_ASSIGNEES = ['다야'] as const;
 
 /** 업무개선요청 — 기본 협업자 */
 export const IMPROVEMENT_REQUEST_ASSIGNEES = ['리아', '찰리'] as const;
@@ -105,7 +108,7 @@ export type PersonalChecklistDto = {
 export type SuppliesOrderDto = PersonalChecklistDto & {
   /** 요청일 (= createdAt) */
   requestedAt: string;
-  /** 다야 완료처리일 (= 주문일) */
+  /** 비품 담당 완료처리일 (= 주문일) */
   orderedAt: string | null;
 };
 

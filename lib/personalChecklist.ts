@@ -21,6 +21,7 @@ import {
   isSuppliesOrderTaxType,
   normalizeChecklistTaxType,
   SUPPLIES_ORDER_ASSIGNEE,
+  SUPPLIES_ORDER_LEGACY_ASSIGNEES,
 } from '@/app/types/calendar';
 import { syncChecklistToClientNotes, unsyncChecklistFromClientNotes } from '@/lib/personalChecklistSync';
 import { getClientById } from '@/lib/clientsDb';
@@ -58,9 +59,9 @@ function assigneesForTaxType(
     return [SUPPLIES_ORDER_ASSIGNEE];
   }
   let base = normalizeAssignees(names, ownerName);
-  // 시스템 개선: 다야는 협업자에서 제외 (비품 담당과 혼동 방지)
+  // 시스템 개선: 다야는 협업자에서 제외
   if (isImprovementRequestTaxType(taxType)) {
-    base = base.filter(n => !managerNamesMatch(n, SUPPLIES_ORDER_ASSIGNEE));
+    base = base.filter(n => !managerNamesMatch(n, '다야'));
   }
   const forced = forcedAssigneesForTaxType(taxType);
   if (forced.length === 0) return base;
@@ -83,7 +84,7 @@ function participantsOf(ownerName: string, assigneeNames: string[]): string[] {
 }
 
 /** 비품·업무개선: 협업자만 완료 체크. 시스템개선은 리아·찰리 항상(요청자가 리아여도 포함).
- *  비품은 요청자가 다야여도 다야가 항상 처리 담당 */
+ *  비품은 요청자가 찰리여도 찰리가 항상 처리 담당 */
 function checkoffParticipants(
   taxType: ChecklistTaxType,
   ownerName: string,
@@ -460,15 +461,14 @@ export async function listSuppliesOrders(
 
   return enriched.map(item => {
     const details = detailMap.get(item.id) ?? {};
-    const daya = details[SUPPLIES_ORDER_ASSIGNEE]
-      ?? Object.entries(details).find(([n]) => managerNamesMatch(n, SUPPLIES_ORDER_ASSIGNEE))?.[1];
-    let orderedAt =
-      daya?.completed && daya.completedAt
-        ? daya.completedAt
-        : null;
+    const handlers = [SUPPLIES_ORDER_ASSIGNEE, ...SUPPLIES_ORDER_LEGACY_ASSIGNEES];
+    const done = Object.entries(details).find(
+      ([n, d]) => d?.completed && d.completedAt && handlers.some(h => managerNamesMatch(n, h)),
+    )?.[1];
+    let orderedAt = done?.completedAt ?? null;
     if (
       !orderedAt
-      && managerNamesMatch(item.ownerName, SUPPLIES_ORDER_ASSIGNEE)
+      && handlers.some(h => managerNamesMatch(item.ownerName, h))
       && (item.myCheckoff ?? item.completed)
     ) {
       orderedAt = item.updatedAt;

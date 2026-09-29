@@ -10,8 +10,9 @@
  *  - 로그인 닉네임(블루/다야/리아/윈터/페리/인디/찰리) 기준
  *    · owner 없음(공용/담당없음) → 전원 표시
  *    · owner === 내 닉네임 → 표시
- *    · owner === 다른 사람 → 숨김
+ *    · owner === 다른 사람 → 숨김 ('전체보기'로 전원 조회 가능)
  */
+import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 export type YouthIdField = {
   label: string;
@@ -53,6 +54,13 @@ export function loadYouthIds(): YouthIdDoc {
   } catch {
     return EMPTY;
   }
+}
+
+/** 전 항목 수정 권한 */
+export const YOUTH_IDS_EDITORS = ['리아', '찰리', '페리', '인디'] as const;
+
+export function canEditAllYouthIds(nickname: string): boolean {
+  return YOUTH_IDS_EDITORS.some(n => managerNamesMatch(nickname, n));
 }
 
 function isVisibleEntry(e: YouthIdEntry, nickname: string): boolean {

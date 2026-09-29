@@ -13,6 +13,7 @@ import {
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { canReviewLeaveRequest, canDeleteCancelledLeave, canApplyLeave } from '@/lib/leaveAccess';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
+import { LEAVE_DEFAULT_SUBSTITUTE_LABEL } from '@/lib/leaveSubstitute';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 type Tab = 'balances' | 'mine';
 
@@ -158,7 +159,7 @@ export default function LeavePageClient() {
             <h1 className="text-xl font-bold text-slate-900">휴가관리</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               팀원(찰리)은 팀장(리아) 승인 후 인디 최종 결재로 올라갑니다. 그 외는 인디에게 바로
-              결재됩니다. 휴가 신청 시 업무대체자 지정이 필수입니다(블루↔다야, 페리↔윈터, 리아↔찰리).
+              결재됩니다. 휴가 신청 시 업무대체자 지정이 필수입니다({LEAVE_DEFAULT_SUBSTITUTE_LABEL}).
               인디는 결재권자로 연차 잔고·신청 대상이 아닙니다. 최종 승인 시 연차 사용·캘린더 반영.
               본인 연차 잔고는 휴가현황 상단에 표시되고, 전직원 연차 잔고·수정은 인디·페리만 가능합니다.
               결재 알림·당일 업무대체는 홈 To Do의 휴가 결재에 표시됩니다.
