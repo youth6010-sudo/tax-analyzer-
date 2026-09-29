@@ -5,6 +5,7 @@ import { requireUserPage } from '@/lib/auth';
 import { assertYouthIdsIpAllowed } from '@/lib/youthIdsAccess';
 import { isYouthIdsConfiguredAsync, loadYouthIdsAsync } from '@/lib/youthIdsDb';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 import { canEditAllYouthIds, visibleForUser } from '@/lib/youthIds';
 import YouthIdsBoard from './_components/YouthIdsBoard';
 
@@ -31,7 +32,7 @@ export default async function YouthIdsPage() {
   }
   const doc = await loadYouthIdsAsync();
   const configured = await isYouthIdsConfiguredAsync();
-  const staffNames = await listCalendarTeamMembers();
+  const staffNames = (await listCalendarTeamMembers()).filter(n => !isRetiredStaff(n));
   const canEditAll = canEditAllYouthIds(user.name);
   const categories = visibleForUser(doc, user.name);
 

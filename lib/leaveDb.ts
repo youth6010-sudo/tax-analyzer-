@@ -25,6 +25,7 @@ import {
   datesOverlap,
   defaultLeaveSubstituteNick,
 } from '@/lib/leaveSubstitute';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 
 function parseDays(raw: string | number | null | undefined): number {
   const n = typeof raw === 'number' ? raw : Number(String(raw ?? '0').trim());
@@ -631,7 +632,8 @@ export async function getLeaveSubstituteOptions(
     n =>
       n &&
       !managerNamesMatch(n, applicantName) &&
-      !managerNamesMatch(n, '인디'),
+      !managerNamesMatch(n, '인디') &&
+      !isRetiredStaff(n),
   );
 
   const defaultNick = defaultLeaveSubstituteNick(applicantName);

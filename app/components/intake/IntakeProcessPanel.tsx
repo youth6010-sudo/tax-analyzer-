@@ -18,6 +18,7 @@ import {
   type ProcessRow,
 } from './intakeUtils';
 import BlueholeCaseLink from './BlueholeCaseLink';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 import { canChangeAssignedManager } from '@/lib/intakeManagerGate';
 import { fmt } from '@/app/lib/taxAmountFmt';
 
@@ -221,7 +222,7 @@ export default function IntakeProcessPanel({
         if (cancelled || !data?.users) return;
         const names = data.users
           .map(u => (u.name ?? '').trim())
-          .filter(Boolean);
+          .filter(n => n && !isRetiredStaff(n));
         setTeamNames([...new Set(names)]);
       })
       .catch(() => {});

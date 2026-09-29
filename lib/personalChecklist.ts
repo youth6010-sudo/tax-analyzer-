@@ -34,6 +34,7 @@ import {
 } from '@/lib/personalChecklistCheckoffs';
 import { createCollaborationInviteNotifications, createCompletionNotification, listUnreadPersonalChecklistNotifications, markItemNotificationsRead } from '@/lib/personalChecklistNotifications';
 import { listCalendarTeamMembers } from '@/lib/calendarTeam';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 import { getManagerMatchNames, managerNamesMatch, resolveCanonicalMemberName } from '@/app/utils/managerMatch';
 
 function normalizeAssignees(names: string[] | undefined | null, ownerName: string): string[] {
@@ -58,11 +59,7 @@ function assigneesForTaxType(
     if (managerNamesMatch(ownerName, SUPPLIES_ORDER_ASSIGNEE)) return [];
     return [SUPPLIES_ORDER_ASSIGNEE];
   }
-  let base = normalizeAssignees(names, ownerName);
-  // 시스템 개선: 다야는 협업자에서 제외
-  if (isImprovementRequestTaxType(taxType)) {
-    base = base.filter(n => !managerNamesMatch(n, '다야'));
-  }
+  const base = normalizeAssignees(names, ownerName).filter(n => !isRetiredStaff(n));
   const forced = forcedAssigneesForTaxType(taxType);
   if (forced.length === 0) return base;
   const out = [...base];

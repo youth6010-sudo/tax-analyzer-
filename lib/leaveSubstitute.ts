@@ -2,19 +2,18 @@ import { managerNamesMatch } from '@/app/utils/managerMatch';
 
 /**
  * 기본 업무대체자 (신청자 → 대체자).
- * 블루→리아, 리아→블루, 찰리→리아, 다야→블루, 페리↔윈터
+ * 블루→리아, 리아→블루, 찰리→리아, 페리↔윈터
  */
 export const LEAVE_DEFAULT_SUBSTITUTES: ReadonlyArray<readonly [string, string]> = [
   ['블루', '리아'],
   ['리아', '블루'],
   ['찰리', '리아'],
-  ['다야', '블루'],
   ['페리', '윈터'],
   ['윈터', '페리'],
 ] as const;
 
 /** 안내 문구용 */
-export const LEAVE_DEFAULT_SUBSTITUTE_LABEL = '블루↔리아 · 찰리→리아 · 다야→블루 · 페리↔윈터';
+export const LEAVE_DEFAULT_SUBSTITUTE_LABEL = '블루↔리아 · 찰리→리아 · 페리↔윈터';
 
 /** 신청자의 기본 업무대체자 닉네임 (없으면 null) */
 export function defaultLeaveSubstituteNick(applicantName: string): string | null {

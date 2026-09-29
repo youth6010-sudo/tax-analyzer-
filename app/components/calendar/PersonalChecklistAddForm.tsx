@@ -22,6 +22,7 @@ import {
 import LeaveApplyForm from '@/app/components/leave/LeaveApplyForm';
 import { filingTargets, type FilingTaxId } from '@/app/utils/filingCheck';
 import { MANAGER_DISPLAY_ORDER } from '@/app/utils/clientsGrouping';
+import { isRetiredStaff } from '@/lib/retiredStaff';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import ScopedClientSearch from '@/app/components/calendar/ScopedClientSearch';
 import { useIsMasterUser } from '@/app/utils/useIsMasterUser';
@@ -238,8 +239,7 @@ export default function PersonalChecklistAddForm({
     const owner = editItem?.ownerName || currentUser;
     return MANAGER_DISPLAY_ORDER.filter(n => {
       if (owner && managerNamesMatch(n, owner)) return false;
-      // 시스템 개선: 다야는 협업자 선택에서 제외
-      if (taxType === 'improvement' && managerNamesMatch(n, '다야')) return false;
+      if (isRetiredStaff(n)) return false;
       return true;
     });
   }, [editItem?.ownerName, currentUser, taxType]);
@@ -1011,7 +1011,7 @@ export default function PersonalChecklistAddForm({
               {isSupplies
                 ? '비품 주문 요청은 찰리만 협업자로 고정됩니다.'
                 : isImprovement
-                  ? '시스템 개선 요청은 리아·찰리만 고정 협업자이며, 다야는 제외됩니다. 한 명이 처리하면 완료됩니다.'
+                  ? '시스템 개선 요청은 리아·찰리만 고정 협업자입니다. 한 명이 처리하면 완료됩니다.'
                   : '선택한 협업자 개인 체크리스트에도 같은 항목이 표시됩니다.'}
             </p>
           </FormRow>
