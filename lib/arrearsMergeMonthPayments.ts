@@ -193,7 +193,7 @@ function attachChamwolPayments<
         if (!isMonthChargeRow(ch)) continue;
         if (Math.round(ch.amount) !== payAmt) continue;
         const ym = chargeYearMonth(ch.description || '');
-        if (ym && ym.m === want.m) return ci;
+        if (ym && ym.m === want.m && Math.abs(ym.y - want.y) <= 1) return ci;
       }
       return -1;
     }

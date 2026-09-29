@@ -33,7 +33,6 @@ import {
 import {
   ARREARS_LETTER_CONTENT_FROZEN_CODES,
   ARREARS_LETTER_PROTECTED_CODES,
-  ARREARS_SKIP_CLIENT_DETAIL_CODES,
 } from '../lib/arrearsBalanceLock.ts';
 
 const db = getDb();
@@ -115,7 +114,6 @@ for (const e of all) {
 const alwaysFrozen = new Set([
   ...ARREARS_LETTER_CONTENT_FROZEN_CODES,
   ...ARREARS_LETTER_PROTECTED_CODES,
-  ...ARREARS_SKIP_CLIENT_DETAIL_CODES,
 ]);
 for (const code of alwaysFrozen) {
   if (!complexCodes.includes(code)) complexCodes.push(code);

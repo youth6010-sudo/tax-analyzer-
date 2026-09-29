@@ -4,7 +4,7 @@ import { arrearsEntries } from '@/db/schema';
 import {
   isArrearsBalanceLocked,
   isArrearsLetterProtected,
-  isArrearsSkipClientDetail,
+  isArrearsBookkeepingDeferred,
   isArrearsLetterContentFrozen,
 } from '@/lib/arrearsBalanceLock';
 import { classifyArrearsLetterComplexity } from '@/lib/arrearsLetterComplexity';
@@ -34,8 +34,9 @@ import { isInactiveArrearsCode } from '@/lib/arrearsInactiveSeed';
 import { isIndieManagerName } from '@/lib/arrearsImportFilenames';
 import { listLetterLines, replaceLetterLines } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
-import { letterBalanceFromLines } from '@/app/types/arrears';
+import { formatArrearsPaidDateKo, letterBalanceFromLines } from '@/app/types/arrears';
 import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
+import { mergeMonthlyBookkeepingPaymentRows } from '@/lib/arrearsMergeMonthPayments';
 
 export type StatusImportPreview = {
   preview: true;
@@ -247,18 +248,23 @@ export async function applyClientDetailImport(
   buffer: Buffer,
   actorName: string,
   _cutoffOverride?: string,
+  dryRun?: (externalCode: string, lines: ArrearsLetterLineInput[]) => void,
 ): Promise<ClientDetailImportResult> {
   const cutoffDate = ARREARS_FROZEN_LETTER_CUTOFF;
-  await writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
+  if (!dryRun) await writeArrearsImportConfig({ letterCutoffDate: cutoffDate });
 
   // 거래처별 말잔 저장 — 현황표와 같으면 목록 「불일치」제외
   const endings = parseArrearsClientDetailEndings(buffer);
-  await writeArrearsDetailEndings(endings);
+  if (!dryRun) await writeArrearsDetailEndings(endings);
+  const saveLines = async (entryId: string, code: string, lines: ArrearsLetterLineInput[]) => {
+    if (dryRun) dryRun(code, lines);
+    else await replaceLetterLines(entryId, actorName, lines, { syncBalance: false });
+  };
 
-  const txs = parseArrearsClientDetailWorkbook(buffer).filter(t =>
-    isAfterCutoff(t.eventDate, cutoffDate),
-  );
+  const allTxs = parseArrearsClientDetailWorkbook(buffer);
+  const txs = allTxs.filter(t => isAfterCutoff(t.eventDate, cutoffDate));
   const byCode = groupTxByCode(txs);
+  const allByCode = groupTxByCode(allTxs);
   // cutoff 이후 거래가 없어도 시트에 있는 업체는 방문 → 임의 추가된 7·8월 공문 줄 제거
   for (const code of Object.keys(endings)) {
     if (!byCode.has(code)) byCode.set(code, []);
@@ -272,11 +278,7 @@ export async function applyClientDetailImport(
   let linesAdded = 0;
 
   for (const [code, codeTxs] of byCode) {
-    if (
-      isInactiveArrearsCode(code) ||
-      isArrearsLetterProtected(code) ||
-      isArrearsSkipClientDetail(code)
-    ) {
+    if (isInactiveArrearsCode(code) || isArrearsLetterProtected(code)) {
       skippedInactive += 1;
       continue;
     }
@@ -299,6 +301,20 @@ export async function applyClientDetailImport(
 
     const existing = await listLetterLines(entry.id);
     const complexity = classifyArrearsLetterComplexity(existing, entry.balance);
+    // 미수 없음·선납(잔액 ≤ 0)이고 공문도 비어 있으면 입금 줄만 생기지 않게 건드리지 않음
+    if (complexity === 'empty' && Math.round(entry.balance) <= 0) continue;
+
+    // 기장료만(simple_bk) + 신규 거래: 기존 줄에 거래를 모두 붙이고 입금을 전월 기장료에 붙인 뒤,
+    // 중간에 한 달이라도 미납이면(수헤어룸형) 전부 남기고, 최근 월만 미납이면 미납 줄만 남겨 롤링.
+    if (complexity === 'simple_bk' && codeTxs.length > 0) {
+      const rolled = rollSimpleBookkeepingLetter(existing, codeTxs, cutoffDate);
+      if (rolled) {
+        await saveLines(entry.id, code, rolled.lines);
+        applied += 1;
+        linesAdded += rolled.added;
+      }
+      continue;
+    }
 
     // 기장료만(simple_bk): 9월~ 거래가 있으면 기존 월기장·회수를 버리고 파일로 롤링 재구성
     // 복잡미수: 8월까지 고정, 9월~만 추가/교체
@@ -307,11 +323,7 @@ export async function applyClientDetailImport(
         return false;
       }
       if (l.source === 'manual') return true;
-      if (complexity === 'simple_bk') {
-        // 이번 업로드 mid에 9월~ 거래가 있을 때만 롤링(기존 월 줄 제거)
-        if (codeTxs.length > 0) return false;
-        return true;
-      }
+      if (complexity === 'simple_bk') return true;
       // 9월~ 월별 기장만 제거하고, 8월까지(letter·ledger 포함)는 절대 지우지 않음
       if (isPostCutoffLetterMonth(l.description, cutoffDate)) return false;
       return true;
@@ -340,6 +352,7 @@ export async function applyClientDetailImport(
     // 단, 기장 미납이 남아 있으면(훈테크·도리형) 매출·입금 쌍을 생략하지 않음
     // 기장료만 롤링(simple_bk + 신규 tx)은 생략하지 않음
     const hasUnpaidBk = hasUnpaidMonthBookkeepingOnLetter(keptFromExisting);
+    const bkDeferred = complexity !== 'simple_bk' && isArrearsBookkeepingDeferred(code);
     if (
       complexity !== 'simple_bk' &&
       endingMatchesStatus &&
@@ -347,7 +360,7 @@ export async function applyClientDetailImport(
       !hasUnpaidBk
     ) {
       if (removedCount > 0) {
-        await replaceLetterLines(entry.id, actorName, base, { syncBalance: false });
+        await saveLines(entry.id, code, base);
         applied += 1;
       }
       continue;
@@ -357,14 +370,26 @@ export async function applyClientDetailImport(
     const additions: ArrearsLetterLineInput[] = [];
 
     // 월기장 청구+동일금액 입금 세트는 즉시회수로 보고 생략.
-    // 단, 공문에 기장료 미납이 한 달이라도 있으면 이후 매출·회수는 모두 남김 (훈테크형).
-    const txs = hasUnpaidBk
-      ? codeTxs
-      : skipImmediateMonthlyRecoveryTxs(codeTxs);
+    // 단, 기장료 미납이 한 달이라도 있으면(공문 또는 이번 거래) 이후 매출·회수는 모두 남김 (훈테크·수헤어룸형).
+    // 내용 동결 4곳: 기장료와 같은 금액의 입금·그 청구는 넣지 않고 차이로 둠. 그 외 청구·입금만 추가.
+    const skipped = skipImmediateMonthlyRecoveryTxs(codeTxs);
+    const unpaidBkInTxs = skipped.some(
+      t => t.debit > 0 && /\d{1,2}\s*월|기장/.test(String(t.ledgerDescription || '')),
+    );
+    const txs = bkDeferred
+      ? dropDeferredBookkeepingTxs(
+          codeTxs,
+          bookkeepingFeeAmounts(allByCode.get(code) ?? [], keptFromExisting),
+        )
+      : hasUnpaidBk || unpaidBkInTxs
+        ? codeTxs
+        : skipped;
 
+    const existingPaid = existingPaymentCounter(base);
     for (const tx of txs) {
       const line = clientDetailTxToLineInput(tx, letterDescs);
       if (!line) continue;
+      if (takeExistingPayment(existingPaid, line)) continue;
       let key = lineDedupKey(line);
       // 부가세신고 동액 여러 건이 같은 적요로 뭉개지지 않게 건수 유지
       if (existingKeys.has(key) && /부가세/.test(line.description)) {
@@ -387,14 +412,12 @@ export async function applyClientDetailImport(
 
     if (!additions.length && removedCount === 0) continue;
 
-    await replaceLetterLines(entry.id, actorName, [...base, ...additions], {
-      syncBalance: false,
-    });
+    await saveLines(entry.id, code, [...base, ...additions]);
     applied += 1;
     linesAdded += additions.length;
   }
 
-  const overageStripped = await stripOverageUnpaidMonthLines(actorName);
+  const overageStripped = dryRun ? 0 : await stripOverageUnpaidMonthLines(actorName);
 
   return {
     preview: false,
@@ -427,6 +450,93 @@ export { isArrearsBalanceLocked };
 
 /** 공문 letter 줄 — 월 기장료 청구(조정·성실·부가세·기타 제외) */
 export { isMonthBookkeepingChargeLine } from '@/lib/arrearsLetterComplexity';
+
+function paymentKey(paidAmount: number, paidDate: string | null | undefined): string {
+  return `${Math.round(paidAmount)}|${formatArrearsPaidDateKo(String(paidDate || '')).replace(/\s+/g, '')}`;
+}
+
+/** 공문에 이미 있는 입금(기장료 줄 옆에 붙은 것 포함) — 금액·입금일 기준 건수 */
+export function existingPaymentCounter(
+  lines: Array<{ paidAmount?: number | null; paidDate?: string | null }>,
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of lines) {
+    if (Math.round(l.paidAmount || 0) <= 0) continue;
+    const k = paymentKey(l.paidAmount || 0, l.paidDate);
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
+/** 입금 줄이 공문에 이미 있으면 true (건수 차감) */
+export function takeExistingPayment(
+  counter: Map<string, number>,
+  line: { amount: number; paidAmount?: number; paidDate?: string },
+): boolean {
+  if (Math.round(line.amount) !== 0 || Math.round(line.paidAmount || 0) <= 0) return false;
+  const k = paymentKey(line.paidAmount || 0, line.paidDate);
+  const n = counter.get(k) ?? 0;
+  if (n <= 0) return false;
+  counter.set(k, n - 1);
+  return true;
+}
+
+type ExistingLetterLine = {
+  description: string;
+  amount: number;
+  paidAmount?: number | null;
+  paidDate?: string | null;
+  source?: string | null;
+};
+
+export function rollSimpleBookkeepingLetter(
+  existing: ExistingLetterLine[],
+  codeTxs: ParsedClientDetailTx[],
+  cutoffDate: string,
+): { lines: ArrearsLetterLineInput[]; added: number } | null {
+  const base: ArrearsLetterLineInput[] = existing
+    .filter(l => !/현황맞춤|말잔맞춤/.test(String(l.description || '').replace(/\s+/g, '')))
+    .filter(l => l.source === 'manual' || !isPostCutoffLetterMonth(l.description, cutoffDate))
+    .map(l => ({
+      description: l.description,
+      amount: l.amount,
+      paidAmount: Math.round(l.paidAmount || 0),
+      paidDate: l.paidDate || '',
+      source: l.source === 'manual' ? 'manual' : 'letter',
+    }));
+  const keys = new Set(base.map(lineDedupKey));
+  const paid = existingPaymentCounter(base);
+  const descs = base.map(l => l.description);
+  const additions: ArrearsLetterLineInput[] = [];
+  for (const tx of codeTxs) {
+    const line = clientDetailTxToLineInput(tx, descs);
+    if (!line) continue;
+    if (takeExistingPayment(paid, line)) continue;
+    const key = lineDedupKey(line);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    descs.push(line.description);
+    additions.push(line);
+  }
+  if (!additions.length && base.length === existing.length) return null;
+
+  const merged = mergeMonthlyBookkeepingPaymentRows(
+    [...base, ...additions].map(l => ({
+      ...l,
+      paidAmount: Math.round(l.paidAmount || 0),
+      paidDate: l.paidDate || '',
+    })),
+  );
+  if (classifyArrearsLetterComplexity(merged) === 'complex') {
+    return { lines: merged, added: additions.length };
+  }
+  const open = merged.filter(
+    l =>
+      l.source === 'manual' ||
+      Math.round(l.amount) - Math.round(l.paidAmount || 0) !== 0,
+  );
+  return { lines: open, added: additions.length };
+}
 
 /** 공문에 기장료 미납이 한 달이라도 있는지 */
 export function hasUnpaidMonthBookkeepingOnLetter(
@@ -466,7 +576,6 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
   for (const e of entries) {
     if (
       isArrearsLetterProtected(e.externalCode) ||
-      isArrearsSkipClientDetail(e.externalCode) ||
       isArrearsLetterContentFrozen(e.externalCode)
     ) {
       continue;
@@ -574,6 +683,35 @@ export function skipImmediateMonthlyRecoveryTxs<
     }
   }
   return txs.filter((_, i) => !drop.has(i));
+}
+
+/** 업체 월 기장료 금액들 — 거래처별 상세(전체 기간)의 「N월 기장」청구 + 공문 월기장 줄 */
+export function bookkeepingFeeAmounts(
+  allCodeTxs: Array<{ debit: number; ledgerDescription: string }>,
+  letterLines: Array<{ description: string; amount: number }>,
+): Set<number> {
+  const fees = new Set<number>();
+  for (const t of allCodeTxs) {
+    if (t.debit > 0 && /\d{1,2}\s*월\s*기장/.test(String(t.ledgerDescription || ''))) {
+      fees.add(Math.round(t.debit));
+    }
+  }
+  for (const l of letterLines) {
+    if (isMonthBookkeepingChargeLine(l.description, l.amount)) fees.add(Math.round(l.amount));
+  }
+  return fees;
+}
+
+/**
+ * 동결 목록 업체용: 기장료 청구+입금 세트는 빼고, 남은 입금 중 기장료 금액과 같은 것(차월 입금)도 뺌.
+ * 입금이 아직 없는 기장료 청구, 기장료 외 청구·입금은 남김.
+ */
+export function dropDeferredBookkeepingTxs<
+  T extends { debit: number; credit: number; ledgerDescription: string; eventDate: string },
+>(txs: T[], feeAmounts: Set<number>): T[] {
+  return skipImmediateMonthlyRecoveryTxs(txs).filter(
+    t => !(t.credit > 0 && t.debit === 0 && feeAmounts.has(Math.round(t.credit))),
+  );
 }
 
 /** 공문 letter 줄 중 cutoff 달보다 이후 월별 기장료 — 거래처별 상세로 대체.

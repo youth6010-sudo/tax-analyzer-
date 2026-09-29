@@ -97,10 +97,29 @@ export function hasNonBookkeepingArrearsContent(lines: LineLike[]): boolean {
   return false;
 }
 
+/** 현재 사이클의 월 기장·기타 청구 중 가장 늦은 달 (YYYY-MM) */
+function latestChargeMonthKey(lines: LineLike[]): string | null {
+  let latest: string | null = null;
+  for (const l of linesForCurrentLetterCycle(withPaid(lines))) {
+    const bk =
+      isMonthBookkeepingChargeLine(l.description, l.amount) ||
+      isMonthOtherFeeChargeLine(l.description, l.amount);
+    if (!bk) continue;
+    const m = norm(l.description).match(/(20\d{2}|\d{2})년(?:기타수수료)?(\d{1,2})월/);
+    if (!m) continue;
+    let y = Number(m[1]);
+    if (y < 100) y += 2000;
+    const key = `${y}-${String(Number(m[2])).padStart(2, '0')}`;
+    if (!latest || key > latest) latest = key;
+  }
+  return latest;
+}
+
 /**
  * - empty: 줄 없음
- * - simple_bk: 기장·기타수수료만 미수, 미납 월 ≤ 1 → 업로드 시 월 롤링 허용
- * - complex: 2개월↑ 기장 밀림 또는 조정료 등 포함 → 고정 + 9월~만 추가
+ * - simple_bk: 기장·기타수수료만 미수, 미납 월 ≤ 1이고 그 달이 가장 최근 청구월 → 업로드 시 월 롤링 허용
+ * - complex: 2개월↑ 기장 밀림, 조정료 등 포함, 또는 미납 월 뒤에 청구가 더 있음(그 달부터 미수 시작)
+ *   → 고정 + 9월~만 추가
  */
 export function classifyArrearsLetterComplexity(
   lines: LineLike[],
@@ -110,6 +129,9 @@ export function classifyArrearsLetterComplexity(
   if (hasNonBookkeepingArrearsContent(lines)) return 'complex';
   const months = unpaidMonthKeys(lines);
   if (months.size >= 2) return 'complex';
+  const unpaid = [...months][0];
+  const latest = latestChargeMonthKey(lines);
+  if (unpaid && latest && unpaid < latest) return 'complex';
   const cycle = linesForCurrentLetterCycle(withPaid(lines));
   const onlyBkPay = cycle.every(l => {
     if (isPaymentLikeLine(l)) return true;
