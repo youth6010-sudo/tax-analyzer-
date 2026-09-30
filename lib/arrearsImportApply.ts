@@ -195,7 +195,8 @@ export async function applyStatusImport(
   await syncArrearsManagersFromLinkedClients();
 
   const totalBalance = parsed.rows.reduce((s, r) => s + r.balance, 0);
-  const overageStripped = await stripOverageUnpaidMonthLines(actorName);
+  // 과다 미납 월 줄 정리는 거래처별 현황 반영 뒤에만 — 여기서 먼저 지우면 차월 입금이 붙을 줄이 사라짐
+  const overageStripped = 0;
 
   return {
     preview: false,
