@@ -422,6 +422,7 @@ export async function applyClientDetailImport(
   }
 
   const overageStripped = dryRun ? 0 : await stripOverageUnpaidMonthLines(actorName);
+  if (!dryRun) await clearSettledLetters(actorName);
 
   return {
     preview: false,
@@ -638,6 +639,43 @@ export async function stripOverageUnpaidMonthLines(actorName: string): Promise<n
   }
 
   return strippedEntries;
+}
+
+/**
+ * 잔액 0원이고 공문 잔액도 0원이면 공문 줄을 비움 — 이후 새로 생기는 미수부터 다시 공문에 쌓임.
+ * 오프라인·하나비(수동 공문)는 제외.
+ */
+export async function clearSettledLetters(
+  actorName: string,
+  dryRun = false,
+): Promise<Array<{ externalCode: string; companyName: string; lines: ArrearsLetterLineInput[] }>> {
+  const db = getDb();
+  const entries = await db.select().from(arrearsEntries);
+  const cleared: Array<{ externalCode: string; companyName: string; lines: ArrearsLetterLineInput[] }> = [];
+
+  for (const e of entries) {
+    if (isArrearsLetterProtected(e.externalCode)) continue;
+    if (Math.round(e.balance) !== 0) continue;
+    const lines = await listLetterLines(e.id);
+    if (!lines.length) continue;
+    if (letterOpenForStatusMatch(e.externalCode, lines) !== 0) continue;
+    cleared.push({
+      externalCode: e.externalCode,
+      companyName: e.companyName,
+      lines: lines.map(l => ({
+        description: l.description,
+        amount: l.amount,
+        paidAmount: Math.round(l.paidAmount || 0),
+        paidDate: l.paidDate || '',
+        source: l.source as ArrearsLetterLineInput['source'],
+      })),
+    });
+    if (!dryRun) {
+      await replaceLetterLines(e.id, actorName || 'clear-settled', [], { syncBalance: false });
+    }
+  }
+
+  return cleared;
 }
 
 /**

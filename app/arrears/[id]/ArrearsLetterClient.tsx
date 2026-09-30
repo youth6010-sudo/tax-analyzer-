@@ -98,7 +98,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     Array<{ entryId: string; externalCode: string; companyName: string; balance: number; managerName: string }>
   >([]);
   const [linkLoaded, setLinkLoaded] = useState(false);
-  const [exportBusy, setExportBusy] = useState<'pdf' | 'xlsx' | 'png' | ''>('');
+  const [exportBusy, setExportBusy] = useState<'pdf' | 'xlsx' | 'png' | 'print' | ''>('');
 
   const needsLedgerLink = !!item?.externalCode.startsWith('letter:');
 
@@ -391,8 +391,7 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
         }),
       );
 
-  /** 브라우저 인쇄 헤더(출력일시·B-System 제목) 제거를 위해 제목을 비움 */
-  const handlePrint = useCallback(() => {
+  const browserPrint = useCallback(() => {
     const prev = document.title;
     document.title = ' ';
     const restore = () => {
@@ -404,6 +403,37 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
     // afterprint 미지원 환경 대비
     setTimeout(restore, 1500);
   }, []);
+
+  /** PDF 저장과 같은 화면 캡처 PDF를 인쇄 — 화면 그대로, 브라우저 머리글(출력일시·주소) 없음 */
+  const handlePrint = useCallback(async () => {
+    const el = document.querySelector('.arrears-letter') as HTMLElement | null;
+    if (!el) {
+      browserPrint();
+      return;
+    }
+    setExportBusy('print');
+    setError('');
+    try {
+      const blob = await buildArrearsLetterPdfBlob(el);
+      const url = URL.createObjectURL(blob);
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      frame.src = url;
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        setTimeout(() => {
+          frame.remove();
+          URL.revokeObjectURL(url);
+        }, 60_000);
+      };
+      document.body.appendChild(frame);
+    } catch {
+      browserPrint();
+    } finally {
+      setExportBusy('');
+    }
+  }, [browserPrint]);
 
   const handleDownloadPdf = useCallback(async () => {
     const el = document.querySelector('.arrears-letter') as HTMLElement | null;
@@ -578,8 +608,13 @@ export default function ArrearsLetterClient({ id }: { id: string }) {
                     수정
                   </button>
                 ) : null}
-                <button type="button" className={portalBtnPrimary} onClick={handlePrint}>
-                  인쇄
+                <button
+                  type="button"
+                  className={portalBtnPrimary}
+                  disabled={!!exportBusy}
+                  onClick={() => void handlePrint()}
+                >
+                  {exportBusy === 'print' ? '인쇄 준비…' : '인쇄'}
                 </button>
                 <button
                   type="button"

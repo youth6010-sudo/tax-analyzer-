@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PortalPageShell from '@/app/components/portal/PortalPageShell';
@@ -12,6 +12,7 @@ import {
   portalMain,
 } from '@/app/components/portal/uiClasses';
 import CenterModal from '@/app/components/portal/CenterModal';
+import ManagerMultiFilter from '@/app/components/portal/ManagerMultiFilter';
 import {
   ARREARS_CHURN_STATUSES,
   ARREARS_MANAGER_NAMES,
@@ -111,7 +112,7 @@ function toDateInputValue(s: string): string {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
 }
 
-export default function ArrearsPageClient() {
+export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
   const router = useRouter();
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
   const [totals, setTotals] = useState<ArrearsManagerTotal[]>([]);
@@ -149,7 +150,7 @@ export default function ArrearsPageClient() {
   const [churnStatuses, setChurnStatuses] = useState<string[]>([]);
   /** false=잔액0 숨김(기본), true=0원도 보기 */
   const [showZero, setShowZero] = useState(false);
-  const [churnedOnly, setChurnedOnly] = useState(false);
+  const [churnedOnly] = useState(false);
   /** true면 현황표 잔액 ≠ 상세내역합(불일치)만 */
   const [mismatchOnly, setMismatchOnly] = useState(false);
   const [q, setQ] = useState('');
@@ -198,7 +199,6 @@ export default function ArrearsPageClient() {
     if (Array.isArray(saved.categories)) setCategories(saved.categories);
     if (Array.isArray(saved.churnStatuses)) setChurnStatuses(saved.churnStatuses);
     if (typeof saved.showZero === 'boolean') setShowZero(saved.showZero);
-    if (typeof saved.churnedOnly === 'boolean') setChurnedOnly(saved.churnedOnly);
     if (typeof saved.mismatchOnly === 'boolean') setMismatchOnly(saved.mismatchOnly);
     setUiReady(true);
   }, []);
@@ -949,6 +949,7 @@ export default function ArrearsPageClient() {
   return (
     <PortalPageShell bare>
       <div className={`${portalMain} w-full space-y-4 py-4`}>
+          {tabs}
           <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-slate-900">미수관리</h1>
@@ -961,22 +962,13 @@ export default function ArrearsPageClient() {
             {canManage ? (
               <button
                 type="button"
-                className={`${portalBtnPrimary} ${baselineImportOpen ? 'ring-2 ring-amber-300 ring-offset-1' : ''}`}
-                onClick={() => setBaselineImportOpen(o => !o)}
-                title="미수수수료 거래처(잔액)현황 · 거래처별 현황 엑셀 업로드"
-              >
-                {baselineImportOpen ? '엑셀 업로드 닫기' : '엑셀 업로드'}
-              </button>
-            ) : null}
-            {canManage ? (
-              <button
-                type="button"
                 className={`${portalBtnSecondary} ${editMode ? 'border-amber-400 bg-amber-50 text-amber-950' : ''}`}
                 onClick={() => {
                   setEditMode(v => {
                     if (v) {
                       setMatchOpen(false);
                       setFeeImportOpen(false);
+                      setBaselineImportOpen(false);
                       setRowDrafts({});
                       return false;
                     }
@@ -986,6 +978,16 @@ export default function ArrearsPageClient() {
                 title="켜면 담당·분류·더빌 등 수정 도구가 표시됩니다"
               >
                 {editMode ? '수정 모드 끄기' : '수정 모드'}
+              </button>
+            ) : null}
+            {editMode ? (
+              <button
+                type="button"
+                className={`${portalBtnPrimary} ${baselineImportOpen ? 'ring-2 ring-amber-300 ring-offset-1' : ''}`}
+                onClick={() => setBaselineImportOpen(o => !o)}
+                title="미수수수료 거래처(잔액)현황 · 거래처별 현황 엑셀 업로드"
+              >
+                {baselineImportOpen ? '엑셀 업로드 닫기' : '엑셀 업로드'}
               </button>
             ) : null}
             {editMode ? (
@@ -1086,7 +1088,7 @@ export default function ArrearsPageClient() {
           />
         ) : null}
 
-        {baselineImportOpen ? (
+        {editMode && baselineImportOpen ? (
           <ArrearsBaselineImport
             onApplied={() => void load('full')}
             onClose={() => setBaselineImportOpen(false)}
@@ -1287,59 +1289,6 @@ export default function ArrearsPageClient() {
         <div className="flex flex-nowrap items-start gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex shrink-0 flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-slate-600">담당 (다중선택)</span>
-              {canManage && managers.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
-                  onClick={() => setManagers([])}
-                >
-                  전체
-                </button>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-4 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
-              {[
-                ...ARREARS_MANAGER_NAMES,
-                ...managerFilterOptions.filter(
-                  n => !(ARREARS_MANAGER_NAMES as readonly string[]).includes(n),
-                ),
-              ].map(n => {
-                const own = managerNamesMatch(n, viewerName);
-                const locked = !canManage && !own;
-                const on = managers.includes(n);
-                return (
-                  <label
-                    key={n}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
-                      locked
-                        ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
-                        : on
-                          ? 'cursor-pointer border-blue-400 bg-blue-50 text-blue-900'
-                          : 'cursor-pointer border-slate-200 bg-white text-slate-700'
-                    }`}
-                    title={
-                      locked
-                        ? '본인 담당만 선택할 수 있습니다'
-                        : undefined
-                    }
-                  >
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300"
-                      checked={on}
-                      disabled={locked}
-                      onChange={() => toggleManagerFilter(n)}
-                    />
-                    {n}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">관리분류 (다중선택)</span>
               {categories.length > 0 ? (
                 <button
@@ -1351,7 +1300,7 @@ export default function ArrearsPageClient() {
                 </button>
               ) : null}
             </div>
-            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+            <div className="flex flex-nowrap gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50/80 p-2">
               <label
                 className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
                   categories.includes('')
@@ -1412,7 +1361,7 @@ export default function ArrearsPageClient() {
                 </button>
               ) : null}
             </div>
-            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+            <div className="flex flex-nowrap gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50/80 p-2">
               <label
                 className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
                   churnStatuses.includes('')
@@ -1460,58 +1409,54 @@ export default function ArrearsPageClient() {
             </div>
           </div>
 
-          <div className="flex min-w-[12rem] flex-1 flex-col items-center justify-end self-stretch px-2">
-            <label className="flex w-full max-w-sm flex-col gap-1 text-center text-xs font-medium text-slate-600">
-              검색
-              <input
-                className={`${portalInput} py-2 text-left`}
-                placeholder="상호·코드·사업자번호"
-                value={q}
-                onChange={e => setQ(e.target.value)}
-              />
-            </label>
+          <div className="flex min-w-[18rem] flex-1 flex-col gap-1.5">
+            <div className="flex h-4 items-center gap-4 text-xs font-medium text-slate-600">
+              <label className="flex items-center gap-1.5 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={showZero}
+                  onChange={e => setShowZero(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                0원인것도 보기
+              </label>
+              <label
+                className="flex items-center gap-1.5 whitespace-nowrap"
+                title="현황표 잔액과 상세내역(공문+7/27 이후) 합이 다른 건만"
+              >
+                <input
+                  type="checkbox"
+                  checked={mismatchOnly}
+                  onChange={e => setMismatchOnly(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                불일치만
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex h-[42px] min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                <span className="shrink-0 text-xs font-semibold text-slate-500">검색</span>
+                <input
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
+                  placeholder="상호·코드·사업자번호"
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                onClick={() => void load('full')}
+                title="새로고침"
+                aria-label="새로고침"
+              >
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+                  <path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6" strokeLinecap="round" />
+                  <path d="M16.5 3.5v3.2h-3.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
-
-          <div className="flex shrink-0 flex-col justify-end gap-1.5 self-stretch pb-0.5 text-sm text-slate-700">
-            <label className="flex items-center gap-2 whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={showZero}
-                onChange={e => setShowZero(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              0원인것도 보기
-            </label>
-            <label className="flex items-center gap-2 whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={churnedOnly}
-                onChange={e => setChurnedOnly(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              유출만
-            </label>
-            <label
-              className="flex items-center gap-2 whitespace-nowrap"
-              title="현황표 잔액과 상세내역(공문+7/27 이후) 합이 다른 건만"
-            >
-              <input
-                type="checkbox"
-                checked={mismatchOnly}
-                onChange={e => setMismatchOnly(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              불일치만
-            </label>
-          </div>
-
-          <button
-            type="button"
-            className={`${portalBtnSecondary} shrink-0 self-end py-2`}
-            onClick={() => void load('full')}
-          >
-            새로고침
-          </button>
         </div>
 
         {error ? <div className={portalAlertError}>{error}</div> : null}
@@ -1540,7 +1485,7 @@ export default function ArrearsPageClient() {
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
+            <thead className="bg-slate-50 text-center text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-2 py-2.5 w-10 print:hidden">
                   <input
@@ -1554,7 +1499,7 @@ export default function ArrearsPageClient() {
                 </th>
                 <th className="px-3 py-2.5 whitespace-nowrap">코드</th>
                 <th className="relative px-3 py-2.5">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-center gap-1">
                     <button
                       type="button"
                       className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-slate-200/80"
@@ -1589,7 +1534,7 @@ export default function ArrearsPageClient() {
                     ) : null}
                   </div>
                   {companyFilterOpen ? (
-                    <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                    <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-lg">
                       <input
                         className={`${portalInput} mb-2 w-full py-1.5 text-xs`}
                         placeholder="상호 검색"
@@ -1643,8 +1588,8 @@ export default function ArrearsPageClient() {
                     </div>
                   ) : null}
                 </th>
-                <th className="relative px-3 py-2.5 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1">
+                <th className="relative px-3 py-2.5 whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1">
                     <button
                       type="button"
                       className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-slate-200/80"
@@ -1737,7 +1682,15 @@ export default function ArrearsPageClient() {
                   ) : null}
                 </th>
                 <th className="px-3 py-2.5 min-w-[12rem]">미수 사유</th>
-                <th className="px-3 py-2.5 whitespace-nowrap">담당</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">
+                  <ManagerMultiFilter
+                    headerLabel="담당"
+                    options={managerFilterOptions}
+                    value={managers}
+                    onChange={setManagers}
+                    isLocked={n => !canManage && !managerNamesMatch(n, viewerName)}
+                  />
+                </th>
                 <th className="px-3 py-2.5 whitespace-nowrap">관리</th>
                 <th className="px-3 py-2.5 whitespace-nowrap">해임</th>
                 <th className="px-3 py-2.5 min-w-[8rem]">메모</th>
