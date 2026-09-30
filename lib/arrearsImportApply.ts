@@ -36,7 +36,10 @@ import { listLetterLines, replaceLetterLines } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
 import { formatArrearsPaidDateKo, letterBalanceFromLines } from '@/app/types/arrears';
 import { letterOpenForStatusMatch } from '@/lib/arrearsLetterOpen';
-import { mergeMonthlyBookkeepingPaymentRows } from '@/lib/arrearsMergeMonthPayments';
+import {
+  attachLumpPaymentsToMonthCharges,
+  mergeMonthlyBookkeepingPaymentRows,
+} from '@/lib/arrearsMergeMonthPayments';
 
 export type StatusImportPreview = {
   preview: true;
@@ -520,12 +523,15 @@ export function rollSimpleBookkeepingLetter(
   }
   if (!additions.length && base.length === existing.length) return null;
 
-  const merged = mergeMonthlyBookkeepingPaymentRows(
-    [...base, ...additions].map(l => ({
-      ...l,
-      paidAmount: Math.round(l.paidAmount || 0),
-      paidDate: l.paidDate || '',
-    })),
+  const merged = attachLumpPaymentsToMonthCharges(
+    mergeMonthlyBookkeepingPaymentRows(
+      [...base, ...additions].map(l => ({
+        ...l,
+        paidAmount: Math.round(l.paidAmount || 0),
+        paidDate: l.paidDate || '',
+      })),
+    ),
+    l => l.source === 'payment',
   );
   if (classifyArrearsLetterComplexity(merged) === 'complex') {
     return { lines: merged, added: additions.length };

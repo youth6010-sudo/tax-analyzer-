@@ -215,6 +215,59 @@ function attachChamwolPayments<
 }
 
 /**
+ * 한 번에 들어온 입금이 같은 달(당월 우선, 없으면 직전 월) 미납 기장료·기타수수료 합계와 같으면
+ * 그 달 줄에 모두 붙인다. 금액이 다르면 입금 줄은 그대로 둔다. isCandidate 입금 줄만 대상.
+ */
+export function attachLumpPaymentsToMonthCharges<
+  T extends ArrearsLetterLineInput & {
+    description: string;
+    amount: number;
+    paidAmount: number;
+    paidDate?: string;
+  },
+>(lines: T[], isCandidate: (l: T) => boolean): T[] {
+  const next = lines.map(l => ({ ...l }));
+  const usedPay = new Set<number>();
+  const isUnpaidMonthCharge = (l: T) =>
+    Math.round(l.amount || 0) > 0 &&
+    Math.round(l.paidAmount || 0) === 0 &&
+    chargeYearMonth(l.description || '') != null;
+
+  for (let pi = 0; pi < next.length; pi++) {
+    const pay = next[pi]!;
+    if (!isCandidate(pay) || !isPaymentOnlyRow(pay)) continue;
+    const pm = paidMonth(pay.paidDate || '');
+    if (pm == null) continue;
+    const payAmt = Math.round(pay.paidAmount || 0);
+    const last = next.map(l => chargeYearMonth(l.description || '')).filter(Boolean).pop();
+    const refY = last ? (pm < last.m ? last.y + 1 : last.y) : new Date().getFullYear();
+
+    const groupFor = (want: { y: number; m: number }): number[] | null => {
+      const idxs = next
+        .map((ch, ci) => ({ ch, ci }))
+        .filter(({ ch }) => {
+          if (!isUnpaidMonthCharge(ch)) return false;
+          const ym = chargeYearMonth(ch.description || '')!;
+          return ym.m === want.m && ym.y === want.y;
+        })
+        .map(({ ci }) => ci);
+      if (!idxs.length) return null;
+      const sum = idxs.reduce((s, ci) => s + Math.round(next[ci]!.amount), 0);
+      return sum === payAmt ? idxs : null;
+    };
+    const group = groupFor({ y: refY, m: pm }) ?? groupFor(prevMonth(refY, pm));
+    if (!group) continue;
+
+    for (const ci of group) {
+      next[ci] = { ...next[ci]!, paidAmount: Math.round(next[ci]!.amount), paidDate: pay.paidDate || '' };
+    }
+    usedPay.add(pi);
+  }
+
+  return next.filter((_, idx) => !usedPay.has(idx));
+}
+
+/**
  * 적요의 2자리 연도 → 4자리 (25년 → 2025년). 지급일시는 그대로.
  */
 export function normalizeLetterDescriptionYears(description: string): string {
