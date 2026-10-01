@@ -205,6 +205,15 @@ export default function InterimClosingPageClient() {
   const [writtenAt, setWrittenAt] = useState<string | null>(null);
 
   const computed = useMemo(() => computeInterimClosing(payload), [payload]);
+  const warnChecks = computed.checks.filter(c => c.kind !== 'placed');
+  const placedChecks = computed.checks.filter(c => c.kind === 'placed');
+  const setLineMapping = (key: string, row: number) =>
+    setPayload(p => {
+      const next = { ...(p.lineMappings || {}) };
+      if (row) next[key] = row;
+      else delete next[key];
+      return { ...p, lineMappings: next };
+    });
   const ownerBases = useMemo(() => computeOwnerTaxBases(payload.manual), [payload.manual]);
 
   useEffect(() => {
@@ -682,6 +691,77 @@ export default function InterimClosingPageClient() {
       {error ? <div className={portalAlertError}>{error}</div> : null}
       {notice ? <div className={portalAlertInfo}>{notice}</div> : null}
       {busy ? <p className="text-sm text-slate-500">{busy}</p> : null}
+
+      {warnChecks.length > 0 ? (
+        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <p className="font-bold">
+            ⚠ 명세서 확인 필요 {warnChecks.length}건 — 아래 금액이 보고서에 빠졌거나 합계가 다릅니다.
+          </p>
+          <table className="mt-1.5">
+            <thead>
+              <tr className="text-left text-[11px] text-amber-800">
+                <th className="pr-3 font-semibold">명세서</th>
+                <th className="pr-3 font-semibold">내용</th>
+                <th className="pr-3 text-right font-semibold">전기</th>
+                <th className="text-right font-semibold">당기</th>
+              </tr>
+            </thead>
+            <tbody>
+              {warnChecks.map((c, i) => (
+                <tr key={i}>
+                  <td className="pr-3 whitespace-nowrap">{STATEMENT_KIND_LABELS[c.statement]}</td>
+                  <td className="pr-3">{c.message}</td>
+                  <td className="pr-3 text-right tabular-nums">{c.prior ? formatWon(c.prior) : '-'}</td>
+                  <td className="text-right tabular-nums">{c.current ? formatWon(c.current) : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {placedChecks.length > 0 ? (
+        <div className="rounded border border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+          <p className="font-bold">
+            ℹ 보고서에 맞는 칸이 없어 자동으로 넣은 명세서 줄 {placedChecks.length}건 — 다른 계정에 합치려면 「넣을 칸」을 바꾸세요.
+          </p>
+          <table className="mt-1.5">
+            <thead>
+              <tr className="text-left text-[11px] text-sky-800">
+                <th className="pr-3 font-semibold">명세서</th>
+                <th className="pr-3 font-semibold">내용</th>
+                <th className="pr-3 text-right font-semibold">전기</th>
+                <th className="pr-3 text-right font-semibold">당기</th>
+                <th className="font-semibold">넣을 칸</th>
+              </tr>
+            </thead>
+            <tbody>
+              {placedChecks.map(c => (
+                <tr key={c.lineKey}>
+                  <td className="pr-3 whitespace-nowrap">{STATEMENT_KIND_LABELS[c.statement]}</td>
+                  <td className="pr-3">{c.message}</td>
+                  <td className="pr-3 text-right tabular-nums">{c.prior ? formatWon(c.prior) : '-'}</td>
+                  <td className="pr-3 text-right tabular-nums">{c.current ? formatWon(c.current) : '-'}</td>
+                  <td className="py-0.5">
+                    <select
+                      className="border border-sky-300 bg-white px-1 py-0.5 text-xs"
+                      value={c.mappedRow || 0}
+                      onChange={e => setLineMapping(c.lineKey!, Number(e.target.value))}
+                    >
+                      <option value={0}>별도 줄 (자동)</option>
+                      {(c.options || []).map(o => (
+                        <option key={o.row} value={o.row}>
+                          {o.label}에 합산
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {/* 상단 메타 — 엑셀 Q2·회사 헤더 */}
       <div className="flex flex-wrap items-end gap-2 rounded border border-[#c5d0e0] bg-white px-3 py-2 text-xs shadow-sm">

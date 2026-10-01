@@ -119,7 +119,16 @@ export type InterimClosingPayload = {
   manual: InterimClosingManualInputs;
   /** 보고서 행 키(r) → 기준 */
   rowCriteria: Record<string, RowCriteria>;
+  /**
+   * 보고서에 대응 칸이 없는 명세서 줄의 반영 위치.
+   * 키 = statementLineKey, 값 = 보고서 excelRow (0 또는 없음 = 자동으로 빈 칸에 별도 줄)
+   */
+  lineMappings?: Record<string, number>;
 };
+
+export function statementLineKey(kind: StatementKind, line: { code: string; name: string }): string {
+  return `${kind}:${line.code || ''}:${String(line.name || '').replace(/\s+/g, '')}`;
+}
 
 export type ComputedReportRow = {
   key: string;
@@ -166,8 +175,27 @@ export type TaxEstimate = {
   rateLabel: string;
 };
 
+/** 명세서 → 보고서 반영 점검 (빠진 줄·합계 불일치) */
+export type InterimClosingCheck = {
+  /** placed = 대응 칸이 없어 자동/지정 칸에 넣음 · unmapped = 넣을 칸도 없음 · total = 합계 불일치 */
+  kind: 'placed' | 'unmapped' | 'total';
+  statement: StatementKind;
+  message: string;
+  prior: number;
+  current: number;
+  /** placed: lineMappings 키 */
+  lineKey?: string;
+  /** placed: 지금 들어간 보고서 행 */
+  targetRow?: number;
+  /** placed: 지정값(0 = 자동) */
+  mappedRow?: number;
+  /** placed: 옮길 수 있는 기존 계정 칸 */
+  options?: { row: number; label: string }[];
+};
+
 export type InterimClosingComputed = {
   rows: ComputedReportRow[];
+  checks: InterimClosingCheck[];
   kpi: {
     /** 엑셀 H3 = L601 세금차감전이익 */
     netIncome: number;

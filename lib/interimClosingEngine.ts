@@ -3,16 +3,19 @@ import { mergeAccountLines } from '@/lib/interimClosingParse';
 import type {
   AccountLine,
   ComputedReportRow,
+  InterimClosingCheck,
   InterimClosingComputed,
   InterimClosingManualInputs,
   InterimClosingPayload,
   ReportTemplateRow,
+  StatementKind,
   TaxEstimate,
 } from '@/lib/interimClosingTypes';
 import {
   assumptionMonthTotal,
   endingInventoryKey,
   isGimalAmountRow,
+  statementLineKey,
 } from '@/lib/interimClosingTypes';
 
 const TEMPLATE = reportTemplateJson as ReportTemplateRow[];
@@ -265,6 +268,64 @@ export function computeInterimClosing(
 
   const byExcelRow = new Map(rawRows.map(r => [r.excelRow, r]));
 
+  /** 대응 칸이 없는 명세서 줄 → 같은 구역 빈 칸(자동) 또는 lineMappings 지정 칸에 합산 */
+  const placements: Placement[] = [];
+  {
+    const initialNames = new Set(rawRows.map(r => nk(r.name)).filter(Boolean));
+    const inRange = (r: ComputedReportRow, [a, b]: [number, number]) =>
+      r.kind === 'account' && r.excelRow >= a && r.excelRow <= b;
+    const taken = new Set<number>();
+    for (const kind of Object.keys(payload.statements) as StatementKind[]) {
+      for (const line of payload.statements[kind] ?? []) {
+        if (!num(line.prior) && !num(line.current)) continue;
+        if (isLineReflected(line, initialNames)) continue;
+        const range = placementRange(kind, line.code);
+        if (!range) continue;
+        const key = statementLineKey(kind, line);
+        const mappedRow = num(payload.lineMappings?.[key]);
+        const options = rawRows
+          .filter(r => inRange(r, range) && nk(r.name))
+          .map(r => ({ row: r.excelRow, label: `${r.code ? `[${r.code}] ` : ''}${r.name}` }));
+        let target: ComputedReportRow | undefined;
+        if (mappedRow && options.some(o => o.row === mappedRow)) {
+          target = byExcelRow.get(mappedRow);
+        } else {
+          target = rawRows.find(
+            r =>
+              inRange(r, range) &&
+              TEMPLATE_BLANK_ROWS.has(r.excelRow) &&
+              !r.linked &&
+              !r.prior &&
+              !r.current &&
+              !taken.has(r.excelRow),
+          );
+          if (target) {
+            taken.add(target.excelRow);
+            target.code = line.code || '';
+            target.name = line.name;
+          }
+        }
+        if (target) {
+          target.prior += num(line.prior);
+          target.current += num(line.current);
+          target.linked = true;
+          target.annualized = target.isComputed
+            ? target.current
+            : annualize(target.current, target.convertBasis, target.name || target.code, manual);
+        }
+        placements.push({
+          kind,
+          line,
+          key,
+          targetRow: target?.excelRow,
+          targetName: target?.name ?? '',
+          mappedRow: target && mappedRow === target.excelRow ? mappedRow : 0,
+          options,
+        });
+      }
+    }
+  }
+
   /**
    * 감가상각비(공사 618 / 판관 818): 전기=명세서 유지,
    * 당기는 명세서에 없으면 manual 값으로 직접 입력.
@@ -348,6 +409,19 @@ export function computeInterimClosing(
       if (hit) s += hit[field];
     }
     return s;
+  };
+
+  /** 특정 명세서에서만 이름으로 합산 (병합 이름맵은 다른 명세서 동명 행을 잡을 수 있음) */
+  const stmtAmt = (
+    kind: keyof InterimClosingPayload['statements'],
+    names: string[],
+    field: 'prior' | 'current',
+  ) => {
+    const keys = new Set(names.map(n => n.replace(/\s+/g, '')));
+    const hit = (payload.statements[kind] || []).find(l =>
+      keys.has((l.name || '').replace(/\s+/g, '')),
+    );
+    return hit ? num(hit[field]) : 0;
   };
 
   const sumExcelRows = (from: number, to: number) => {
@@ -446,15 +520,16 @@ export function computeInterimClosing(
       }
     }
 
-    // 기초원재료재고액(73): 전기=기초원재료, 당기=기초제품+기초미완성공사 (엑셀 G73 템플릿)
+    // 기초원재료재고액(73): 제조원가명세서 기초원재료만.
+    // 기초제품은 R51, 기초미완성공사는 공사원가(R233) 소속 — 여기 넣으면 제품원가로 이중 반영됨
     {
       const row = byExcelRow.get(73);
       if (row) {
-        const prior = nameAmt(['기초원재료재고액'], 'prior');
-        const current =
-          nameAmt(['기초제품재고액'], 'current') +
-          nameAmt(['기초미완성 공사액', '기초미완성공사액'], 'current');
-        setAmt(row, prior, current);
+        setAmt(
+          row,
+          stmtAmt('manufacturing', ['기초원재료재고액'], 'prior'),
+          stmtAmt('manufacturing', ['기초원재료재고액'], 'current'),
+        );
         if (!row.name) row.name = '기초원재료재고액';
       }
     }
@@ -563,6 +638,9 @@ export function computeInterimClosing(
           setAmt(overhead, p, c, a);
         } else if (named && (named.prior || named.current)) {
           setAmt(overhead, named.prior, named.current);
+        } else {
+          // 이름 VLOOKUP이 공사원가명세서 「경비」를 잡아오는 것 방지
+          setAmt(overhead, 0, 0, 0);
         }
         if (!overhead.name) overhead.name = '경비';
       }
@@ -637,27 +715,48 @@ export function computeInterimClosing(
       }
     }
 
-    // 당기공사원가(233) = 178+182+183+191+192
+    // 중기 및 운반비(191, 610): 세부 계정 없이 요약행만 있는 명세서
+    {
+      const row = byExcelRow.get(191);
+      const hasCode = !!lookupByCode(byCode, '610');
+      if (row && !hasCode) {
+        const names = ['중기 및 운반비', '중기및운반비'];
+        const p = stmtAmt('construction', names, 'prior');
+        const c = stmtAmt('construction', names, 'current');
+        if (p || c) {
+          row.name = '중기 및 운반비';
+          setAmt(row, p, c);
+        }
+      }
+    }
+
+    // 당기공사원가(233) = 178+182+183+191+192 + 기초미완성공사액 (기말미완성은 가결산 기본 0)
     {
       const constTotal = byExcelRow.get(233);
+      const wipNames = ['기초미완성 공사액', '기초미완성공사액'];
+      const wipP = stmtAmt('construction', wipNames, 'prior');
+      const wipC = stmtAmt('construction', wipNames, 'current');
       const p =
         amt(178, 'prior') +
         amt(182, 'prior') +
         amt(183, 'prior') +
         amt(191, 'prior') +
-        amt(192, 'prior');
+        amt(192, 'prior') +
+        wipP;
       const c =
         amt(178, 'current') +
         amt(182, 'current') +
         amt(183, 'current') +
         amt(191, 'current') +
-        amt(192, 'current');
+        amt(192, 'current') +
+        wipC;
       const a =
         amt(178, 'annualized') +
         amt(182, 'annualized') +
         amt(183, 'annualized') +
         amt(191, 'annualized') +
-        amt(192, 'annualized');
+        amt(192, 'annualized') +
+        wipC;
       setAmt(constTotal, p, c, a);
       if (constTotal && !constTotal.name) constTotal.name = '당기공사원가';
 
@@ -979,6 +1078,7 @@ export function computeInterimClosing(
 
   return {
     rows: rawRows,
+    checks: checkStatementCoverage(payload, rawRows, placements),
     kpi: {
       // 엑셀 상단 H3 = L601(세금차감전이익)
       netIncome: pretaxBase,
@@ -994,6 +1094,174 @@ export function computeInterimClosing(
     corporateTax: corporateTaxEst,
     uploaded: uploaded as InterimClosingComputed['uploaded'],
   };
+}
+
+const nk = (s: string | null | undefined) => String(s || '').replace(/\s+/g, '');
+
+/** 코드 없는 요약·합계 줄 중 엔진이 식으로 처리하는 것 */
+const HANDLED_SUMMARY_NAMES = new Set(
+  [
+    '원재료비',
+    '노무비',
+    '경비',
+    '합계',
+    '당기 총 공사비용',
+    '당기공사원가',
+    '기초미완성 공사액',
+    '기말미완성 공사액',
+    '중기 및 운반비',
+    '당기 총 제조비용',
+    '당기제품 제조원가',
+    '기초재공품 재고액',
+    '기말재공품 재고액',
+  ].map(nk),
+);
+
+const TEMPLATE_CODES = new Set(TEMPLATE.map(t => t.code).filter(Boolean));
+const TEMPLATE_BLANK_ROWS = new Set(
+  TEMPLATE.filter(t => t.kind === 'account' && !t.name).map(t => t.r),
+);
+
+function isLineReflected(line: AccountLine, rowNames: Set<string>): boolean {
+  if (line.code && (TEMPLATE_CODES.has(line.code) || TEMPLATE_CODES.has(String(Number(line.code))))) {
+    return true;
+  }
+  const name = nk(line.name);
+  return !!name && (rowNames.has(name) || HANDLED_SUMMARY_NAMES.has(name));
+}
+
+/** 대응 칸 없는 줄을 넣을 보고서 구역 (엑셀 행 범위) */
+function placementRange(kind: StatementKind, code: string): [number, number] | null {
+  if (kind === 'construction') return [193, 232]; // 공사 경비 상세
+  if (kind === 'manufacturing') return [87, 176]; // 제조 경비 상세
+  if (kind !== 'pl') return null;
+  const c = Number(code);
+  if (!Number.isFinite(c) || !code) return null;
+  if (c >= 400 && c < 500) return [15, 44]; // 매출
+  if (c >= 800 && c < 900) return [401, 500]; // 판관비
+  if (c >= 900 && c < 950) return [503, 552]; // 영업외수익
+  if (c >= 950 && c < 998) return [554, 600]; // 영업외비용
+  return null;
+}
+
+type Placement = {
+  kind: StatementKind;
+  line: AccountLine;
+  key: string;
+  targetRow?: number;
+  targetName: string;
+  mappedRow: number;
+  options: { row: number; label: string }[];
+};
+
+/**
+ * 명세서가 보고서에 빠짐없이 반영됐는지 점검.
+ * - unmapped: 보고서 어느 칸에도 대응하지 않는 명세서 줄
+ * - total: 공사·제조원가 합계가 명세서와 다름 (가결산 규칙상 0인 기말재고·수동 감가상각은 차이에서 제외)
+ */
+function checkStatementCoverage(
+  payload: InterimClosingPayload,
+  rows: ComputedReportRow[],
+  placements: Placement[],
+): InterimClosingCheck[] {
+  const checks: InterimClosingCheck[] = [];
+  const placedInfo: InterimClosingCheck[] = [];
+  const rowNames = new Set(rows.map(r => nk(r.name)).filter(Boolean));
+  const byRow = new Map(rows.map(r => [r.excelRow, r]));
+  const at = (r: number, f: 'prior' | 'current') => num(byRow.get(r)?.[f]);
+  const placedKeys = new Set<string>();
+
+  for (const p of placements) {
+    if (p.targetRow == null) continue;
+    placedKeys.add(p.key);
+    const label = `${p.line.code ? `[${p.line.code}] ` : ''}${p.line.name}`;
+    placedInfo.push({
+      kind: 'placed',
+      statement: p.kind,
+      message: p.mappedRow
+        ? `${label} → 「${byRow.get(p.targetRow)?.name ?? ''}」에 합산`
+        : `${label} → 별도 줄로 자동 반영`,
+      prior: num(p.line.prior),
+      current: num(p.line.current),
+      lineKey: p.key,
+      targetRow: p.targetRow,
+      mappedRow: p.mappedRow,
+      options: p.options,
+    });
+  }
+
+  for (const kind of Object.keys(payload.statements) as StatementKind[]) {
+    for (const l of payload.statements[kind] ?? []) {
+      if (!num(l.prior) && !num(l.current)) continue;
+      if (placedKeys.has(statementLineKey(kind, l))) continue;
+      if (isLineReflected(l, rowNames)) continue;
+      checks.push({
+        kind: 'unmapped',
+        statement: kind,
+        message: `${l.code ? `[${l.code}] ` : ''}${l.name || '(이름 없음)'} — 보고서에 반영되지 않았습니다`,
+        prior: num(l.prior),
+        current: num(l.current),
+      });
+    }
+  }
+
+  const find = (lines: AccountLine[], names: string[]) => {
+    const keys = new Set(names.map(nk));
+    return lines.find(l => keys.has(nk(l.name)));
+  };
+
+  /** 명세서 합계 + 엔진이 0으로 둔 기말재고 − 수동 기말 + 수동 감가상각 */
+  const totalCheck = (
+    kind: StatementKind,
+    engineRow: number,
+    label: string,
+    totalNames: string[],
+    excludeEnding: RegExp,
+    manualEndingRows: number[],
+    deprRow?: { row: number; code: string },
+  ) => {
+    const lines = payload.statements[kind] ?? [];
+    if (!lines.length) return;
+    const total = find(lines, totalNames);
+    if (!total) return;
+    const endingLines = lines.filter(l => {
+      const n = nk(l.name);
+      return n.startsWith('기말') && !excludeEnding.test(n);
+    });
+    const endP = endingLines.reduce((s, l) => s + num(l.prior), 0);
+    const endC = endingLines.reduce((s, l) => s + num(l.current), 0);
+    const manualEnd = manualEndingRows.reduce((s, r) => s + at(r, 'current'), 0);
+    let deprAdj = 0;
+    if (deprRow) {
+      const stmt = lines.find(l => l.code === deprRow.code);
+      deprAdj = at(deprRow.row, 'current') - num(stmt?.current);
+    }
+    const expP = num(total.prior) + endP;
+    const expC = num(total.current) + endC - manualEnd + deprAdj;
+    const dP = Math.round(at(engineRow, 'prior') - expP);
+    const dC = Math.round(at(engineRow, 'current') - expC);
+    if (!dP && !dC) return;
+    checks.push({
+      kind: 'total',
+      statement: kind,
+      message: `${label} 합계가 명세서와 다릅니다 (보고서 − 명세서 차이)`,
+      prior: dP,
+      current: dC,
+    });
+  };
+
+  totalCheck(
+    'construction',
+    233,
+    '당기공사원가',
+    ['합계'],
+    /미완성/,
+    [181],
+    { row: 200, code: '618' },
+  );
+  totalCheck('manufacturing', 177, '당기제품 제조원가', ['당기 총 제조비용'], /재공품/, [75]);
+
+  return [...checks, ...placedInfo];
 }
 
 function estimatePersonalTax(
