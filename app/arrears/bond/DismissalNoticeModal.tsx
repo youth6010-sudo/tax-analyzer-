@@ -24,7 +24,11 @@ type Props = {
   recipient?: BondRecipient;
   notices: BondNotice[];
   contact: BondContact;
+  /** 담당 선택 목록 (기본값 + 이전에 쓴 담당) */
+  contacts: BondContact[];
   nextDocNo: string;
+  /** 문서번호 선택 목록 (다음 번호부터 연속) */
+  docNoOptions: string[];
   /** PATCH 응답(records·contact·nextDocNo) 반영 */
   onPayload: (data: unknown) => void;
   onClose: () => void;
@@ -50,12 +54,58 @@ function defaultVersion(status: string, lastV1: BondNotice | undefined, today: s
   return 'v1';
 }
 
+type PickOption = { value: string; label: string };
+
+/** 직접 입력 + ▾ 목록에서 선택 */
+function PickInput({
+  value,
+  onChange,
+  options,
+  onPick,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: PickOption[];
+  onPick?: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex gap-1">
+      <input className={`${portalInput} min-w-0 flex-1`} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+      {options.length ? (
+        <select
+          aria-label="목록에서 선택"
+          title="목록에서 선택"
+          className={`${portalInput} w-10 shrink-0 cursor-pointer px-1`}
+          value=""
+          onChange={e => {
+            if (!e.target.value) return;
+            (onPick ?? onChange)(e.target.value);
+          }}
+        >
+          <option value="">▾</option>
+          {options.map((o, i) => (
+            <option key={`${o.value}-${i}`} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </div>
+  );
+}
+
+const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
+
 export default function DismissalNoticeModal({
   entry,
   recipient,
   notices,
   contact: savedContact,
+  contacts,
   nextDocNo,
+  docNoOptions,
   onPayload,
   onClose,
 }: Props) {
@@ -69,7 +119,6 @@ export default function DismissalNoticeModal({
   );
   const [docNo, setDocNo] = useState(nextDocNo);
   const [sentDate, setSentDate] = useState(today);
-  const [closingDateEdit, setClosingDate] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState(recipient?.상호 || entry.companyName);
   const [periodEdit, setPeriod] = useState<string | null>(null);
   const [amountEdit, setAmountText] = useState<string | null>(null);
@@ -81,7 +130,6 @@ export default function DismissalNoticeModal({
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
 
-  const closingDate = closingDateEdit ?? sentDate;
   const deadline = deadlineEdit ?? addDays(sentDate, 7);
   const period =
     periodEdit ??
@@ -89,6 +137,25 @@ export default function DismissalNoticeModal({
   const amountText = amountEdit ?? (data ? data.balance.toLocaleString('ko-KR') : '');
   const amount = Number(amountText.replace(/[^\d]/g, '')) || 0;
   const filename = `세무보수_미수금_안내문_${safeName(recipientName)}_${NOTICE_FILE_VERSION[version]}.pdf`;
+
+  const docNoPick: PickOption[] = [
+    ...(docNoOptions.length ? docNoOptions : [nextDocNo]).map((v, i) => ({
+      value: v,
+      label: i === 0 ? `${v} (다음 번호)` : v,
+    })),
+    ...notices.map(n => ({ value: n.docNo, label: `${n.docNo} (이전 ${n.version} · ${n.sentDate})` })),
+  ].filter(o => o.value);
+  const contactKey = (c: BondContact) => `${c.담당}|${c.전화}|${c.이메일}`;
+  const contactPick: PickOption[] = contacts.map(c => ({
+    value: contactKey(c),
+    label: [c.담당, c.전화, c.이메일].filter(Boolean).join(' · '),
+  }));
+  const phonePick = uniq(contacts.map(c => c.전화)).map(v => ({ value: v, label: v }));
+  const emailPick = uniq(contacts.map(c => c.이메일)).map(v => ({ value: v, label: v }));
+  const pickContact = (key: string) => {
+    const c = contacts.find(x => contactKey(x) === key);
+    if (c) setContact(c);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -107,26 +174,31 @@ export default function DismissalNoticeModal({
     setDone('');
     try {
       downloadBlob(await buildMultiPagePdfBlob(pages), filename);
-      if (save) {
-        const res = await fetch('/api/arrears/bond', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            updates: [
-              {
-                id: entry.id,
-                patch: { 해임통보: { date: sentDate } },
-                appendNotice: { version, docNo, sentDate, deadline: version === 'v1.5' ? '' : deadline },
-              },
-            ],
-            contact: saveContact ? contact : undefined,
-          }),
-        });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((d as { error?: string }).error || '기록 저장 실패');
-        onPayload(d);
-        setDone('발송 기록을 저장했습니다. 보낸 안내문 스캔본은 해임통보 폴더에 올려 주세요.');
-      }
+      const res = await fetch('/api/arrears/bond', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: save
+            ? [
+                {
+                  id: entry.id,
+                  patch: { 해임통보: { date: sentDate } },
+                  appendNotice: { version, docNo, sentDate, deadline: version === 'v1.5' ? '' : deadline, contact },
+                },
+              ]
+            : [],
+          contact: save && saveContact ? contact : undefined,
+          usedDocNo: docNo,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((d as { error?: string }).error || (save ? '기록 저장 실패' : '문서번호 반영 실패'));
+      onPayload(d);
+      setDone(
+        save
+          ? '발송 기록을 저장했습니다. 보낸 안내문 스캔본은 해임통보 폴더에 올려 주세요.'
+          : `PDF를 만들었습니다. 다음 문서번호는 ${(d as { nextDocNo?: string }).nextDocNo ?? ''}입니다.`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'PDF 생성 실패');
     } finally {
@@ -176,11 +248,8 @@ export default function DismissalNoticeModal({
                 ))}
               </select>,
             )}
-            {field('문서번호', <input className={portalInput} value={docNo} onChange={e => setDocNo(e.target.value)} />)}
-            <div className="grid grid-cols-2 gap-2">
-              {field('발신일자', <input type="date" className={portalInput} value={sentDate} onChange={e => setSentDate(e.target.value)} />)}
-              {field('끝 날짜', <input type="date" className={portalInput} value={closingDate} onChange={e => setClosingDate(e.target.value)} />)}
-            </div>
+            {field('문서번호', <PickInput value={docNo} onChange={setDocNo} options={docNoPick} />)}
+            {field('발신일자 (끝 날짜 동일)', <input type="date" className={portalInput} value={sentDate} onChange={e => setSentDate(e.target.value)} />)}
             {field('수신 (○○ 대표님 귀하)', <input className={portalInput} value={recipientName} onChange={e => setRecipientName(e.target.value)} />)}
             {field('귀속기간', <input className={portalInput} value={period} onChange={e => setPeriod(e.target.value)} placeholder="2018.07 ~ 2026.08" />)}
             {field('금액(원)', <input className={`${portalInput} text-right tabular-nums`} value={amountText} onChange={e => setAmountText(e.target.value)} inputMode="numeric" />)}
@@ -189,9 +258,18 @@ export default function DismissalNoticeModal({
               : field('입금 기한', <input type="date" className={portalInput} value={deadline} onChange={e => setDeadline(e.target.value)} />)}
 
             <p className="pt-2 text-xs font-bold text-slate-800">담당 (7항 아래)</p>
-            {field('담당', <input className={portalInput} value={contact.담당} onChange={e => setC('담당', e.target.value)} placeholder="TAX팀 김평진 팀장" />)}
-            {field('전화', <input className={portalInput} value={contact.전화} onChange={e => setC('전화', e.target.value)} />)}
-            {field('이메일', <input className={portalInput} value={contact.이메일} onChange={e => setC('이메일', e.target.value)} />)}
+            {field(
+              '담당 (선택 시 전화·이메일 함께)',
+              <PickInput
+                value={contact.담당}
+                onChange={v => setC('담당', v)}
+                options={contactPick}
+                onPick={pickContact}
+                placeholder="TAX팀 김평진 팀장"
+              />,
+            )}
+            {field('전화', <PickInput value={contact.전화} onChange={v => setC('전화', v)} options={phonePick} />)}
+            {field('이메일', <PickInput value={contact.이메일} onChange={v => setC('이메일', v)} options={emailPick} />)}
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
               <input type="checkbox" className="rounded border-slate-300" checked={saveContact} onChange={e => setSaveContact(e.target.checked)} />
               이 담당을 기본값으로 저장 (기록 저장 시)
@@ -228,7 +306,7 @@ export default function DismissalNoticeModal({
                     amount,
                     deadlineLabel: formatNoticeDate(deadline),
                     prevDeadlineLabel: formatNoticeDate(prevDeadline),
-                    closingDateLabel: formatNoticeDate(closingDate),
+                    closingDateLabel: formatNoticeDate(sentDate),
                     contact,
                   }}
                 />

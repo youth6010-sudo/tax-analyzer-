@@ -4,6 +4,7 @@
  * npx tsx scripts/import-bond-certified-letters.ts            (dry-run: 매칭 결과만 출력)
  * npx tsx scripts/import-bond-certified-letters.ts --apply    (업로드 + 내용증명 체크/날짜 + 수신정보 저장)
  *   [--dir 폴더] [--excel 내용증명_내용.xlsx] [--date 2026-09-29]
+ *   [--replace]  매칭된 업체의 기존 내용증명 첨부를 지우고 이 폴더 파일로 교체
  */
 import fs from 'fs';
 import path from 'path';
@@ -33,6 +34,7 @@ function arg(name: string): string | undefined {
 }
 
 const APPLY = process.argv.includes('--apply');
+const REPLACE = process.argv.includes('--replace');
 const DIR = arg('dir') || DEFAULT_DIR;
 const EXCEL = arg('excel') || DEFAULT_EXCEL;
 const SENT_DATE = arg('date') || '2026-09-29';
@@ -40,12 +42,16 @@ const SENT_DATE = arg('date') || '2026-09-29';
 /** 파일명 상호 → 미수관리 업체명 (정규화로 안 맞는 경우만) */
 const MANUAL_MAP: Record<string, string> = {
   '고문환(예윤F＆C)': '예윤F＆C',
+  // 발송완료 스캔본 파일명 (3쪽=광주, 2쪽=회생채권)
+  '주식회사 팀코리아': '주식회사 팀코리아(광주)',
+  '주식회사 팀코리아(채권)': '팀코리아-회생채권',
 };
 
 /** 파일명 상호 → 엑셀 수신정보 상호 (같은 법인을 두 건으로 보낸 경우) */
 const RECIPIENT_ALIAS: Record<string, string> = {
   '주식회사 팀코리아(광주)': '주식회사 팀코리아',
   '주식회사 팀코리아-회생채권': '주식회사 팀코리아',
+  '주식회사 팀코리아(채권)': '주식회사 팀코리아',
 };
 
 function norm(s: string): string {
@@ -113,15 +119,17 @@ async function main() {
   const { getDb } = await import('../db');
   const { arrearsEntries } = await import('../db/schema');
   const { readBondRecords } = await import('../lib/bondMgmtDb');
-  const { setAppConfig } = await import('../lib/appConfigDb');
-  const { uploadBondFile, buildBondStoragePath } = await import('../lib/bondStorage');
+  const { getAppConfig, setAppConfig } = await import('../lib/appConfigDb');
+  const { uploadBondFile, buildBondStoragePath, removeBondFile } = await import('../lib/bondStorage');
   type Stored = import('../app/types/bond').BondStoredRecord;
 
   const files = fs
     .readdirSync(DIR)
     .filter(f => /^내용증명_.+\.pdf$/i.test(f))
     .sort((a, b) => a.localeCompare(b, 'ko'));
-  console.log(`폴더: ${DIR}\nPDF ${files.length}건 · 발송일 ${SENT_DATE} · ${APPLY ? 'APPLY' : 'DRY-RUN'}\n`);
+  console.log(
+    `폴더: ${DIR}\nPDF ${files.length}건 · 발송일 ${SENT_DATE} · ${APPLY ? 'APPLY' : 'DRY-RUN'}${REPLACE ? ' · 교체' : ''}\n`,
+  );
 
   const db = getDb();
   const entries: Entry[] = (
@@ -138,10 +146,19 @@ async function main() {
   const recipients = readRecipients();
   const records: Record<string, Stored> = await readBondRecords();
 
+  const saveRecords = async () => {
+    const doc = (await getAppConfig<Record<string, unknown>>('bond_mgmt')) ?? {};
+    await setAppConfig('bond_mgmt', { ...doc, records });
+  };
+  const cleared = new Set<string>();
   const unmatched: string[] = [];
   let done = 0;
   for (const file of files) {
-    const name = file.replace(/^내용증명_/, '').replace(/_첨부포함\.pdf$/i, '').replace(/\.pdf$/i, '');
+    const name = file
+      .replace(/^내용증명_/, '')
+      .replace(/\.pdf$/i, '')
+      .replace(/_\d{8}$/, '')
+      .replace(/_첨부포함$/, '');
     const { entry, how, candidates } = pickEntry(name, entries);
     if (!entry) {
       unmatched.push(name);
@@ -151,12 +168,19 @@ async function main() {
     const rName = RECIPIENT_ALIAS[name] ?? name;
     const rcpt = recipients.find(r => r.상호 === rName) ?? recipients.find(r => norm(r.상호) === norm(rName));
     const warn = entry.mgmtCategory !== 'recovery' ? ' ⚠ 채권회수 분류 아님' : '';
+    const prev = records[entry.id]?.attachments?.내용증명 ?? [];
     console.log(
-      `  ✓ ${name} → ${entry.companyName} (${how}, ${entry.managerName || '담당없음'})${rcpt ? '' : ' · 수신정보 없음'}${warn}`,
+      `  ✓ ${name} → ${entry.companyName} (${how}, ${entry.managerName || '담당없음'})${rcpt ? '' : ' · 수신정보 없음'}${warn}` +
+        (prev.length ? `  [기존 ${prev.map(a => a.filename).join(', ')}]` : ''),
     );
     if (!APPLY) continue;
 
     const rec: Stored = records[entry.id] ?? {};
+    if (REPLACE && !cleared.has(entry.id)) {
+      cleared.add(entry.id);
+      for (const a of rec.attachments?.내용증명 ?? []) await removeBondFile(a.storagePath);
+      rec.attachments = { ...rec.attachments, 내용증명: [] };
+    }
     const existing = rec.attachments?.내용증명 ?? [];
     if (existing.some(a => a.filename === file && a.sentDate === SENT_DATE)) {
       console.log('      (이미 등록됨 — 건너뜀)');
@@ -185,7 +209,7 @@ async function main() {
     rec.내용증명 = { checked: true, date: SENT_DATE };
     if (rcpt && !rec.recipient) rec.recipient = rcpt;
     records[entry.id] = rec;
-    await setAppConfig('bond_mgmt', { records });
+    await saveRecords();
     done += 1;
   }
 

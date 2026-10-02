@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { handleApiError } from '@/lib/apiError';
-import { nextNoticeDocNo, readBondContact, readBondRecords, updateBondRecords } from '@/lib/bondMgmtDb';
+import {
+  listBondContacts,
+  nextNoticeDocNo,
+  nextNoticeDocNos,
+  readBondContact,
+  readBondDocSeq,
+  readBondRecords,
+  updateBondRecords,
+} from '@/lib/bondMgmtDb';
 import type { BondRecordPatch, BondStoredRecord } from '@/app/types/bond';
 
 export const runtime = 'nodejs';
@@ -11,10 +19,15 @@ const NO_STORE = { headers: { 'Cache-Control': 'private, no-store' } } as const;
 
 async function payload(records?: Record<string, BondStoredRecord>) {
   const recs = records ?? (await readBondRecords());
+  const contact = await readBondContact();
+  const docSeq = await readBondDocSeq();
+  const year = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }));
   return {
     records: recs,
-    contact: await readBondContact(),
-    nextDocNo: nextNoticeDocNo(recs, new Date().getFullYear()),
+    contact,
+    contacts: listBondContacts(recs, contact),
+    nextDocNo: nextNoticeDocNo(recs, year, docSeq),
+    docNoOptions: nextNoticeDocNos(recs, year, docSeq),
   };
 }
 
@@ -33,14 +46,16 @@ export async function PATCH(req: Request) {
     const body = (await req.json().catch(() => ({}))) as {
       updates?: Array<{ id?: string; patch?: BondRecordPatch; appendNotice?: unknown }>;
       contact?: unknown;
+      /** PDF로 만든 해임통보 문서번호 — 연도별 카운터 갱신 */
+      usedDocNo?: unknown;
     };
     const updates = (body.updates ?? [])
       .filter(u => u?.id && (u.patch || u.appendNotice))
       .map(u => ({ id: String(u.id), patch: u.patch ?? {}, appendNotice: u.appendNotice }));
-    if (!updates.length && body.contact === undefined) {
+    if (!updates.length && body.contact === undefined && body.usedDocNo === undefined) {
       return NextResponse.json({ error: 'updates 필요' }, { status: 400 });
     }
-    const records = await updateBondRecords(updates, user, canManageArrears(user), body.contact);
+    const records = await updateBondRecords(updates, user, canManageArrears(user), body.contact, body.usedDocNo);
     return NextResponse.json(await payload(records), NO_STORE);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';

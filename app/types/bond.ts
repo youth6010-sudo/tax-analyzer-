@@ -66,6 +66,8 @@ export type BondNotice = {
   sentDate: string;
   /** 입금 기한 YYYY-MM-DD (v1.5는 비움) */
   deadline: string;
+  /** 안내문에 넣은 담당 — 다음 생성 때 선택 목록으로 사용 */
+  contact?: BondContact;
 };
 
 /** 안내문 하단 담당 줄 기본값 */
@@ -75,11 +77,19 @@ export type BondContact = {
   이메일: string;
 };
 
-export const DEFAULT_BOND_CONTACT: BondContact = {
-  담당: 'TAX팀 김평진 팀장',
-  전화: '051-783-6007',
-  이메일: 'youth6@taxbiz.kr',
-};
+const OFFICE_TEL = '051-783-6007';
+
+/** 해임통보 담당 선택 목록 */
+export const BOND_STAFF_CONTACTS: BondContact[] = [
+  { 담당: 'TAX팀 김평진 팀장', 전화: OFFICE_TEL, 이메일: 'youth6@taxbiz.kr' },
+  { 담당: 'TAX팀 안혜빈 과장', 전화: OFFICE_TEL, 이메일: 'youth4@taxbiz.kr' },
+  { 담당: 'TAX팀 박혜림 과장', 전화: OFFICE_TEL, 이메일: 'youth3@taxbiz.kr' },
+  { 담당: 'TAX팀 구진혜 과장', 전화: OFFICE_TEL, 이메일: 'youth2@taxbiz.kr' },
+  { 담당: 'TAX팀 이희만 주임', 전화: OFFICE_TEL, 이메일: 'youth7@taxbiz.kr' },
+  { 담당: '신상협 세무사', 전화: OFFICE_TEL, 이메일: 'youth@taxbiz.kr' },
+];
+
+export const DEFAULT_BOND_CONTACT: BondContact = BOND_STAFF_CONTACTS[0]!;
 
 /** DB 저장분 — 담당자명·업체명은 미수관리에서 */
 export type BondStoredRecord = {

@@ -20,6 +20,7 @@ import {
   type ArrearsEntryDto,
 } from '@/app/types/arrears';
 import {
+  BOND_STAFF_CONTACTS,
   DEFAULT_BOND_CONTACT,
   emptyBondRecord,
   type BondContact,
@@ -148,13 +149,23 @@ export default function BondMgmtPanel() {
   const [certTargetId, setCertTargetId] = useState<string | null>(null);
   const [dismissTargetId, setDismissTargetId] = useState<string | null>(null);
   const [contact, setContact] = useState<BondContact>(DEFAULT_BOND_CONTACT);
+  const [contacts, setContacts] = useState<BondContact[]>(BOND_STAFF_CONTACTS);
   const [nextDocNo, setNextDocNo] = useState('');
+  const [docNoOptions, setDocNoOptions] = useState<string[]>([]);
 
   const applyBondPayload = useCallback((data: unknown) => {
-    const d = data as { records?: Record<string, BondStoredRecord>; contact?: BondContact; nextDocNo?: string };
+    const d = data as {
+      records?: Record<string, BondStoredRecord>;
+      contact?: BondContact;
+      contacts?: BondContact[];
+      nextDocNo?: string;
+      docNoOptions?: string[];
+    };
     if (d.records) setStored(d.records);
     if (d.contact) setContact(d.contact);
+    if (d.contacts?.length) setContacts(d.contacts);
     if (d.nextDocNo) setNextDocNo(d.nextDocNo);
+    if (d.docNoOptions) setDocNoOptions(d.docNoOptions);
   }, []);
 
   const [reloadTick, setReloadTick] = useState(0);
@@ -583,7 +594,9 @@ export default function BondMgmtPanel() {
           recipient={dismissRow.recipient}
           notices={dismissRow.해임통보.notices ?? []}
           contact={contact}
+          contacts={contacts}
           nextDocNo={nextDocNo}
+          docNoOptions={docNoOptions}
           onPayload={applyBondPayload}
           onClose={() => setDismissTargetId(null)}
         />

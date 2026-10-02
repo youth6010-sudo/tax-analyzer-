@@ -5,6 +5,7 @@ import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import {
   BOND_ATTACHMENT_STEPS,
+  BOND_STAFF_CONTACTS,
   DEFAULT_BOND_CONTACT,
   type BondAttachment,
   type BondAttachmentStepKey,
@@ -17,7 +18,12 @@ import {
 
 const KEY = 'bond_mgmt';
 
-type BondDoc = { records: Record<string, BondStoredRecord>; contact?: BondContact };
+type BondDoc = {
+  records: Record<string, BondStoredRecord>;
+  contact?: BondContact;
+  /** 연도별 마지막으로 쓴 해임통보 문서번호 일련번호 (PDF 만들 때마다 갱신) */
+  docSeq?: Record<string, number>;
+};
 
 const DATE_RE = /^(\d{4}-\d{2}-\d{2})?$/;
 const DOC_NO_RE = /^청년들-부산-추심-(\d{4})-(\d+)호$/;
@@ -62,11 +68,13 @@ function sanitizeNotice(v: unknown): BondNotice | null {
     const s = String(x ?? '');
     return DATE_RE.test(s) ? s : '';
   };
+  const contact = r.contact === undefined ? null : sanitizeContact(r.contact);
   return {
     version,
     docNo: String(r.docNo ?? '').trim().slice(0, 60),
     sentDate: d(r.sentDate),
     deadline: d(r.deadline),
+    ...(contact && (contact.담당 || contact.전화 || contact.이메일) ? { contact } : {}),
   };
 }
 
@@ -112,21 +120,33 @@ async function assertCanEdit(ids: string[], user: { name: string }, canManage: b
   }
 }
 
+/** 사용한 문서번호를 연도별 카운터에 반영 — 다음 번호는 그보다 1 큰 수 */
+function consumeDocNo(doc: BondDoc, docNo: unknown): void {
+  const m = DOC_NO_RE.exec(String(docNo ?? '').trim());
+  if (!m) return;
+  const year = m[1]!;
+  const seq = Number(m[2]);
+  doc.docSeq = { ...doc.docSeq, [year]: Math.max(doc.docSeq?.[year] ?? 0, seq) };
+}
+
 export async function updateBondRecords(
   updates: Array<{ id: string; patch: BondRecordPatch; appendNotice?: unknown }>,
   user: { name: string },
   canManage: boolean,
   contact?: unknown,
+  usedDocNo?: unknown,
 ): Promise<Record<string, BondStoredRecord>> {
   const ids = [...new Set(updates.map(u => u.id).filter(Boolean))];
-  if (!ids.length && contact === undefined) return readBondRecords();
+  if (!ids.length && contact === undefined && usedDocNo === undefined) return readBondRecords();
   if (ids.length) await assertCanEdit(ids, user, canManage);
 
   const doc = await readDoc();
+  if (usedDocNo !== undefined) consumeDocNo(doc, usedDocNo);
   for (const { id, patch, appendNotice } of updates) {
     const rec = applyPatch(doc.records[id], patch);
     const notice = appendNotice === undefined ? null : sanitizeNotice(appendNotice);
     if (notice) {
+      consumeDocNo(doc, notice.docNo);
       rec.해임통보 = {
         date: rec.해임통보?.date ?? '',
         notices: [...(rec.해임통보?.notices ?? []), notice],
@@ -144,16 +164,57 @@ export async function readBondContact(): Promise<BondContact> {
   return c && (c.담당 || c.전화 || c.이메일) ? c : DEFAULT_BOND_CONTACT;
 }
 
-/** 청년들-부산-추심-YYYY-NNN호 — 저장된 해임통보 기록 중 해당 연도 최대 번호 + 1 */
-export function nextNoticeDocNo(records: Record<string, BondStoredRecord>, year: number): string {
-  let max = 0;
+/** 담당 선택 목록 — 기본값 + 직원 목록 + 발송 기록에 직접 입력해 쓴 담당 (중복 제거) */
+export function listBondContacts(records: Record<string, BondStoredRecord>, current: BondContact): BondContact[] {
+  const used = Object.values(records)
+    .flatMap(r => r.해임통보?.notices ?? [])
+    .filter(n => n.contact)
+    .sort((a, b) => b.sentDate.localeCompare(a.sentDate))
+    .map(n => n.contact!);
+  const seen = new Set<string>();
+  return [current, ...BOND_STAFF_CONTACTS, ...used].filter(c => {
+    const key = `${c.담당}|${c.전화}|${c.이메일}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export async function readBondDocSeq(): Promise<Record<string, number>> {
+  return (await readDoc()).docSeq ?? {};
+}
+
+function noticeSeq(records: Record<string, BondStoredRecord>, year: number, docSeq: Record<string, number>): number {
+  let max = docSeq[String(year)] ?? 0;
   for (const rec of Object.values(records)) {
     for (const n of rec.해임통보?.notices ?? []) {
       const m = DOC_NO_RE.exec(n.docNo);
       if (m && Number(m[1]) === year) max = Math.max(max, Number(m[2]));
     }
   }
-  return `청년들-부산-추심-${year}-${String(max + 1).padStart(3, '0')}호`;
+  return max;
+}
+
+const formatDocNo = (year: number, seq: number) => `청년들-부산-추심-${year}-${String(seq).padStart(3, '0')}호`;
+
+/** 청년들-부산-추심-YYYY-NNN호 — 해당 연도 카운터·발송 기록 중 최대 번호 + 1 (해가 바뀌면 001부터) */
+export function nextNoticeDocNo(
+  records: Record<string, BondStoredRecord>,
+  year: number,
+  docSeq: Record<string, number> = {},
+): string {
+  return formatDocNo(year, noticeSeq(records, year, docSeq) + 1);
+}
+
+/** 문서번호 선택 목록 — 다음 번호부터 연속 count개 (같은 날 여러 건 발송용) */
+export function nextNoticeDocNos(
+  records: Record<string, BondStoredRecord>,
+  year: number,
+  docSeq: Record<string, number> = {},
+  count = 5,
+): string[] {
+  const base = noticeSeq(records, year, docSeq);
+  return Array.from({ length: count }, (_, i) => formatDocNo(year, base + 1 + i));
 }
 
 export function isBondStep(v: unknown): v is BondAttachmentStepKey {
