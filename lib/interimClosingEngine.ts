@@ -506,14 +506,12 @@ export function computeInterimClosing(
     forceLinkEndingInventoryRows();
     applyEndingInventoryManual();
 
-    // 기초제품재고액(51): 전기=기초제품, 당기=기초제품+기초재공품 (엑셀 G51)
+    // 기초제품재고액(51): 기초제품만. 기초재공품은 별도 표시 줄 + 당기제품 제조원가(177)에 반영
     {
       const row = byExcelRow.get(51);
       if (row) {
         const prior = nameAmt(['기초제품재고액'], 'prior');
-        const current =
-          nameAmt(['기초제품재고액'], 'current') +
-          nameAmt(['기초재공품 재고액', '기초재공품재고액'], 'current');
+        const current = nameAmt(['기초제품재고액'], 'current');
         setAmt(row, prior, current);
         if (row.name !== '기초제품재고액') row.name = '기초제품재고액';
       }
@@ -649,14 +647,17 @@ export function computeInterimClosing(
     // 당기제품 제조원가(177) = 항상 72+76+77+86 (명세서 합계행 사용 금지)
     {
       const mfgTotal = byExcelRow.get(177);
-      // 전기: 총제조비용 + 기초재공품 − 기말재공품 (당기는 기초재공품이 R51에 들어가고 기말은 0)
+      // 총제조비용 + 기초재공품 − 기말재공품 (기말재공품 당기는 가결산 기본 0)
+      const wipBeginC = manufacturingWipBeginCurrent(payload);
       const p =
         amt(72, 'prior') + amt(76, 'prior') + amt(77, 'prior') + amt(86, 'prior') +
         stmtAmt('manufacturing', MANUFACTURING_WIP_BEGIN_NAMES, 'prior') -
         stmtAmt('manufacturing', MANUFACTURING_WIP_END_NAMES, 'prior');
-      const c = amt(72, 'current') + amt(76, 'current') + amt(77, 'current') + amt(86, 'current');
+      const c =
+        amt(72, 'current') + amt(76, 'current') + amt(77, 'current') + amt(86, 'current') + wipBeginC;
       const a =
-        amt(72, 'annualized') + amt(76, 'annualized') + amt(77, 'annualized') + amt(86, 'annualized');
+        amt(72, 'annualized') + amt(76, 'annualized') + amt(77, 'annualized') + amt(86, 'annualized') +
+        wipBeginC;
       setAmt(mfgTotal, p, c, a);
       if (mfgTotal && !mfgTotal.name) mfgTotal.name = '당기제품 제조원가';
       // 엑셀 R52: G52=$H$177, K52=$L$177. 전기도 제조원가 합계 복사 — 전기 기말제품이 빠지므로 0이면 매출원가가 틀어짐
@@ -678,6 +679,15 @@ export function computeInterimClosing(
           amt(51, 'current') + amt(52, 'current') - amt(53, 'current'),
           amt(51, 'annualized') + amt(52, 'annualized') - amt(53, 'annualized'),
         );
+        // 제품매출원가가 있으면 기초·기말제품재고액은 명세서에 없어도 0원으로 표시
+        if (cogs455.linked) {
+          for (const [r, name] of [[51, '기초제품재고액'], [53, '기말제품재고액']] as const) {
+            const row = byExcelRow.get(r);
+            if (!row) continue;
+            row.linked = true;
+            if (!row.name) row.name = name;
+          }
+        }
       }
     }
 
@@ -1156,6 +1166,24 @@ const CONSTRUCTION_WIP_END_NAMES = ['기말미완성 공사액', '기말미완�
 const MANUFACTURING_WIP_BEGIN_NAMES = ['기초재공품 재고액', '기초재공품재고액'];
 const MANUFACTURING_WIP_END_NAMES = ['기말재공품 재고액', '기말재공품재고액'];
 
+function statementLineAmt(
+  payload: InterimClosingPayload,
+  kind: StatementKind,
+  names: string[],
+  field: 'prior' | 'current',
+): number {
+  const keys = new Set(names.map(nk));
+  return num((payload.statements[kind] || []).find(l => keys.has(nk(l.name)))?.[field]);
+}
+
+/** 당기 기초재공품 = 명세서 당기 기초재공품, 없으면 전기 기말재공품 */
+function manufacturingWipBeginCurrent(payload: InterimClosingPayload): number {
+  return (
+    statementLineAmt(payload, 'manufacturing', MANUFACTURING_WIP_BEGIN_NAMES, 'current') ||
+    statementLineAmt(payload, 'manufacturing', MANUFACTURING_WIP_END_NAMES, 'prior')
+  );
+}
+
 /**
  * 재공품·미완성공사는 템플릿에 칸이 없어 합계행(177·233)에만 반영됨 → 합계행 바로 위에 표시 전용 줄 추가.
  * excelRow 소수(176.5·232.5…): 정수 구간 합계(sumRange·sumExcelRows)에 잡히지 않아 이중 합산되지 않음.
@@ -1175,7 +1203,17 @@ function withWipDisplayRows(
     kind: StatementKind;
     names: string[];
     ending: boolean;
+    current?: number;
   }[] = [
+    {
+      key: 'wip-mfg-begin',
+      excelRow: 176.4,
+      before: 177,
+      kind: 'manufacturing',
+      names: MANUFACTURING_WIP_BEGIN_NAMES,
+      ending: false,
+      current: manufacturingWipBeginCurrent(payload),
+    },
     { key: 'wip-mfg-end', excelRow: 176.5, before: 177, kind: 'manufacturing', names: MANUFACTURING_WIP_END_NAMES, ending: true },
     { key: 'wip-construction', excelRow: 232.5, before: 233, kind: 'construction', names: CONSTRUCTION_WIP_NAMES, ending: false },
     { key: 'wip-construction-end', excelRow: 232.6, before: 233, kind: 'construction', names: CONSTRUCTION_WIP_END_NAMES, ending: true },
@@ -1185,7 +1223,7 @@ function withWipDisplayRows(
     const keys = new Set(def.names.map(nk));
     const line = (payload.statements[def.kind] || []).find(l => keys.has(nk(l.name)));
     const prior = num(line?.prior);
-    const current = def.ending ? 0 : num(line?.current);
+    const current = def.ending ? 0 : def.current ?? num(line?.current);
     if (!prior && !current) continue;
     const idx = out.findIndex(r => r.excelRow === def.before);
     if (idx < 0) continue;
@@ -1297,6 +1335,7 @@ function checkStatementCoverage(
     excludeEnding: RegExp,
     manualEndingRows: number[],
     priorWipAdj: number,
+    currentWipAdj: number,
     deprRow?: { row: number; code: string },
   ) => {
     const lines = payload.statements[kind] ?? [];
@@ -1315,7 +1354,7 @@ function checkStatementCoverage(
       deprAdj = at(deprRow.row, 'current') - num(stmt?.current);
     }
     const expP = num(total.prior) + priorWipAdj;
-    const expC = num(total.current) + endC - manualEnd + deprAdj;
+    const expC = num(total.current) + endC - manualEnd + deprAdj + currentWipAdj;
     const dP = Math.round(at(engineRow, 'prior') - expP);
     const dC = Math.round(at(engineRow, 'current') - expC);
     if (!dP && !dC) return;
@@ -1336,6 +1375,7 @@ function checkStatementCoverage(
     /미완성/,
     [181],
     -lineAmt('construction', CONSTRUCTION_WIP_END_NAMES),
+    0,
     { row: 200, code: '618' },
   );
   totalCheck(
@@ -1347,6 +1387,7 @@ function checkStatementCoverage(
     [75],
     lineAmt('manufacturing', MANUFACTURING_WIP_BEGIN_NAMES) -
       lineAmt('manufacturing', MANUFACTURING_WIP_END_NAMES),
+    manufacturingWipBeginCurrent(payload),
   );
 
   return [...checks, ...placedInfo];
