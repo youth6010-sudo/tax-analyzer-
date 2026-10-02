@@ -7,6 +7,7 @@ import DismissalNoticeSheet, {
   NOTICE_FILE_VERSION,
   NOTICE_VERSION_LABEL,
 } from '@/app/arrears/bond/DismissalNoticeSheet';
+import { uploadBondAttachment } from '@/app/arrears/bond/bondUpload';
 import { useArrearsLetterData } from '@/app/arrears/bond/useArrearsLetterData';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import { arrearsChurnStatusLabel, type ArrearsEntryDto } from '@/app/types/arrears';
@@ -173,7 +174,19 @@ export default function DismissalNoticeModal({
     setError('');
     setDone('');
     try {
-      downloadBlob(await buildMultiPagePdfBlob(pages), filename);
+      const blob = await buildMultiPagePdfBlob(pages);
+      downloadBlob(blob, filename);
+      if (save) {
+        await uploadBondAttachment({
+          id: entry.id,
+          step: '해임통보',
+          file: blob,
+          filename,
+          sentDate,
+          source: 'generated',
+          patch: { 해임통보: { date: sentDate } },
+        });
+      }
       const res = await fetch('/api/arrears/bond', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +209,7 @@ export default function DismissalNoticeModal({
       onPayload(d);
       setDone(
         save
-          ? '발송 기록을 저장했습니다. 보낸 안내문 스캔본은 해임통보 폴더에 올려 주세요.'
+          ? '해임통보 폴더에 PDF를 저장하고 발송 기록을 남겼습니다.'
           : `PDF를 만들었습니다. 다음 문서번호는 ${(d as { nextDocNo?: string }).nextDocNo ?? ''}입니다.`,
       );
     } catch (e) {
@@ -286,7 +299,7 @@ export default function DismissalNoticeModal({
                 {busy === 'save' ? '저장 중…' : '다운로드 + 기록 저장'}
               </button>
               <p className="text-[11px] leading-snug text-slate-400">
-                기록 저장 = 해임통보 날짜를 발신일로, 버전·문서번호·기한을 발송 기록에 남김. 파일명: {filename}
+                기록 저장 = PDF를 해임통보 폴더에 올리고, 해임통보 날짜를 발신일로, 버전·문서번호·기한을 발송 기록에 남김. 파일명: {filename}
               </p>
             </div>
           </aside>

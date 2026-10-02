@@ -171,22 +171,48 @@ async function prepareLetterClone(
   return { host, clone };
 }
 
-function collectRowBreakYs(clone: HTMLElement): number[] {
+/** 다음 쪽에 반복할 표 머리글 위치 (px) */
+type TableBand = { headTop: number; headBottom: number; bodyBottom: number };
+
+type PageLayout = { breakYs: number[]; tables: TableBand[]; padTop: number };
+
+/** 끊을 수 있는 위치(행 아래·문단 경계)와 표 머리글 위치 — CSS px */
+function collectPageLayout(clone: HTMLElement): PageLayout {
   const rootTop = clone.getBoundingClientRect().top;
   const ys = new Set<number>([0]);
-  const addBottom = (el: Element | null | undefined) => {
+  const rel = (v: number) => Math.max(0, Math.round(v - rootTop));
+  const addEdges = (el: Element | null | undefined, top = false) => {
     if (!el) return;
     const r = (el as HTMLElement).getBoundingClientRect();
-    ys.add(Math.max(0, Math.round(r.bottom - rootTop)));
+    if (r.height <= 0) return;
+    ys.add(rel(r.bottom));
+    if (top) ys.add(rel(r.top));
   };
 
-  clone
-    .querySelectorAll('.arrears-letter-table thead tr, .arrears-letter-table tbody tr')
-    .forEach(tr => addBottom(tr));
-  addBottom(clone.querySelector('.arrears-letter-footer'));
+  clone.querySelectorAll('table thead tr, table tbody tr').forEach(tr => addEdges(tr));
+  Array.from(clone.children).forEach(child => {
+    if (child.tagName === 'STYLE') return;
+    addEdges(child, true);
+  });
+  addEdges(clone.querySelector('.arrears-letter-footer'), true);
   ys.add(Math.round(clone.getBoundingClientRect().height));
 
-  return [...ys].filter(y => Number.isFinite(y)).sort((a, b) => a - b);
+  const tables: TableBand[] = [];
+  clone.querySelectorAll('table').forEach(table => {
+    const head = table.querySelector('thead');
+    if (!head) return;
+    const h = head.getBoundingClientRect();
+    const t = table.getBoundingClientRect();
+    if (h.height <= 0) return;
+    tables.push({ headTop: rel(h.top), headBottom: rel(h.bottom), bodyBottom: rel(t.bottom) });
+  });
+
+  const padTop = parseFloat(getComputedStyle(clone).paddingTop) || 0;
+  return {
+    breakYs: [...ys].filter(y => Number.isFinite(y)).sort((a, b) => a - b),
+    tables,
+    padTop,
+  };
 }
 
 function snapSliceEnd(breakYs: number[], startY: number, maxEndY: number, totalH: number): number {
@@ -223,13 +249,13 @@ async function captureLetterCanvas(
   opts: { scale: number; liftLatin: boolean },
 ): Promise<{
   canvas: HTMLCanvasElement;
-  breakYsPx: number[];
+  layout: PageLayout;
   cleanup: () => void;
 }> {
   const { host, clone } = await prepareLetterClone(el, { liftLatin: opts.liftLatin });
   const html2canvas = (await import('html2canvas-pro')).default;
   try {
-    const breakYsCss = collectRowBreakYs(clone);
+    const layoutCss = collectPageLayout(clone);
     const canvas = await html2canvas(clone, {
       scale: opts.scale,
       useCORS: true,
@@ -248,13 +274,22 @@ async function captureLetterCanvas(
     }
 
     const scaleX = canvas.width / Math.max(1, clone.offsetWidth);
-    const breakYsPx = breakYsCss.map(y => Math.round(y * scaleX));
-    if (!breakYsPx.includes(canvas.height)) breakYsPx.push(canvas.height);
-    breakYsPx.sort((a, b) => a - b);
+    const px = (y: number) => Math.round(y * scaleX);
+    const breakYs = layoutCss.breakYs.map(px);
+    if (!breakYs.includes(canvas.height)) breakYs.push(canvas.height);
+    breakYs.sort((a, b) => a - b);
 
     return {
       canvas,
-      breakYsPx,
+      layout: {
+        breakYs,
+        tables: layoutCss.tables.map(t => ({
+          headTop: px(t.headTop),
+          headBottom: px(t.headBottom),
+          bodyBottom: px(t.bodyBottom),
+        })),
+        padTop: px(layoutCss.padTop),
+      },
       cleanup: () => host.remove(),
     };
   } catch (e) {
@@ -263,7 +298,7 @@ async function captureLetterCanvas(
   }
 }
 
-/** firstPage(1-based)부터 totalPages 장에 「- i / n -」 */
+/** firstPage(1-based)부터 totalPages 장에 「i / n」 */
 function addPdfPageNumbers(pdf: import('jspdf').jsPDF, totalPages: number, firstPage = 1): void {
   if (totalPages <= 1) return;
   const pageW = pdf.internal.pageSize.getWidth();
@@ -273,31 +308,15 @@ function addPdfPageNumbers(pdf: import('jspdf').jsPDF, totalPages: number, first
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(85, 85, 85);
-    pdf.text(`- ${i} / ${totalPages} -`, pageW / 2, pageH - 7, { align: 'center' });
+    pdf.text(`${i} / ${totalPages}`, pageW / 2, pageH - 7, { align: 'center' });
   }
-}
-
-function sliceCanvas(
-  source: HTMLCanvasElement,
-  srcY: number,
-  srcH: number,
-): HTMLCanvasElement {
-  const slice = document.createElement('canvas');
-  slice.width = source.width;
-  slice.height = Math.max(1, srcH);
-  const ctx = slice.getContext('2d');
-  if (!ctx) return slice;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, slice.width, slice.height);
-  ctx.drawImage(source, 0, srcY, source.width, srcH, 0, 0, source.width, srcH);
-  return slice;
 }
 
 /** 캡처 한 장을 A4에 행 경계로 나눠 붙임. 반환 = 붙인 페이지 수 */
 function appendCanvasPages(
   pdf: import('jspdf').jsPDF,
   canvas: HTMLCanvasElement,
-  breakYsPx: number[],
+  layout: PageLayout,
   startOnNewPage: boolean,
 ): number {
   const pageW = pdf.internal.pageSize.getWidth();
@@ -315,21 +334,39 @@ function appendCanvasPages(
     return 1;
   }
 
-  const pxPerMm = canvas.height / imgH;
-  const maxSlicePx = Math.floor(usableH * pxPerMm);
+  const { breakYs, tables, padTop } = layout;
+  const pageMaxPx = Math.floor(usableH * (canvas.width / usableW));
+  /** 표 테두리 두께(캡처 배율 반영) — 이어지는 쪽 첫 행 윗선이 빠지지 않게 겹쳐 자름 */
+  const border = Math.max(2, Math.round(canvas.width / CAPTURE_WIDTH_PX));
   let srcY = 0;
   let pageIdx = 0;
   while (srcY < canvas.height - 2) {
-    const rawEnd = Math.min(srcY + maxSlicePx, canvas.height);
-    const endY =
-      rawEnd >= canvas.height - 2
-        ? canvas.height
-        : snapSliceEnd(breakYsPx, srcY, rawEnd, canvas.height);
-    const h = Math.max(1, endY - srcY);
-    const slice = sliceCanvas(canvas, srcY, h);
-    const sliceHmm = (h / canvas.width) * usableW;
+    const cont = pageIdx > 0;
+    const band = cont ? tables.find(t => srcY > t.headBottom + 2 && srcY < t.bodyBottom - 2) : undefined;
+    const topPad = cont ? padTop : 0;
+    const headFrom = band ? Math.max(0, band.headTop - border) : 0;
+    const headH = band ? band.headBottom - headFrom : 0;
+    const room = pageMaxPx - topPad - headH - border * 2;
+    const rawEnd = Math.min(srcY + room, canvas.height);
+    let endY =
+      rawEnd >= canvas.height - 2 ? canvas.height : snapSliceEnd(breakYs, srcY, rawEnd, canvas.height);
+    if (endY - srcY > room) endY = rawEnd;
+    const from = band ? Math.max(0, srcY - border) : srcY;
+    const to = endY < canvas.height ? Math.min(canvas.height, endY + border) : endY;
+    const bodyH = Math.max(1, to - from);
+
+    const page = document.createElement('canvas');
+    page.width = canvas.width;
+    page.height = topPad + headH + bodyH;
+    const ctx = page.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, page.width, page.height);
+      if (headH > 0) ctx.drawImage(canvas, 0, headFrom, canvas.width, headH, 0, topPad, canvas.width, headH);
+      ctx.drawImage(canvas, 0, from, canvas.width, bodyH, 0, topPad + headH, canvas.width, bodyH);
+    }
     if (pageIdx > 0 || startOnNewPage) pdf.addPage();
-    pdf.addImage(slice.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, sliceHmm);
+    pdf.addImage(page.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, (page.height / page.width) * usableW);
     srcY = endY;
     pageIdx += 1;
     if (pageIdx > 80) break;
@@ -351,12 +388,12 @@ export async function buildMultiPagePdfBlob(els: HTMLElement[]): Promise<Blob> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   let total = 0;
   for (const el of els) {
-    const { canvas, breakYsPx, cleanup } = await captureLetterCanvas(el, {
+    const { canvas, layout, cleanup } = await captureLetterCanvas(el, {
       scale: CAPTURE_SCALE_PDF,
       liftLatin: true,
     });
     try {
-      const pages = appendCanvasPages(pdf, canvas, breakYsPx, total > 0);
+      const pages = appendCanvasPages(pdf, canvas, layout, total > 0);
       addPdfPageNumbers(pdf, pages, total + 1);
       total += pages;
     } finally {

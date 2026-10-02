@@ -350,7 +350,9 @@ export default function BondMgmtPanel() {
           count={r[step].attachments.length}
           onClick={() => setAttachTarget({ id: r.id, step })}
         />
-        <GenerateButton enabled={generateEnabled} onClick={() => handleGenerate(step, r)} />
+        {isDocumentReady(step) ? (
+          <GenerateButton enabled={generateEnabled} onClick={() => handleGenerate(step, r)} />
+        ) : null}
       </Cell>
     );
   };
