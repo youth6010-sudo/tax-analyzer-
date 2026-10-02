@@ -222,11 +222,14 @@ export default function InterimClosingPageClient() {
     };
   }, [pdfPreviewUrl]);
 
-  // 환산기준=가정치 계정 → 가정치 표 자동 연동 (연동된 행만)
+  // 환산기준=가정치 계정 → 가정치 표 자동 연동 (연동된 행 + 사용자가 직접 가정치로 고른 행)
   // assumptions를 deps에 넣으면 금액 입력 중 sync가 다시 돌려 입력이 깨짐
   useEffect(() => {
-    const source = computed.rows.filter(r => r.linked && (r.name || '').trim());
     setPayload(p => {
+      const source = computed.rows
+        .filter(r => (r.name || '').trim())
+        .filter(r => r.linked || p.rowCriteria[r.key]?.convertBasis === '가정치')
+        .map(r => ({ ...r, linked: true }));
       const next = syncAssumptionsWithReport(p.manual.assumptions, source);
       const same =
         next.length === p.manual.assumptions.length &&

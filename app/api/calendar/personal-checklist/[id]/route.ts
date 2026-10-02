@@ -19,7 +19,10 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ item });
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: '조회 실패' }, { status: 500 });
   }
 }
@@ -50,6 +53,7 @@ export async function PATCH(
     return NextResponse.json({ item });
   } catch (e) {
     const msg = e instanceof Error ? e.message : '수정 실패';
+    if (msg === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (msg === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ error: msg }, { status: 400 });
   }
@@ -67,6 +71,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true, deleted: result.deleted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : '삭제 실패';
+    if (msg === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (msg === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ error: msg }, { status: 400 });
   }

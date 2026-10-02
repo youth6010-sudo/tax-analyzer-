@@ -11,6 +11,8 @@ export interface SessionUser {
 
 export interface SessionData {
   user?: SessionUser;
+  /** 마지막 쿠키 갱신 시각(ms) — 화면을 보고 있는 동안 heartbeat로 24시간 만료를 연장 */
+  renewedAt?: number;
 }
 
 export function getSessionPassword(): string {

@@ -443,9 +443,8 @@ export function computeInterimClosing(
   const forceEndingInventoryZero = () => {
     for (const row of rawRows) {
       const n = (row.name || '').replace(/\s+/g, '');
-      // 「기말~」은 가결산 기본 0 (당기 미확정). 수동 endingInventories 로만 채움.
+      // 「기말~」 당기는 가결산 기본 0 (미확정, 수동 endingInventories 로만 채움). 전기는 명세서 값 유지.
       if (n.includes('기말')) {
-        row.prior = 0;
         row.current = 0;
         row.annualized = 0;
       }
@@ -563,10 +562,11 @@ export function computeInterimClosing(
           ['당기상품매입액', '상품매입액', '상품매입', '당기상품매입'],
           'current',
         );
-        // 명세서에 매입 세부가 없으면 상품매출원가 − 기초 로 역산
-        // (기말은 가결산 기본 0 → 수동 기말재고 입력 시 매출원가가 줄어들도록 역산에 기말 미포함)
+        const endPrior = nameAmt(['기말상품재고액', '기말상품'], 'prior');
+        // 명세서에 매입 세부가 없으면 상품매출원가 − 기초 (+ 전기 기말) 로 역산
+        // (당기 기말은 가결산 기본 0 → 수동 기말재고 입력 시 매출원가가 줄어들도록 당기 역산에 기말 미포함)
         if (!purchPrior && hit) {
-          purchPrior = num(hit.prior) - beginPrior;
+          purchPrior = num(hit.prior) - beginPrior + endPrior;
         }
         if (!purchCurrent && hit) {
           purchCurrent = num(hit.current) - beginCurrent;
@@ -582,7 +582,7 @@ export function computeInterimClosing(
         }
         if (endRow) {
           endRow.name = '기말상품재고액';
-          endRow.prior = 0;
+          endRow.prior = endPrior;
           const endKey = endingInventoryKey(endRow.name);
           const hasManual =
             num(manual.endingInventories?.[endKey]) || num(manual.endingInventoryCurrent);
@@ -649,18 +649,21 @@ export function computeInterimClosing(
     // 당기제품 제조원가(177) = 항상 72+76+77+86 (명세서 합계행 사용 금지)
     {
       const mfgTotal = byExcelRow.get(177);
-      const p = amt(72, 'prior') + amt(76, 'prior') + amt(77, 'prior') + amt(86, 'prior');
+      // 전기: 총제조비용 + 기초재공품 − 기말재공품 (당기는 기초재공품이 R51에 들어가고 기말은 0)
+      const p =
+        amt(72, 'prior') + amt(76, 'prior') + amt(77, 'prior') + amt(86, 'prior') +
+        stmtAmt('manufacturing', MANUFACTURING_WIP_BEGIN_NAMES, 'prior') -
+        stmtAmt('manufacturing', MANUFACTURING_WIP_END_NAMES, 'prior');
       const c = amt(72, 'current') + amt(76, 'current') + amt(77, 'current') + amt(86, 'current');
       const a =
         amt(72, 'annualized') + amt(76, 'annualized') + amt(77, 'annualized') + amt(86, 'annualized');
       setAmt(mfgTotal, p, c, a);
       if (mfgTotal && !mfgTotal.name) mfgTotal.name = '당기제품 제조원가';
-      // 엑셀 R52: D52=VLOOKUP("당기제품제조원가") — 조회표는 "당기제품 제조원가"(공백)라 실패→0
-      // G52=$H$177, K52=$L$177 (당기·환산만 제조원가 합계 복사)
+      // 엑셀 R52: G52=$H$177, K52=$L$177. 전기도 제조원가 합계 복사 — 전기 기말제품이 빠지므로 0이면 매출원가가 틀어짐
       const underCogs = byExcelRow.get(52);
       if (mfgTotal && underCogs) {
         underCogs.name = '당기제품제조원가';
-        setAmt(underCogs, 0, mfgTotal.current, mfgTotal.annualized);
+        setAmt(underCogs, mfgTotal.prior, mfgTotal.current, mfgTotal.annualized);
       }
     }
 
@@ -730,19 +733,20 @@ export function computeInterimClosing(
       }
     }
 
-    // 당기공사원가(233) = 178+182+183+191+192 + 기초미완성공사액 (기말미완성은 가결산 기본 0)
+    // 당기공사원가(233) = 178+182+183+191+192 + 기초미완성공사액 − 기말미완성공사액 (기말미완성 당기는 가결산 기본 0)
     {
       const constTotal = byExcelRow.get(233);
-      const wipNames = ['기초미완성 공사액', '기초미완성공사액'];
-      const wipP = stmtAmt('construction', wipNames, 'prior');
-      const wipC = stmtAmt('construction', wipNames, 'current');
+      const wipP = stmtAmt('construction', CONSTRUCTION_WIP_NAMES, 'prior');
+      const wipC = stmtAmt('construction', CONSTRUCTION_WIP_NAMES, 'current');
+      const wipEndP = stmtAmt('construction', CONSTRUCTION_WIP_END_NAMES, 'prior');
       const p =
         amt(178, 'prior') +
         amt(182, 'prior') +
         amt(183, 'prior') +
         amt(191, 'prior') +
         amt(192, 'prior') +
-        wipP;
+        wipP -
+        wipEndP;
       const c =
         amt(178, 'current') +
         amt(182, 'current') +
@@ -964,6 +968,9 @@ export function computeInterimClosing(
   const salesCurrent = sales?.current || 0;
   let salesAnn = sales?.annualized || 0;
 
+  // 명세서 대사(합계 점검)는 「비율」로 바꾼 당기가 아니라 명세서 기준 당기로 비교
+  const statementCurrentByRow = new Map(rawRows.map(r => [r.excelRow, r.current]));
+
   // 입력기준「비율」: 전기 매출대비 비율(전기계정÷전기매출) × 올해 당기매출 → 당기금액
   // 입력기준「실적」: 명세서 당기 그대로(기본)
   if (salesCurrent || salesPrior) {
@@ -1077,8 +1084,8 @@ export function computeInterimClosing(
   }
 
   return {
-    rows: rawRows,
-    checks: checkStatementCoverage(payload, rawRows, placements),
+    rows: withWipDisplayRows(rawRows, payload, salesPrior, salesCurrent, salesAnn),
+    checks: checkStatementCoverage(payload, rawRows, placements, statementCurrentByRow),
     kpi: {
       // 엑셀 상단 H3 = L601(세금차감전이익)
       netIncome: pretaxBase,
@@ -1144,6 +1151,67 @@ function placementRange(kind: StatementKind, code: string): [number, number] | n
   return null;
 }
 
+const CONSTRUCTION_WIP_NAMES = ['기초미완성 공사액', '기초미완성공사액'];
+const CONSTRUCTION_WIP_END_NAMES = ['기말미완성 공사액', '기말미완성공사액'];
+const MANUFACTURING_WIP_BEGIN_NAMES = ['기초재공품 재고액', '기초재공품재고액'];
+const MANUFACTURING_WIP_END_NAMES = ['기말재공품 재고액', '기말재공품재고액'];
+
+/**
+ * 재공품·미완성공사는 템플릿에 칸이 없어 합계행(177·233)에만 반영됨 → 합계행 바로 위에 표시 전용 줄 추가.
+ * excelRow 소수(176.5·232.5…): 정수 구간 합계(sumRange·sumExcelRows)에 잡히지 않아 이중 합산되지 않음.
+ * 기말 당기는 가결산 기본 0.
+ */
+function withWipDisplayRows(
+  rows: ComputedReportRow[],
+  payload: InterimClosingPayload,
+  salesPrior: number,
+  salesCurrent: number,
+  salesAnn: number,
+): ComputedReportRow[] {
+  const defs: {
+    key: string;
+    excelRow: number;
+    before: number;
+    kind: StatementKind;
+    names: string[];
+    ending: boolean;
+  }[] = [
+    { key: 'wip-mfg-end', excelRow: 176.5, before: 177, kind: 'manufacturing', names: MANUFACTURING_WIP_END_NAMES, ending: true },
+    { key: 'wip-construction', excelRow: 232.5, before: 233, kind: 'construction', names: CONSTRUCTION_WIP_NAMES, ending: false },
+    { key: 'wip-construction-end', excelRow: 232.6, before: 233, kind: 'construction', names: CONSTRUCTION_WIP_END_NAMES, ending: true },
+  ];
+  let out = rows;
+  for (const def of defs) {
+    const keys = new Set(def.names.map(nk));
+    const line = (payload.statements[def.kind] || []).find(l => keys.has(nk(l.name)));
+    const prior = num(line?.prior);
+    const current = def.ending ? 0 : num(line?.current);
+    if (!prior && !current) continue;
+    const idx = out.findIndex(r => r.excelRow === def.before);
+    if (idx < 0) continue;
+    const row: ComputedReportRow = {
+      key: def.key,
+      excelRow: def.excelRow,
+      code: '',
+      name: line?.name || def.names[0]!,
+      kind: 'sub',
+      prior,
+      priorRatio: salesPrior ? prior / salesPrior : null,
+      current,
+      currentRatio: salesCurrent ? current / salesCurrent : null,
+      annualized: current,
+      annualizedRatio: salesAnn ? current / salesAnn : null,
+      inputBasis: '',
+      convertBasis: '',
+      isSection: false,
+      isComputed: true,
+      linked: true,
+    };
+    out = [...out.slice(0, idx), row, ...out.slice(idx)];
+  }
+  return out;
+}
+
 type Placement = {
   kind: StatementKind;
   line: AccountLine;
@@ -1163,12 +1231,16 @@ function checkStatementCoverage(
   payload: InterimClosingPayload,
   rows: ComputedReportRow[],
   placements: Placement[],
+  statementCurrentByRow: Map<number, number>,
 ): InterimClosingCheck[] {
   const checks: InterimClosingCheck[] = [];
   const placedInfo: InterimClosingCheck[] = [];
   const rowNames = new Set(rows.map(r => nk(r.name)).filter(Boolean));
   const byRow = new Map(rows.map(r => [r.excelRow, r]));
-  const at = (r: number, f: 'prior' | 'current') => num(byRow.get(r)?.[f]);
+  const at = (r: number, f: 'prior' | 'current') =>
+    f === 'current' && statementCurrentByRow.has(r)
+      ? num(statementCurrentByRow.get(r))
+      : num(byRow.get(r)?.[f]);
   const placedKeys = new Set<string>();
 
   for (const p of placements) {
@@ -1210,7 +1282,13 @@ function checkStatementCoverage(
     return lines.find(l => keys.has(nk(l.name)));
   };
 
-  /** 명세서 합계 + 엔진이 0으로 둔 기말재고 − 수동 기말 + 수동 감가상각 */
+  const lineAmt = (kind: StatementKind, names: string[]) =>
+    num(find(payload.statements[kind] ?? [], names)?.prior);
+
+  /**
+   * 전기: 명세서 합계 + 재공품·미완성 조정(priorWipAdj)
+   * 당기: 명세서 합계 + 엔진이 0으로 둔 기말재고 − 수동 기말 + 수동 감가상각
+   */
   const totalCheck = (
     kind: StatementKind,
     engineRow: number,
@@ -1218,6 +1296,7 @@ function checkStatementCoverage(
     totalNames: string[],
     excludeEnding: RegExp,
     manualEndingRows: number[],
+    priorWipAdj: number,
     deprRow?: { row: number; code: string },
   ) => {
     const lines = payload.statements[kind] ?? [];
@@ -1228,7 +1307,6 @@ function checkStatementCoverage(
       const n = nk(l.name);
       return n.startsWith('기말') && !excludeEnding.test(n);
     });
-    const endP = endingLines.reduce((s, l) => s + num(l.prior), 0);
     const endC = endingLines.reduce((s, l) => s + num(l.current), 0);
     const manualEnd = manualEndingRows.reduce((s, r) => s + at(r, 'current'), 0);
     let deprAdj = 0;
@@ -1236,7 +1314,7 @@ function checkStatementCoverage(
       const stmt = lines.find(l => l.code === deprRow.code);
       deprAdj = at(deprRow.row, 'current') - num(stmt?.current);
     }
-    const expP = num(total.prior) + endP;
+    const expP = num(total.prior) + priorWipAdj;
     const expC = num(total.current) + endC - manualEnd + deprAdj;
     const dP = Math.round(at(engineRow, 'prior') - expP);
     const dC = Math.round(at(engineRow, 'current') - expC);
@@ -1257,9 +1335,19 @@ function checkStatementCoverage(
     ['합계'],
     /미완성/,
     [181],
+    -lineAmt('construction', CONSTRUCTION_WIP_END_NAMES),
     { row: 200, code: '618' },
   );
-  totalCheck('manufacturing', 177, '당기제품 제조원가', ['당기 총 제조비용'], /재공품/, [75]);
+  totalCheck(
+    'manufacturing',
+    177,
+    '당기제품 제조원가',
+    ['당기 총 제조비용'],
+    /재공품/,
+    [75],
+    lineAmt('manufacturing', MANUFACTURING_WIP_BEGIN_NAMES) -
+      lineAmt('manufacturing', MANUFACTURING_WIP_END_NAMES),
+  );
 
   return [...checks, ...placedInfo];
 }
