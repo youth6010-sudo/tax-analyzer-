@@ -49,6 +49,8 @@ async function prepareLetterClone(
   el: HTMLElement,
   opts?: { liftLatin?: boolean },
 ): Promise<{ host: HTMLElement; clone: HTMLElement }> {
+  /** data-capture-font 가 있으면 그 글꼴 유지 (내용증명은 바탕체) */
+  const font = el.dataset.captureFont || CAPTURE_FONT;
   const host = document.createElement('div');
   host.setAttribute('data-arrears-capture', '1');
   host.style.cssText = `position:fixed;left:-14000px;top:0;width:${CAPTURE_WIDTH_PX}px;background:#fff;z-index:-1;overflow:visible;`;
@@ -66,11 +68,11 @@ async function prepareLetterClone(
     'background:#ffffff',
     'color:#111111',
     'box-sizing:border-box',
-    `font-family:${CAPTURE_FONT}`,
+    `font-family:${font}`,
   ].join(';');
 
   clone.querySelectorAll<HTMLElement>('*').forEach(node => {
-    node.style.fontFamily = CAPTURE_FONT;
+    node.style.fontFamily = font;
   });
 
   clone.querySelectorAll<HTMLElement>('.arrears-letter-table').forEach(table => {
@@ -81,7 +83,7 @@ async function prepareLetterClone(
   clone.querySelectorAll<HTMLElement>('.arrears-letter-table th, .arrears-letter-table td').forEach(cell => {
     cell.style.border = '1px solid #222222';
     cell.style.verticalAlign = 'middle';
-    cell.style.fontFamily = CAPTURE_FONT;
+    cell.style.fontFamily = font;
   });
   clone.querySelectorAll<HTMLElement>('h2').forEach(h => {
     h.style.textAlign = 'center';
@@ -153,8 +155,8 @@ async function prepareLetterClone(
   if (document.fonts?.ready) {
     try {
       await document.fonts.ready;
-      await document.fonts.load(`12px ${CAPTURE_FONT}`);
-      await document.fonts.load(`bold 12px ${CAPTURE_FONT}`);
+      await document.fonts.load(`12px ${font}`);
+      await document.fonts.load(`bold 12px ${font}`);
     } catch {
       /* ignore */
     }
@@ -261,12 +263,13 @@ async function captureLetterCanvas(
   }
 }
 
-function addPdfPageNumbers(pdf: import('jspdf').jsPDF, totalPages: number): void {
+/** firstPage(1-based)부터 totalPages 장에 「- i / n -」 */
+function addPdfPageNumbers(pdf: import('jspdf').jsPDF, totalPages: number, firstPage = 1): void {
   if (totalPages <= 1) return;
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   for (let i = 1; i <= totalPages; i++) {
-    pdf.setPage(i);
+    pdf.setPage(firstPage + i - 1);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(85, 85, 85);
@@ -290,54 +293,77 @@ function sliceCanvas(
   return slice;
 }
 
+/** 캡처 한 장을 A4에 행 경계로 나눠 붙임. 반환 = 붙인 페이지 수 */
+function appendCanvasPages(
+  pdf: import('jspdf').jsPDF,
+  canvas: HTMLCanvasElement,
+  breakYsPx: number[],
+  startOnNewPage: boolean,
+): number {
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const marginX = 10;
+  const marginTop = 10;
+  const footerH = 12;
+  const usableW = pageW - marginX * 2;
+  const usableH = pageH - marginTop - footerH;
+  const imgH = (canvas.height / canvas.width) * usableW;
+
+  if (imgH <= usableH + 0.5) {
+    if (startOnNewPage) pdf.addPage();
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, imgH);
+    return 1;
+  }
+
+  const pxPerMm = canvas.height / imgH;
+  const maxSlicePx = Math.floor(usableH * pxPerMm);
+  let srcY = 0;
+  let pageIdx = 0;
+  while (srcY < canvas.height - 2) {
+    const rawEnd = Math.min(srcY + maxSlicePx, canvas.height);
+    const endY =
+      rawEnd >= canvas.height - 2
+        ? canvas.height
+        : snapSliceEnd(breakYsPx, srcY, rawEnd, canvas.height);
+    const h = Math.max(1, endY - srcY);
+    const slice = sliceCanvas(canvas, srcY, h);
+    const sliceHmm = (h / canvas.width) * usableW;
+    if (pageIdx > 0 || startOnNewPage) pdf.addPage();
+    pdf.addImage(slice.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, sliceHmm);
+    srcY = endY;
+    pageIdx += 1;
+    if (pageIdx > 80) break;
+  }
+  return pageIdx || 1;
+}
+
 /** A4 PDF — 행 경계로만 분할, 숫자·영문 높낮이 보정 */
 export async function buildArrearsLetterPdfBlob(el: HTMLElement): Promise<Blob> {
-  const { canvas, breakYsPx, cleanup } = await captureLetterCanvas(el, {
-    scale: CAPTURE_SCALE_PDF,
-    liftLatin: true,
-  });
-  try {
-    const { jsPDF } = await import('jspdf');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const marginX = 10;
-    const marginTop = 10;
-    const footerH = 12;
-    const usableW = pageW - marginX * 2;
-    const usableH = pageH - marginTop - footerH;
-    const imgH = (canvas.height / canvas.width) * usableW;
-    const pxPerMm = canvas.height / imgH;
-    const maxSlicePx = Math.floor(usableH * pxPerMm);
+  return buildMultiPagePdfBlob([el]);
+}
 
-    if (imgH <= usableH + 0.5) {
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, imgH);
-      addPdfPageNumbers(pdf, 1);
-      return pdf.output('blob');
+/**
+ * 여러 문서(예: 내용증명 1쪽 + 미수 수수료 안내)를 한 PDF로.
+ * 각 문서는 새 페이지에서 시작하고, 쪽번호는 문서별로 매김(2쪽 이상일 때만).
+ */
+export async function buildMultiPagePdfBlob(els: HTMLElement[]): Promise<Blob> {
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  let total = 0;
+  for (const el of els) {
+    const { canvas, breakYsPx, cleanup } = await captureLetterCanvas(el, {
+      scale: CAPTURE_SCALE_PDF,
+      liftLatin: true,
+    });
+    try {
+      const pages = appendCanvasPages(pdf, canvas, breakYsPx, total > 0);
+      addPdfPageNumbers(pdf, pages, total + 1);
+      total += pages;
+    } finally {
+      cleanup();
     }
-
-    let srcY = 0;
-    let pageIdx = 0;
-    while (srcY < canvas.height - 2) {
-      const rawEnd = Math.min(srcY + maxSlicePx, canvas.height);
-      const endY =
-        rawEnd >= canvas.height - 2
-          ? canvas.height
-          : snapSliceEnd(breakYsPx, srcY, rawEnd, canvas.height);
-      const h = Math.max(1, endY - srcY);
-      const slice = sliceCanvas(canvas, srcY, h);
-      const sliceHmm = (h / canvas.width) * usableW;
-      if (pageIdx > 0) pdf.addPage();
-      pdf.addImage(slice.toDataURL('image/png'), 'PNG', marginX, marginTop, usableW, sliceHmm);
-      srcY = endY;
-      pageIdx += 1;
-      if (pageIdx > 80) break;
-    }
-    addPdfPageNumbers(pdf, pageIdx || 1);
-    return pdf.output('blob');
-  } finally {
-    cleanup();
   }
+  return pdf.output('blob');
 }
 
 /** 전체 공문 한 장 PNG — 화면과 비슷한 글자 크기(배율 1) */

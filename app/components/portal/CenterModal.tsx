@@ -9,9 +9,11 @@ type Props = {
   description?: string;
   onClose: () => void;
   children: ReactNode;
+  /** 기본 max-w-md */
+  widthClass?: string;
 };
 
-export default function CenterModal({ open, title, description, onClose, children }: Props) {
+export default function CenterModal({ open, title, description, onClose, children, widthClass = 'max-w-md' }: Props) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function CenterModal({ open, title, description, onClose, childre
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl overflow-visible"
+        className={`w-full ${widthClass} rounded-2xl border border-slate-200 bg-white shadow-xl overflow-visible`}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">

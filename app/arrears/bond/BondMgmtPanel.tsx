@@ -12,11 +12,11 @@ import {
 } from '@/app/components/portal/uiClasses';
 import ArrearsHubTabs from '@/app/arrears/ArrearsHubTabs';
 import BondAttachmentModal from '@/app/arrears/bond/BondAttachmentModal';
+import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
 import type { ArrearsEntryDto } from '@/app/types/arrears';
 import {
   emptyBondRecord,
   todayIsoDate,
-  type BondAttachment,
   type BondAttachmentStepKey,
   type BondCheckedStepKey,
   type BondRecord,
@@ -25,22 +25,22 @@ import {
 } from '@/app/types/bond';
 import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
-import { generateDocument, type DocumentType } from '@/lib/documents/generateDocument';
+import { generateDocument, isDocumentReady, type DocumentType } from '@/lib/documents/generateDocument';
 
 /** 미수관리 관리분류 「채권회수」 업체가 채권관리 대상 */
 const BOND_CATEGORY = 'recovery';
 
-type AttachmentMap = Record<string, Partial<Record<BondAttachmentStepKey, BondAttachment[]>>>;
-
 function toRecord(e: ArrearsEntryDto, stored: BondStoredRecord | undefined): BondRecord {
   const base = emptyBondRecord(e.id, e.managerName || '', e.companyName);
   if (!stored) return base;
+  const att = stored.attachments ?? {};
   return {
     ...base,
-    내용증명: { ...base.내용증명, ...stored.내용증명 },
+    내용증명: { ...base.내용증명, ...stored.내용증명, attachments: att.내용증명 ?? [] },
     회수일정: stored.회수일정 ?? '',
-    해임통보: { ...base.해임통보, ...stored.해임통보 },
-    지급명령: { ...base.지급명령, ...stored.지급명령 },
+    해임통보: { ...base.해임통보, ...stored.해임통보, attachments: att.해임통보 ?? [] },
+    지급명령: { ...base.지급명령, ...stored.지급명령, attachments: att.지급명령 ?? [] },
+    recipient: stored.recipient,
   };
 }
 
@@ -123,7 +123,6 @@ function Cell({ children }: { children: ReactNode }) {
 export default function BondMgmtPanel() {
   const [entries, setEntries] = useState<ArrearsEntryDto[]>([]);
   const [stored, setStored] = useState<Record<string, BondStoredRecord>>({});
-  const [attachments, setAttachments] = useState<AttachmentMap>({});
   const [canManage, setCanManage] = useState(false);
   const [viewerName, setViewerName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -139,6 +138,7 @@ export default function BondMgmtPanel() {
   const [bulkDate, setBulkDate] = useState(todayIsoDate());
   const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
   const [attachTarget, setAttachTarget] = useState<{ id: string; step: BondAttachmentStepKey } | null>(null);
+  const [certTargetId, setCertTargetId] = useState<string | null>(null);
 
   const [reloadTick, setReloadTick] = useState(0);
   const load = useCallback(() => setReloadTick(n => n + 1), []);
@@ -184,16 +184,8 @@ export default function BondMgmtPanel() {
   );
 
   const allRows = useMemo(
-    () =>
-      entries.map(e => {
-        const r = toRecord(e, stored[e.id]);
-        const att = attachments[e.id] ?? {};
-        r.내용증명.attachments = att.내용증명 ?? [];
-        r.지급명령.attachments = att.지급명령 ?? [];
-        r.해임통보.attachments = att.해임통보 ?? [];
-        return r;
-      }),
-    [entries, stored, attachments],
+    () => entries.map(e => toRecord(e, stored[e.id])),
+    [entries, stored],
   );
 
   const dateOptionsOf = useCallback(
@@ -278,6 +270,10 @@ export default function BondMgmtPanel() {
   };
 
   const handleGenerate = (type: DocumentType, r: BondRecord) => {
+    if (type === '내용증명') {
+      setCertTargetId(r.id);
+      return;
+    }
     try {
       generateDocument({ type, ...r });
     } catch {
@@ -287,9 +283,12 @@ export default function BondMgmtPanel() {
 
   const editableRows = rows.filter(canEditRow);
   const allSelected = editableRows.length > 0 && editableRows.every(r => selected.has(r.id));
-  const attachRow = attachTarget ? rows.find(r => r.id === attachTarget.id) : null;
+  const attachRow = attachTarget ? allRows.find(r => r.id === attachTarget.id) : null;
+  const certEntry = certTargetId ? entries.find(e => e.id === certTargetId) : null;
+  const certRow = certTargetId ? allRows.find(r => r.id === certTargetId) : null;
 
-  const checkedStepCell = (r: BondRecord, step: BondCheckedStepKey, generateEnabled: boolean) => {
+  const checkedStepCell = (r: BondRecord, step: BondCheckedStepKey) => {
+    const generateEnabled = isDocumentReady(step) && canEditRow(r);
     const editable = canEditRow(r);
     return (
       <Cell>
@@ -471,7 +470,7 @@ export default function BondMgmtPanel() {
                       </td>
                       <td className={`${TD} whitespace-nowrap text-slate-700`}>{r.담당자명 || '-'}</td>
                       <td className={`${TD} whitespace-nowrap font-medium text-slate-900`}>{r.업체명}</td>
-                      <td className={TD}>{checkedStepCell(r, '내용증명', true)}</td>
+                      <td className={TD}>{checkedStepCell(r, '내용증명')}</td>
                       <td className={TD}>
                         <input
                           className={`${portalInput} w-full min-w-[12rem] px-2 py-1 text-xs`}
@@ -494,10 +493,13 @@ export default function BondMgmtPanel() {
                             disabled={!editable}
                             onChange={e => void save([{ id: r.id, patch: { 해임통보: { date: e.target.value } } }])}
                           />
-                          <GenerateButton enabled={false} onClick={() => handleGenerate('해임통보', r)} />
+                          <GenerateButton
+                            enabled={isDocumentReady('해임통보') && editable}
+                            onClick={() => handleGenerate('해임통보', r)}
+                          />
                         </Cell>
                       </td>
-                      <td className={TD}>{checkedStepCell(r, '지급명령', false)}</td>
+                      <td className={TD}>{checkedStepCell(r, '지급명령')}</td>
                     </tr>
                   );
                 })
@@ -510,17 +512,23 @@ export default function BondMgmtPanel() {
       {attachTarget && attachRow ? (
         <BondAttachmentModal
           open
-          stepLabel={attachTarget.step}
+          entryId={attachRow.id}
+          step={attachTarget.step}
           companyName={attachRow.업체명}
-          attachments={attachments[attachRow.id]?.[attachTarget.step] ?? []}
+          attachments={attachRow[attachTarget.step].attachments ?? []}
+          defaultSentDate={attachRow[attachTarget.step].date}
           readOnly={!canEditRow(attachRow)}
-          onChange={next =>
-            setAttachments(prev => ({
-              ...prev,
-              [attachRow.id]: { ...prev[attachRow.id], [attachTarget.step]: next },
-            }))
-          }
+          onRecords={setStored}
           onClose={() => setAttachTarget(null)}
+        />
+      ) : null}
+
+      {certEntry && certRow ? (
+        <CertifiedLetterModal
+          entry={certEntry}
+          recipient={certRow.recipient}
+          onRecords={setStored}
+          onClose={() => setCertTargetId(null)}
         />
       ) : null}
     </PortalPageShell>
