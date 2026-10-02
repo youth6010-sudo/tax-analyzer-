@@ -1,24 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import ArrearsLetterSheet from '@/app/arrears/ArrearsLetterSheet';
 import CertifiedLetterSheet, { formatCertDate } from '@/app/arrears/bond/CertifiedLetterSheet';
 import { uploadBondAttachment } from '@/app/arrears/bond/bondUpload';
+import { useArrearsLetterData } from '@/app/arrears/bond/useArrearsLetterData';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
-import {
-  filterHiddenCancelledTaxInvoiceLines,
-  formatArrearsLetterDate,
-  hasPriorClosedLetterCycle,
-  letterRunningBalances,
-  linesForCurrentLetterCycle,
-  resolveArrearsLetterAsOfDate,
-  type ArrearsEntryDto,
-  type ArrearsLetterLineDto,
-} from '@/app/types/arrears';
+import type { ArrearsEntryDto } from '@/app/types/arrears';
 import { todayIsoDate, type BondRecipient, type BondStoredRecord } from '@/app/types/bond';
-import { fetchWithTimeout } from '@/app/utils/fetchTimeout';
-import { formatArrearsLetterLineLabels } from '@/lib/arrearsLineLabel';
 import { buildMultiPagePdfBlob, downloadBlob } from '@/lib/arrearsLetterPdf';
 
 type Props = {
@@ -28,22 +18,9 @@ type Props = {
   onClose: () => void;
 };
 
-type LetterData = {
-  lines: ArrearsLetterLineDto[];
-  labelAsOf: string;
-  letterDateLabel: string;
-};
-
-/** 내역 라벨의 「YYYY년 M월」 중 가장 이른·늦은 달 → 「2026 . 04 .」 */
-function periodFromLabels(labels: string[]): { from: string; to: string } {
-  const keys: string[] = [];
-  for (const l of labels) {
-    const m = /(\d{4})년\s*(\d{1,2})월/.exec(l);
-    if (m) keys.push(`${m[1]}-${m[2].padStart(2, '0')}`);
-  }
-  keys.sort();
-  const fmt = (k?: string) => (k ? `${k.slice(0, 4)} . ${k.slice(5)} .` : '');
-  return { from: fmt(keys[0]), to: fmt(keys[keys.length - 1]) };
+/** YYYY-MM → 「2026 . 04 .」 */
+function certMonth(key: string): string {
+  return key ? `${key.slice(0, 4)} . ${key.slice(5)} .` : '';
 }
 
 function safeName(s: string): string {
@@ -57,17 +34,23 @@ function emptyRecipient(entry: ArrearsEntryDto): BondRecipient {
 export default function CertifiedLetterModal({ entry, recipient, onRecords, onClose }: Props) {
   const certRef = useRef<HTMLDivElement>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<LetterData | null>(null);
+  const { data, error: loadError } = useArrearsLetterData(entry.id);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'' | 'download' | 'save'>('');
   const [done, setDone] = useState('');
 
   const [rcpt, setRcpt] = useState<BondRecipient>(() => recipient ?? emptyRecipient(entry));
-  const [periodFrom, setPeriodFrom] = useState('');
-  const [periodTo, setPeriodTo] = useState('');
-  const [amountText, setAmountText] = useState('');
+  /** null = 미수 내역에서 계산한 기본값 사용 */
+  const [periodFromEdit, setPeriodFrom] = useState<string | null>(null);
+  const [periodToEdit, setPeriodTo] = useState<string | null>(null);
+  const [amountEdit, setAmountText] = useState<string | null>(null);
   const [sentDate, setSentDate] = useState(todayIsoDate());
-  const [noticeDate, setNoticeDate] = useState('');
+  const [noticeDateEdit, setNoticeDate] = useState<string | null>(null);
+
+  const periodFrom = periodFromEdit ?? certMonth(data?.firstMonth ?? '');
+  const periodTo = periodToEdit ?? certMonth(data?.lastMonth ?? '');
+  const amountText = amountEdit ?? (data ? data.balance.toLocaleString('ko-KR') : '');
+  const noticeDate = noticeDateEdit ?? data?.letterDateLabel ?? '';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -77,52 +60,6 @@ export default function CertifiedLetterModal({ entry, recipient, onRecords, onCl
     return () => window.removeEventListener('keydown', onKey);
   }, [busy, onClose]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchWithTimeout(`/api/arrears/${entry.id}`, { cache: 'no-store' }, 20_000)
-      .then(async res => {
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((d as { error?: string }).error || '미수 내역 조회 실패');
-        return d as {
-          item: ArrearsEntryDto;
-          lines?: ArrearsLetterLineDto[];
-          globalAsOfDate?: string;
-          letterAsOfDate?: string;
-        };
-      })
-      .then(d => {
-        if (cancelled) return;
-        const all = d.lines || [];
-        // 미수 내역 화면 기본(미납 시점부터 표시)과 동일
-        const cycle = hasPriorClosedLetterCycle(all) ? linesForCurrentLetterCycle(all) : all;
-        const lines = filterHiddenCancelledTaxInvoiceLines(cycle, d.item.companyName);
-        const globalAsOf = d.globalAsOfDate || '';
-        const labelAsOf = globalAsOf || d.item.asOfDate || '';
-        const letterDateLabel = formatArrearsLetterDate(
-          resolveArrearsLetterAsOfDate(globalAsOf, { asOfDate: d.item.asOfDate, letterDate: '' }),
-        );
-        const labels = formatArrearsLetterLineLabels(lines, labelAsOf);
-        const running = letterRunningBalances(lines);
-        const period = periodFromLabels(labels.filter((_, i) => lines[i]!.amount > 0));
-        setData({ lines, labelAsOf, letterDateLabel });
-        setPeriodFrom(period.from);
-        setPeriodTo(period.to);
-        setAmountText((running.length ? running[running.length - 1]! : d.item.balance).toLocaleString('ko-KR'));
-        setNoticeDate(letterDateLabel);
-      })
-      .catch(e => {
-        if (!cancelled) setError(e instanceof Error ? e.message : '불러오기 실패');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [entry.id]);
-
-  const labels = useMemo(
-    () => (data ? formatArrearsLetterLineLabels(data.lines, data.labelAsOf) : []),
-    [data],
-  );
-  const running = useMemo(() => (data ? letterRunningBalances(data.lines) : []), [data]);
   const amount = Number(amountText.replace(/[^\d]/g, '')) || 0;
   const companyLabel = rcpt.상호.trim() || entry.companyName;
   const filename = `내용증명_${safeName(companyLabel)}_첨부포함.pdf`;
@@ -230,7 +167,7 @@ export default function CertifiedLetterModal({ entry, recipient, onRecords, onCl
 
           <div className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-6">
             {!data ? (
-              <p className="py-20 text-center text-sm text-slate-500">{error || '미수 내역 불러오는 중…'}</p>
+              <p className="py-20 text-center text-sm text-slate-500">{loadError || '미수 내역 불러오는 중…'}</p>
             ) : (
               <div className="mx-auto w-[720px] space-y-6">
                 <div ref={certRef} className="shadow-sm">
@@ -249,8 +186,8 @@ export default function CertifiedLetterModal({ entry, recipient, onRecords, onCl
                     companyLabel={companyLabel}
                     letterDateLabel={noticeDate}
                     viewLines={data.lines}
-                    labels={labels}
-                    running={running}
+                    labels={data.labels}
+                    running={data.running}
                     emptyHint="등록된 미수 내역이 없습니다."
                   />
                 </div>

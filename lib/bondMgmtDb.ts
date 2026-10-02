@@ -5,8 +5,11 @@ import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import {
   BOND_ATTACHMENT_STEPS,
+  DEFAULT_BOND_CONTACT,
   type BondAttachment,
   type BondAttachmentStepKey,
+  type BondContact,
+  type BondNotice,
   type BondRecipient,
   type BondRecordPatch,
   type BondStoredRecord,
@@ -14,13 +17,22 @@ import {
 
 const KEY = 'bond_mgmt';
 
-type BondDoc = { records: Record<string, BondStoredRecord> };
+type BondDoc = { records: Record<string, BondStoredRecord>; contact?: BondContact };
 
 const DATE_RE = /^(\d{4}-\d{2}-\d{2})?$/;
+const DOC_NO_RE = /^청년들-부산-추심-(\d{4})-(\d+)호$/;
+
+async function readDoc(): Promise<BondDoc> {
+  const doc = await getAppConfig<BondDoc>(KEY);
+  return { ...doc, records: doc?.records ?? {} };
+}
+
+async function writeDoc(doc: BondDoc): Promise<void> {
+  await setAppConfig(KEY, doc as unknown as Record<string, unknown>);
+}
 
 export async function readBondRecords(): Promise<Record<string, BondStoredRecord>> {
-  const doc = await getAppConfig<BondDoc>(KEY);
-  return doc?.records ?? {};
+  return (await readDoc()).records;
 }
 
 function sanitizeRecipient(v: unknown): BondRecipient {
@@ -33,6 +45,28 @@ function sanitizeRecipient(v: unknown): BondRecipient {
     등록번호: s(r.등록번호, 40),
     사업장주소: s(r.사업장주소),
     실제주소: s(r.실제주소),
+  };
+}
+
+function sanitizeContact(v: unknown): BondContact {
+  const r = (v ?? {}) as Record<string, unknown>;
+  const s = (x: unknown) => String(x ?? '').trim().slice(0, 120);
+  return { 담당: s(r.담당), 전화: s(r.전화), 이메일: s(r.이메일) };
+}
+
+function sanitizeNotice(v: unknown): BondNotice | null {
+  const r = (v ?? {}) as Record<string, unknown>;
+  const version = r.version;
+  if (version !== 'v1' && version !== 'v1.5' && version !== 'v2') return null;
+  const d = (x: unknown) => {
+    const s = String(x ?? '');
+    return DATE_RE.test(s) ? s : '';
+  };
+  return {
+    version,
+    docNo: String(r.docNo ?? '').trim().slice(0, 60),
+    sentDate: d(r.sentDate),
+    deadline: d(r.deadline),
   };
 }
 
@@ -54,6 +88,14 @@ function sanitizePatch(patch: BondRecordPatch): BondRecordPatch {
   return out;
 }
 
+/** 해임통보는 날짜만 바꾸고 발송 기록(notices)은 보존 */
+function applyPatch(rec: BondStoredRecord | undefined, patch: BondRecordPatch): BondStoredRecord {
+  const clean = sanitizePatch(patch);
+  const next: BondStoredRecord = { ...rec, ...clean };
+  if (clean.해임통보) next.해임통보 = { ...rec?.해임통보, date: clean.해임통보.date };
+  return next;
+}
+
 /** 담당자 본인 업체 또는 미수 관리권한자만 수정 */
 async function assertCanEdit(ids: string[], user: { name: string }, canManage: boolean): Promise<void> {
   const db = getDb();
@@ -71,20 +113,47 @@ async function assertCanEdit(ids: string[], user: { name: string }, canManage: b
 }
 
 export async function updateBondRecords(
-  updates: Array<{ id: string; patch: BondRecordPatch }>,
+  updates: Array<{ id: string; patch: BondRecordPatch; appendNotice?: unknown }>,
   user: { name: string },
   canManage: boolean,
+  contact?: unknown,
 ): Promise<Record<string, BondStoredRecord>> {
   const ids = [...new Set(updates.map(u => u.id).filter(Boolean))];
-  if (!ids.length) return readBondRecords();
-  await assertCanEdit(ids, user, canManage);
+  if (!ids.length && contact === undefined) return readBondRecords();
+  if (ids.length) await assertCanEdit(ids, user, canManage);
 
-  const records = await readBondRecords();
-  for (const { id, patch } of updates) {
-    records[id] = { ...records[id], ...sanitizePatch(patch) };
+  const doc = await readDoc();
+  for (const { id, patch, appendNotice } of updates) {
+    const rec = applyPatch(doc.records[id], patch);
+    const notice = appendNotice === undefined ? null : sanitizeNotice(appendNotice);
+    if (notice) {
+      rec.해임통보 = {
+        date: rec.해임통보?.date ?? '',
+        notices: [...(rec.해임통보?.notices ?? []), notice],
+      };
+    }
+    doc.records[id] = rec;
   }
-  await setAppConfig(KEY, { records });
-  return records;
+  if (contact !== undefined) doc.contact = sanitizeContact(contact);
+  await writeDoc(doc);
+  return doc.records;
+}
+
+export async function readBondContact(): Promise<BondContact> {
+  const c = (await readDoc()).contact;
+  return c && (c.담당 || c.전화 || c.이메일) ? c : DEFAULT_BOND_CONTACT;
+}
+
+/** 청년들-부산-추심-YYYY-NNN호 — 저장된 해임통보 기록 중 해당 연도 최대 번호 + 1 */
+export function nextNoticeDocNo(records: Record<string, BondStoredRecord>, year: number): string {
+  let max = 0;
+  for (const rec of Object.values(records)) {
+    for (const n of rec.해임통보?.notices ?? []) {
+      const m = DOC_NO_RE.exec(n.docNo);
+      if (m && Number(m[1]) === year) max = Math.max(max, Number(m[2]));
+    }
+  }
+  return `청년들-부산-추심-${year}-${String(max + 1).padStart(3, '0')}호`;
 }
 
 export function isBondStep(v: unknown): v is BondAttachmentStepKey {
@@ -102,13 +171,13 @@ export async function addBondAttachment(
   att: BondAttachment,
   extra?: BondRecordPatch,
 ): Promise<Record<string, BondStoredRecord>> {
-  const records = await readBondRecords();
-  const rec: BondStoredRecord = { ...records[id], ...(extra ? sanitizePatch(extra) : {}) };
+  const doc = await readDoc();
+  const rec = extra ? applyPatch(doc.records[id], extra) : { ...doc.records[id] };
   const list = (rec.attachments?.[step] ?? []).filter(a => a.storagePath !== att.storagePath);
   rec.attachments = { ...rec.attachments, [step]: [...list, att] };
-  records[id] = rec;
-  await setAppConfig(KEY, { records });
-  return records;
+  doc.records[id] = rec;
+  await writeDoc(doc);
+  return doc.records;
 }
 
 export async function removeBondAttachment(
@@ -116,15 +185,15 @@ export async function removeBondAttachment(
   step: BondAttachmentStepKey,
   attachmentId: string,
 ): Promise<{ records: Record<string, BondStoredRecord>; removed: BondAttachment | null }> {
-  const records = await readBondRecords();
-  const rec = records[id];
+  const doc = await readDoc();
+  const rec = doc.records[id];
   const list = rec?.attachments?.[step] ?? [];
   const removed = list.find(a => a.id === attachmentId) ?? null;
   if (rec && removed) {
     rec.attachments = { ...rec.attachments, [step]: list.filter(a => a.id !== attachmentId) };
-    await setAppConfig(KEY, { records });
+    await writeDoc(doc);
   }
-  return { records, removed };
+  return { records: doc.records, removed };
 }
 
 export function findBondAttachment(

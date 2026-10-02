@@ -13,9 +13,16 @@ import {
 import ArrearsHubTabs from '@/app/arrears/ArrearsHubTabs';
 import BondAttachmentModal from '@/app/arrears/bond/BondAttachmentModal';
 import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
-import type { ArrearsEntryDto } from '@/app/types/arrears';
+import DismissalNoticeModal from '@/app/arrears/bond/DismissalNoticeModal';
 import {
+  arrearsChurnStatusChipClass,
+  arrearsChurnStatusLabel,
+  type ArrearsEntryDto,
+} from '@/app/types/arrears';
+import {
+  DEFAULT_BOND_CONTACT,
   emptyBondRecord,
+  type BondContact,
   todayIsoDate,
   type BondAttachmentStepKey,
   type BondCheckedStepKey,
@@ -139,6 +146,16 @@ export default function BondMgmtPanel() {
   const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
   const [attachTarget, setAttachTarget] = useState<{ id: string; step: BondAttachmentStepKey } | null>(null);
   const [certTargetId, setCertTargetId] = useState<string | null>(null);
+  const [dismissTargetId, setDismissTargetId] = useState<string | null>(null);
+  const [contact, setContact] = useState<BondContact>(DEFAULT_BOND_CONTACT);
+  const [nextDocNo, setNextDocNo] = useState('');
+
+  const applyBondPayload = useCallback((data: unknown) => {
+    const d = data as { records?: Record<string, BondStoredRecord>; contact?: BondContact; nextDocNo?: string };
+    if (d.records) setStored(d.records);
+    if (d.contact) setContact(d.contact);
+    if (d.nextDocNo) setNextDocNo(d.nextDocNo);
+  }, []);
 
   const [reloadTick, setReloadTick] = useState(0);
   const load = useCallback(() => setReloadTick(n => n + 1), []);
@@ -162,7 +179,7 @@ export default function BondMgmtPanel() {
         setEntries((list as { items?: ArrearsEntryDto[] }).items || []);
         setCanManage(!!(list as { canManage?: boolean }).canManage);
         setViewerName((list as { viewerName?: string }).viewerName?.trim() || '');
-        setStored((bond as { records?: Record<string, BondStoredRecord> }).records || {});
+        applyBondPayload(bond);
       })
       .catch(e => {
         if (!cancelled) setError(e instanceof Error ? e.message : '불러오기 실패');
@@ -173,7 +190,9 @@ export default function BondMgmtPanel() {
     return () => {
       cancelled = true;
     };
-  }, [reloadTick]);
+  }, [reloadTick, applyBondPayload]);
+
+  const churnById = useMemo(() => new Map(entries.map(e => [e.id, e.churnMgmtStatus || ''])), [entries]);
 
   const managerOptions = useMemo(
     () =>
@@ -228,7 +247,11 @@ export default function BondMgmtPanel() {
     if (!updates.length) return;
     setStored(prev => {
       const next = { ...prev };
-      for (const { id, patch } of updates) next[id] = { ...next[id], ...patch };
+      for (const { id, patch } of updates) {
+        const prevRec = next[id];
+        next[id] = { ...prevRec, ...patch };
+        if (patch.해임통보) next[id].해임통보 = { ...prevRec?.해임통보, ...patch.해임통보 };
+      }
       return next;
     });
     try {
@@ -239,12 +262,12 @@ export default function BondMgmtPanel() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || '저장 실패');
-      setStored((data as { records?: Record<string, BondStoredRecord> }).records || {});
+      applyBondPayload(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 실패');
       load();
     }
-  }, [load]);
+  }, [load, applyBondPayload]);
 
   const setCheck = (r: BondRecord, step: BondCheckedStepKey, checked: boolean) =>
     void save([{ id: r.id, patch: { [step]: { checked, date: checked ? r[step].date || todayIsoDate() : '' } } }]);
@@ -274,6 +297,10 @@ export default function BondMgmtPanel() {
       setCertTargetId(r.id);
       return;
     }
+    if (type === '해임통보') {
+      setDismissTargetId(r.id);
+      return;
+    }
     try {
       generateDocument({ type, ...r });
     } catch {
@@ -286,6 +313,8 @@ export default function BondMgmtPanel() {
   const attachRow = attachTarget ? allRows.find(r => r.id === attachTarget.id) : null;
   const certEntry = certTargetId ? entries.find(e => e.id === certTargetId) : null;
   const certRow = certTargetId ? allRows.find(r => r.id === certTargetId) : null;
+  const dismissEntry = dismissTargetId ? entries.find(e => e.id === dismissTargetId) : null;
+  const dismissRow = dismissTargetId ? allRows.find(r => r.id === dismissTargetId) : null;
 
   const checkedStepCell = (r: BondRecord, step: BondCheckedStepKey) => {
     const generateEnabled = isDocumentReady(step) && canEditRow(r);
@@ -469,7 +498,19 @@ export default function BondMgmtPanel() {
                         />
                       </td>
                       <td className={`${TD} whitespace-nowrap text-slate-700`}>{r.담당자명 || '-'}</td>
-                      <td className={`${TD} whitespace-nowrap font-medium text-slate-900`}>{r.업체명}</td>
+                      <td className={`${TD} whitespace-nowrap font-medium text-slate-900`}>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span>{r.업체명}</span>
+                          {churnById.get(r.id) ? (
+                            <span
+                              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${arrearsChurnStatusChipClass(churnById.get(r.id)!)}`}
+                              title="미수관리 해임 상태"
+                            >
+                              {arrearsChurnStatusLabel(churnById.get(r.id)!)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className={TD}>{checkedStepCell(r, '내용증명')}</td>
                       <td className={TD}>
                         <input
@@ -492,6 +533,10 @@ export default function BondMgmtPanel() {
                             value={r.해임통보.date}
                             disabled={!editable}
                             onChange={e => void save([{ id: r.id, patch: { 해임통보: { date: e.target.value } } }])}
+                          />
+                          <AttachButton
+                            count={r.해임통보.attachments?.length ?? 0}
+                            onClick={() => setAttachTarget({ id: r.id, step: '해임통보' })}
                           />
                           <GenerateButton
                             enabled={isDocumentReady('해임통보') && editable}
@@ -529,6 +574,18 @@ export default function BondMgmtPanel() {
           recipient={certRow.recipient}
           onRecords={setStored}
           onClose={() => setCertTargetId(null)}
+        />
+      ) : null}
+
+      {dismissEntry && dismissRow ? (
+        <DismissalNoticeModal
+          entry={dismissEntry}
+          recipient={dismissRow.recipient}
+          notices={dismissRow.해임통보.notices ?? []}
+          contact={contact}
+          nextDocNo={nextDocNo}
+          onPayload={applyBondPayload}
+          onClose={() => setDismissTargetId(null)}
         />
       ) : null}
     </PortalPageShell>

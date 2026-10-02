@@ -35,6 +35,7 @@ export type BondCheckedStep = {
 export type BondDateStep = {
   date: string;
   attachments?: BondAttachment[];
+  notices?: BondNotice[];
 };
 
 export type BondRecord = {
@@ -56,11 +57,35 @@ export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '
 
 export type BondAttachmentMap = Partial<Record<BondAttachmentStepKey, BondAttachment[]>>;
 
+export type BondNoticeVersion = 'v1' | 'v1.5' | 'v2';
+
+/** 해임통보 안내문 발송 기록 — v1.5는 직전 v1 기한을 인용 */
+export type BondNotice = {
+  version: BondNoticeVersion;
+  docNo: string;
+  sentDate: string;
+  /** 입금 기한 YYYY-MM-DD (v1.5는 비움) */
+  deadline: string;
+};
+
+/** 안내문 하단 담당 줄 기본값 */
+export type BondContact = {
+  담당: string;
+  전화: string;
+  이메일: string;
+};
+
+export const DEFAULT_BOND_CONTACT: BondContact = {
+  담당: 'TAX팀 김평진 팀장',
+  전화: '051-783-6007',
+  이메일: 'youth6@taxbiz.kr',
+};
+
 /** DB 저장분 — 담당자명·업체명은 미수관리에서 */
 export type BondStoredRecord = {
   내용증명?: { checked: boolean; date: string };
   회수일정?: string;
-  해임통보?: { date: string };
+  해임통보?: { date: string; notices?: BondNotice[] };
   지급명령?: { checked: boolean; date: string };
   attachments?: BondAttachmentMap;
   recipient?: BondRecipient;

@@ -1,9 +1,9 @@
 export type DocumentType = '내용증명' | '해임통보' | '지급명령';
 
-/** 서식생성 버튼 활성 여부 — 내용증명은 채권관리 CertifiedLetterModal 에서 생성 */
+/** 서식생성 버튼 활성 여부 — 내용증명·해임통보는 채권관리 모달(CertifiedLetterModal·DismissalNoticeModal)에서 생성 */
 const READY: Record<DocumentType, boolean> = {
   내용증명: true,
-  해임통보: false,
+  해임통보: true,
   지급명령: false,
 };
 
