@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageArrears } from '@/lib/arrearsAccess';
 import { handleApiError } from '@/lib/apiError';
 import {
+  editBondNotice,
   listBondContacts,
   nextNoticeDocNo,
   nextNoticeDocNos,
@@ -12,6 +13,7 @@ import {
   readBondNoticeDefaults,
   readBondNoticeDefaultsLog,
   readBondRecords,
+  reserveBondDocNo,
   updateBondRecords,
   writeBondNoticeDefaults,
 } from '@/lib/bondMgmtDb';
@@ -59,7 +61,19 @@ export async function PATCH(req: Request) {
       issue?: unknown;
       /** 해임통보 발신일자·입금기한 일괄값 — 미수 관리권한자만 */
       noticeDefaults?: unknown;
+      /** 발급한 안내문 수정 (같은 문서번호) */
+      editNotice?: unknown;
+      /** 새 안내문 문서번호 확보 (미수관리 항목 id) */
+      reserveDocNo?: unknown;
     };
+    if (body.reserveDocNo !== undefined) {
+      const docNo = await reserveBondDocNo(String(body.reserveDocNo), user, canManageArrears(user));
+      return NextResponse.json({ docNo }, NO_STORE);
+    }
+    if (body.editNotice !== undefined) {
+      const records = await editBondNotice(body.editNotice, user, canManageArrears(user));
+      return NextResponse.json(await payload(records), NO_STORE);
+    }
     if (body.noticeDefaults !== undefined) {
       if (!canManageArrears(user)) {
         return NextResponse.json({ error: '일괄 날짜는 관리자만 지정할 수 있습니다.' }, { status: 403 });
@@ -82,6 +96,12 @@ export async function PATCH(req: Request) {
     }
     if (msg === 'NOT_FOUND') {
       return NextResponse.json({ error: '미수관리 항목을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (msg === 'NO_REASON') {
+      return NextResponse.json({ error: '수정 사유를 입력하세요.' }, { status: 400 });
+    }
+    if (msg === 'NOTICE_NOT_FOUND' || msg === 'BAD_EDIT') {
+      return NextResponse.json({ error: '수정할 안내문 기록을 찾을 수 없습니다.' }, { status: 404 });
     }
     return handleApiError(e);
   }

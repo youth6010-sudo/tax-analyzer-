@@ -5,6 +5,7 @@ import CenterModal from '@/app/components/portal/CenterModal';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
 import {
   formatSentDateKo,
+  isLockedBondAttachment,
   todayIsoDate,
   type BondAttachment,
   type BondAttachmentStepKey,
@@ -77,9 +78,11 @@ export default function BondAttachmentModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const [sentDate, setSentDate] = useState(defaultSentDate || todayIsoDate());
   const [busy, setBusy] = useState('');
+  const certDateRef = useRef(defaultSentDate);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const isOrder = step === '지급명령';
+  const dateLabel = isOrder ? '신청' : step === '회수일정' ? '받은' : '발송';
 
   /** 최근 발송일 먼저, 같은 날 안에서는 올린 순 */
   const groups = useMemo(() => {
@@ -123,13 +126,19 @@ export default function BondAttachmentModal({
           );
           continue;
         }
+        const markCert = step === '내용증명' && (!certDateRef.current || sentDate > certDateRef.current);
         const { records } = await uploadBondAttachment({
           id: entryId,
           step,
           file: f,
           filename: buildFilename(sentDate, step, companyName, f.name, taken),
           sentDate,
+          ...(markCert ? { patch: { 내용증명: { checked: true, date: sentDate } } } : {}),
         });
+        if (markCert) {
+          certDateRef.current = sentDate;
+          setNotice(`내용증명 체크·발송일 ${formatSentDateKo(sentDate)}을 자동 기록했습니다.`);
+        }
         onRecords(records);
       }
     } catch (e) {
@@ -188,7 +197,7 @@ export default function BondAttachmentModal({
               }}
             />
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              {isOrder ? '신청일' : '발송일'}
+              {dateLabel === '받은' ? '받은 날' : `${dateLabel}일`}
               <input
                 type="date"
                 className={`${portalInput} w-auto py-1 text-xs`}
@@ -224,7 +233,7 @@ export default function BondAttachmentModal({
             {groups.map(g => (
               <section key={g.date || 'none'}>
                 <h3 className="mb-1 text-xs font-bold text-slate-700">
-                  {g.date ? `${formatSentDateKo(g.date)} ${isOrder ? '신청' : '발송'} 서류` : '발송일 미지정'}
+                  {g.date ? `${formatSentDateKo(g.date)} ${dateLabel} 서류` : '날짜 미지정'}
                 </h3>
                 <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                   {g.list.map(att => (
@@ -246,7 +255,14 @@ export default function BondAttachmentModal({
                       <button type="button" className={portalBtnSecondary} onClick={() => void openFile(att, true)}>
                         다운로드
                       </button>
-                      {!readOnly ? (
+                      {isLockedBondAttachment(step, att) ? (
+                        <span
+                          className="shrink-0 px-2 py-1 text-[10px] text-slate-400"
+                          title="문서번호가 붙은 안내문은 삭제할 수 없습니다. 이력관리에서 수정하세요."
+                        >
+                          삭제불가
+                        </span>
+                      ) : !readOnly ? (
                         <button
                           type="button"
                           className="shrink-0 rounded px-2 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-50"

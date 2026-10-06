@@ -8,8 +8,10 @@ import {
   BOND_NOTICE_VERSIONS,
   BOND_STAFF_CONTACTS,
   DEFAULT_BOND_CONTACT,
+  isLockedBondAttachment,
   type BondAttachment,
   type BondAttachmentStepKey,
+  type BondChangeLogEntry,
   type BondContact,
   type BondDocLogEntry,
   type BondNotice,
@@ -31,9 +33,51 @@ type BondDoc = {
   docLog?: BondDocLogEntry[];
   noticeDefaults?: BondNoticeDefaults;
   noticeDefaultsLog?: BondNoticeDefaultsLogEntry[];
+  changeLog?: BondChangeLogEntry[];
 };
 
 const DOC_LOG_MAX = 3000;
+const CHANGE_LOG_MAX = 5000;
+
+const dateText = (d: string | undefined) => d || '(없음)';
+
+/** 저장 전후를 비교해 단계별 변경 이력 줄 생성 */
+function diffRecord(
+  before: BondStoredRecord | undefined,
+  after: BondStoredRecord,
+  meta: { at: string; by: string; entryId: string },
+): BondChangeLogEntry[] {
+  const out: BondChangeLogEntry[] = [];
+  const push = (step: BondChangeLogEntry['step'], action: string, detail: string) =>
+    out.push({ ...meta, step, action, detail });
+  for (const step of ['내용증명', '지급명령'] as const) {
+    const a = before?.[step];
+    const b = after[step];
+    if (!b) continue;
+    if (!!a?.checked !== b.checked) push(step, b.checked ? '체크' : '체크 해제', '');
+    if ((a?.date ?? '') !== b.date) push(step, '날짜 변경', `${dateText(a?.date)} → ${dateText(b.date)}`);
+  }
+  if (after.해임통보 && (before?.해임통보?.date ?? '') !== after.해임통보.date) {
+    push('해임통보', '날짜 변경', `${dateText(before?.해임통보?.date)} → ${dateText(after.해임통보.date)}`);
+  }
+  const prevNotices = before?.해임통보?.notices?.length ?? 0;
+  for (const n of after.해임통보?.notices?.slice(prevNotices) ?? []) {
+    push('해임통보', '안내문 발송 기록', `${n.docNo} · v.${n.version} · 발송 ${n.sentDate} · 기한 ${n.deadline}`);
+  }
+  if (after.회수일정 !== undefined && (before?.회수일정 ?? '') !== after.회수일정) {
+    push('회수일정', '메모 변경', `${before?.회수일정 || '(없음)'} → ${after.회수일정 || '(없음)'}`);
+  }
+  return out;
+}
+
+function appendChangeLog(doc: BondDoc, entries: BondChangeLogEntry[]) {
+  if (entries.length) doc.changeLog = [...(doc.changeLog ?? []), ...entries].slice(-CHANGE_LOG_MAX);
+}
+
+/** 변경 이력 — 최신순 */
+export async function readBondChangeLog(): Promise<BondChangeLogEntry[]> {
+  return [...((await readDoc()).changeLog ?? [])].reverse();
+}
 const NOTICE_DEFAULTS_LOG_MAX = 200;
 
 const DATE_RE = /^(\d{4}-\d{2}-\d{2})?$/;
@@ -86,7 +130,69 @@ function sanitizeNotice(v: unknown): BondNotice | null {
     sentDate: d(r.sentDate),
     deadline: d(r.deadline),
     ...(contact && (contact.담당 || contact.전화 || contact.이메일) ? { contact } : {}),
+    ...noticeBody(r),
   };
+}
+
+/** 안내문 본문 값 (수정 때 다시 불러옴) */
+function noticeBody(r: Record<string, unknown>): Pick<BondNotice, 'recipientName' | 'period' | 'amount'> {
+  const out: Pick<BondNotice, 'recipientName' | 'period' | 'amount'> = {};
+  if (typeof r.recipientName === 'string' && r.recipientName.trim()) out.recipientName = r.recipientName.trim().slice(0, 200);
+  if (typeof r.period === 'string' && r.period.trim()) out.period = r.period.trim().slice(0, 60);
+  const amount = Number(r.amount);
+  if (Number.isFinite(amount) && amount > 0) out.amount = Math.round(amount);
+  return out;
+}
+
+/** 이미 발급한 해임통보 안내문 수정 — 같은 문서번호의 발송 기록·발급 대장을 갱신하고 수정일 기록 */
+export async function editBondNotice(
+  v: unknown,
+  user: { name: string },
+  canManage: boolean,
+): Promise<Record<string, BondStoredRecord>> {
+  const r = (v ?? {}) as Record<string, unknown>;
+  const entryId = String(r.entryId ?? '');
+  const docNo = String(r.docNo ?? '').trim();
+  const reason = String(r.reason ?? '').trim().slice(0, 500);
+  if (!entryId || !docNo) throw new Error('BAD_EDIT');
+  if (!reason) throw new Error('NO_REASON');
+  await assertCanEdit([entryId], user, canManage);
+  const doc = await readDoc();
+  const rec = doc.records[entryId];
+  const notices = rec?.해임통보?.notices ?? [];
+  const idx = notices.findIndex(n => n.docNo === docNo);
+  let logIdx = -1;
+  (doc.docLog ?? []).forEach((l, i) => {
+    if (l.docNo === docNo && l.entryId === entryId) logIdx = i;
+  });
+  if (idx < 0 && logIdx < 0) throw new Error('NOTICE_NOT_FOUND');
+  const base = idx >= 0 ? notices[idx]! : doc.docLog![logIdx]!;
+  const next = sanitizeNotice({ ...base, ...r, version: base.version, docNo });
+  if (!next) throw new Error('BAD_EDIT');
+  const at = new Date().toISOString();
+  const stamped = { ...next, modifiedAt: at, modifiedBy: user.name, modifyReason: reason };
+  if (rec && idx >= 0) {
+    const list = [...notices];
+    list[idx] = stamped;
+    rec.해임통보 = { date: rec.해임통보?.date ?? '', ...rec.해임통보, notices: list };
+  }
+  if (logIdx >= 0) {
+    const log = [...doc.docLog!];
+    log[logIdx] = { ...log[logIdx]!, ...stamped };
+    doc.docLog = log;
+  }
+  appendChangeLog(doc, [
+    {
+      at,
+      by: user.name,
+      entryId,
+      step: '해임통보',
+      action: '안내문 수정',
+      detail: `사유: ${reason}\n${docNo} · 발송 ${next.sentDate} · 기한 ${next.deadline}${next.amount ? ` · ${next.amount.toLocaleString('ko-KR')}원` : ''}`,
+    },
+  ]);
+  await writeDoc(doc);
+  return doc.records;
 }
 
 function sanitizePatch(patch: BondRecordPatch): BondRecordPatch {
@@ -155,8 +261,10 @@ export async function updateBondRecords(
   const doc = await readDoc();
   if (usedDocNo !== undefined) consumeDocNo(doc, usedDocNo);
   let saved = false;
+  const at = new Date().toISOString();
   for (const { id, patch, appendNotice } of updates) {
-    const rec = applyPatch(doc.records[id], patch);
+    const prev = doc.records[id];
+    const rec = applyPatch(prev, patch);
     const notice = appendNotice === undefined ? null : sanitizeNotice(appendNotice);
     if (notice) {
       saved = true;
@@ -166,6 +274,7 @@ export async function updateBondRecords(
         notices: [...(rec.해임통보?.notices ?? []), notice],
       };
     }
+    appendChangeLog(doc, diffRecord(prev, rec, { at, by: user.name, entryId: id }));
     doc.records[id] = rec;
   }
   if (contact !== undefined) doc.contact = sanitizeContact(contact);
@@ -285,6 +394,22 @@ export function nextNoticeDocNo(
   return formatDocNo(year, noticeSeq(records, year, docSeq) + 1);
 }
 
+/** 새 안내문 문서번호 확보 — 저장 직전에 서버에서 번호를 올려 동시 발급 시 중복 방지 */
+export async function reserveBondDocNo(id: string, user: { name: string }, canManage: boolean): Promise<string> {
+  await assertCanEdit([id], user, canManage);
+  const year = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }));
+  const doc = await readDoc();
+  let seq = noticeSeq(doc.records, year, doc.docSeq ?? {});
+  for (const l of doc.docLog ?? []) {
+    const m = DOC_NO_RE.exec(l.docNo);
+    if (m && Number(m[1]) === year) seq = Math.max(seq, Number(m[2]));
+  }
+  const docNo = formatDocNo(year, seq + 1);
+  consumeDocNo(doc, docNo);
+  await writeDoc(doc);
+  return docNo;
+}
+
 /** 문서번호 선택 목록 — 다음 번호부터 연속 count개 (같은 날 여러 건 발송용) */
 export function nextNoticeDocNos(
   records: Record<string, BondStoredRecord>,
@@ -309,12 +434,24 @@ export async function addBondAttachment(
   id: string,
   step: BondAttachmentStepKey,
   att: BondAttachment,
+  user: { name: string },
   extra?: BondRecordPatch,
 ): Promise<Record<string, BondStoredRecord>> {
   const doc = await readDoc();
-  const rec = extra ? applyPatch(doc.records[id], extra) : { ...doc.records[id] };
+  const prev = doc.records[id];
+  const rec = extra ? applyPatch(prev, extra) : { ...prev };
   const list = (rec.attachments?.[step] ?? []).filter(a => a.storagePath !== att.storagePath);
   rec.attachments = { ...rec.attachments, [step]: [...list, att] };
+  const meta = { at: new Date().toISOString(), by: user.name, entryId: id };
+  appendChangeLog(doc, [
+    {
+      ...meta,
+      step,
+      action: att.source === 'generated' ? '서식생성 파일 저장' : '파일 추가',
+      detail: `${att.filename}${att.sentDate ? ` (${att.sentDate})` : ''}`,
+    },
+    ...diffRecord(prev, rec, meta),
+  ]);
   doc.records[id] = rec;
   await writeDoc(doc);
   return doc.records;
@@ -324,13 +461,18 @@ export async function removeBondAttachment(
   id: string,
   step: BondAttachmentStepKey,
   attachmentId: string,
+  user: { name: string },
 ): Promise<{ records: Record<string, BondStoredRecord>; removed: BondAttachment | null }> {
   const doc = await readDoc();
   const rec = doc.records[id];
   const list = rec?.attachments?.[step] ?? [];
   const removed = list.find(a => a.id === attachmentId) ?? null;
+  if (removed && isLockedBondAttachment(step, removed)) throw new Error('LOCKED');
   if (rec && removed) {
     rec.attachments = { ...rec.attachments, [step]: list.filter(a => a.id !== attachmentId) };
+    appendChangeLog(doc, [
+      { at: new Date().toISOString(), by: user.name, entryId: id, step, action: '파일 삭제', detail: removed.filename },
+    ]);
     await writeDoc(doc);
   }
   return { records: doc.records, removed };

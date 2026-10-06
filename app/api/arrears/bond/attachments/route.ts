@@ -39,6 +39,12 @@ function errorResponse(e: unknown) {
   if (msg === 'NOT_FOUND') {
     return NextResponse.json({ error: '미수관리 항목을 찾을 수 없습니다.' }, { status: 404 });
   }
+  if (msg === 'LOCKED') {
+    return NextResponse.json(
+      { error: '문서번호가 붙은 해임통보 안내문은 삭제할 수 없습니다. 이력관리에서 수정하세요.' },
+      { status: 400 },
+    );
+  }
   if (msg === 'BAD_STEP') {
     return NextResponse.json({ error: '단계(step)가 올바르지 않습니다.' }, { status: 400 });
   }
@@ -139,11 +145,12 @@ export async function PUT(req: Request) {
       storagePath,
       size: Number(body.size) || 0,
       uploadedAt: new Date().toISOString(),
+      uploadedBy: user.name,
       sentDate: DATE_RE.test(sentDate) ? sentDate : '',
       mimeType: String(body.mimeType || 'application/pdf'),
       source: body.source === 'generated' ? 'generated' : 'manual',
     };
-    const records = await addBondAttachment(id, step, att, body.patch);
+    const records = await addBondAttachment(id, step, att, user, body.patch);
     return NextResponse.json({ records, attachment: att }, NO_STORE);
   } catch (e) {
     return errorResponse(e);
@@ -158,7 +165,12 @@ export async function DELETE(req: Request) {
     const id = url.searchParams.get('id') || '';
     const step = parseStep(url.searchParams.get('step'));
     await assertCanEditBond(id, user, canManageArrears(user));
-    const { records, removed } = await removeBondAttachment(id, step, url.searchParams.get('attachmentId') || '');
+    const { records, removed } = await removeBondAttachment(
+      id,
+      step,
+      url.searchParams.get('attachmentId') || '',
+      user,
+    );
     if (removed) {
       await removeBondFile(removed.storagePath).catch(e => console.warn('bond file remove failed', e));
     }

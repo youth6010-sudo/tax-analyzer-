@@ -14,10 +14,9 @@ import ArrearsHubTabs from '@/app/arrears/ArrearsHubTabs';
 import BondAttachmentModal from '@/app/arrears/bond/BondAttachmentModal';
 import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
 import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
-import DismissalDocLogModal from '@/app/arrears/bond/DismissalDocLogModal';
+import BondHistoryModal from '@/app/arrears/bond/BondHistoryModal';
 import DismissalNoticeModal from '@/app/arrears/bond/DismissalNoticeModal';
 import { addDaysIso } from '@/app/arrears/bond/DismissalNoticeSheet';
-import NoticeDefaultsLogModal from '@/app/arrears/bond/NoticeDefaultsLogModal';
 import { useColumnWidths } from '@/app/components/portal/useColumnWidths';
 import {
   arrearsChurnStatusChipClass,
@@ -30,12 +29,14 @@ import {
   DEFAULT_BOND_CONTACT,
   dismissalNoticeKind,
   type BondNoticeDefaults,
+  type BondNoticeEdit,
   type BondNoticeDefaultsLogEntry,
   emptyBondRecord,
   paymentOrderAllowed,
   type BondContact,
   type BondDocLogEntry,
   todayIsoDate,
+  type BondAttachment,
   type BondAttachmentStepKey,
   type BondCheckedStepKey,
   type BondRecord,
@@ -57,6 +58,7 @@ function toRecord(e: ArrearsEntryDto, stored: BondStoredRecord | undefined): Bon
     ...base,
     내용증명: { ...base.내용증명, ...stored.내용증명, attachments: att.내용증명 ?? [] },
     회수일정: stored.회수일정 ?? '',
+    회수일정첨부: att.회수일정 ?? [],
     해임통보: { ...base.해임통보, ...stored.해임통보, attachments: att.해임통보 ?? [] },
     지급명령: { ...base.지급명령, ...stored.지급명령, attachments: att.지급명령 ?? [] },
     recipient: stored.recipient,
@@ -143,7 +145,11 @@ function formatScheduleOption(v: string): string {
 const COL_BORDER = 'border-r border-slate-200 last:border-r-0';
 const TH = `relative whitespace-nowrap px-3 py-3 text-center align-middle ${COL_BORDER}`;
 
-const BOND_COLUMNS = ['select', 'manager', 'company', 'cert', 'schedule', 'dismiss', 'order'] as const;
+const BOND_COLUMNS = ['select', 'manager', 'company', 'cert', 'dismiss', 'schedule', 'order'] as const;
+
+function attachmentsOf(r: BondRecord, step: BondAttachmentStepKey): BondAttachment[] {
+  return step === '회수일정' ? r.회수일정첨부 : (r[step].attachments ?? []);
+}
 const BOND_COL_WIDTHS_KEY = 'bondMgmt.colWidths.v1';
 const TD = `px-3 py-2 text-center ${COL_BORDER}`;
 
@@ -175,27 +181,26 @@ export default function BondMgmtPanel() {
   const [contact, setContact] = useState<BondContact>(DEFAULT_BOND_CONTACT);
   const [contacts, setContacts] = useState<BondContact[]>(BOND_STAFF_CONTACTS);
   const [nextDocNo, setNextDocNo] = useState('');
-  const [docNoOptions, setDocNoOptions] = useState<string[]>([]);
+  const [editNotice, setEditNotice] = useState<BondNoticeEdit | null>(null);
   const [docLog, setDocLog] = useState<BondDocLogEntry[]>([]);
-  const [docLogOpen, setDocLogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [noticeDefaults, setNoticeDefaults] = useState<BondNoticeDefaults>({ sentDate: '', deadline: '' });
   /** 입력 중인 일괄 날짜 — 「저장」 전에는 안내문에 쓰지 않음 */
   const [defaultsDraft, setDefaultsDraft] = useState<BondNoticeDefaults | null>(null);
   const [defaultsSaving, setDefaultsSaving] = useState(false);
   const [defaultsError, setDefaultsError] = useState('');
   const [defaultsLog, setDefaultsLog] = useState<BondNoticeDefaultsLogEntry[]>([]);
-  const [defaultsLogOpen, setDefaultsLogOpen] = useState(false);
   const cols = useColumnWidths(BOND_COL_WIDTHS_KEY, BOND_COLUMNS);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  /** 검색칸 = 표 왼쪽 ~ 내용증명 열 끝 (회수일정 열 시작 전) */
+  /** 검색칸 = 표 왼쪽 ~ 내용증명 열 끝 (해임통보 열 시작 전) */
   const [searchWidth, setSearchWidth] = useState<number | null>(null);
   useEffect(() => {
     const table = tableRef.current;
     const bar = toolbarRef.current;
     if (!table || !bar) return;
     const measure = () => {
-      const th = table.querySelector<HTMLElement>('thead th[data-col="schedule"]');
+      const th = table.querySelector<HTMLElement>('thead th[data-col="dismiss"]');
       if (!th) return;
       const w = Math.round(th.getBoundingClientRect().left - bar.getBoundingClientRect().left - 8);
       setSearchWidth(w >= 240 ? w : null);
@@ -216,7 +221,6 @@ export default function BondMgmtPanel() {
       contact?: BondContact;
       contacts?: BondContact[];
       nextDocNo?: string;
-      docNoOptions?: string[];
       docLog?: BondDocLogEntry[];
     };
     if (d.docLog) setDocLog(d.docLog);
@@ -226,7 +230,6 @@ export default function BondMgmtPanel() {
     if (d.contact) setContact(d.contact);
     if (d.contacts?.length) setContacts(d.contacts);
     if (d.nextDocNo) setNextDocNo(d.nextDocNo);
-    if (d.docNoOptions) setDocNoOptions(d.docNoOptions);
   }, []);
 
   const saveNoticeDefaults = async (next: BondNoticeDefaults) => {
@@ -306,6 +309,7 @@ export default function BondMgmtPanel() {
     };
   }, [reloadTick, applyBondPayload]);
 
+  const companyNames = useMemo(() => new Map(entries.map(e => [e.id, e.companyName])), [entries]);
   const churnById = useMemo(() => new Map(entries.map(e => [e.id, e.churnMgmtStatus || ''])), [entries]);
   /** 미수관리 수정 모드에서 편집한 해임 구분 이름·색 */
   const churnOptions = useArrearsChurnStatuses();
@@ -446,6 +450,8 @@ export default function BondMgmtPanel() {
   const certRow = certTargetId ? allRows.find(r => r.id === certTargetId) : null;
   const dismissEntry = dismissTargetId ? entries.find(e => e.id === dismissTargetId) : null;
   const dismissRow = dismissTargetId ? allRows.find(r => r.id === dismissTargetId) : null;
+  const editEntry = editNotice ? entries.find(e => e.id === editNotice.entryId) : null;
+  const editRow = editNotice ? allRows.find(r => r.id === editNotice.entryId) : null;
 
   const checkedStepCell = (r: BondRecord, step: BondCheckedStepKey) => {
     const label = churnLabelOf(r.id);
@@ -566,15 +572,15 @@ export default function BondMgmtPanel() {
               ) : (
                 <span className="text-slate-500">{savedStamp || '저장됨 (저장자 기록 없음)'}</span>
               )}
-              <button
-                type="button"
-                className="h-7 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                onClick={() => setDefaultsLogOpen(true)}
-                title="누가 언제 어떤 날짜로 저장했는지 보기"
-              >
-                이력{defaultsLog.length ? ` (${defaultsLog.length})` : ''}
-              </button>
             </div>
+            <button
+              type="button"
+              className={`${portalBtnSecondary} whitespace-nowrap`}
+              onClick={() => setHistoryOpen(true)}
+              title="내용증명·해임통보·회수일정·지급명령 변경 이력, 발급 대장, 일괄 날짜 이력"
+            >
+              이력관리
+            </button>
             {cols.customized ? (
               <button
                 type="button"
@@ -671,6 +677,18 @@ export default function BondMgmtPanel() {
                     searchable
                   />
                 </th>
+                <th {...cols.thProps('dismiss')} className={TH}>
+                  {cols.handle('dismiss')}
+                  <ManagerMultiFilter
+                    headerLabel="해임통보"
+                    options={dateOptionsOf(r => r.해임통보.date)}
+                    value={dismissFilter}
+                    onChange={setDismissFilter}
+                    formatOption={formatDateOption}
+                    searchable
+                    align="right"
+                  />
+                </th>
                 <th {...cols.thProps('schedule')} className={TH}>
                   {cols.handle('schedule')}
                   <ManagerMultiFilter
@@ -680,38 +698,8 @@ export default function BondMgmtPanel() {
                     onChange={setScheduleFilter}
                     formatOption={formatScheduleOption}
                     searchable
+                    align="right"
                   />
-                </th>
-                <th {...cols.thProps('dismiss')} className={TH}>
-                  {cols.handle('dismiss')}
-                  <div className="inline-flex items-center gap-1.5">
-                    <ManagerMultiFilter
-                      headerLabel="해임통보"
-                      options={dateOptionsOf(r => r.해임통보.date)}
-                      value={dismissFilter}
-                      onChange={setDismissFilter}
-                      formatOption={formatDateOption}
-                      searchable
-                      align="right"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setDocLogOpen(true)}
-                      title={`해임통보 발급 대장${docLog.length ? ` (${docLog.length}건)` : ''}`}
-                      aria-label="해임통보 발급 대장"
-                      className="relative inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                    >
-                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden>
-                        <path d="M5 2.5h7l3 3v12H5z" strokeLinejoin="round" />
-                        <path d="M12 2.5v3h3M7.5 9h5M7.5 12h5M7.5 15h3" strokeLinecap="round" />
-                      </svg>
-                      {docLog.length ? (
-                        <span className="absolute -right-1.5 -top-1.5 rounded-full bg-blue-600 px-1 text-[9px] font-semibold leading-tight text-white">
-                          {docLog.length}
-                        </span>
-                      ) : null}
-                    </button>
-                  </div>
                 </th>
                 <th {...cols.thProps('order')} className={TH}>
                   {cols.handle('order')}
@@ -777,19 +765,6 @@ export default function BondMgmtPanel() {
                       </td>
                       <td className={TD}>{checkedStepCell(r, '내용증명')}</td>
                       <td className={TD}>
-                        <input
-                          className={`${portalInput} w-full min-w-[12rem] px-2 py-1 text-xs`}
-                          placeholder="협의한 회수 일정"
-                          value={memoDrafts[r.id] ?? r.회수일정}
-                          disabled={!editable}
-                          onChange={e => setMemoDrafts(prev => ({ ...prev, [r.id]: e.target.value }))}
-                          onBlur={() => commitMemo(r)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                        />
-                      </td>
-                      <td className={TD}>
                         <Cell>
                           <input
                             type="date"
@@ -820,6 +795,25 @@ export default function BondMgmtPanel() {
                           />
                         </Cell>
                       </td>
+                      <td className={TD}>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            className={`${portalInput} w-full min-w-[10rem] px-2 py-1 text-xs`}
+                            placeholder="협의한 회수 일정 메모"
+                            value={memoDrafts[r.id] ?? r.회수일정}
+                            disabled={!editable}
+                            onChange={e => setMemoDrafts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                            onBlur={() => commitMemo(r)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                          />
+                          <AttachButton
+                            count={r.회수일정첨부.length}
+                            onClick={() => setAttachTarget({ id: r.id, step: '회수일정' })}
+                          />
+                        </div>
+                      </td>
                       <td className={TD}>{checkedStepCell(r, '지급명령')}</td>
                     </tr>
                   );
@@ -836,8 +830,8 @@ export default function BondMgmtPanel() {
           entryId={attachRow.id}
           step={attachTarget.step}
           companyName={attachRow.업체명}
-          attachments={attachRow[attachTarget.step].attachments ?? []}
-          defaultSentDate={attachRow[attachTarget.step].date}
+          attachments={attachmentsOf(attachRow, attachTarget.step)}
+          defaultSentDate={attachTarget.step === '회수일정' ? '' : attachRow[attachTarget.step].date}
           readOnly={!canEditRow(attachRow)}
           onRecords={setStored}
           onClose={() => setAttachTarget(null)}
@@ -864,18 +858,45 @@ export default function BondMgmtPanel() {
           contacts={contacts}
           defaults={noticeDefaults}
           nextDocNo={nextDocNo}
-          docNoOptions={docNoOptions}
           onPayload={applyBondPayload}
           onClose={() => setDismissTargetId(null)}
         />
       ) : null}
 
-      {docLogOpen ? (
-        <DismissalDocLogModal log={docLog} nextDocNo={nextDocNo} onClose={() => setDocLogOpen(false)} />
+      {editEntry && editRow && editNotice ? (
+        <DismissalNoticeModal
+          key={`${editNotice.entryId}-${editNotice.docNo}`}
+          entry={editEntry}
+          kind={editNotice.version === '기장' ? '기장' : '유예'}
+          churnLabel={churnLabelOf(editEntry.id) || '미지정'}
+          recipient={editRow.recipient}
+          notices={editRow.해임통보.notices ?? []}
+          contact={editNotice.contact ?? bondContactForManager(editRow.담당자명) ?? contact}
+          contacts={contacts}
+          defaults={noticeDefaults}
+          nextDocNo={nextDocNo}
+          editing={editNotice}
+          onPayload={applyBondPayload}
+          onClose={() => setEditNotice(null)}
+        />
       ) : null}
 
-      {defaultsLogOpen ? (
-        <NoticeDefaultsLogModal log={defaultsLog} onClose={() => setDefaultsLogOpen(false)} />
+      {historyOpen ? (
+        <BondHistoryModal
+          log={docLog}
+          nextDocNo={nextDocNo}
+          defaultsLog={defaultsLog}
+          companyNames={companyNames}
+          canEditEntry={id => {
+            const row = allRows.find(r => r.id === id);
+            return !!row && canEditRow(row);
+          }}
+          onEditNotice={n => {
+            setHistoryOpen(false);
+            setEditNotice(n);
+          }}
+          onClose={() => setHistoryOpen(false)}
+        />
       ) : null}
     </PortalPageShell>
   );

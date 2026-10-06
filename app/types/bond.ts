@@ -8,6 +8,7 @@ export type BondAttachment = {
   storagePath: string;
   size: number;
   uploadedAt: string;
+  uploadedBy?: string;
   /** 발송일 YYYY-MM-DD — 폴더 모달에서 「○월 ○일 발송 서류」로 묶음 */
   sentDate: string;
   /** 파일 형식 (뷰어 분기용) */
@@ -47,15 +48,18 @@ export type BondRecord = {
   업체명: string;
   내용증명: BondCheckedStep;
   회수일정: string;
+  /** 회수일정 관련 받은 서류 (분할변제 합의서 등) */
+  회수일정첨부: BondAttachment[];
   해임통보: BondDateStep;
   지급명령: BondCheckedStep;
   recipient?: BondRecipient;
 };
 
 export type BondCheckedStepKey = '내용증명' | '지급명령';
-export type BondAttachmentStepKey = BondCheckedStepKey | '해임통보';
+export type BondAttachmentStepKey = BondCheckedStepKey | '해임통보' | '회수일정';
 
-export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '해임통보', '지급명령'];
+/** 순서 = 저장 경로의 단계 번호 — 새 단계는 맨 뒤에만 추가 */
+export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '해임통보', '지급명령', '회수일정'];
 
 export type BondAttachmentMap = Partial<Record<BondAttachmentStepKey, BondAttachment[]>>;
 
@@ -86,6 +90,42 @@ export type BondNotice = {
   deadline: string;
   /** 안내문에 넣은 담당 — 다음 생성 때 선택 목록으로 사용 */
   contact?: BondContact;
+  /** 수정 시 다시 불러올 본문 값 */
+  recipientName?: string;
+  period?: string;
+  amount?: number;
+  modifiedAt?: string;
+  modifiedBy?: string;
+  /** 마지막 수정 사유 */
+  modifyReason?: string;
+};
+
+/** 문서번호가 붙은 해임통보 서식생성 파일은 삭제 불가 */
+export function isLockedBondAttachment(step: BondAttachmentStepKey, att: BondAttachment): boolean {
+  return step === '해임통보' && att.source === 'generated';
+}
+
+/** 이력관리에서 「수정」으로 다시 여는 안내문 */
+export type BondNoticeEdit = {
+  entryId: string;
+  docNo: string;
+  version: BondNoticeVersion;
+  sentDate: string;
+  deadline: string;
+  contact?: BondContact;
+  recipientName?: string;
+  period?: string;
+  amount?: number;
+};
+
+/** 채권관리 단계별 변경 이력 (날짜·체크·메모·첨부·발송 기록) */
+export type BondChangeLogEntry = {
+  at: string;
+  by: string;
+  entryId: string;
+  step: BondAttachmentStepKey;
+  action: string;
+  detail: string;
 };
 
 /** 해임통보 문서번호 발급 대장 — PDF를 만들 때마다 한 줄 (폴더 저장 여부와 무관) */
@@ -97,10 +137,17 @@ export type BondDocLogEntry = {
   sentDate: string;
   deadline: string;
   contact?: BondContact;
+  recipientName?: string;
+  period?: string;
+  amount?: number;
   /** true = 폴더 저장 + 발송 기록, false = PDF만 */
   saved: boolean;
   issuedAt: string;
   issuedBy: string;
+  modifiedAt?: string;
+  modifiedBy?: string;
+  /** 마지막 수정 사유 */
+  modifyReason?: string;
 };
 
 /** 안내문 하단 담당 줄 기본값 */
@@ -179,6 +226,7 @@ export function emptyBondRecord(id: string, 담당자명: string, 업체명: str
     업체명,
     내용증명: { checked: false, date: '', attachments: [] },
     회수일정: '',
+    회수일정첨부: [],
     해임통보: { date: '', attachments: [] },
     지급명령: { checked: false, date: '', attachments: [] },
   };
