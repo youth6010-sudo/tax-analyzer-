@@ -723,6 +723,9 @@ export function computeInterimClosing(
           setAmt(overhead, p, c, a);
         } else if (named && (named.prior || named.current)) {
           setAmt(overhead, named.prior, named.current);
+        } else {
+          // 이름 VLOOKUP이 제조원가명세서 「경비」를 잡아오는 것 방지
+          setAmt(overhead, 0, 0, 0);
         }
         if (!overhead.name) overhead.name = '경비';
       }
