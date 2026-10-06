@@ -297,7 +297,7 @@ export function buildInterimClosingReportHtml(
           })
           .join('');
 
-  const specialBlock = (m.specialNotes || '').trim()
+  const specialBlock = m.printSpecialNotes !== false && (m.specialNotes || '').trim()
     ? `<div class="notes-extra"><b>특이사항</b><br/>${escapeHtml(m.specialNotes).replace(/\n/g, '<br/>')}</div>`
     : '';
 
@@ -835,32 +835,8 @@ async function packRowsByMeasuring(
       }));
     }
 
-    // 표 전체가 세액계산과 같이 안 들어가면 — 끝부분(당기순이익 포함)만 세액계산과 같은 장에
-    let lo = 1;
-    let hi = lastRows.length;
-    let trailN = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      const trail = lastRows.slice(lastRows.length - mid);
-      if (await fits({ rows: trail, showFooter: true }, 'cont', false)) {
-        trailN = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    if (trailN > 0 && trailN < lastRows.length) {
-      const head = lastRows.slice(0, lastRows.length - trailN);
-      const trail = lastRows.slice(lastRows.length - trailN);
-      return [
-        ...tableChunks.slice(0, lastIdx).map(r => ({ rows: r, showFooter: false })),
-        { rows: head, showFooter: false },
-        { rows: trail, showFooter: true },
-      ];
-    }
-
-    // 세액계산만으로도 한 장 — 표와 분리
+    // 표 전체가 세액계산과 같이 안 들어가면 — 표는 그 장에 채운 채로 두고 세액계산만 다음 장으로.
+    // (표 끝부분을 세액계산 쪽으로 옮기면 앞장 아래가 크게 비어 보임)
     return [
       ...tableChunks.map(r => ({ rows: r, showFooter: false })),
       { rows: [], showFooter: true },

@@ -98,6 +98,8 @@ export type InterimClosingManualInputs = {
   confirmRole: string;
   /** 조정사항 아래 특이사항 메모 */
   specialNotes: string;
+  /** 보고서 출력 시 특이사항 표시 (미지정=표시) */
+  printSpecialNotes?: boolean;
   /**
    * 감가상각비 당기 — 명세서에 당기값이 없을 때만 엔진이 사용.
    * 전기는 항상 업로드 명세서 값.
@@ -264,28 +266,23 @@ export function syncAssumptionsWithReport(
     if (!needed.has(key)) needed.set(key, name);
   }
 
-  const byKey = new Map(
-    assumptions.map(a => {
-      const n = normalizeAssumptionRow(a);
-      return [n.name.replace(/\s+/g, ''), n] as const;
-    }),
-  );
+  // 기존 줄 순서 유지 — 가정치→역산으로 바꿔도 줄이 끝으로 밀리지 않고 제자리에 남음(입력값 있을 때)
   const out: AssumptionRow[] = [];
   const seen = new Set<string>();
-
-  for (const [key, name] of needed) {
-    seen.add(key);
-    const prev = byKey.get(key);
-    out.push(prev ? { ...prev, name: prev.name || name } : { name, byMonth: {}, note: '' });
-  }
-
   for (const a of assumptions) {
     const n = normalizeAssumptionRow(a);
     const key = n.name.replace(/\s+/g, '');
     if (seen.has(key)) continue;
-    if (assumptionMonthTotal(n) || (n.note || '').trim()) {
+    if (needed.has(key)) {
+      seen.add(key);
+      out.push({ ...n, name: n.name || needed.get(key)! });
+    } else if (assumptionMonthTotal(n) || (n.note || '').trim()) {
+      seen.add(key);
       out.push(n);
     }
+  }
+  for (const [key, name] of needed) {
+    if (!seen.has(key)) out.push({ name, byMonth: {}, note: '' });
   }
   return out;
 }

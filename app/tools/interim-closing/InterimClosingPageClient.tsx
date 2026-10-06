@@ -210,6 +210,9 @@ export default function InterimClosingPageClient() {
   const [writtenAt, setWrittenAt] = useState<string | null>(null);
   /** 마지막으로 확정한 수임처 — 검색칸 입력 중(clientId 비움)에도 유지 */
   const lastClientRef = useRef('');
+  const clientLoadTokenRef = useRef(0);
+  /** 화면 표시용 저장 정보 (savedAt 빈 값 = 저장본 없음) */
+  const [savedInfo, setSavedInfo] = useState<{ savedAt: string; savedBy: string } | null>(null);
   const computed = useMemo(() => computeInterimClosing(payload), [payload]);
   const warnChecks = computed.checks.filter(c => c.kind !== 'placed');
   const placedChecks = computed.checks.filter(c => c.kind === 'placed');
@@ -284,39 +287,44 @@ export default function InterimClosingPageClient() {
       .catch(() => {});
   }, [isMaster]);
 
-  const applyClient = useCallback(
-    (c: ClientOption) => {
-      const entityType = entityTypeFromClient({
-        businessEntityType: c.businessEntityType,
-        intakeData: { category: c.category },
-      });
-      // 첫 선택(업로드 후 수임처 지정)은 유지, 이미 고른 수임처에서 바꿀 때만 초기화
-      const switched = !!lastClientRef.current && lastClientRef.current !== c.id;
-      lastClientRef.current = c.id;
-      setClientId(c.id);
-      setClientQuery(c.companyName);
-      setPayload(p => {
-        // 다른 수임처: 명세서·입력값·기준 전부 비우고 새 화면 (연도·기준월만 유지)
-        const base = switched ? emptyPayload(p.year, p.baseMonth) : p;
-        return {
-          ...base,
-          companyName: c.companyName,
-          manual: { ...base.manual, entityType },
-        };
-      });
-      if (switched) {
-        setWrittenAt(null);
-        setSelectedRowKeys([]);
-        setBulkInputBasis('');
-        setBulkConvertBasis('');
-        setShowUpload(true);
-        setNotice('');
-        setError('');
+  /** 수임처 선택: 기본값으로 초기화 → 저장본이 있으면 마지막 저장본 불러오기 */
+  const applyClient = (c: ClientOption) => {
+    setClientSuggestOpen(false);
+    if (lastClientRef.current === c.id) return;
+    const entityType = entityTypeFromClient({
+      businessEntityType: c.businessEntityType,
+      intakeData: { category: c.category },
+    });
+    lastClientRef.current = c.id;
+    const token = ++clientLoadTokenRef.current;
+    setClientId(c.id);
+    setClientQuery(c.companyName);
+    setPayload(p => {
+      const base = emptyPayload(p.year, p.baseMonth);
+      return { ...base, companyName: c.companyName, manual: { ...base.manual, entityType } };
+    });
+    setWrittenAt(null);
+    setSavedInfo(null);
+    setSelectedRowKeys([]);
+    setBulkInputBasis('');
+    setBulkConvertBasis('');
+    setShowUpload(true);
+    setNotice('');
+    setError('');
+    void (async () => {
+      try {
+        const qs = new URLSearchParams({ clientId: c.id, companyName: c.companyName });
+        const data = await fetch(`/api/interim-closing/saves?${qs}`, { cache: 'no-store' }).then(r => r.json());
+        const latest = (Array.isArray(data?.items) ? data.items : [])[0] as SaveListItem | undefined;
+        // 응답 전에 다른 수임처로 바꿨으면 무시
+        if (token !== clientLoadTokenRef.current) return;
+        if (latest) await onLoad(latest.id, token);
+        else setSavedInfo({ savedAt: '', savedBy: '' });
+      } catch {
+        // 조회 실패 시 초기 화면 유지
       }
-      setClientSuggestOpen(false);
-    },
-    [],
-  );
+    })();
+  };
 
   const filteredClients = useMemo(() => {
     const q = clientQuery.replace(/\s+/g, '').toLowerCase();
@@ -531,6 +539,7 @@ export default function InterimClosingPageClient() {
       if (!res.ok) throw new Error(data?.error || '저장 실패');
       const savedAt = String(data.saved.savedAt || new Date().toISOString());
       setWrittenAt(savedAt);
+      setSavedInfo({ savedAt, savedBy: String(data.saved.savedBy || '') });
       setNotice(`저장됨 · ${new Date(savedAt).toLocaleString('ko-KR')}`);
       await refreshSaves();
     } catch (e) {
@@ -540,13 +549,15 @@ export default function InterimClosingPageClient() {
     }
   };
 
-  const onLoad = async (id: string) => {
+  const onLoad = async (id: string, token?: number) => {
     setBusy('불러오는 중…');
     setError('');
     try {
       const res = await fetch(`/api/interim-closing/saves/${id}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || '불러오기 실패');
+      if (token != null && token !== clientLoadTokenRef.current) return;
+      if (token == null) clientLoadTokenRef.current += 1;
       const saved = data.saved;
       const loaded = saved.payload as InterimClosingPayload;
       const assumptions = (loaded.manual?.assumptions || []).map(a => normalizeAssumptionRow(a));
@@ -576,6 +587,7 @@ export default function InterimClosingPageClient() {
         lastClientRef.current = hit?.id || name;
       }
       setWrittenAt(String(saved.savedAt || ''));
+      setSavedInfo({ savedAt: String(saved.savedAt || ''), savedBy: String(saved.savedBy || '') });
       setClientQuery(String(loaded.companyName || saved.companyName || ''));
       setShowLoad(false);
       setNotice(`불러옴 · ${new Date(saved.savedAt).toLocaleString('ko-KR')}`);
@@ -899,6 +911,20 @@ export default function InterimClosingPageClient() {
             해당항목표시
           </button>
         </div>
+        {savedInfo ? (
+          <div className="w-full text-[11px] print:hidden">
+            {savedInfo.savedAt ? (
+              <span className="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-blue-800">
+                불러온 저장본 · {new Date(savedInfo.savedAt).toLocaleString('ko-KR')}
+                {savedInfo.savedBy ? ` · ${savedInfo.savedBy}` : ''}
+              </span>
+            ) : (
+              <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-500">
+                저장된 데이터 없음 · 새로 작성
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {showUpload ? (
@@ -1356,7 +1382,18 @@ export default function InterimClosingPageClient() {
                 </tbody>
               </table>
 
-              <div className={sheetSection}>특이사항</div>
+              <div className={`${sheetSection} relative`}>
+                특이사항
+                <label className="absolute right-1.5 top-1/2 flex -translate-y-1/2 cursor-pointer items-center gap-1 text-[10px] font-normal">
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3"
+                    checked={payload.manual.printSpecialNotes !== false}
+                    onChange={e => patchManual({ printSpecialNotes: e.target.checked })}
+                  />
+                  출력
+                </label>
+              </div>
               <div className="flex min-h-0 flex-1 flex-col">
                 <textarea
                   className="min-h-[3rem] w-full flex-1 resize-none border border-[#c5d0e0] bg-[#eef4fb] px-2 py-1.5 text-[11px] leading-snug outline-none placeholder:text-slate-400 focus:border-[#001f60]"

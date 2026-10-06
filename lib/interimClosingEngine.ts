@@ -68,6 +68,20 @@ function isComputedFormulaRow(excelRow: number, kind: string, name = ''): boolea
   return COMPUTED_FORMULA_ROWS.has(excelRow);
 }
 
+/**
+ * 사용자 선택이 없을 때의 환산기준 기본값.
+ * 퇴직급여류 → 실적 / 매출액(15~44행)·원가 노무비(78~85, 184~191행)·인건비(급여·잡급·임금·상여·제수당) → 가정치
+ */
+function defaultConvertBasis(excelRow: number, name: string, tplConvert: string): string | null {
+  const n = (name || '').replace(/\s+/g, '');
+  if (/퇴직/.test(n)) return '실적';
+  if (tplConvert !== '' && tplConvert !== '환산기준') return null;
+  if (excelRow >= 15 && excelRow <= 44) return '가정치';
+  if ((excelRow >= 78 && excelRow <= 85) || (excelRow >= 184 && excelRow <= 191)) return '가정치';
+  if (/급여|잡급|임금|상여|제수당/.test(n)) return '가정치';
+  return null;
+}
+
 function annualize(
   current: number,
   convertBasis: string,
@@ -242,6 +256,11 @@ export function computeInterimClosing(
       }
     }
 
+    if (!computedRow && !criteria?.convertBasis && !isGimalAmountRow(t.name) && t.kind === 'account') {
+      const def = defaultConvertBasis(t.r, name, (t.convertBasis ?? '').trim());
+      if (def) convertBasis = def;
+    }
+
     const annualized = computedRow
       ? current
       : annualize(current, convertBasis, name || t.code, manual);
@@ -303,6 +322,10 @@ export function computeInterimClosing(
             taken.add(target.excelRow);
             target.code = line.code || '';
             target.name = line.name;
+            if (!target.isComputed && !payload.rowCriteria[target.key]?.convertBasis) {
+              const def = defaultConvertBasis(target.excelRow, line.name, '');
+              if (def) target.convertBasis = def;
+            }
           }
         }
         if (target) {
