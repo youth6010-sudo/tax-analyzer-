@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import NoticeDefaultsLogTable from '@/app/arrears/bond/NoticeDefaultsLogTable';
 import CenterModal from '@/app/components/portal/CenterModal';
 import { portalBtnSecondary } from '@/app/components/portal/uiClasses';
+import { downloadBondAttachment } from '@/app/arrears/bond/bondUpload';
 import type {
+  BondAttachment,
   BondAttachmentStepKey,
   BondChangeLogEntry,
   BondDocLogEntry,
@@ -22,6 +24,8 @@ type Props = {
   companyNames: Map<string, string>;
   canEditEntry: (entryId: string) => boolean;
   onEditNotice: (n: BondNoticeEdit) => void;
+  /** 발급 대장 한 줄의 최종 저장본 (수정했으면 수정본) */
+  noticeFileOf: (l: BondDocLogEntry) => BondAttachment | undefined;
   initialTab?: Tab;
   onClose: () => void;
 };
@@ -91,11 +95,27 @@ function DocLogTable({
   log,
   canEditEntry,
   onEdit,
+  fileOf,
+  onError,
 }: {
   log: BondDocLogEntry[];
   canEditEntry: (entryId: string) => boolean;
   onEdit: (l: BondDocLogEntry) => void;
+  fileOf: (l: BondDocLogEntry) => BondAttachment | undefined;
+  onError: (msg: string) => void;
 }) {
+  const [busy, setBusy] = useState('');
+  const download = async (l: BondDocLogEntry, att: BondAttachment) => {
+    setBusy(att.id);
+    onError('');
+    try {
+      await downloadBondAttachment(l.entryId, '해임통보', att);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : '내려받기 실패');
+    } finally {
+      setBusy('');
+    }
+  };
   return (
     <div className="h-full overflow-auto rounded-lg border border-slate-200">
       <table className="w-full text-xs">
@@ -110,13 +130,14 @@ function DocLogTable({
             <th className={TH}>생성</th>
             <th className={TH}>수정일</th>
             <th className={TH}>수정 사유</th>
+            <th className={TH}>공문</th>
             <th className={TH}>수정</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {log.length === 0 ? (
             <tr>
-              <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
                 발급된 해임통보 안내문이 없습니다.
               </td>
             </tr>
@@ -144,6 +165,23 @@ function DocLogTable({
                 </td>
                 <td className="max-w-[240px] whitespace-normal break-all px-2.5 py-1.5 text-left text-slate-600">
                   {l.modifyReason || '-'}
+                </td>
+                <td className={TD}>
+                  {(() => {
+                    const att = l.saved ? fileOf(l) : undefined;
+                    if (!att) return <span className="text-slate-300">-</span>;
+                    return (
+                      <button
+                        type="button"
+                        title={att.filename}
+                        disabled={busy === att.id}
+                        className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                        onClick={() => void download(l, att)}
+                      >
+                        {busy === att.id ? '받는 중…' : '내려받기'}
+                      </button>
+                    );
+                  })()}
                 </td>
                 <td className={TD}>
                   {l.saved && (l.version === '유예' || l.version === '기장') && canEditEntry(l.entryId) ? (
@@ -175,6 +213,7 @@ export default function BondHistoryModal({
   companyNames,
   canEditEntry,
   onEditNotice,
+  noticeFileOf,
   initialTab = '내용증명',
   onClose,
 }: Props) {
@@ -277,6 +316,8 @@ export default function BondHistoryModal({
                   <DocLogTable
                     log={docLog.filter(l => matchCompany(l.companyName))}
                     canEditEntry={canEditEntry}
+                    fileOf={noticeFileOf}
+                    onError={setError}
                     onEdit={l =>
                       onEditNotice({
                         entryId: l.entryId,

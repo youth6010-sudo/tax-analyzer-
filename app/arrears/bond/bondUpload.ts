@@ -82,6 +82,25 @@ export async function signBondAttachmentUrl(
   return data.url;
 }
 
+/** Storage 서명 URL에 한글 파일명(download=)을 넘기면 500 → 받아서 브라우저에서 이름 붙여 저장 */
+export async function downloadBondAttachment(
+  id: string,
+  step: BondAttachmentStepKey,
+  att: Pick<BondAttachment, 'id' | 'filename'>,
+): Promise<void> {
+  const url = await signBondAttachmentUrl(id, step, att.id);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`파일 받기 실패 (${res.status})`);
+  const href = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = att.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
+}
+
 export async function deleteBondAttachment(
   id: string,
   step: BondAttachmentStepKey,

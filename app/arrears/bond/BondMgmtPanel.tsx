@@ -891,6 +891,11 @@ export default function BondMgmtPanel() {
             const row = allRows.find(r => r.id === id);
             return !!row && canEditRow(row);
           }}
+          noticeFileOf={l =>
+            (allRows.find(r => r.id === l.entryId)?.해임통보.attachments ?? [])
+              .filter(a => a.source === 'generated' && a.sentDate === l.sentDate)
+              .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))[0]
+          }
           onEditNotice={n => {
             setHistoryOpen(false);
             setEditNotice(n);

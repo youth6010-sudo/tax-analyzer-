@@ -11,7 +11,12 @@ import {
   type BondAttachmentStepKey,
   type BondStoredRecord,
 } from '@/app/types/bond';
-import { deleteBondAttachment, signBondAttachmentUrl, uploadBondAttachment } from '@/app/arrears/bond/bondUpload';
+import {
+  deleteBondAttachment,
+  downloadBondAttachment,
+  signBondAttachmentUrl,
+  uploadBondAttachment,
+} from '@/app/arrears/bond/bondUpload';
 import { readPdfCreationDate } from '@/app/arrears/bond/pdfCreationDate';
 
 type Props = {
@@ -153,14 +158,8 @@ export default function BondAttachmentModal({
     const win = download ? null : window.open('', '_blank');
     setError('');
     try {
-      const url = await signBondAttachmentUrl(entryId, step, att.id, download);
-      if (win) win.location.href = url;
-      else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = att.filename;
-        a.click();
-      }
+      if (download) await downloadBondAttachment(entryId, step, att);
+      else if (win) win.location.href = await signBondAttachmentUrl(entryId, step, att.id);
     } catch (e) {
       win?.close();
       setError(e instanceof Error ? e.message : '파일 열기 실패');
