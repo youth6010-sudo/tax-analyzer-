@@ -94,6 +94,8 @@ async function prepareLetterClone(
     if (src.startsWith('/')) {
       img.setAttribute('src', `${window.location.origin}${src}`);
     }
+    /** 직인처럼 글자 위에 겹쳐 놓은 이미지는 화면 위치·크기 그대로 */
+    if (img.dataset.captureKeep === '1') return;
     const isFooter = src.includes('footer') || img.closest('.arrears-letter-footer');
     const isHeader = src.includes('header') || img.closest('.arrears-letter-brand');
     const hPx = isFooter ? 40 : isHeader ? 48 : 48;

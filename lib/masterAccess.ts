@@ -2,14 +2,19 @@ import type { SessionUser } from '@/lib/session';
 
 /**
  * 권한 모델
- * - 개발자(찰리, 리아 관리자모드, DB role=admin): 찰리 기능 + 인디의 입력·수정·조회 기능
+ * - 개발자(찰리, 리아·페리 관리자모드, DB role=admin): 찰리 기능 + 인디의 입력·수정·조회 기능
  *   (휴가 최종 결재·취소 승인만 인디 전용으로 제외)
  * - 결재권자(인디): 전 수임처 자료 조회·수정, 휴가 최종 결재, 일반 담당과 동일한 메뉴만 (관리·블루홀 등 비공개)
  * - 일반 담당: 본인 담당 범위
  */
 
 /** 개발자 — 관리자 모드 로그인 시 전체 메뉴·권한 */
-export const DEVELOPER_LOGIN_IDS = ['charlie', 'ria'] as const;
+export const DEVELOPER_LOGIN_IDS = ['charlie', 'ria', 'peri'] as const;
+
+/** 로그인·헤더에서 관리자 모드를 켜고 끌 수 있는 계정 */
+export const ADMIN_MODE_LOGIN_IDS = ['ria', 'peri'] as const;
+
+const isAdminModeLoginId = (loginId: string) => (ADMIN_MODE_LOGIN_IDS as readonly string[]).includes(loginId);
 
 /** 결재권자 — 전체 데이터 조회·수정 (개발·관리 메뉴 비공개) */
 export const DATA_VIEWER_LOGIN_IDS = ['indie'] as const;
@@ -41,7 +46,7 @@ export function isDeveloperAdmin(user: AccessUser): boolean {
   if (user.role === 'admin') return true;
   const loginId = normalizeLoginId(user);
   if (loginId === 'charlie') return true;
-  if (loginId === 'ria' && user.adminMode) return true;
+  if (isAdminModeLoginId(loginId) && user.adminMode) return true;
   return false;
 }
 
@@ -55,12 +60,12 @@ export function isDataViewer(user: AccessUser): boolean {
 
 /** 로그인 후 관리자 모드 전환 가능 여부 */
 export function canToggleAdminMode(user: AccessUser): boolean {
-  return normalizeLoginId(user) === 'ria';
+  return isAdminModeLoginId(normalizeLoginId(user));
 }
 
 /** 로그인 화면에서 관리자 모드 선택 가능 여부 */
 export function canChooseAdminMode(loginId: string): boolean {
-  return loginId.trim().toLowerCase() === 'ria';
+  return isAdminModeLoginId(loginId.trim().toLowerCase());
 }
 
 /** 로그인 시 관리자 모드 자동 적용 (찰리) */
@@ -68,9 +73,9 @@ export function isAlwaysAdminModeLogin(loginId: string): boolean {
   return loginId.trim().toLowerCase() === 'charlie';
 }
 
-/** 리아 관리자 모드 */
+/** 리아·페리 관리자 모드 */
 export function isRiaAdminMode(user: AccessUser): boolean {
-  return normalizeLoginId(user) === 'ria' && !!user?.adminMode;
+  return isAdminModeLoginId(normalizeLoginId(user)) && !!user?.adminMode;
 }
 
 /**

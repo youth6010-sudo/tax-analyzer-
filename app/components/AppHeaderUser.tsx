@@ -71,7 +71,7 @@ export default function AppHeaderUser() {
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <span className="hidden sm:inline text-xs font-semibold text-gray-600">
           {user.name}
-          {user.adminMode && user.loginId === 'ria' && (
+          {user.adminMode && canToggleAdminMode && (
             <span className="ml-1 rounded bg-violet-100 px-1 py-px text-[10px] font-bold text-violet-700">
               관리자
             </span>

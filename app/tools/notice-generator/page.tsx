@@ -84,6 +84,7 @@ import type {
 } from './_lib/types';
 import { EMPTY_VAT_REPORT } from './_lib/types';
 import { currentMonthlyFilingMonth } from '@/lib/periodUtils';
+import { isRiaAdminMode } from '@/lib/masterAccess';
 
 function defaultNoticeParams(): DeadlineParams {
   const { year, month } = currentMonthlyFilingMonth();
@@ -646,8 +647,7 @@ export default function NoticeGeneratorPage() {
   const scenario = resolveNoticeTemplateScenario(taxType, effectivePayrollByUs);
   const guideDefaultKey = globalDefaultScenarioKey(scenario);
 
-  const canEditGlobalDefault =
-    (sessionUser?.loginId ?? '').trim().toLowerCase() === 'ria' && Boolean(sessionUser?.adminMode);
+  const canEditGlobalDefault = isRiaAdminMode(sessionUser);
 
   const scenarioDefaultHtml = globalDefaults[guideDefaultKey];
 

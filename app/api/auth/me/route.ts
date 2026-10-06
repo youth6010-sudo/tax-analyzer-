@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import {
+  canToggleAdminMode,
   canUseCharlieFeatures,
   canUseIndieFeatures,
   isDataViewer,
@@ -20,7 +21,7 @@ export async function GET() {
       isMaster: isDataViewer(user),
       isDeveloper: isDeveloperAdmin(user),
       adminMode: !!user.adminMode,
-      canToggleAdminMode: user.loginId?.trim().toLowerCase() === 'ria',
+      canToggleAdminMode: canToggleAdminMode(user),
       /** 개발자 전용 메뉴·기능 */
       canUseCharlieFeatures: canUseCharlieFeatures(user),
       /** 검토표 열 구성 등 — 인디·개발자 */

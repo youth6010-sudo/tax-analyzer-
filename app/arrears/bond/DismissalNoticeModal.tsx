@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import DismissalNoticeSheet, {
   NOTICE_KIND_LABEL,
+  noticeFilename,
   type DismissalNoticeKind,
 } from '@/app/arrears/bond/DismissalNoticeSheet';
 import { uploadBondAttachment } from '@/app/arrears/bond/bondUpload';
@@ -39,10 +40,6 @@ type Props = {
   onPayload: (data: unknown) => void;
   onClose: () => void;
 };
-
-function safeName(s: string): string {
-  return s.replace(/[\\/:*?"<>|]/g, '').trim() || '업체';
-}
 
 type PickOption = { value: string; label: string };
 
@@ -128,7 +125,7 @@ export default function DismissalNoticeModal({
     (data?.firstMonth ? `${data.firstMonth.replace('-', '.')} ~ ${data.lastMonth.replace('-', '.')}` : '');
   const amountText = amountEdit ?? (data ? data.balance.toLocaleString('ko-KR') : '');
   const amount = Number(amountText.replace(/[^\d]/g, '')) || 0;
-  const filename = `세무보수_미수금_안내문_${safeName(recipientName)}_v.${kind}${editing ? '_수정' : ''}.pdf`;
+  const filename = noticeFilename(recipientName, sentDate, !!editing);
 
   const contactKey = (c: BondContact) => `${c.담당}|${c.전화}|${c.이메일}`;
   const contactPick: PickOption[] = contacts.map(c => ({

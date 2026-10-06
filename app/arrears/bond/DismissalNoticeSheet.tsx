@@ -43,6 +43,12 @@ function formatInlineDate(iso: string): string {
   return m ? `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일` : iso;
 }
 
+/** 저장 파일명 — 세무보수_미수금_안내문_{수신}_{2026.10.06}.pdf (수정본은 _수정) */
+export function noticeFilename(recipientName: string, sentDate: string, edited = false): string {
+  const name = recipientName.replace(/[\\/:*?"<>|]/g, '').trim() || '업체';
+  return `세무보수_미수금_안내문_${name}_${sentDate.replace(/-/g, '.')}${edited ? '_수정' : ''}.pdf`;
+}
+
 export function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '';
@@ -165,6 +171,7 @@ export default function DismissalNoticeSheet({ content }: { content: DismissalNo
             <img
               src="/seal-youth-busan.png"
               alt=""
+              data-capture-keep="1"
               width={64}
               height={64}
               style={{ left: '50%', top: '50%', marginLeft: -32, marginTop: -32 }}
