@@ -3,30 +3,34 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import DismissalNoticeSheet, {
-  formatNoticeDate,
-  NOTICE_FILE_VERSION,
-  NOTICE_VERSION_LABEL,
+  NOTICE_KIND_LABEL,
+  type DismissalNoticeKind,
 } from '@/app/arrears/bond/DismissalNoticeSheet';
 import { uploadBondAttachment } from '@/app/arrears/bond/bondUpload';
 import { useArrearsLetterData } from '@/app/arrears/bond/useArrearsLetterData';
 import { portalBtnPrimary, portalBtnSecondary, portalInput } from '@/app/components/portal/uiClasses';
-import { arrearsChurnStatusLabel, type ArrearsEntryDto } from '@/app/types/arrears';
+import type { ArrearsEntryDto } from '@/app/types/arrears';
 import {
-  todayIsoDate,
   type BondContact,
   type BondNotice,
-  type BondNoticeVersion,
+  type BondNoticeDefaults,
   type BondRecipient,
 } from '@/app/types/bond';
 import { buildMultiPagePdfBlob, downloadBlob } from '@/lib/arrearsLetterPdf';
 
 type Props = {
   entry: ArrearsEntryDto;
+  /** 해임 구분으로 정해지는 공문 종류 (유예·기장) */
+  kind: DismissalNoticeKind;
+  /** 화면 표시용 해임 구분 이름 */
+  churnLabel: string;
   recipient?: BondRecipient;
   notices: BondNotice[];
   contact: BondContact;
   /** 담당 선택 목록 (기본값 + 이전에 쓴 담당) */
   contacts: BondContact[];
+  /** 관리자가 지정한 발신일자·입금기한 일괄값 (빈 값이면 오늘·7일 뒤) */
+  defaults: BondNoticeDefaults;
   nextDocNo: string;
   /** 문서번호 선택 목록 (다음 번호부터 연속) */
   docNoOptions: string[];
@@ -35,24 +39,8 @@ type Props = {
   onClose: () => void;
 };
 
-const VERSIONS: BondNoticeVersion[] = ['v1', 'v1.5', 'v2'];
-
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return '';
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function safeName(s: string): string {
   return s.replace(/[\\/:*?"<>|]/g, '').trim() || '업체';
-}
-
-/** 확정 → v2, 대기·유예·특수 → v1 (저장된 v1 기한이 지났으면 v1.5) */
-function defaultVersion(status: string, lastV1: BondNotice | undefined, today: string): BondNoticeVersion {
-  if (status === 'confirmed') return 'v2';
-  if (lastV1?.deadline && lastV1.deadline < today) return 'v1.5';
-  return 'v1';
 }
 
 type PickOption = { value: string; label: string };
@@ -101,10 +89,13 @@ const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
 
 export default function DismissalNoticeModal({
   entry,
+  kind,
+  churnLabel,
   recipient,
   notices,
   contact: savedContact,
   contacts,
+  defaults,
   nextDocNo,
   docNoOptions,
   onPayload,
@@ -112,32 +103,26 @@ export default function DismissalNoticeModal({
 }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const { data, error: loadError } = useArrearsLetterData(entry.id);
-  const today = todayIsoDate();
-  const lastV1 = [...notices].reverse().find(n => n.version === 'v1');
-
-  const [version, setVersion] = useState<BondNoticeVersion>(() =>
-    defaultVersion(entry.churnMgmtStatus, lastV1, today),
-  );
+  const version = kind;
   const [docNo, setDocNo] = useState(nextDocNo);
-  const [sentDate, setSentDate] = useState(today);
+  const [sentDate, setSentDate] = useState(defaults.sentDate);
   const [recipientName, setRecipientName] = useState(recipient?.상호 || entry.companyName);
   const [periodEdit, setPeriod] = useState<string | null>(null);
   const [amountEdit, setAmountText] = useState<string | null>(null);
-  const [deadlineEdit, setDeadline] = useState<string | null>(null);
-  const [prevDeadline, setPrevDeadline] = useState(lastV1?.deadline ?? '');
+  const [deadline, setDeadline] = useState(defaults.deadline);
   const [contact, setContact] = useState<BondContact>(savedContact);
   const [saveContact, setSaveContact] = useState(false);
   const [busy, setBusy] = useState<'' | 'download' | 'save'>('');
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
 
-  const deadline = deadlineEdit ?? addDays(sentDate, 7);
+  const datesReady = !!sentDate && !!deadline;
   const period =
     periodEdit ??
     (data?.firstMonth ? `${data.firstMonth.replace('-', '.')} ~ ${data.lastMonth.replace('-', '.')}` : '');
   const amountText = amountEdit ?? (data ? data.balance.toLocaleString('ko-KR') : '');
   const amount = Number(amountText.replace(/[^\d]/g, '')) || 0;
-  const filename = `세무보수_미수금_안내문_${safeName(recipientName)}_${NOTICE_FILE_VERSION[version]}.pdf`;
+  const filename = `세무보수_미수금_안내문_${safeName(recipientName)}_v.${kind}.pdf`;
 
   const docNoPick: PickOption[] = [
     ...(docNoOptions.length ? docNoOptions : [nextDocNo]).map((v, i) => ({
@@ -167,7 +152,6 @@ export default function DismissalNoticeModal({
   }, [busy, onClose]);
 
   const run = async (save: boolean) => {
-    if (version === 'v1.5' && !prevDeadline && !window.confirm('v1 입금 기한이 비어 있습니다. 그대로 만들까요?')) return;
     const pages = Array.from(sheetRef.current?.querySelectorAll<HTMLElement>('.notice-page') ?? []);
     if (!pages.length) return;
     setBusy(save ? 'save' : 'download');
@@ -196,7 +180,7 @@ export default function DismissalNoticeModal({
                 {
                   id: entry.id,
                   patch: { 해임통보: { date: sentDate } },
-                  appendNotice: { version, docNo, sentDate, deadline: version === 'v1.5' ? '' : deadline, contact },
+                  appendNotice: { version, docNo, sentDate, deadline, contact },
                 },
               ]
             : [],
@@ -207,7 +191,7 @@ export default function DismissalNoticeModal({
             companyName: entry.companyName,
             version,
             sentDate,
-            deadline: version === 'v1.5' ? '' : deadline,
+            deadline,
             contact,
           },
         }),
@@ -242,7 +226,7 @@ export default function DismissalNoticeModal({
           <div>
             <h3 className="text-base font-bold text-slate-900">해임통보 안내문 생성</h3>
             <p className="text-xs text-slate-500">
-              {entry.companyName} · 해임 상태 {arrearsChurnStatusLabel(entry.churnMgmtStatus) || '없음'}
+              {entry.companyName} · 해임 상태 {churnLabel}
               {notices.length
                 ? ` · 발송 기록 ${notices.map(n => `${n.version}(${n.sentDate.slice(5).replace('-', '/')})`).join(', ')}`
                 : ''}
@@ -256,31 +240,24 @@ export default function DismissalNoticeModal({
         <div className="flex min-h-0 flex-1">
           <aside className="w-80 shrink-0 space-y-3 overflow-y-auto border-r border-slate-100 p-4">
             {field(
-              '버전',
-              <select
-                className={portalInput}
-                value={version}
-                onChange={e => setVersion(e.target.value as BondNoticeVersion)}
-              >
-                {VERSIONS.map(v => (
-                  <option key={v} value={v}>
-                    {NOTICE_VERSION_LABEL[v]}
-                  </option>
-                ))}
-              </select>,
+              '공문 종류 (해임 구분으로 자동 결정)',
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm font-semibold text-slate-800">
+                {NOTICE_KIND_LABEL[kind]}
+              </p>,
             )}
             {field('문서번호', <PickInput value={docNo} onChange={setDocNo} options={docNoPick} />)}
-            {field('발신일자 (끝 날짜 동일)', <input type="date" className={portalInput} value={sentDate} onChange={e => setSentDate(e.target.value)} />)}
+            {field('발신일자 (일괄 저장값, 수정 가능)', <input type="date" className={portalInput} value={sentDate} onChange={e => setSentDate(e.target.value)} />)}
             {field('수신 (○○ 대표님 귀하)', <input className={portalInput} value={recipientName} onChange={e => setRecipientName(e.target.value)} />)}
             {field('귀속기간', <input className={portalInput} value={period} onChange={e => setPeriod(e.target.value)} placeholder="2018.07 ~ 2026.08" />)}
             {field('금액(원)', <input className={`${portalInput} text-right tabular-nums`} value={amountText} onChange={e => setAmountText(e.target.value)} inputMode="numeric" />)}
-            {version === 'v1.5'
-              ? field('v1 입금 기한 (2항 인용)', <input type="date" className={portalInput} value={prevDeadline} onChange={e => setPrevDeadline(e.target.value)} />)
-              : field('입금 기한', <input type="date" className={portalInput} value={deadline} onChange={e => setDeadline(e.target.value)} />)}
+            {field(
+              `${kind === '기장' ? '입금 기한 (다음 날 계약 해지)' : '입금 기한'} · 일괄 저장값`,
+              <input type="date" className={portalInput} value={deadline} onChange={e => setDeadline(e.target.value)} />,
+            )}
 
             <p className="pt-2 text-xs font-bold text-slate-800">담당 (7항 아래)</p>
             {field(
-              '담당 (선택 시 전화·이메일 함께)',
+              '담당 (업체 담당자 기준 자동, 선택 시 전화·이메일 함께)',
               <PickInput
                 value={contact.담당}
                 onChange={v => setC('담당', v)}
@@ -300,10 +277,11 @@ export default function DismissalNoticeModal({
             {done ? <p className="text-xs text-emerald-700">{done}</p> : null}
 
             <div className="flex flex-col gap-2 pt-2">
-              <button type="button" className={portalBtnSecondary} disabled={!data || !!busy} onClick={() => void run(false)}>
+              {!datesReady ? <p className="text-xs text-amber-600">발신일자와 입금 기한이 있어야 생성할 수 있습니다.</p> : null}
+              <button type="button" className={portalBtnSecondary} disabled={!data || !!busy || !datesReady} onClick={() => void run(false)}>
                 {busy === 'download' ? 'PDF 만드는 중…' : 'PDF 다운로드'}
               </button>
-              <button type="button" className={portalBtnPrimary} disabled={!data || !!busy || !sentDate || !docNo.trim()} onClick={() => void run(true)}>
+              <button type="button" className={portalBtnPrimary} disabled={!data || !!busy || !datesReady || !docNo.trim()} onClick={() => void run(true)}>
                 {busy === 'save' ? '저장 중…' : '다운로드 + 기록 저장'}
               </button>
               <p className="text-[11px] leading-snug text-slate-400">
@@ -318,18 +296,7 @@ export default function DismissalNoticeModal({
             ) : (
               <div ref={sheetRef} className="mx-auto w-[720px]">
                 <DismissalNoticeSheet
-                  content={{
-                    version,
-                    docNo,
-                    sentDateLabel: formatNoticeDate(sentDate),
-                    recipientName,
-                    period,
-                    amount,
-                    deadlineLabel: formatNoticeDate(deadline),
-                    prevDeadlineLabel: formatNoticeDate(prevDeadline),
-                    closingDateLabel: formatNoticeDate(sentDate),
-                    contact,
-                  }}
+                  content={{ kind, docNo, sentDate, recipientName, period, amount, deadline, contact }}
                 />
               </div>
             )}

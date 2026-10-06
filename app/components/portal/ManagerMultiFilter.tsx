@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /** 표 머리글 「제목 ▼」 트리거 + 팝오버 */
 export function HeaderPopover({
@@ -17,24 +18,47 @@ export function HeaderPopover({
   align?: 'left' | 'right';
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const open = pos !== null;
 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !popRef.current?.contains(t)) setPos(null);
     };
+    const onScroll = (e: Event) => {
+      if (!popRef.current?.contains(e.target as Node)) setPos(null);
+    };
+    const onResize = () => setPos(null);
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
   }, [open]);
+
+  const toggle = () => {
+    if (open) {
+      setPos(null);
+      return;
+    }
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ top: r.bottom + 4, left: align === 'right' ? r.right : r.left });
+  };
 
   const active = activeCount > 0;
   return (
     <div ref={ref} className="relative inline-block">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         title={title}
         className={`inline-flex items-center gap-1 ${active ? 'text-blue-700' : ''}`}
       >
@@ -44,15 +68,22 @@ export function HeaderPopover({
         ) : null}
         <span className={`text-[10px] ${active ? 'text-blue-600' : 'text-slate-400'}`}>▼</span>
       </button>
-      {open ? (
-        <div
-          className={`absolute top-full z-20 mt-1 min-w-[9rem] rounded-lg border border-slate-200 bg-white p-1.5 text-left text-xs font-normal text-slate-700 shadow-lg ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
-          {children}
-        </div>
-      ) : null}
+      {pos
+        ? createPortal(
+            <div
+              ref={popRef}
+              style={{
+                top: pos.top,
+                left: pos.left,
+                transform: align === 'right' ? 'translateX(-100%)' : undefined,
+              }}
+              className="fixed z-[1000] min-w-[9rem] rounded-lg border border-slate-200 bg-white p-1.5 text-left text-xs font-normal text-slate-700 shadow-lg"
+            >
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

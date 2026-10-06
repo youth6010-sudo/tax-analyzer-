@@ -1,10 +1,10 @@
-/** 미수 관리분류 */
+/** 미수 관리분류 — 화면 표시 순서(미분류 다음). code는 엑셀 가져오기 값이라 순서와 무관 */
 export const ARREARS_MGMT_CATEGORIES = [
-  { id: 'recovery', label: '채권회수', code: 0 },
-  { id: 'bad', label: '악성', code: 1 },
-  { id: 'long', label: '장기', code: 2 },
-  { id: 'temp', label: '일시', code: 3 },
   { id: 'cms', label: 'CMS', code: 4 },
+  { id: 'temp', label: '일시', code: 3 },
+  { id: 'long', label: '장기', code: 2 },
+  { id: 'bad', label: '악성', code: 1 },
+  { id: 'recovery', label: '채권회수', code: 0 },
 ] as const;
 
 export type ArrearsMgmtCategory = (typeof ARREARS_MGMT_CATEGORIES)[number]['id'] | '';

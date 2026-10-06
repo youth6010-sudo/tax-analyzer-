@@ -5,6 +5,7 @@ import { getAppConfig, setAppConfig } from '@/lib/appConfigDb';
 import { managerNamesMatch } from '@/app/utils/managerMatch';
 import {
   BOND_ATTACHMENT_STEPS,
+  BOND_NOTICE_VERSIONS,
   BOND_STAFF_CONTACTS,
   DEFAULT_BOND_CONTACT,
   type BondAttachment,
@@ -12,6 +13,9 @@ import {
   type BondContact,
   type BondDocLogEntry,
   type BondNotice,
+  type BondNoticeDefaults,
+  type BondNoticeDefaultsLogEntry,
+  type BondNoticeVersion,
   type BondRecipient,
   type BondRecordPatch,
   type BondStoredRecord,
@@ -25,9 +29,12 @@ type BondDoc = {
   /** 연도별 마지막으로 쓴 해임통보 문서번호 일련번호 (PDF 만들 때마다 갱신) */
   docSeq?: Record<string, number>;
   docLog?: BondDocLogEntry[];
+  noticeDefaults?: BondNoticeDefaults;
+  noticeDefaultsLog?: BondNoticeDefaultsLogEntry[];
 };
 
 const DOC_LOG_MAX = 3000;
+const NOTICE_DEFAULTS_LOG_MAX = 200;
 
 const DATE_RE = /^(\d{4}-\d{2}-\d{2})?$/;
 const DOC_NO_RE = /^청년들-부산-추심-(\d{4})-(\d+)호$/;
@@ -66,8 +73,8 @@ function sanitizeContact(v: unknown): BondContact {
 
 function sanitizeNotice(v: unknown): BondNotice | null {
   const r = (v ?? {}) as Record<string, unknown>;
-  const version = r.version;
-  if (version !== 'v1' && version !== 'v1.5' && version !== 'v2') return null;
+  const version = r.version as BondNoticeVersion;
+  if (!BOND_NOTICE_VERSIONS.includes(version)) return null;
   const d = (x: unknown) => {
     const s = String(x ?? '');
     return DATE_RE.test(s) ? s : '';
@@ -209,6 +216,47 @@ export function listBondContacts(records: Record<string, BondStoredRecord>, curr
     seen.add(key);
     return true;
   });
+}
+
+export async function readBondNoticeDefaults(): Promise<BondNoticeDefaults> {
+  const v = (await readDoc()).noticeDefaults;
+  return {
+    sentDate: v?.sentDate ?? '',
+    deadline: v?.deadline ?? '',
+    ...(v?.savedBy ? { savedBy: v.savedBy } : {}),
+    ...(v?.savedAt ? { savedAt: v.savedAt } : {}),
+  };
+}
+
+export async function writeBondNoticeDefaults(v: unknown, user: { name: string }): Promise<void> {
+  const r = (v ?? {}) as Record<string, unknown>;
+  const d = (x: unknown) => {
+    const s = String(x ?? '');
+    return DATE_RE.test(s) ? s : '';
+  };
+  const doc = await readDoc();
+  const entry: BondNoticeDefaultsLogEntry = {
+    sentDate: d(r.sentDate),
+    deadline: d(r.deadline),
+    savedBy: user.name,
+    savedAt: new Date().toISOString(),
+  };
+  doc.noticeDefaults = { ...entry };
+  doc.noticeDefaultsLog = [...(doc.noticeDefaultsLog ?? []), entry].slice(-NOTICE_DEFAULTS_LOG_MAX);
+  await writeDoc(doc);
+}
+
+/** 일괄 날짜 저장 이력 — 최신순 */
+export async function readBondNoticeDefaultsLog(): Promise<BondNoticeDefaultsLogEntry[]> {
+  const doc = await readDoc();
+  const log = doc.noticeDefaultsLog ?? [];
+  const cur = doc.noticeDefaults;
+  /** 이력 기능 이전에 저장된 값은 현재값 1건으로 보여 줌 */
+  const seeded =
+    !log.length && cur?.savedAt
+      ? [{ sentDate: cur.sentDate, deadline: cur.deadline, savedBy: cur.savedBy ?? '', savedAt: cur.savedAt }]
+      : log;
+  return [...seeded].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 export async function readBondDocSeq(): Promise<Record<string, number>> {

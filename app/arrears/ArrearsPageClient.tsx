@@ -36,6 +36,7 @@ import ArrearsBaselineImport from '@/app/arrears/ArrearsBaselineImport';
 import { toArrearsListExportItem } from '@/lib/arrearsListExportShared';
 import ChurnStatusEditorModal from '@/app/arrears/ChurnStatusEditorModal';
 import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
+import { useColumnWidths } from '@/app/components/portal/useColumnWidths';
 
 type BulkRow = {
   clientId?: string;
@@ -113,6 +114,10 @@ function toDateInputValue(s: string): string {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
 }
 
+const ARREARS_COLUMNS = ['select', 'code', 'company', 'balance', 'reason', 'manager', 'category', 'churn', 'memo'] as const;
+const ARREARS_COLUMNS_EDIT = [...ARREARS_COLUMNS, 'input'] as const;
+const ARREARS_COL_WIDTHS_KEY = 'arrearsList.colWidths.v1';
+
 export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
   const router = useRouter();
   const [items, setItems] = useState<ArrearsEntryDto[]>([]);
@@ -129,6 +134,10 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
   const [viewerName, setViewerName] = useState('');
   /** 인디 등 관리자: 기본은 담당자 화면과 동일, 켤 때만 수정 UI — 탭 세션 유지 */
   const [editMode, setEditMode] = useState(false);
+  const cols = useColumnWidths(
+    ARREARS_COL_WIDTHS_KEY,
+    editMode ? ARREARS_COLUMNS_EDIT : ARREARS_COLUMNS,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -1451,6 +1460,16 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                   <path d="M16.5 3.5v3.2h-3.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
+              {cols.customized ? (
+                <button
+                  type="button"
+                  className="inline-flex h-[42px] shrink-0 items-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 print:hidden"
+                  onClick={cols.reset}
+                  title="이 컴퓨터에서 조절한 열 너비를 원래대로"
+                >
+                  열 너비 초기화
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1480,10 +1499,14 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
         ) : null}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table
+            style={cols.tableStyle}
+            className={`min-w-full text-left text-sm ${cols.customized ? '[&_td]:overflow-hidden' : ''}`}
+          >
             <thead className="bg-slate-50 text-center text-xs font-semibold text-slate-600">
               <tr>
-                <th className="px-2 py-2.5 w-10 print:hidden">
+                <th {...cols.thProps('select')} className="relative px-2 py-2.5 w-10 print:hidden">
+                  {cols.handle('select')}
                   <input
                     type="checkbox"
                     className="rounded border-slate-300"
@@ -1493,8 +1516,12 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                     aria-label="전체 선택"
                   />
                 </th>
-                <th className="px-3 py-2.5 whitespace-nowrap">코드</th>
-                <th className="relative px-3 py-2.5">
+                <th {...cols.thProps('code')} className="relative px-3 py-2.5 whitespace-nowrap">
+                  {cols.handle('code')}
+                  코드
+                </th>
+                <th {...cols.thProps('company')} className="relative px-3 py-2.5">
+                  {cols.handle('company')}
                   <div className="flex items-center justify-center gap-1">
                     <button
                       type="button"
@@ -1584,7 +1611,8 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                     </div>
                   ) : null}
                 </th>
-                <th className="relative px-3 py-2.5 whitespace-nowrap">
+                <th {...cols.thProps('balance')} className="relative px-3 py-2.5 whitespace-nowrap">
+                  {cols.handle('balance')}
                   <div className="flex items-center justify-center gap-1">
                     <button
                       type="button"
@@ -1677,8 +1705,12 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                     </div>
                   ) : null}
                 </th>
-                <th className="px-3 py-2.5 min-w-[12rem]">미수 사유</th>
-                <th className="px-3 py-2.5 whitespace-nowrap">
+                <th {...cols.thProps('reason')} className="relative px-3 py-2.5 min-w-[12rem]">
+                  {cols.handle('reason')}
+                  미수 사유
+                </th>
+                <th {...cols.thProps('manager')} className="relative px-3 py-2.5 whitespace-nowrap">
+                  {cols.handle('manager')}
                   <ManagerMultiFilter
                     headerLabel="담당"
                     options={managerFilterOptions}
@@ -1687,11 +1719,23 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                     isLocked={n => !canManage && !managerNamesMatch(n, viewerName)}
                   />
                 </th>
-                <th className="px-3 py-2.5 whitespace-nowrap">관리</th>
-                <th className="px-3 py-2.5 whitespace-nowrap">해임</th>
-                <th className="px-3 py-2.5 min-w-[8rem]">메모</th>
+                <th {...cols.thProps('category')} className="relative px-3 py-2.5 whitespace-nowrap">
+                  {cols.handle('category')}
+                  관리
+                </th>
+                <th {...cols.thProps('churn')} className="relative px-3 py-2.5 whitespace-nowrap">
+                  {cols.handle('churn')}
+                  해임
+                </th>
+                <th {...cols.thProps('memo')} className="relative px-3 py-2.5 min-w-[8rem]">
+                  {cols.handle('memo')}
+                  메모
+                </th>
                 {editMode ? (
-                  <th className="px-3 py-2.5 whitespace-nowrap print:hidden">입력</th>
+                  <th {...cols.thProps('input')} className="relative px-3 py-2.5 whitespace-nowrap print:hidden">
+                    {cols.handle('input')}
+                    입력
+                  </th>
                 ) : null}
               </tr>
             </thead>

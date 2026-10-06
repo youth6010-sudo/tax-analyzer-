@@ -1,3 +1,5 @@
+import { getManagerMatchNames } from '@/app/utils/managerMatch';
+
 /** 채권관리 — 첨부파일 (내용증명·지급명령 공용, 해임통보도 추후 사용) */
 export type BondAttachment = {
   id: string;
@@ -57,7 +59,23 @@ export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '
 
 export type BondAttachmentMap = Partial<Record<BondAttachmentStepKey, BondAttachment[]>>;
 
-export type BondNoticeVersion = 'v1' | 'v1.5' | 'v2';
+/** 유예·기장 = 현행 안내문 / v1·v1.5·v2 = 이전 양식 발송 기록 */
+export type BondNoticeVersion = '유예' | '기장' | 'v1' | 'v1.5' | 'v2';
+export const BOND_NOTICE_VERSIONS: BondNoticeVersion[] = ['유예', '기장', 'v1', 'v1.5', 'v2'];
+
+/** 해임 구분 이름 → 해임통보 공문 종류 (유예·기장만 공문 생성) */
+export function dismissalNoticeKind(churnLabel: string): '유예' | '기장' | null {
+  const l = churnLabel.replace(/\s+/g, '');
+  if (l === '유예') return '유예';
+  if (l === '기장') return '기장';
+  return null;
+}
+
+/** 지급명령까지 진행하는 해임 구분 */
+export function paymentOrderAllowed(churnLabel: string): boolean {
+  const l = churnLabel.replace(/\s+/g, '');
+  return l === '기장' || l === '해임';
+}
 
 /** 해임통보 안내문 발송 기록 — v1.5는 직전 v1 기한을 인용 */
 export type BondNotice = {
@@ -105,6 +123,41 @@ export const BOND_STAFF_CONTACTS: BondContact[] = [
 ];
 
 export const DEFAULT_BOND_CONTACT: BondContact = BOND_STAFF_CONTACTS[0]!;
+
+/** 이 담당(찰리·다야) 업체의 안내문에는 리아 연락처를 넣음 */
+const CONTACT_ALIAS: Record<string, string> = { 이희만: '박혜림', 홍다예: '박혜림' };
+
+/** 미수관리 담당자명(닉네임·실명) → 안내문 담당 줄 (목록에 없으면 null) */
+export function bondContactForManager(managerName: string): BondContact | null {
+  const names = getManagerMatchNames(managerName.trim()).map(n => n.replace(/\s+/g, ''));
+  if (!names.length) return null;
+  const alias = names.map(n => CONTACT_ALIAS[n]).find(Boolean);
+  const targets = alias ? [alias] : names;
+  return (
+    BOND_STAFF_CONTACTS.find(c => {
+      const name = c.담당.split(/\s+/).find(w => w.length === 3 && !w.includes('팀')) ?? '';
+      return !!name && targets.some(t => t.includes(name));
+    }) ?? null
+  );
+}
+
+/** 해임통보 발신일자·입금기한 일괄값 (빈 문자열 = 미지정) */
+export type BondNoticeDefaults = {
+  sentDate: string;
+  deadline: string;
+  savedBy?: string;
+  /** ISO 시각 */
+  savedAt?: string;
+};
+
+/** 일괄 날짜 저장 이력 1건 */
+export type BondNoticeDefaultsLogEntry = {
+  sentDate: string;
+  deadline: string;
+  savedBy: string;
+  /** ISO 시각 */
+  savedAt: string;
+};
 
 /** DB 저장분 — 담당자명·업체명은 미수관리에서 */
 export type BondStoredRecord = {

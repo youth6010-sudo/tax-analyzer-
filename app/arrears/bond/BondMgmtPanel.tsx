@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ManagerMultiFilter from '@/app/components/portal/ManagerMultiFilter';
 import PortalPageShell from '@/app/components/portal/PortalPageShell';
 import {
@@ -16,6 +16,9 @@ import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
 import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
 import DismissalDocLogModal from '@/app/arrears/bond/DismissalDocLogModal';
 import DismissalNoticeModal from '@/app/arrears/bond/DismissalNoticeModal';
+import { addDaysIso } from '@/app/arrears/bond/DismissalNoticeSheet';
+import NoticeDefaultsLogModal from '@/app/arrears/bond/NoticeDefaultsLogModal';
+import { useColumnWidths } from '@/app/components/portal/useColumnWidths';
 import {
   arrearsChurnStatusChipClass,
   arrearsChurnStatusLabel,
@@ -23,8 +26,13 @@ import {
 } from '@/app/types/arrears';
 import {
   BOND_STAFF_CONTACTS,
+  bondContactForManager,
   DEFAULT_BOND_CONTACT,
+  dismissalNoticeKind,
+  type BondNoticeDefaults,
+  type BondNoticeDefaultsLogEntry,
   emptyBondRecord,
+  paymentOrderAllowed,
   type BondContact,
   type BondDocLogEntry,
   todayIsoDate,
@@ -83,13 +91,21 @@ function AttachButton({ count, onClick }: { count: number; onClick: () => void }
   );
 }
 
-function GenerateButton({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
+function GenerateButton({
+  enabled,
+  onClick,
+  disabledTitle = '준비중',
+}: {
+  enabled: boolean;
+  onClick: () => void;
+  disabledTitle?: string;
+}) {
   return (
     <button
       type="button"
       disabled={!enabled}
       onClick={onClick}
-      title={enabled ? '서식 생성' : '준비중'}
+      title={enabled ? '서식 생성' : disabledTitle}
       className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
     >
       서식생성
@@ -97,6 +113,7 @@ function GenerateButton({ enabled, onClick }: { enabled: boolean; onClick: () =>
   );
 }
 
+const CHURN_NONE = '__none__';
 const DATE_SET = '__set__';
 const DATE_UNSET = '__unset__';
 const SCHEDULE_EMPTY = '__empty__';
@@ -124,7 +141,10 @@ function formatScheduleOption(v: string): string {
 
 /** 열 구분선 */
 const COL_BORDER = 'border-r border-slate-200 last:border-r-0';
-const TH = `whitespace-nowrap px-3 py-3 text-center align-middle ${COL_BORDER}`;
+const TH = `relative whitespace-nowrap px-3 py-3 text-center align-middle ${COL_BORDER}`;
+
+const BOND_COLUMNS = ['select', 'manager', 'company', 'cert', 'schedule', 'dismiss', 'order'] as const;
+const BOND_COL_WIDTHS_KEY = 'bondMgmt.colWidths.v1';
 const TD = `px-3 py-2 text-center ${COL_BORDER}`;
 
 function Cell({ children }: { children: ReactNode }) {
@@ -144,6 +164,7 @@ export default function BondMgmtPanel() {
   const [dismissFilter, setDismissFilter] = useState<string[]>([]);
   const [orderFilter, setOrderFilter] = useState<string[]>([]);
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
+  const [churnFilter, setChurnFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStep, setBulkStep] = useState<BondCheckedStepKey>('내용증명');
   const [bulkDate, setBulkDate] = useState(todayIsoDate());
@@ -157,9 +178,40 @@ export default function BondMgmtPanel() {
   const [docNoOptions, setDocNoOptions] = useState<string[]>([]);
   const [docLog, setDocLog] = useState<BondDocLogEntry[]>([]);
   const [docLogOpen, setDocLogOpen] = useState(false);
+  const [noticeDefaults, setNoticeDefaults] = useState<BondNoticeDefaults>({ sentDate: '', deadline: '' });
+  /** 입력 중인 일괄 날짜 — 「저장」 전에는 안내문에 쓰지 않음 */
+  const [defaultsDraft, setDefaultsDraft] = useState<BondNoticeDefaults | null>(null);
+  const [defaultsSaving, setDefaultsSaving] = useState(false);
+  const [defaultsError, setDefaultsError] = useState('');
+  const [defaultsLog, setDefaultsLog] = useState<BondNoticeDefaultsLogEntry[]>([]);
+  const [defaultsLogOpen, setDefaultsLogOpen] = useState(false);
+  const cols = useColumnWidths(BOND_COL_WIDTHS_KEY, BOND_COLUMNS);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  /** 검색칸 = 표 왼쪽 ~ 내용증명 열 끝 (회수일정 열 시작 전) */
+  const [searchWidth, setSearchWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const table = tableRef.current;
+    const bar = toolbarRef.current;
+    if (!table || !bar) return;
+    const measure = () => {
+      const th = table.querySelector<HTMLElement>('thead th[data-col="schedule"]');
+      if (!th) return;
+      const w = Math.round(th.getBoundingClientRect().left - bar.getBoundingClientRect().left - 8);
+      setSearchWidth(w >= 240 ? w : null);
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(table);
+    ro.observe(bar);
+    table.querySelectorAll('thead th').forEach(th => ro.observe(th));
+    return () => ro.disconnect();
+  }, []);
+  const noticeDatesReady = !!noticeDefaults.sentDate && !!noticeDefaults.deadline;
 
   const applyBondPayload = useCallback((data: unknown) => {
     const d = data as {
+      noticeDefaults?: BondNoticeDefaults;
+      noticeDefaultsLog?: BondNoticeDefaultsLogEntry[];
       records?: Record<string, BondStoredRecord>;
       contact?: BondContact;
       contacts?: BondContact[];
@@ -168,12 +220,56 @@ export default function BondMgmtPanel() {
       docLog?: BondDocLogEntry[];
     };
     if (d.docLog) setDocLog(d.docLog);
+    if (d.noticeDefaults) setNoticeDefaults(d.noticeDefaults);
+    if (d.noticeDefaultsLog) setDefaultsLog(d.noticeDefaultsLog);
     if (d.records) setStored(d.records);
     if (d.contact) setContact(d.contact);
     if (d.contacts?.length) setContacts(d.contacts);
     if (d.nextDocNo) setNextDocNo(d.nextDocNo);
     if (d.docNoOptions) setDocNoOptions(d.docNoOptions);
   }, []);
+
+  const saveNoticeDefaults = async (next: BondNoticeDefaults) => {
+    if (next.sentDate && next.deadline && next.deadline < next.sentDate) {
+      setDefaultsError('입금기한이 발신일보다 빠릅니다.');
+      return;
+    }
+    setDefaultsSaving(true);
+    setDefaultsError('');
+    try {
+      const res = await fetch('/api/arrears/bond', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noticeDefaults: next }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((d as { error?: string }).error || '저장 실패');
+      applyBondPayload(d);
+      setDefaultsDraft(null);
+    } catch (e) {
+      setDefaultsError(e instanceof Error ? e.message : '저장 실패');
+    } finally {
+      setDefaultsSaving(false);
+    }
+  };
+  const suggestedDefaults: BondNoticeDefaults = noticeDatesReady
+    ? noticeDefaults
+    : { sentDate: todayIsoDate(), deadline: addDaysIso(todayIsoDate(), 7) };
+  const shownDefaults = defaultsDraft ?? suggestedDefaults;
+  const defaultsDirty =
+    !noticeDatesReady ||
+    shownDefaults.sentDate !== noticeDefaults.sentDate ||
+    shownDefaults.deadline !== noticeDefaults.deadline;
+  const savedStamp = noticeDefaults.savedAt
+    ? `${noticeDefaults.savedBy || '?'} · ${new Date(noticeDefaults.savedAt).toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })} 저장`
+    : '';
 
   const [reloadTick, setReloadTick] = useState(0);
   const load = useCallback(() => setReloadTick(n => n + 1), []);
@@ -213,6 +309,15 @@ export default function BondMgmtPanel() {
   const churnById = useMemo(() => new Map(entries.map(e => [e.id, e.churnMgmtStatus || ''])), [entries]);
   /** 미수관리 수정 모드에서 편집한 해임 구분 이름·색 */
   const churnOptions = useArrearsChurnStatuses();
+  const churnLabelOf = useCallback(
+    (id: string) => (churnById.get(id) ? arrearsChurnStatusLabel(churnById.get(id)!, churnOptions) : ''),
+    [churnById, churnOptions],
+  );
+  const churnFilterOptions = useMemo(() => [CHURN_NONE, ...churnOptions.map(o => o.id)], [churnOptions]);
+  const formatChurnOption = useCallback(
+    (v: string) => (v === CHURN_NONE ? '(미지정)' : arrearsChurnStatusLabel(v, churnOptions) || v),
+    [churnOptions],
+  );
 
   const managerOptions = useMemo(
     () =>
@@ -250,13 +355,14 @@ export default function BondMgmtPanel() {
       r =>
         (!managerFilter.length || managerFilter.some(m => managerNamesMatch(r.담당자명, m))) &&
         (!qn || norm(r.업체명).includes(qn)) &&
+        (!churnFilter.length || churnFilter.includes(churnById.get(r.id) || CHURN_NONE)) &&
         (!scheduleFilter.length ||
           scheduleFilter.includes(r.회수일정.trim() || SCHEDULE_EMPTY)) &&
         matchesDateFilter(r.내용증명.date, certFilter) &&
         matchesDateFilter(r.해임통보.date, dismissFilter) &&
         matchesDateFilter(r.지급명령.date, orderFilter),
     );
-  }, [allRows, managerFilter, companyQuery, scheduleFilter, certFilter, dismissFilter, orderFilter]);
+  }, [allRows, managerFilter, companyQuery, churnFilter, churnById, scheduleFilter, certFilter, dismissFilter, orderFilter]);
 
   const canEditRow = useCallback(
     (r: BondRecord) => canManage || managerNamesMatch(r.담당자명, viewerName),
@@ -296,7 +402,12 @@ export default function BondMgmtPanel() {
     void save([{ id: r.id, patch: { [step]: { checked: !!date, date } } }]);
 
   const applyBulk = () => {
-    const targets = rows.filter(r => selected.has(r.id) && canEditRow(r));
+    const targets = rows.filter(
+      r =>
+        selected.has(r.id) &&
+        canEditRow(r) &&
+        (bulkStep !== '지급명령' || paymentOrderAllowed(churnLabelOf(r.id))),
+    );
     if (!targets.length) return;
     void save(targets.map(r => ({ id: r.id, patch: { [bulkStep]: { checked: !!bulkDate, date: bulkDate } } })));
   };
@@ -318,7 +429,7 @@ export default function BondMgmtPanel() {
       return;
     }
     if (type === '해임통보') {
-      setDismissTargetId(r.id);
+      if (noticeDatesReady && dismissalNoticeKind(churnLabelOf(r.id))) setDismissTargetId(r.id);
       return;
     }
     try {
@@ -337,9 +448,15 @@ export default function BondMgmtPanel() {
   const dismissRow = dismissTargetId ? allRows.find(r => r.id === dismissTargetId) : null;
 
   const checkedStepCell = (r: BondRecord, step: BondCheckedStepKey) => {
-    const generateEnabled = isDocumentReady(step) && canEditRow(r);
-    const editable = canEditRow(r);
+    const label = churnLabelOf(r.id);
+    const locked = step === '지급명령' && !paymentOrderAllowed(label);
+    const editable = canEditRow(r) && !locked;
+    const generateEnabled = isDocumentReady(step) && editable;
     return (
+      <div
+        className={locked ? 'opacity-40' : undefined}
+        title={locked ? `지급명령은 해임 구분이 기장·해임인 업체만 진행합니다 (현재: ${label || '미지정'})` : undefined}
+      >
       <Cell>
         <input
           type="checkbox"
@@ -357,12 +474,19 @@ export default function BondMgmtPanel() {
         />
         <AttachButton
           count={r[step].attachments.length}
-          onClick={() => setAttachTarget({ id: r.id, step })}
+          onClick={() => {
+            if (!locked) setAttachTarget({ id: r.id, step });
+          }}
         />
         {isDocumentReady(step) ? (
-          <GenerateButton enabled={generateEnabled} onClick={() => handleGenerate(step, r)} />
+          <GenerateButton
+            enabled={generateEnabled}
+            onClick={() => handleGenerate(step, r)}
+            disabledTitle={locked ? '기장·해임 업체만 진행' : '준비중'}
+          />
         ) : null}
       </Cell>
+      </div>
     );
   };
 
@@ -378,19 +502,89 @@ export default function BondMgmtPanel() {
               미수관리에서 관리분류가 「채권회수」인 업체가 자동으로 표시됩니다. 담당자·업체명은 미수관리 기준입니다.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" className={portalBtnSecondary} onClick={() => setDocLogOpen(true)}>
-              해임통보 발급 대장{docLog.length ? ` (${docLog.length})` : ''}
-            </button>
-            <label className="flex w-64 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-              <span className="shrink-0 text-xs font-semibold text-slate-500">검색</span>
-              <input
-                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-                placeholder="거래처명"
-                value={companyQuery}
-                onChange={e => setCompanyQuery(e.target.value)}
-              />
-            </label>
+        </div>
+
+        <div ref={toolbarRef} className="flex flex-wrap items-center gap-2">
+          <label
+            style={searchWidth ? { width: searchWidth } : undefined}
+            className="flex w-80 shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"
+          >
+            <span className="shrink-0 text-xs font-semibold text-slate-500">검색</span>
+            <input
+              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
+              placeholder="거래처명"
+              value={companyQuery}
+              onChange={e => setCompanyQuery(e.target.value)}
+            />
+          </label>
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600"
+              title={
+                canManage
+                  ? '해임통보 안내문의 기본 발신일자·입금기한 (각 담당이 안내문 생성 화면에서 바꿀 수 있음)'
+                  : '관리자가 지정한 일괄 날짜 — 안내문 생성 화면에서 바꿀 수 있음'
+              }
+            >
+              <span className="font-semibold text-slate-500">해임통보 일괄</span>
+              <label className="flex items-center gap-1">
+                발신일
+                <input
+                  type="date"
+                  className="h-7 rounded border border-slate-300 px-1 text-xs disabled:bg-slate-50"
+                  value={shownDefaults.sentDate}
+                  disabled={!canManage || defaultsSaving}
+                  onChange={e => setDefaultsDraft({ ...shownDefaults, sentDate: e.target.value })}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                입금기한
+                <input
+                  type="date"
+                  className="h-7 rounded border border-slate-300 px-1 text-xs disabled:bg-slate-50"
+                  value={shownDefaults.deadline}
+                  disabled={!canManage || defaultsSaving}
+                  onChange={e => setDefaultsDraft({ ...shownDefaults, deadline: e.target.value })}
+                />
+              </label>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="h-7 rounded-md bg-slate-900 px-2.5 text-xs font-semibold text-white disabled:bg-slate-300"
+                  disabled={defaultsSaving || !shownDefaults.sentDate || !shownDefaults.deadline}
+                  onClick={() => void saveNoticeDefaults(shownDefaults)}
+                >
+                  {defaultsSaving ? '저장 중…' : '저장'}
+                </button>
+              ) : null}
+              {defaultsError ? (
+                <span className="text-rose-600">{defaultsError}</span>
+              ) : !noticeDatesReady ? (
+                <span className="text-amber-600">저장 전 · 해임통보 생성 불가</span>
+              ) : defaultsDirty ? (
+                <span className="text-amber-600">변경 저장 전</span>
+              ) : (
+                <span className="text-slate-500">{savedStamp || '저장됨 (저장자 기록 없음)'}</span>
+              )}
+              <button
+                type="button"
+                className="h-7 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                onClick={() => setDefaultsLogOpen(true)}
+                title="누가 언제 어떤 날짜로 저장했는지 보기"
+              >
+                이력{defaultsLog.length ? ` (${defaultsLog.length})` : ''}
+              </button>
+            </div>
+            {cols.customized ? (
+              <button
+                type="button"
+                className={`${portalBtnSecondary} ml-auto whitespace-nowrap`}
+                onClick={cols.reset}
+                title="이 컴퓨터에서 조절한 열 너비를 원래대로"
+              >
+                열 너비 초기화
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -423,10 +617,15 @@ export default function BondMgmtPanel() {
         ) : null}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table
+            ref={tableRef}
+            style={cols.tableStyle}
+            className={`w-full min-w-[1100px] text-sm ${cols.customized ? '[&_td]:overflow-hidden' : ''}`}
+          >
             <thead className="border-b-2 border-slate-300 bg-slate-100 text-sm font-bold text-slate-800">
               <tr>
-                <th className={`w-10 px-3 py-3 text-center align-middle ${COL_BORDER}`}>
+                <th {...cols.thProps('select')} className={`relative w-10 px-3 py-3 text-center align-middle ${COL_BORDER}`}>
+                  {cols.handle('select')}
                   <input
                     type="checkbox"
                     className="rounded border-slate-300"
@@ -437,7 +636,8 @@ export default function BondMgmtPanel() {
                     }
                   />
                 </th>
-                <th className={`${TH} w-28`}>
+                <th {...cols.thProps('manager')} className={`${TH} w-28`}>
+                  {cols.handle('manager')}
                   <ManagerMultiFilter
                     headerLabel="담당자명"
                     options={managerOptions}
@@ -445,8 +645,23 @@ export default function BondMgmtPanel() {
                     onChange={setManagerFilter}
                   />
                 </th>
-                <th className={`${TH} w-48`}>거래처명</th>
-                <th className={TH}>
+                <th {...cols.thProps('company')} className={`${TH} w-48`}>
+                  {cols.handle('company')}
+                  <div className="inline-flex items-center gap-3">
+                    <span>거래처명</span>
+                    <span className="text-xs font-semibold text-slate-600">
+                      <ManagerMultiFilter
+                        headerLabel="해임"
+                        options={churnFilterOptions}
+                        value={churnFilter}
+                        onChange={setChurnFilter}
+                        formatOption={formatChurnOption}
+                      />
+                    </span>
+                  </div>
+                </th>
+                <th {...cols.thProps('cert')} className={TH}>
+                  {cols.handle('cert')}
                   <ManagerMultiFilter
                     headerLabel="내용증명"
                     options={dateOptionsOf(r => r.내용증명.date)}
@@ -456,7 +671,8 @@ export default function BondMgmtPanel() {
                     searchable
                   />
                 </th>
-                <th className={TH}>
+                <th {...cols.thProps('schedule')} className={TH}>
+                  {cols.handle('schedule')}
                   <ManagerMultiFilter
                     headerLabel="회수일정"
                     options={scheduleOptions}
@@ -466,18 +682,39 @@ export default function BondMgmtPanel() {
                     searchable
                   />
                 </th>
-                <th className={TH}>
-                  <ManagerMultiFilter
-                    headerLabel="해임통보"
-                    options={dateOptionsOf(r => r.해임통보.date)}
-                    value={dismissFilter}
-                    onChange={setDismissFilter}
-                    formatOption={formatDateOption}
-                    searchable
-                    align="right"
-                  />
+                <th {...cols.thProps('dismiss')} className={TH}>
+                  {cols.handle('dismiss')}
+                  <div className="inline-flex items-center gap-1.5">
+                    <ManagerMultiFilter
+                      headerLabel="해임통보"
+                      options={dateOptionsOf(r => r.해임통보.date)}
+                      value={dismissFilter}
+                      onChange={setDismissFilter}
+                      formatOption={formatDateOption}
+                      searchable
+                      align="right"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setDocLogOpen(true)}
+                      title={`해임통보 발급 대장${docLog.length ? ` (${docLog.length}건)` : ''}`}
+                      aria-label="해임통보 발급 대장"
+                      className="relative inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                    >
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden>
+                        <path d="M5 2.5h7l3 3v12H5z" strokeLinejoin="round" />
+                        <path d="M12 2.5v3h3M7.5 9h5M7.5 12h5M7.5 15h3" strokeLinecap="round" />
+                      </svg>
+                      {docLog.length ? (
+                        <span className="absolute -right-1.5 -top-1.5 rounded-full bg-blue-600 px-1 text-[9px] font-semibold leading-tight text-white">
+                          {docLog.length}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
                 </th>
-                <th className={TH}>
+                <th {...cols.thProps('order')} className={TH}>
+                  {cols.handle('order')}
                   <ManagerMultiFilter
                     headerLabel="지급명령"
                     options={dateOptionsOf(r => r.지급명령.date)}
@@ -566,8 +803,20 @@ export default function BondMgmtPanel() {
                             onClick={() => setAttachTarget({ id: r.id, step: '해임통보' })}
                           />
                           <GenerateButton
-                            enabled={isDocumentReady('해임통보') && editable}
+                            enabled={
+                              isDocumentReady('해임통보') &&
+                              editable &&
+                              noticeDatesReady &&
+                              !!dismissalNoticeKind(churnLabelOf(r.id))
+                            }
                             onClick={() => handleGenerate('해임통보', r)}
+                            disabledTitle={
+                              !dismissalNoticeKind(churnLabelOf(r.id))
+                                ? `해임 구분이 유예·기장인 업체만 해임통보 공문을 만듭니다 (현재: ${churnLabelOf(r.id) || '미지정'})`
+                                : !noticeDatesReady
+                                  ? '상단 「해임통보 일괄」 발신일·입금기한을 저장해야 생성할 수 있습니다'
+                                  : '권한 없음'
+                            }
                           />
                         </Cell>
                       </td>
@@ -604,13 +853,16 @@ export default function BondMgmtPanel() {
         />
       ) : null}
 
-      {dismissEntry && dismissRow ? (
+      {dismissEntry && dismissRow && noticeDatesReady && dismissalNoticeKind(churnLabelOf(dismissEntry.id)) ? (
         <DismissalNoticeModal
           entry={dismissEntry}
+          kind={dismissalNoticeKind(churnLabelOf(dismissEntry.id))!}
+          churnLabel={churnLabelOf(dismissEntry.id)}
           recipient={dismissRow.recipient}
           notices={dismissRow.해임통보.notices ?? []}
-          contact={contact}
+          contact={bondContactForManager(dismissRow.담당자명) ?? contact}
           contacts={contacts}
+          defaults={noticeDefaults}
           nextDocNo={nextDocNo}
           docNoOptions={docNoOptions}
           onPayload={applyBondPayload}
@@ -620,6 +872,10 @@ export default function BondMgmtPanel() {
 
       {docLogOpen ? (
         <DismissalDocLogModal log={docLog} nextDocNo={nextDocNo} onClose={() => setDocLogOpen(false)} />
+      ) : null}
+
+      {defaultsLogOpen ? (
+        <NoticeDefaultsLogModal log={defaultsLog} onClose={() => setDefaultsLogOpen(false)} />
       ) : null}
     </PortalPageShell>
   );

@@ -9,8 +9,11 @@ import {
   readBondContact,
   readBondDocLog,
   readBondDocSeq,
+  readBondNoticeDefaults,
+  readBondNoticeDefaultsLog,
   readBondRecords,
   updateBondRecords,
+  writeBondNoticeDefaults,
 } from '@/lib/bondMgmtDb';
 import type { BondRecordPatch, BondStoredRecord } from '@/app/types/bond';
 
@@ -30,6 +33,8 @@ async function payload(records?: Record<string, BondStoredRecord>) {
     nextDocNo: nextNoticeDocNo(recs, year, docSeq),
     docNoOptions: nextNoticeDocNos(recs, year, docSeq),
     docLog: await readBondDocLog(),
+    noticeDefaults: await readBondNoticeDefaults(),
+    noticeDefaultsLog: await readBondNoticeDefaultsLog(),
   };
 }
 
@@ -52,7 +57,16 @@ export async function PATCH(req: Request) {
       usedDocNo?: unknown;
       /** 발급 대장에 남길 안내문 정보 (usedDocNo와 함께) */
       issue?: unknown;
+      /** 해임통보 발신일자·입금기한 일괄값 — 미수 관리권한자만 */
+      noticeDefaults?: unknown;
     };
+    if (body.noticeDefaults !== undefined) {
+      if (!canManageArrears(user)) {
+        return NextResponse.json({ error: '일괄 날짜는 관리자만 지정할 수 있습니다.' }, { status: 403 });
+      }
+      await writeBondNoticeDefaults(body.noticeDefaults, user);
+      return NextResponse.json(await payload(), NO_STORE);
+    }
     const updates = (body.updates ?? [])
       .filter(u => u?.id && (u.patch || u.appendNotice))
       .map(u => ({ id: String(u.id), patch: u.patch ?? {}, appendNotice: u.appendNotice }));
