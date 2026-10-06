@@ -202,6 +202,14 @@ export default function DismissalNoticeModal({
             : [],
           contact: save && saveContact ? contact : undefined,
           usedDocNo: docNo,
+          issue: {
+            entryId: entry.id,
+            companyName: entry.companyName,
+            version,
+            sentDate,
+            deadline: version === 'v1.5' ? '' : deadline,
+            contact,
+          },
         }),
       });
       const d = await res.json().catch(() => ({}));

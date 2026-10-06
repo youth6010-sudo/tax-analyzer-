@@ -10,6 +10,7 @@ import {
   type BondAttachment,
   type BondAttachmentStepKey,
   type BondContact,
+  type BondDocLogEntry,
   type BondNotice,
   type BondRecipient,
   type BondRecordPatch,
@@ -23,7 +24,10 @@ type BondDoc = {
   contact?: BondContact;
   /** 연도별 마지막으로 쓴 해임통보 문서번호 일련번호 (PDF 만들 때마다 갱신) */
   docSeq?: Record<string, number>;
+  docLog?: BondDocLogEntry[];
 };
+
+const DOC_LOG_MAX = 3000;
 
 const DATE_RE = /^(\d{4}-\d{2}-\d{2})?$/;
 const DOC_NO_RE = /^청년들-부산-추심-(\d{4})-(\d+)호$/;
@@ -135,6 +139,7 @@ export async function updateBondRecords(
   canManage: boolean,
   contact?: unknown,
   usedDocNo?: unknown,
+  issue?: unknown,
 ): Promise<Record<string, BondStoredRecord>> {
   const ids = [...new Set(updates.map(u => u.id).filter(Boolean))];
   if (!ids.length && contact === undefined && usedDocNo === undefined) return readBondRecords();
@@ -142,10 +147,12 @@ export async function updateBondRecords(
 
   const doc = await readDoc();
   if (usedDocNo !== undefined) consumeDocNo(doc, usedDocNo);
+  let saved = false;
   for (const { id, patch, appendNotice } of updates) {
     const rec = applyPatch(doc.records[id], patch);
     const notice = appendNotice === undefined ? null : sanitizeNotice(appendNotice);
     if (notice) {
+      saved = true;
       consumeDocNo(doc, notice.docNo);
       rec.해임통보 = {
         date: rec.해임통보?.date ?? '',
@@ -155,8 +162,32 @@ export async function updateBondRecords(
     doc.records[id] = rec;
   }
   if (contact !== undefined) doc.contact = sanitizeContact(contact);
+  const logEntry = usedDocNo !== undefined && issue !== undefined ? sanitizeIssue(issue, usedDocNo) : null;
+  if (logEntry) {
+    doc.docLog = [
+      ...(doc.docLog ?? []),
+      { ...logEntry, saved, issuedAt: new Date().toISOString(), issuedBy: user.name },
+    ].slice(-DOC_LOG_MAX);
+  }
   await writeDoc(doc);
   return doc.records;
+}
+
+function sanitizeIssue(v: unknown, docNo: unknown): Omit<BondDocLogEntry, 'saved' | 'issuedAt' | 'issuedBy'> | null {
+  const r = (v ?? {}) as Record<string, unknown>;
+  const notice = sanitizeNotice({ ...r, docNo });
+  if (!notice?.docNo) return null;
+  return {
+    ...notice,
+    entryId: String(r.entryId ?? '').slice(0, 80),
+    companyName: String(r.companyName ?? '').trim().slice(0, 200),
+  };
+}
+
+/** 발급 대장 — 문서번호 순 */
+export async function readBondDocLog(): Promise<BondDocLogEntry[]> {
+  const log = (await readDoc()).docLog ?? [];
+  return [...log].sort((a, b) => a.docNo.localeCompare(b.docNo) || a.issuedAt.localeCompare(b.issuedAt));
 }
 
 export async function readBondContact(): Promise<BondContact> {

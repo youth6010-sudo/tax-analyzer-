@@ -7,6 +7,7 @@ import {
   nextNoticeDocNo,
   nextNoticeDocNos,
   readBondContact,
+  readBondDocLog,
   readBondDocSeq,
   readBondRecords,
   updateBondRecords,
@@ -28,6 +29,7 @@ async function payload(records?: Record<string, BondStoredRecord>) {
     contacts: listBondContacts(recs, contact),
     nextDocNo: nextNoticeDocNo(recs, year, docSeq),
     docNoOptions: nextNoticeDocNos(recs, year, docSeq),
+    docLog: await readBondDocLog(),
   };
 }
 
@@ -48,6 +50,8 @@ export async function PATCH(req: Request) {
       contact?: unknown;
       /** PDF로 만든 해임통보 문서번호 — 연도별 카운터 갱신 */
       usedDocNo?: unknown;
+      /** 발급 대장에 남길 안내문 정보 (usedDocNo와 함께) */
+      issue?: unknown;
     };
     const updates = (body.updates ?? [])
       .filter(u => u?.id && (u.patch || u.appendNotice))
@@ -55,7 +59,7 @@ export async function PATCH(req: Request) {
     if (!updates.length && body.contact === undefined && body.usedDocNo === undefined) {
       return NextResponse.json({ error: 'updates 필요' }, { status: 400 });
     }
-    const records = await updateBondRecords(updates, user, canManageArrears(user), body.contact, body.usedDocNo);
+    const records = await updateBondRecords(updates, user, canManageArrears(user), body.contact, body.usedDocNo, body.issue);
     return NextResponse.json(await payload(records), NO_STORE);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';

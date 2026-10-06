@@ -70,6 +70,21 @@ export type BondNotice = {
   contact?: BondContact;
 };
 
+/** 해임통보 문서번호 발급 대장 — PDF를 만들 때마다 한 줄 (폴더 저장 여부와 무관) */
+export type BondDocLogEntry = {
+  docNo: string;
+  entryId: string;
+  companyName: string;
+  version: BondNoticeVersion;
+  sentDate: string;
+  deadline: string;
+  contact?: BondContact;
+  /** true = 폴더 저장 + 발송 기록, false = PDF만 */
+  saved: boolean;
+  issuedAt: string;
+  issuedBy: string;
+};
+
 /** 안내문 하단 담당 줄 기본값 */
 export type BondContact = {
   담당: string;

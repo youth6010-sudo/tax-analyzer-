@@ -14,6 +14,7 @@ import ArrearsHubTabs from '@/app/arrears/ArrearsHubTabs';
 import BondAttachmentModal from '@/app/arrears/bond/BondAttachmentModal';
 import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
 import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
+import DismissalDocLogModal from '@/app/arrears/bond/DismissalDocLogModal';
 import DismissalNoticeModal from '@/app/arrears/bond/DismissalNoticeModal';
 import {
   arrearsChurnStatusChipClass,
@@ -25,6 +26,7 @@ import {
   DEFAULT_BOND_CONTACT,
   emptyBondRecord,
   type BondContact,
+  type BondDocLogEntry,
   todayIsoDate,
   type BondAttachmentStepKey,
   type BondCheckedStepKey,
@@ -153,6 +155,8 @@ export default function BondMgmtPanel() {
   const [contacts, setContacts] = useState<BondContact[]>(BOND_STAFF_CONTACTS);
   const [nextDocNo, setNextDocNo] = useState('');
   const [docNoOptions, setDocNoOptions] = useState<string[]>([]);
+  const [docLog, setDocLog] = useState<BondDocLogEntry[]>([]);
+  const [docLogOpen, setDocLogOpen] = useState(false);
 
   const applyBondPayload = useCallback((data: unknown) => {
     const d = data as {
@@ -161,7 +165,9 @@ export default function BondMgmtPanel() {
       contacts?: BondContact[];
       nextDocNo?: string;
       docNoOptions?: string[];
+      docLog?: BondDocLogEntry[];
     };
+    if (d.docLog) setDocLog(d.docLog);
     if (d.records) setStored(d.records);
     if (d.contact) setContact(d.contact);
     if (d.contacts?.length) setContacts(d.contacts);
@@ -372,15 +378,20 @@ export default function BondMgmtPanel() {
               미수관리에서 관리분류가 「채권회수」인 업체가 자동으로 표시됩니다. 담당자·업체명은 미수관리 기준입니다.
             </p>
           </div>
-          <label className="flex w-64 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-            <span className="shrink-0 text-xs font-semibold text-slate-500">검색</span>
-            <input
-              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-              placeholder="거래처명"
-              value={companyQuery}
-              onChange={e => setCompanyQuery(e.target.value)}
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <button type="button" className={portalBtnSecondary} onClick={() => setDocLogOpen(true)}>
+              해임통보 발급 대장{docLog.length ? ` (${docLog.length})` : ''}
+            </button>
+            <label className="flex w-64 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+              <span className="shrink-0 text-xs font-semibold text-slate-500">검색</span>
+              <input
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
+                placeholder="거래처명"
+                value={companyQuery}
+                onChange={e => setCompanyQuery(e.target.value)}
+              />
+            </label>
+          </div>
         </div>
 
         {error ? <p className={portalAlertError}>{error}</p> : null}
@@ -605,6 +616,10 @@ export default function BondMgmtPanel() {
           onPayload={applyBondPayload}
           onClose={() => setDismissTargetId(null)}
         />
+      ) : null}
+
+      {docLogOpen ? (
+        <DismissalDocLogModal log={docLog} nextDocNo={nextDocNo} onClose={() => setDocLogOpen(false)} />
       ) : null}
     </PortalPageShell>
   );
