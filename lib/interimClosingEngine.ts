@@ -1491,8 +1491,9 @@ export function computeOwnerTaxBases(manual: InterimClosingManualInputs) {
   const execPay = num(manual.execSalaryAnnual) + num(manual.execExtraBonus);
   const ownerDed = earnedIncomeDeduction(ownerPay, num(manual.ownerDeduction));
   const execDed = earnedIncomeDeduction(execPay, num(manual.execDeduction));
-  const ownerTaxBase = ownerPay - ownerDed;
-  const execTaxBase = execPay - execDed;
+  // 공제가 급여보다 커도 과세표준은 0 미만으로 내려가지 않음
+  const ownerTaxBase = Math.max(0, ownerPay - ownerDed);
+  const execTaxBase = Math.max(0, execPay - execDed);
   return {
     ownerPay,
     execPay,

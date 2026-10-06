@@ -275,10 +275,15 @@ export function buildInterimClosingReportHtml(
       : assumptionMonths.length === 1
         ? `${assumptionMonths[0]}월`
         : `${assumptionMonths[0]}~12월`;
+  // 환산기준이 「가정치」인 행만 보고서에 반영 — 역산 등으로 바꾼 뒤 남은 입력값은 제외
+  const appliedKeys = new Set(
+    computed.rows.filter(r => r.convertBasis === '가정치' && r.name).map(r => r.name.replace(/\s+/g, '')),
+  );
+  const appliedAssumptions = m.assumptions.filter(a => appliedKeys.has(a.name.replace(/\s+/g, '')));
   const assumptionRows =
-    m.assumptions.length === 0
+    appliedAssumptions.length === 0
       ? `<tr><td colspan="3" class="empty">(없음)</td></tr>`
-      : m.assumptions
+      : appliedAssumptions
           .map(a => {
             const total = assumptionMonths.reduce((s, mo) => {
               const v = Number(a.byMonth?.[String(mo)] ?? 0) || 0;

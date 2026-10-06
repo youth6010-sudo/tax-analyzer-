@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeaderIcon } from '@/app/components/dashboard/SidebarNavIcon';
 import { PortalPageHeader } from '@/app/components/portal/PortalPageShell';
 import {
@@ -161,8 +161,13 @@ function MoneyCell({
       value={display}
       inputMode="decimal"
       onFocus={e => {
-        setDraft(value ? String(value) : '');
-        requestAnimationFrame(() => e.target.select());
+        const el = e.currentTarget;
+        const initial = value ? String(value) : '';
+        setDraft(initial);
+        // 계산이 무거우면 프레임이 늦어짐 — 그 사이 입력이 시작됐으면 전체선택하지 않음 (첫 글자 덮어쓰기 방지)
+        requestAnimationFrame(() => {
+          if (initial && document.activeElement === el && el.value === initial) el.select();
+        });
       }}
       onBlur={() => {
         const n = parseWonInput(draft ?? '');
@@ -203,7 +208,8 @@ export default function InterimClosingPageClient() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   /** 작성일 — 저장/불러온 시점 (없으면 오늘) */
   const [writtenAt, setWrittenAt] = useState<string | null>(null);
-
+  /** 마지막으로 확정한 수임처 — 검색칸 입력 중(clientId 비움)에도 유지 */
+  const lastClientRef = useRef('');
   const computed = useMemo(() => computeInterimClosing(payload), [payload]);
   const warnChecks = computed.checks.filter(c => c.kind !== 'placed');
   const placedChecks = computed.checks.filter(c => c.kind === 'placed');
@@ -278,20 +284,39 @@ export default function InterimClosingPageClient() {
       .catch(() => {});
   }, [isMaster]);
 
-  const applyClient = useCallback((c: ClientOption) => {
-    const entityType = entityTypeFromClient({
-      businessEntityType: c.businessEntityType,
-      intakeData: { category: c.category },
-    });
-    setClientId(c.id);
-    setClientQuery(c.companyName);
-    setPayload(p => ({
-      ...p,
-      companyName: c.companyName,
-      manual: { ...p.manual, entityType },
-    }));
-    setClientSuggestOpen(false);
-  }, []);
+  const applyClient = useCallback(
+    (c: ClientOption) => {
+      const entityType = entityTypeFromClient({
+        businessEntityType: c.businessEntityType,
+        intakeData: { category: c.category },
+      });
+      // 첫 선택(업로드 후 수임처 지정)은 유지, 이미 고른 수임처에서 바꿀 때만 초기화
+      const switched = !!lastClientRef.current && lastClientRef.current !== c.id;
+      lastClientRef.current = c.id;
+      setClientId(c.id);
+      setClientQuery(c.companyName);
+      setPayload(p => {
+        // 다른 수임처: 명세서·입력값·기준 전부 비우고 새 화면 (연도·기준월만 유지)
+        const base = switched ? emptyPayload(p.year, p.baseMonth) : p;
+        return {
+          ...base,
+          companyName: c.companyName,
+          manual: { ...base.manual, entityType },
+        };
+      });
+      if (switched) {
+        setWrittenAt(null);
+        setSelectedRowKeys([]);
+        setBulkInputBasis('');
+        setBulkConvertBasis('');
+        setShowUpload(true);
+        setNotice('');
+        setError('');
+      }
+      setClientSuggestOpen(false);
+    },
+    [],
+  );
 
   const filteredClients = useMemo(() => {
     const q = clientQuery.replace(/\s+/g, '').toLowerCase();
@@ -308,6 +333,16 @@ export default function InterimClosingPageClient() {
       baseMonth: patch.baseMonth ?? p.baseMonth,
     }));
   }, []);
+
+  const appliedAssumptionKeys = useMemo(
+    () =>
+      new Set(
+        computed.rows
+          .filter(r => r.convertBasis === '가정치' && (r.name || '').trim())
+          .map(r => r.name.replace(/\s+/g, '')),
+      ),
+    [computed.rows],
+  );
 
   const assumptionMonths = useMemo(
     () => remainingAssumptionMonths(payload.baseMonth),
@@ -531,11 +566,14 @@ export default function InterimClosingPageClient() {
         },
         rowCriteria: loaded.rowCriteria || {},
       });
-      if (saved.clientId) setClientId(saved.clientId);
-      else {
+      if (saved.clientId) {
+        setClientId(saved.clientId);
+        lastClientRef.current = saved.clientId;
+      } else {
         const name = String(loaded.companyName || saved.companyName || '').trim();
         const hit = clients.find(c => c.companyName.replace(/\s+/g, '') === name.replace(/\s+/g, ''));
         if (hit) setClientId(hit.id);
+        lastClientRef.current = hit?.id || name;
       }
       setWrittenAt(String(saved.savedAt || ''));
       setClientQuery(String(loaded.companyName || saved.companyName || ''));
@@ -1113,10 +1151,21 @@ export default function InterimClosingPageClient() {
                         </td>
                       </tr>
                     ) : (
-                      payload.manual.assumptions.map((a, i) => (
-                        <tr key={i}>
+                      payload.manual.assumptions.map((a, i) => {
+                        const applied = appliedAssumptionKeys.has(a.name.replace(/\s+/g, ''));
+                        return (
+                        <tr
+                          key={i}
+                          className={applied ? '' : 'opacity-50'}
+                          title={applied ? undefined : '환산기준이 「가정치」가 아니라 환산에 반영되지 않음'}
+                        >
                           <td className="whitespace-nowrap border border-[#c5d0e0] bg-white px-1.5 py-0.5 text-left font-medium text-slate-800">
                             {a.name || '—'}
+                            {applied ? null : (
+                              <span className="ml-1 rounded border border-slate-300 bg-slate-100 px-1 text-[9px] font-normal text-slate-500">
+                                미반영
+                              </span>
+                            )}
                           </td>
                           {assumptionMonths.map(m => (
                             <td key={m} className={assumeInput}>
@@ -1144,7 +1193,8 @@ export default function InterimClosingPageClient() {
                             </button>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
