@@ -9,16 +9,86 @@ export const ARREARS_MGMT_CATEGORIES = [
 
 export type ArrearsMgmtCategory = (typeof ARREARS_MGMT_CATEGORIES)[number]['id'] | '';
 
-/** 미수관리 — 해임(유출) 처리 구분 */
-export const ARREARS_CHURN_STATUSES = [
-  { id: 'pending', label: '대기' },
-  { id: 'done', label: '완료' },
-  { id: 'confirmed', label: '확정' },
-  { id: 'deferred', label: '유예' },
-  { id: 'special', label: '특수' },
-] as const;
+export const ARREARS_CHIP_COLORS = ['slate', 'emerald', 'blue', 'amber', 'violet', 'rose', 'sky', 'orange'] as const;
+export type ArrearsChipColor = (typeof ARREARS_CHIP_COLORS)[number];
 
-export type ArrearsChurnStatus = (typeof ARREARS_CHURN_STATUSES)[number]['id'] | '';
+export const ARREARS_CHIP_COLOR_LABELS: Record<ArrearsChipColor, string> = {
+  slate: '회색',
+  emerald: '초록',
+  blue: '파랑',
+  amber: '노랑',
+  violet: '보라',
+  rose: '빨강',
+  sky: '하늘',
+  orange: '주황',
+};
+
+const CHIP_CLASS: Record<ArrearsChipColor, string> = {
+  slate: 'bg-slate-100 text-slate-700 border-slate-300',
+  emerald: 'bg-emerald-50 text-emerald-900 border-emerald-300',
+  blue: 'bg-blue-50 text-blue-900 border-blue-300',
+  amber: 'bg-amber-50 text-amber-900 border-amber-300',
+  violet: 'bg-violet-50 text-violet-900 border-violet-300',
+  rose: 'bg-rose-50 text-rose-900 border-rose-300',
+  sky: 'bg-sky-50 text-sky-900 border-sky-300',
+  orange: 'bg-orange-50 text-orange-900 border-orange-300',
+};
+
+export type ArrearsChurnStatusOption = { id: string; label: string; color: ArrearsChipColor };
+
+/** 미수관리 — 해임(유출) 처리 구분 기본값. 실제 목록은 수정 모드에서 편집(app_config) */
+export const DEFAULT_ARREARS_CHURN_STATUSES: ArrearsChurnStatusOption[] = [
+  { id: 'pending', label: '대기', color: 'slate' },
+  { id: 'done', label: '완료', color: 'emerald' },
+  { id: 'confirmed', label: '확정', color: 'blue' },
+  { id: 'deferred', label: '유예', color: 'amber' },
+  { id: 'special', label: '특수', color: 'violet' },
+];
+
+/** id는 저장값이라 이름을 바꿔도 유지. '' = 미지정 */
+export type ArrearsChurnStatus = string;
+
+let churnStatusOptions: ArrearsChurnStatusOption[] = DEFAULT_ARREARS_CHURN_STATUSES;
+const churnStatusListeners = new Set<() => void>();
+
+export function getArrearsChurnStatuses(): ArrearsChurnStatusOption[] {
+  return churnStatusOptions;
+}
+
+export function getDefaultArrearsChurnStatuses(): ArrearsChurnStatusOption[] {
+  return DEFAULT_ARREARS_CHURN_STATUSES;
+}
+
+/** 브라우저에서 서버 목록을 받은 뒤 호출 — 라벨·색 함수가 이 목록을 기본으로 사용 */
+export function setArrearsChurnStatuses(list: ArrearsChurnStatusOption[]): void {
+  churnStatusOptions = list;
+  for (const fn of churnStatusListeners) fn();
+}
+
+export function subscribeArrearsChurnStatuses(fn: () => void): () => void {
+  churnStatusListeners.add(fn);
+  return () => {
+    churnStatusListeners.delete(fn);
+  };
+}
+
+export function sanitizeArrearsChurnStatuses(raw: unknown): ArrearsChurnStatusOption[] {
+  if (!Array.isArray(raw)) return DEFAULT_ARREARS_CHURN_STATUSES;
+  const out: ArrearsChurnStatusOption[] = [];
+  const ids = new Set<string>();
+  for (const v of raw) {
+    const o = (v ?? {}) as Record<string, unknown>;
+    const id = String(o.id ?? '').trim().slice(0, 40);
+    const label = String(o.label ?? '').replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (!id || !label || ids.has(id)) continue;
+    const color = (ARREARS_CHIP_COLORS as readonly string[]).includes(String(o.color))
+      ? (o.color as ArrearsChipColor)
+      : 'slate';
+    ids.add(id);
+    out.push({ id, label, color });
+  }
+  return out.length ? out : DEFAULT_ARREARS_CHURN_STATUSES;
+}
 
 export const ARREARS_MANAGER_CODE_MAP: Record<number, string> = {
   1: '인디',
@@ -285,34 +355,35 @@ export function arrearsCategoryLabel(id: string): string {
   return found?.label ?? id;
 }
 
-export function arrearsChurnStatusLabel(id: string): string {
-  if (!id) return '—';
-  const found = ARREARS_CHURN_STATUSES.find(c => c.id === id);
+export function arrearsChurnStatusLabel(
+  id: string,
+  options: ArrearsChurnStatusOption[] = churnStatusOptions,
+): string {
+  if (!id) return '';
+  const found = options.find(c => c.id === id);
   return found?.label ?? id;
 }
 
-export function arrearsChurnStatusFromLabel(label: string): ArrearsChurnStatus {
+export function arrearsChurnStatusFromLabel(
+  label: string,
+  options: ArrearsChurnStatusOption[] = churnStatusOptions,
+): ArrearsChurnStatus {
   const s = String(label || '').replace(/\s+/g, '').trim();
   if (!s) return '';
-  const found = ARREARS_CHURN_STATUSES.find(c => c.label === s || c.id === s);
+  const found = options.find(c => c.label.replace(/\s+/g, '') === s || c.id === s);
   return found?.id ?? '';
 }
 
-export function arrearsChurnStatusChipClass(id: string): string {
-  switch (id) {
-    case 'pending':
-      return 'bg-slate-100 text-slate-700 border-slate-300';
-    case 'done':
-      return 'bg-emerald-50 text-emerald-900 border-emerald-300';
-    case 'confirmed':
-      return 'bg-blue-50 text-blue-900 border-blue-300';
-    case 'deferred':
-      return 'bg-amber-50 text-amber-900 border-amber-300';
-    case 'special':
-      return 'bg-violet-50 text-violet-900 border-violet-300';
-    default:
-      return 'bg-slate-50 text-slate-500 border-slate-200';
-  }
+export function arrearsChurnStatusChipClass(
+  id: string,
+  options: ArrearsChurnStatusOption[] = churnStatusOptions,
+): string {
+  const found = id ? options.find(c => c.id === id) : undefined;
+  return found ? CHIP_CLASS[found.color] : 'bg-slate-50 text-slate-500 border-slate-200';
+}
+
+export function arrearsChipColorClass(color: ArrearsChipColor): string {
+  return CHIP_CLASS[color];
 }
 
 /**

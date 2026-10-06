@@ -5,6 +5,7 @@ import {
   arrearsCategoryLabel,
   arrearsChurnStatusLabel,
   type ArrearsChurnStatus,
+  type ArrearsChurnStatusOption,
   type ArrearsEntryDto,
   type ArrearsManagerTotal,
   type ArrearsMgmtCategory,
@@ -45,7 +46,10 @@ export function arrearsListExportFilename(asOfDate: string): string {
   return `미수목록_전체_${stamp}.xlsx`;
 }
 
-export function toArrearsListSheetRow(item: ArrearsListExportItem): ArrearsListSheetRow {
+export function toArrearsListSheetRow(
+  item: ArrearsListExportItem,
+  churnStatuses?: ArrearsChurnStatusOption[],
+): ArrearsListSheetRow {
   return {
     코드: item.externalCode.startsWith('letter:') ? '' : item.externalCode,
     상호: item.companyName,
@@ -53,7 +57,7 @@ export function toArrearsListSheetRow(item: ArrearsListExportItem): ArrearsListS
     '미수 사유': item.reasonSummary || '',
     담당: item.managerName || '',
     관리: arrearsCategoryLabel(item.mgmtCategory),
-    해임: arrearsChurnStatusLabel(item.churnMgmtStatus),
+    해임: arrearsChurnStatusLabel(item.churnMgmtStatus, churnStatuses),
     메모: item.memo || '',
   };
 }

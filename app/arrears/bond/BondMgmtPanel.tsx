@@ -12,6 +12,7 @@ import {
 } from '@/app/components/portal/uiClasses';
 import ArrearsHubTabs from '@/app/arrears/ArrearsHubTabs';
 import BondAttachmentModal from '@/app/arrears/bond/BondAttachmentModal';
+import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
 import CertifiedLetterModal from '@/app/arrears/bond/CertifiedLetterModal';
 import DismissalNoticeModal from '@/app/arrears/bond/DismissalNoticeModal';
 import {
@@ -204,6 +205,8 @@ export default function BondMgmtPanel() {
   }, [reloadTick, applyBondPayload]);
 
   const churnById = useMemo(() => new Map(entries.map(e => [e.id, e.churnMgmtStatus || ''])), [entries]);
+  /** 미수관리 수정 모드에서 편집한 해임 구분 이름·색 */
+  const churnOptions = useArrearsChurnStatuses();
 
   const managerOptions = useMemo(
     () =>
@@ -516,10 +519,10 @@ export default function BondMgmtPanel() {
                           <span>{r.업체명}</span>
                           {churnById.get(r.id) ? (
                             <span
-                              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${arrearsChurnStatusChipClass(churnById.get(r.id)!)}`}
+                              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${arrearsChurnStatusChipClass(churnById.get(r.id)!, churnOptions)}`}
                               title="미수관리 해임 상태"
                             >
-                              {arrearsChurnStatusLabel(churnById.get(r.id)!)}
+                              {arrearsChurnStatusLabel(churnById.get(r.id)!, churnOptions)}
                             </span>
                           ) : null}
                         </div>

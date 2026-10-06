@@ -14,7 +14,6 @@ import {
 import CenterModal from '@/app/components/portal/CenterModal';
 import ManagerMultiFilter from '@/app/components/portal/ManagerMultiFilter';
 import {
-  ARREARS_CHURN_STATUSES,
   ARREARS_MANAGER_NAMES,
   ARREARS_MGMT_CATEGORIES,
   arrearsCategoryChipClass,
@@ -35,6 +34,8 @@ import ArrearsMatchPanel from '@/app/arrears/ArrearsMatchPanel';
 import ArrearsFeeEventsImport from '@/app/arrears/ArrearsFeeEventsImport';
 import ArrearsBaselineImport from '@/app/arrears/ArrearsBaselineImport';
 import { toArrearsListExportItem } from '@/lib/arrearsListExportShared';
+import ChurnStatusEditorModal from '@/app/arrears/ChurnStatusEditorModal';
+import { useArrearsChurnStatuses } from '@/app/arrears/useArrearsChurnStatuses';
 
 type BulkRow = {
   clientId?: string;
@@ -146,8 +147,11 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
   const [managers, setManagers] = useState<string[]>([]);
   /** 선택된 관리분류 id. '' = 미분류. 빈 배열 = 전체 */
   const [categories, setCategories] = useState<string[]>([]);
-  /** 선택된 해임 구분 id. '' = 미지정. 빈 배열 = 전체 */
+  /** 선택된 해임 구분 id. 빈 배열 = 전체 */
   const [churnStatuses, setChurnStatuses] = useState<string[]>([]);
+  /** 해임 구분 선택지 (수정 모드에서 편집) */
+  const churnOptions = useArrearsChurnStatuses();
+  const [churnEditorOpen, setChurnEditorOpen] = useState(false);
   /** false=잔액0 숨김(기본), true=0원도 보기 */
   const [showZero, setShowZero] = useState(false);
   const [churnedOnly] = useState(false);
@@ -197,7 +201,7 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
     }
     if (Array.isArray(saved.managers)) setManagers(saved.managers.filter(Boolean));
     if (Array.isArray(saved.categories)) setCategories(saved.categories);
-    if (Array.isArray(saved.churnStatuses)) setChurnStatuses(saved.churnStatuses);
+    if (Array.isArray(saved.churnStatuses)) setChurnStatuses(saved.churnStatuses.filter(Boolean));
     if (typeof saved.showZero === 'boolean') setShowZero(saved.showZero);
     if (typeof saved.mismatchOnly === 'boolean') setMismatchOnly(saved.mismatchOnly);
     setUiReady(true);
@@ -736,7 +740,7 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
     }
     if (patch.churnMgmtStatus !== undefined) {
       labelParts.push(
-        `해임 → ${patch.churnMgmtStatus ? arrearsChurnStatusLabel(patch.churnMgmtStatus) : '미지정'}`,
+        `해임 → ${patch.churnMgmtStatus ? arrearsChurnStatusLabel(patch.churnMgmtStatus) : '비우기'}`,
       );
     }
     if (
@@ -1221,8 +1225,8 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                 disabled={bulkFieldBusy}
               >
                 <option value="__keep__">변경 안 함</option>
-                <option value="">미지정</option>
-                {ARREARS_CHURN_STATUSES.map(c => (
+                <option value="">비우기</option>
+                {churnOptions.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.label}
                   </option>
@@ -1351,37 +1355,29 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
           <div className="flex shrink-0 flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-600">해임 (다중선택)</span>
-              {churnStatuses.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
-                  onClick={() => setChurnStatuses([])}
-                >
-                  전체
-                </button>
-              ) : null}
+              <span className="flex items-center gap-2">
+                {canManage && editMode ? (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-900"
+                    onClick={() => setChurnEditorOpen(true)}
+                  >
+                    구분 편집
+                  </button>
+                ) : null}
+                {churnStatuses.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+                    onClick={() => setChurnStatuses([])}
+                  >
+                    전체
+                  </button>
+                ) : null}
+              </span>
             </div>
             <div className="flex flex-nowrap gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50/80 p-2">
-              <label
-                className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium ${
-                  churnStatuses.includes('')
-                    ? 'border-slate-500 bg-slate-100 text-slate-900'
-                    : 'border-slate-200 bg-white text-slate-700'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300"
-                  checked={churnStatuses.includes('')}
-                  onChange={() =>
-                    setChurnStatuses(prev =>
-                      prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''],
-                    )
-                  }
-                />
-                미지정
-              </label>
-              {ARREARS_CHURN_STATUSES.map(c => {
+              {churnOptions.map(c => {
                 const on = churnStatuses.includes(c.id);
                 return (
                   <label
@@ -1894,20 +1890,20 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
                             })
                           }
                         >
-                          <option value="">미지정</option>
-                          {ARREARS_CHURN_STATUSES.map(c => (
+                          <option value="" />
+                          {churnOptions.map(c => (
                             <option key={c.id} value={c.id}>
                               {c.label}
                             </option>
                           ))}
                         </select>
-                      ) : (
+                      ) : row.churnMgmtStatus ? (
                         <span
                           className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${arrearsChurnStatusChipClass(row.churnMgmtStatus)}`}
                         >
                           {arrearsChurnStatusLabel(row.churnMgmtStatus)}
                         </span>
-                      )}
+                      ) : null}
                     </td>
                     <td className="px-3 py-2">
                       {editMode ? (
@@ -1968,6 +1964,14 @@ export default function ArrearsPageClient({ tabs }: { tabs?: ReactNode } = {}) {
         onClose={() => setManualOpen(false)}
         onSubmit={submitManual}
       />
+
+      {churnEditorOpen ? (
+        <ChurnStatusEditorModal
+          open
+          items={churnOptions}
+          onClose={() => setChurnEditorOpen(false)}
+        />
+      ) : null}
 
       <CenterModal
         open={bulkOpen}

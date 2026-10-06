@@ -8,6 +8,7 @@ import type {
   ArrearsMgmtCategory,
 } from '@/app/types/arrears';
 import { normalizeBizNo } from '@/app/utils/filingCheck';
+import { isValidArrearsChurnStatus } from '@/lib/arrearsChurnStatusDb';
 import type { LedgerArrearsRow } from '@/lib/arrearsLedgerParse';
 import { normalizeLedgerBalanceSign } from '@/lib/arrearsLedgerParse';
 import { classifyBalanceDiff } from '@/lib/arrearsBalanceDiff';
@@ -552,8 +553,6 @@ export async function getArrearsEntryById(id: string) {
 }
 
 const VALID_CATEGORIES = new Set(['', 'recovery', 'bad', 'long', 'temp', 'cms']);
-const VALID_CHURN_STATUSES = new Set(['', 'pending', 'done', 'confirmed', 'deferred', 'special']);
-
 export async function patchArrearsEntry(
   id: string,
   actorName: string,
@@ -600,7 +599,7 @@ export async function patchArrearsEntry(
   }
   if (patch.churnMgmtStatus !== undefined) {
     const st = patch.churnMgmtStatus.trim();
-    if (!VALID_CHURN_STATUSES.has(st)) throw new Error('해임 구분이 올바르지 않습니다.');
+    if (!(await isValidArrearsChurnStatus(st))) throw new Error('해임 구분이 올바르지 않습니다.');
     updates.churnMgmtStatus = st;
   }
   if (patch.memo !== undefined) {

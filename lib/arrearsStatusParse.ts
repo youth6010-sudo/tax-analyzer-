@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { arrearsChurnStatusFromLabel } from '@/app/types/arrears';
+import { arrearsChurnStatusFromLabel, type ArrearsChurnStatusOption } from '@/app/types/arrears';
 import { ARREARS_MANAGER_CODE_MAP } from '@/lib/arrearsImportFilenames';
 
 export type ParsedStatusRow = {
@@ -88,7 +88,7 @@ export function sheetNameToDotDate(sheetName: string): string {
 
 export function parseArrearsStatusWorkbook(
   buffer: Buffer,
-  opts?: { sheetName?: string },
+  opts?: { sheetName?: string; churnStatuses?: ArrearsChurnStatusOption[] },
 ): { asOfDate: string; rows: ParsedStatusRow[] } {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheetName = opts?.sheetName || wb.SheetNames[wb.SheetNames.length - 1] || '';
@@ -134,7 +134,7 @@ export function parseArrearsStatusWorkbook(
       companyName,
       managerName,
       mgmtCategory: iMgmt >= 0 ? parseMgmtCategory(row[iMgmt]) : '',
-      churnMgmtStatus: iChurn >= 0 ? arrearsChurnStatusFromLabel(cellStr(row[iChurn])) : '',
+      churnMgmtStatus: iChurn >= 0 ? arrearsChurnStatusFromLabel(cellStr(row[iChurn]), opts?.churnStatuses) : '',
       balance,
       carryIn: iCarry >= 0 ? cellMoney(row[iCarry]) : 0,
       debit: debitCols.length ? cellMoney(row[debitCols[0]]) : 0,

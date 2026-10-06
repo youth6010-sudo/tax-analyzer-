@@ -3,6 +3,7 @@
  */
 import ExcelJS from 'exceljs';
 import { type ArrearsManagerTotal } from '@/app/types/arrears';
+import { readArrearsChurnStatuses } from '@/lib/arrearsChurnStatusDb';
 import {
   arrearsListRowFillArgb,
   toArrearsListSheetRow,
@@ -68,8 +69,9 @@ export async function buildArrearsListWorkbook(
     cell.numFmt = '@';
   };
 
+  const churnStatuses = await readArrearsChurnStatuses();
   for (const item of items) {
-    const sheet = toArrearsListSheetRow(item);
+    const sheet = toArrearsListSheetRow(item, churnStatuses);
     const row = ws.addRow({
       code: '',
       name: '',

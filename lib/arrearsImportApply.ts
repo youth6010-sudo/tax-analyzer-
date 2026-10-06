@@ -31,6 +31,7 @@ import {
   type ParsedStatusRow,
 } from '@/lib/arrearsStatusParse';
 import { isInactiveArrearsCode } from '@/lib/arrearsInactiveSeed';
+import { readArrearsChurnStatuses } from '@/lib/arrearsChurnStatusDb';
 import { isIndieManagerName } from '@/lib/arrearsImportFilenames';
 import { listLetterLines, replaceLetterLines } from '@/lib/arrearsLetterDb';
 import type { ArrearsLetterLineInput } from '@/app/types/arrears';
@@ -90,7 +91,9 @@ export async function previewStatusImport(
   buffer: Buffer,
   asOfDateOverride?: string,
 ): Promise<StatusImportPreview> {
-  const parsed = parseArrearsStatusWorkbook(buffer);
+  const parsed = parseArrearsStatusWorkbook(buffer, {
+    churnStatuses: await readArrearsChurnStatuses(),
+  });
   const asOfDate = normalizeDotDate(asOfDateOverride) || parsed.asOfDate;
   const totalBalance = parsed.rows.reduce((s, r) => s + r.balance, 0);
   return {
@@ -107,7 +110,9 @@ export async function applyStatusImport(
   actorName: string,
   asOfDateOverride?: string,
 ): Promise<StatusImportResult> {
-  const parsed = parseArrearsStatusWorkbook(buffer);
+  const parsed = parseArrearsStatusWorkbook(buffer, {
+    churnStatuses: await readArrearsChurnStatuses(),
+  });
   const asOfDate = normalizeDotDate(asOfDateOverride) || parsed.asOfDate;
   const asOfIso = toIsoDate(asOfDate);
   const db = getDb();
