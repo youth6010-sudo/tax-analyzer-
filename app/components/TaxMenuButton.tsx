@@ -122,6 +122,22 @@ export default function TaxMenuButton() {
                             >
                               {item.label}
                             </Link>
+                            {item.children?.length ? (
+                              <ul role="none" className="mt-0.5 space-y-0.5 pl-4">
+                                {item.children.map(child => (
+                                  <li key={child.href} role="none">
+                                    <Link
+                                      href={child.href}
+                                      role="menuitem"
+                                      onClick={() => setOpen(false)}
+                                      className="block rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                                    >
+                                      {child.label}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
                           </li>
                         );
                       })}

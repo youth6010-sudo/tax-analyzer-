@@ -14,10 +14,25 @@ export const TAX_MENU = [
     items: [
       { label: '캘린더', href: '/calendar' },
       { label: '휴가관리', href: '/leave' },
-      { label: '미수관리', href: '/arrears' },
+      {
+        label: '미수관리',
+        href: '/arrears',
+        children: [
+          { label: '미수관리', href: '/arrears' },
+          { label: '채권관리', href: '/arrears?tab=bond' },
+        ],
+      },
       { label: '청년들 ID', href: '/youth-ids' },
       { label: '우편물 대장', href: '/mail-ledger' },
-      { label: '검토표', href: '/clients/annual-progress' },
+      {
+        label: '검토표',
+        href: '/clients/annual-progress',
+        children: [
+          { label: '연간진행표', href: '/clients/annual-progress' },
+          { label: '부가가치세', href: '/clients/vat-progress' },
+          { label: '결산', href: '/clients/review-sheet' },
+        ],
+      },
     ],
   },
   {

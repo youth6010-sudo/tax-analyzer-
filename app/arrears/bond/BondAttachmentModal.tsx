@@ -38,23 +38,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function safeName(s: string): string {
-  return s.replace(/[\\/:*?"<>|]/g, '').trim() || '업체';
-}
-
-/** 2026-09-29_내용증명_OO업체.pdf — 같은 이름이면 (2), (3) … */
-function buildFilename(
-  sentDate: string,
-  stepLabel: string,
-  companyName: string,
-  original: string,
-  taken: Set<string>,
-): string {
-  const dot = original.lastIndexOf('.');
-  const ext = dot > 0 ? original.slice(dot) : '';
-  return uniqueName(`${sentDate || todayIsoDate()}_${stepLabel}_${safeName(companyName)}`, ext, taken);
-}
-
 function uniqueName(base: string, ext: string, taken: Set<string>): string {
   let name = `${base}${ext}`;
   for (let n = 2; taken.has(name); n++) name = `${base}(${n})${ext}`;
@@ -62,10 +45,10 @@ function uniqueName(base: string, ext: string, taken: Set<string>): string {
   return name;
 }
 
-/** 전자소송 보관용 원래 파일명 유지 */
-function keepOriginalName(original: string, taken: Set<string>): string {
+/** 올린 원래 파일명 유지 — 같은 이름이면 (2), (3) … */
+function keepOriginalName(original: string, taken: Set<string>, fallback: string): string {
   const dot = original.lastIndexOf('.');
-  const base = (dot > 0 ? original.slice(0, dot) : original).replace(/[\\/:*?"<>|]/g, '').trim() || '지급명령';
+  const base = (dot > 0 ? original.slice(0, dot) : original).replace(/[\\/:*?"<>|]/g, '').trim() || fallback;
   return uniqueName(base, dot > 0 ? original.slice(dot) : '', taken);
 }
 
@@ -119,7 +102,7 @@ export default function BondAttachmentModal({
             id: entryId,
             step,
             file: f,
-            filename: keepOriginalName(f.name, taken),
+            filename: keepOriginalName(f.name, taken, step),
             sentDate: date,
             patch: { 지급명령: { checked: true, date } },
           });
@@ -136,7 +119,7 @@ export default function BondAttachmentModal({
           id: entryId,
           step,
           file: f,
-          filename: buildFilename(sentDate, step, companyName, f.name, taken),
+          filename: keepOriginalName(f.name, taken, step),
           sentDate,
           ...(markCert ? { patch: { 내용증명: { checked: true, date: sentDate } } } : {}),
         });

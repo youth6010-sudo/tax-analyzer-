@@ -25,11 +25,20 @@ export function normalizeAcceptNewClients(raw: unknown): AcceptNewClientsPrefs |
   };
 }
 
+export type ResolvedMenuChild = { label: string; href: string };
+
 export type ResolvedMenuItem = {
   label: string;
   href: string;
   charlieOnly?: boolean;
+  /** 화면 안 탭 — 사이드바에서 펼침 하위 메뉴 */
+  children?: ResolvedMenuChild[];
 };
+
+function childrenOf(item: object): { children: ResolvedMenuChild[] } | Record<string, never> {
+  if (!('children' in item) || !Array.isArray(item.children)) return {};
+  return { children: (item.children as ResolvedMenuChild[]).map(c => ({ label: c.label, href: c.href })) };
+}
 
 export type ResolvedMenuGroup =
   | { id: string; label: string; href: string; adminOnly?: boolean }
@@ -126,6 +135,7 @@ export function resolveMenuGroups(
           label: item.label,
           href: item.href,
           ...('charlieOnly' in item && item.charlieOnly ? { charlieOnly: true as const } : {}),
+          ...childrenOf(item),
         }));
 
       const orderedItems = orderByKeys(
