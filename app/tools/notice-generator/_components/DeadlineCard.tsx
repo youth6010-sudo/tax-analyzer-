@@ -37,7 +37,12 @@ export default function DeadlineCard({ meta, deadline }: Props) {
         </span>
       </div>
 
-      {deadline.wasAdjusted ? (
+      {deadline.overrideReason ? (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+          <span className="font-semibold">📢 기한 연장</span> · 법정기한 {deadline.statutoryText} →{' '}
+          {deadline.overrideReason}
+        </div>
+      ) : deadline.wasAdjusted ? (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
           <span className="font-semibold">🎈 휴일 보정</span> · 법정기한{' '}
           {deadline.statutoryText}이 휴일에 해당하여 다음 영업일로 자동

@@ -328,7 +328,9 @@ export default function NoticeSetupBar({
             </p>
             {deadline.wasAdjusted && (
               <p className="mt-1 text-[11px] text-amber-700">
-                휴일 보정 ({deadline.statutoryText})
+                {deadline.overrideReason
+                  ? `기한 연장 (${deadline.overrideReason})`
+                  : `휴일 보정 (${deadline.statutoryText})`}
               </p>
             )}
           </div>

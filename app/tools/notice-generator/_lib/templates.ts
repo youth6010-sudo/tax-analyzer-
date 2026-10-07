@@ -68,23 +68,6 @@ function specialPaymentIntro(
 function formatNoticeDateKo(date: Date): string {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일(${getWeekdayKo(date)})`;
 }
-
-function formatNoticeDateShort(date: Date): string {
-  return `${date.getMonth() + 1}/${date.getDate()}(${getWeekdayKo(date)})`;
-}
-
-/** 부가세 예정고지 분납 기한 — 1기: 납부일·6/1·6/30, 2기: 납부일·12/1·12/31 (휴일 보정) */
-export function vatNoticeInstallmentDates(due: Date, secondHalf: boolean): Date[] {
-  const y = due.getFullYear();
-  const second = secondHalf ? new Date(y, 11, 1) : new Date(y, 5, 1);
-  const third = secondHalf ? new Date(y, 11, 31) : new Date(y, 5, 30);
-  return [
-    due,
-    adjustToNextBusinessDay(second).adjusted,
-    adjustToNextBusinessDay(third).adjusted,
-  ];
-}
-
 export const DEFAULT_CORP_INTERIM_FILING_NOTE =
   "상반기 가결산 결과 결손이 발생하였습니다. 가결산 기준으로 신고할 경우의 세무상 리스크를 고려하여, '직전 사업연도 기준'으로 신고를 완료하였습니다.";
 
@@ -167,33 +150,24 @@ function buildVatPreliminaryNoticeBody(
   const half = secondHalf ? '2기' : '1기';
   const due = deadline?.final;
   const dueText = due ? formatNoticeDateKo(due) : '';
-  const inst = due ? vatNoticeInstallmentDates(due, secondHalf) : [];
-
-  const parts: string[] = [
-    line('안녕하세요 세무법인청년들 부산지점입니다.'),
+  return [
+    line('안녕하세요, 세무법인청년들 부산지점입니다.'),
     blank(),
-    line(`${year}년 ${half} 부가가치세 예정고지 납부 안내드립니다.`),
+    line(`${year}년 ${half} 부가가치세 예정고지 납부 안내입니다.`),
+    line('우편 고지서가 늦게 도착하거나 분실될 수 있어 납부서를 먼저 보내드립니다.'),
     blank(),
-    line('국세청 우편 고지서 수령이 늦어지거나 분실될 경우를 대비하여 납부서 먼저 송부드립니다.'),
+    line(`- 납부금액: ${escapeHtml(amountText)}`),
+    line(`- 납부기한: ${escapeHtml(dueText)}`),
+    line('- 가상계좌 납부는 당일 밤 11시에 마감됩니다.'),
     blank(),
-    line(`납부금액 : ${escapeHtml(amountText)}`),
-    line(`납부기한: ${escapeHtml(dueText)}`),
-    line('가상계좌 납부는 당일 밤 11시 마감됩니다.'),
-    line('미납 시 가산세가 발생하므로 기한 내 납부 부탁드립니다.'),
+    line('기한이 지나면 가산세가 붙을 수 있으니, 기한 내 납부 부탁드립니다.'),
     blank(),
-    line('[분납 안내 (최대 3회)]'),
-    line('일시 납부가 어려우실 경우 아래 일정으로 나누어 납부 가능합니다.'),
-  ];
-  inst.forEach((d, i) => {
-    parts.push(line(`-${i + 1}차: ${escapeHtml(formatNoticeDateShort(d))}`));
-  });
-  parts.push(
-    blank(),
-    line('분납을 원하실 경우, 희망하시는 [횟수와 금액]을 회신해 주시기 바랍니다.'),
+    line(
+      '혹시 한 번에 납부하시기 부담되시면 말씀 주세요. 나누어 납부하실 수 있도록 신청이 가능한지 확인해 보겠습니다^^',
+    ),
     blank(),
     line('감사합니다.'),
-  );
-  return parts.join('');
+  ].join('');
 }
 
 function escapeHtml(str: string): string {
@@ -1103,6 +1077,9 @@ export function sanitizeNoticeHtml(html: string): string {
 
 function adjustmentSentence(deadline: DeadlineResult | null): string {
   if (!deadline || !deadline.wasAdjusted) return '';
+  if (deadline.overrideReason) {
+    return `※ ${deadline.overrideReason}하여 ${deadline.finalText}까지 납부하시면 됩니다.`;
+  }
   const reasons = deadline.skipped.map(s => s.reason).join(', ');
   return `※ 법정 신고기한이 휴일(${reasons})에 해당하여, 다음 영업일인 ${deadline.finalText}까지 신고·납부하시면 됩니다.`;
 }

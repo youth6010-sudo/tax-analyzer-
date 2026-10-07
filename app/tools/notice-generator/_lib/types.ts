@@ -31,6 +31,8 @@ export type DeadlineResult = {
   skipped: SkippedDay[];
   statutoryText: string;
   finalText: string;
+  /** 국세청 공지로 기한이 따로 연장된 경우의 사유 (휴일 보정이 아님) */
+  overrideReason?: string;
 };
 
 // 자료 제출 마감 (사용자가 토글로 직접 지정)

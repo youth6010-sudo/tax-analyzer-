@@ -9,6 +9,11 @@ import {
 } from './dateUtils';
 import type { DeadlineParams, DeadlineResult, TaxTypeKey } from './types';
 
+/** 국세청이 해당 연도만 따로 연장한 기한 — 키: `${연도}:${부가세 과세기간 id}` */
+const VAT_DUE_OVERRIDES: Record<string, { date: [number, number, number]; reason: string }> = {
+  '2026:2-notice': { date: [2026, 11, 2], reason: '추석 연휴로 국세청이 납부기한을 연장' },
+};
+
 // 각 세목별 "법정 마감일(보정 전)"을 계산한 뒤,
 // 휴일 보정을 적용해 최종 결과 객체를 반환합니다.
 
@@ -18,13 +23,30 @@ function buildResult({
   coverageStart,
   coverageEnd,
   statutory,
+  override,
 }: {
   periodLabel: string;
   coverage?: string;
   coverageStart: Date;
   coverageEnd: Date;
   statutory: Date;
+  override?: { date: Date; reason: string };
 }): DeadlineResult {
+  if (override) {
+    return {
+      periodLabel,
+      coverage,
+      coverageStart,
+      coverageEnd,
+      statutory,
+      final: override.date,
+      wasAdjusted: true,
+      skipped: [],
+      statutoryText: formatKoreanDate(statutory),
+      finalText: formatKoreanDate(override.date),
+      overrideReason: override.reason,
+    };
+  }
   const adj = adjustToNextBusinessDay(statutory);
   return {
     periodLabel,
@@ -71,12 +93,16 @@ function calcVat({ year, vatPeriodId }: DeadlineParams): DeadlineResult {
   const period = VAT_PERIODS.find(p => p.id === vatPeriodId) || VAT_PERIODS[0];
   const dueYear = year + period.dueYearOffset;
   const dueDate = new Date(dueYear, period.dueMonth - 1, period.dueDay);
+  const ov = VAT_DUE_OVERRIDES[`${year}:${period.id}`];
   return buildResult({
     periodLabel: `${year}년 ${period.shortLabel}`,
     coverage: `과세기간 ${period.coverage}`,
     coverageStart: new Date(year, period.startMonth - 1, period.startDay),
     coverageEnd: new Date(year, period.endMonth - 1, period.endDay),
     statutory: dueDate,
+    override: ov
+      ? { date: new Date(ov.date[0], ov.date[1] - 1, ov.date[2]), reason: ov.reason }
+      : undefined,
   });
 }
 
