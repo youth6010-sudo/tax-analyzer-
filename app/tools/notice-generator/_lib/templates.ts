@@ -153,7 +153,7 @@ function buildVatPreliminaryNoticeBody(
   return [
     line('안녕하세요, 세무법인청년들 부산지점입니다.'),
     blank(),
-    line(`${year}년 ${half} 부가가치세 예정고지 납부 안내입니다.`),
+    line(`${year}년 ${half} 부가가치세 예정고지 납부 안내드립니다.`),
     line('우편 고지서가 늦게 도착하거나 분실될 수 있어 납부서를 먼저 보내드립니다.'),
     blank(),
     line(`- 납부금액: ${escapeHtml(amountText)}`),
@@ -161,7 +161,6 @@ function buildVatPreliminaryNoticeBody(
     line('- 가상계좌 납부는 당일 밤 11시에 마감됩니다.'),
     blank(),
     line('기한이 지나면 가산세가 붙을 수 있으니, 기한 내 납부 부탁드립니다.'),
-    blank(),
     line(
       '혹시 한 번에 납부하시기 부담되시면 말씀 주세요. 나누어 납부하실 수 있도록 신청이 가능한지 확인해 보겠습니다^^',
     ),
