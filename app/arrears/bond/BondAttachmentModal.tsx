@@ -70,7 +70,7 @@ export default function BondAttachmentModal({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const isOrder = step === '지급명령';
-  const dateLabel = isOrder ? '신청' : step === '회수일정' ? '받은' : '발송';
+  const dateLabel = isOrder ? '신청' : step === '회수일정' ? '받은' : step === '배달증명' ? '배달' : '발송';
 
   /** 최근 발송일 먼저, 같은 날 안에서는 올린 순 */
   const groups = useMemo(() => {
@@ -114,18 +114,19 @@ export default function BondAttachmentModal({
           );
           continue;
         }
-        const markCert = step === '내용증명' && (!certDateRef.current || sentDate > certDateRef.current);
+        const markCert =
+          (step === '내용증명' || step === '배달증명') && (!certDateRef.current || sentDate > certDateRef.current);
         const { records } = await uploadBondAttachment({
           id: entryId,
           step,
           file: f,
           filename: keepOriginalName(f.name, taken, step),
           sentDate,
-          ...(markCert ? { patch: { 내용증명: { checked: true, date: sentDate } } } : {}),
+          ...(markCert ? { patch: { [step]: { checked: true, date: sentDate } } } : {}),
         });
         if (markCert) {
           certDateRef.current = sentDate;
-          setNotice(`내용증명 체크·발송일 ${formatSentDateKo(sentDate)}을 자동 기록했습니다.`);
+          setNotice(`${step} 체크·${dateLabel}일 ${formatSentDateKo(sentDate)}을 자동 기록했습니다.`);
         }
         onRecords(records);
       }

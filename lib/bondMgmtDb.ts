@@ -50,12 +50,15 @@ function diffRecord(
   const out: BondChangeLogEntry[] = [];
   const push = (step: BondChangeLogEntry['step'], action: string, detail: string) =>
     out.push({ ...meta, step, action, detail });
-  for (const step of ['내용증명', '지급명령'] as const) {
+  for (const step of ['내용증명', '배달증명', '지급명령'] as const) {
     const a = before?.[step];
     const b = after[step];
     if (!b) continue;
     if (!!a?.checked !== b.checked) push(step, b.checked ? '체크' : '체크 해제', '');
     if ((a?.date ?? '') !== b.date) push(step, '날짜 변경', `${dateText(a?.date)} → ${dateText(b.date)}`);
+  }
+  if (after.배달증명 && !!before?.배달증명?.returned !== !!after.배달증명.returned) {
+    push('배달증명', after.배달증명.returned ? '반송 체크' : '반송 해제', '');
   }
   if (after.해임통보 && (before?.해임통보?.date ?? '') !== after.해임통보.date) {
     push('해임통보', '날짜 변경', `${dateText(before?.해임통보?.date)} → ${dateText(after.해임통보.date)}`);
@@ -203,6 +206,10 @@ function sanitizePatch(patch: BondRecordPatch): BondRecordPatch {
     return { checked: s?.checked === true, date: DATE_RE.test(date) ? date : '' };
   };
   if (patch.내용증명) out.내용증명 = step(patch.내용증명);
+  if (patch.배달증명) {
+    const returned = patch.배달증명.returned;
+    out.배달증명 = { ...step(patch.배달증명), ...(typeof returned === 'boolean' ? { returned } : {}) };
+  }
   if (patch.지급명령) out.지급명령 = step(patch.지급명령);
   if (patch.해임통보) {
     const date = String(patch.해임통보.date ?? '');
@@ -213,11 +220,16 @@ function sanitizePatch(patch: BondRecordPatch): BondRecordPatch {
   return out;
 }
 
-/** 해임통보는 날짜만 바꾸고 발송 기록(notices)은 보존 */
+/** 해임통보는 날짜만 바꾸고 발송 기록(notices)은 보존, 배달증명 반송은 patch에 없으면 유지 */
 function applyPatch(rec: BondStoredRecord | undefined, patch: BondRecordPatch): BondStoredRecord {
   const clean = sanitizePatch(patch);
   const next: BondStoredRecord = { ...rec, ...clean };
   if (clean.해임통보) next.해임통보 = { ...rec?.해임통보, date: clean.해임통보.date };
+  if (clean.배달증명) {
+    const { checked, date } = clean.배달증명;
+    const returned = clean.배달증명.returned ?? rec?.배달증명?.returned;
+    next.배달증명 = returned ? { checked, date, returned: true } : { checked, date };
+  }
   return next;
 }
 

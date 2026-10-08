@@ -57,6 +57,7 @@ function toRecord(e: ArrearsEntryDto, stored: BondStoredRecord | undefined): Bon
   return {
     ...base,
     내용증명: { ...base.내용증명, ...stored.내용증명, attachments: att.내용증명 ?? [] },
+    배달증명: { ...base.배달증명, ...stored.배달증명, attachments: att.배달증명 ?? [] },
     회수일정: stored.회수일정 ?? '',
     회수일정첨부: att.회수일정 ?? [],
     해임통보: { ...base.해임통보, ...stored.해임통보, attachments: att.해임통보 ?? [] },
@@ -79,7 +80,7 @@ function AttachButton({ count, onClick }: { count: number; onClick: () => void }
       type="button"
       onClick={onClick}
       title="첨부파일"
-      className={`relative inline-flex h-7 w-7 items-center justify-center rounded-md border ${
+      className={`relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${
         count ? 'border-amber-300 bg-amber-50 text-amber-600' : 'border-slate-200 bg-white text-slate-400 hover:text-slate-600'
       }`}
     >
@@ -108,7 +109,7 @@ function GenerateButton({
       disabled={!enabled}
       onClick={onClick}
       title={enabled ? '서식 생성' : disabledTitle}
-      className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+      className="shrink-0 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
     >
       서식생성
     </button>
@@ -130,7 +131,18 @@ function matchesDateFilter(date: string, filter: string[]): boolean {
   });
 }
 
+const DELIVERY_RETURNED = '__returned__';
+
+/** 배달증명 필터 — 「반송」 선택은 날짜 조건과 OR */
+function matchesDeliveryFilter(step: { date: string; returned?: boolean }, filter: string[]): boolean {
+  if (!filter.length) return true;
+  if (filter.includes(DELIVERY_RETURNED) && step.returned) return true;
+  const dates = filter.filter(f => f !== DELIVERY_RETURNED);
+  return dates.length > 0 && matchesDateFilter(step.date, dates);
+}
+
 function formatDateOption(v: string): string {
+  if (v === DELIVERY_RETURNED) return '반송';
   if (v === DATE_SET) return '날짜 있음';
   if (v === DATE_UNSET) return '날짜 없음';
   if (v.length === 7) return `${v.slice(0, 4)}년 ${Number(v.slice(5))}월 전체`;
@@ -143,18 +155,18 @@ function formatScheduleOption(v: string): string {
 
 /** 열 구분선 */
 const COL_BORDER = 'border-r border-slate-200 last:border-r-0';
-const TH = `relative whitespace-nowrap px-3 py-3 text-center align-middle ${COL_BORDER}`;
+const TH = `relative whitespace-nowrap px-2 py-2.5 text-center align-middle ${COL_BORDER}`;
 
-const BOND_COLUMNS = ['select', 'manager', 'company', 'cert', 'dismiss', 'schedule', 'order'] as const;
+const BOND_COLUMNS = ['select', 'manager', 'company', 'cert', 'delivery', 'dismiss', 'schedule', 'order'] as const;
 
 function attachmentsOf(r: BondRecord, step: BondAttachmentStepKey): BondAttachment[] {
   return step === '회수일정' ? r.회수일정첨부 : (r[step].attachments ?? []);
 }
-const BOND_COL_WIDTHS_KEY = 'bondMgmt.colWidths.v1';
-const TD = `px-3 py-2 text-center ${COL_BORDER}`;
+const BOND_COL_WIDTHS_KEY = 'bondMgmt.colWidths.v2';
+const TD = `px-1.5 py-1.5 text-center ${COL_BORDER}`;
 
 function Cell({ children }: { children: ReactNode }) {
-  return <div className="flex items-center justify-center gap-1.5">{children}</div>;
+  return <div className="flex items-center justify-center gap-1">{children}</div>;
 }
 
 export default function BondMgmtPanel() {
@@ -167,6 +179,7 @@ export default function BondMgmtPanel() {
   const [companyQuery, setCompanyQuery] = useState('');
   const [managerFilter, setManagerFilter] = useState<string[]>([]);
   const [certFilter, setCertFilter] = useState<string[]>([]);
+  const [deliveryFilter, setDeliveryFilter] = useState<string[]>([]);
   const [dismissFilter, setDismissFilter] = useState<string[]>([]);
   const [orderFilter, setOrderFilter] = useState<string[]>([]);
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
@@ -193,14 +206,14 @@ export default function BondMgmtPanel() {
   const cols = useColumnWidths(BOND_COL_WIDTHS_KEY, BOND_COLUMNS);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  /** 검색칸 = 표 왼쪽 ~ 내용증명 열 끝 (해임통보 열 시작 전) */
+  /** 검색칸 = 표 왼쪽 ~ 내용증명 열 끝 (배달증명 열 시작 전) */
   const [searchWidth, setSearchWidth] = useState<number | null>(null);
   useEffect(() => {
     const table = tableRef.current;
     const bar = toolbarRef.current;
     if (!table || !bar) return;
     const measure = () => {
-      const th = table.querySelector<HTMLElement>('thead th[data-col="dismiss"]');
+      const th = table.querySelector<HTMLElement>('thead th[data-col="delivery"]');
       if (!th) return;
       const w = Math.round(th.getBoundingClientRect().left - bar.getBoundingClientRect().left - 8);
       setSearchWidth(w >= 240 ? w : null);
@@ -363,10 +376,22 @@ export default function BondMgmtPanel() {
         (!scheduleFilter.length ||
           scheduleFilter.includes(r.회수일정.trim() || SCHEDULE_EMPTY)) &&
         matchesDateFilter(r.내용증명.date, certFilter) &&
+        matchesDeliveryFilter(r.배달증명, deliveryFilter) &&
         matchesDateFilter(r.해임통보.date, dismissFilter) &&
         matchesDateFilter(r.지급명령.date, orderFilter),
     );
-  }, [allRows, managerFilter, companyQuery, churnFilter, churnById, scheduleFilter, certFilter, dismissFilter, orderFilter]);
+  }, [
+    allRows,
+    managerFilter,
+    companyQuery,
+    churnFilter,
+    churnById,
+    scheduleFilter,
+    certFilter,
+    deliveryFilter,
+    dismissFilter,
+    orderFilter,
+  ]);
 
   const canEditRow = useCallback(
     (r: BondRecord) => canManage || managerNamesMatch(r.담당자명, viewerName),
@@ -381,6 +406,12 @@ export default function BondMgmtPanel() {
         const prevRec = next[id];
         next[id] = { ...prevRec, ...patch };
         if (patch.해임통보) next[id].해임통보 = { ...prevRec?.해임통보, ...patch.해임통보 };
+        if (patch.배달증명) {
+          next[id].배달증명 = {
+            ...patch.배달증명,
+            returned: patch.배달증명.returned ?? prevRec?.배달증명?.returned,
+          };
+        }
       }
       return next;
     });
@@ -457,7 +488,8 @@ export default function BondMgmtPanel() {
     const label = churnLabelOf(r.id);
     const locked = step === '지급명령' && !paymentOrderAllowed(label);
     const editable = canEditRow(r) && !locked;
-    const generateEnabled = isDocumentReady(step) && editable;
+    const docType: DocumentType | null = step === '배달증명' ? null : step;
+    const generateEnabled = !!docType && isDocumentReady(docType) && editable;
     return (
       <div
         className={locked ? 'opacity-40' : undefined}
@@ -473,21 +505,47 @@ export default function BondMgmtPanel() {
         />
         <input
           type="date"
-          className={`${portalInput} w-[8.5rem] px-1.5 py-1 text-xs`}
+          className={`${portalInput} w-[6.9rem] px-1 py-0.5 text-[11px]`}
           value={r[step].date}
           disabled={!editable}
           onChange={e => setStepDate(r, step, e.target.value)}
         />
+        {step === '배달증명' ? (
+          <label
+            className={`flex shrink-0 items-center gap-0.5 rounded border px-1 py-0.5 text-[11px] font-semibold ${
+              r.배달증명.returned
+                ? 'border-rose-300 bg-rose-50 text-rose-700'
+                : 'border-slate-200 bg-white text-slate-500'
+            }`}
+            title="우편물 반송 — 날짜칸에는 반송일을 기록"
+          >
+            <input
+              type="checkbox"
+              className="rounded border-slate-300"
+              checked={!!r.배달증명.returned}
+              disabled={!editable}
+              onChange={e =>
+                void save([
+                  {
+                    id: r.id,
+                    patch: { 배달증명: { checked: r.배달증명.checked, date: r.배달증명.date, returned: e.target.checked } },
+                  },
+                ])
+              }
+            />
+            반송
+          </label>
+        ) : null}
         <AttachButton
           count={r[step].attachments.length}
           onClick={() => {
             if (!locked) setAttachTarget({ id: r.id, step });
           }}
         />
-        {isDocumentReady(step) ? (
+        {docType && isDocumentReady(docType) ? (
           <GenerateButton
             enabled={generateEnabled}
-            onClick={() => handleGenerate(step, r)}
+            onClick={() => handleGenerate(docType, r)}
             disabledTitle={locked ? '기장·해임 업체만 진행' : '준비중'}
           />
         ) : null}
@@ -605,6 +663,7 @@ export default function BondMgmtPanel() {
               onChange={e => setBulkStep(e.target.value as BondCheckedStepKey)}
             >
               <option value="내용증명">내용증명</option>
+              <option value="배달증명">배달증명</option>
               <option value="지급명령">지급명령</option>
             </select>
             <input
@@ -626,11 +685,11 @@ export default function BondMgmtPanel() {
           <table
             ref={tableRef}
             style={cols.tableStyle}
-            className={`w-full min-w-[1100px] text-sm ${cols.customized ? '[&_td]:overflow-hidden' : ''}`}
+            className={`w-full text-sm ${cols.customized ? '[&_td]:overflow-hidden' : ''}`}
           >
             <thead className="border-b-2 border-slate-300 bg-slate-100 text-sm font-bold text-slate-800">
               <tr>
-                <th {...cols.thProps('select')} className={`relative w-10 px-3 py-3 text-center align-middle ${COL_BORDER}`}>
+                <th {...cols.thProps('select')} className={`relative w-8 px-1.5 py-2.5 text-center align-middle ${COL_BORDER}`}>
                   {cols.handle('select')}
                   <input
                     type="checkbox"
@@ -642,7 +701,7 @@ export default function BondMgmtPanel() {
                     }
                   />
                 </th>
-                <th {...cols.thProps('manager')} className={`${TH} w-28`}>
+                <th {...cols.thProps('manager')} className={`${TH} w-20`}>
                   {cols.handle('manager')}
                   <ManagerMultiFilter
                     headerLabel="담당자명"
@@ -673,6 +732,17 @@ export default function BondMgmtPanel() {
                     options={dateOptionsOf(r => r.내용증명.date)}
                     value={certFilter}
                     onChange={setCertFilter}
+                    formatOption={formatDateOption}
+                    searchable
+                  />
+                </th>
+                <th {...cols.thProps('delivery')} className={TH}>
+                  {cols.handle('delivery')}
+                  <ManagerMultiFilter
+                    headerLabel="배달증명"
+                    options={[DELIVERY_RETURNED, ...dateOptionsOf(r => r.배달증명.date)]}
+                    value={deliveryFilter}
+                    onChange={setDeliveryFilter}
                     formatOption={formatDateOption}
                     searchable
                   />
@@ -718,13 +788,13 @@ export default function BondMgmtPanel() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                     불러오는 중…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                     {entries.length ? '조건에 맞는 업체가 없습니다.' : '채권회수로 분류된 업체가 없습니다.'}
                   </td>
                 </tr>
@@ -764,11 +834,12 @@ export default function BondMgmtPanel() {
                         </div>
                       </td>
                       <td className={TD}>{checkedStepCell(r, '내용증명')}</td>
+                      <td className={TD}>{checkedStepCell(r, '배달증명')}</td>
                       <td className={TD}>
                         <Cell>
                           <input
                             type="date"
-                            className={`${portalInput} w-[8.5rem] px-1.5 py-1 text-xs`}
+                            className={`${portalInput} w-[6.9rem] px-1 py-0.5 text-[11px]`}
                             value={r.해임통보.date}
                             disabled={!editable}
                             onChange={e => void save([{ id: r.id, patch: { 해임통보: { date: e.target.value } } }])}
@@ -796,9 +867,9 @@ export default function BondMgmtPanel() {
                         </Cell>
                       </td>
                       <td className={TD}>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <input
-                            className={`${portalInput} w-full min-w-[10rem] px-2 py-1 text-xs`}
+                            className={`${portalInput} w-full min-w-[6rem] px-1.5 py-0.5 text-[11px]`}
                             placeholder="협의한 회수 일정 메모"
                             value={memoDrafts[r.id] ?? r.회수일정}
                             disabled={!editable}

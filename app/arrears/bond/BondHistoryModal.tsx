@@ -30,7 +30,7 @@ type Props = {
   onClose: () => void;
 };
 
-const STEP_TABS: BondAttachmentStepKey[] = ['내용증명', '해임통보', '회수일정', '지급명령'];
+const STEP_TABS: BondAttachmentStepKey[] = ['내용증명', '배달증명', '해임통보', '회수일정', '지급명령'];
 
 const dot = (iso: string) => (iso ? iso.replace(/-/g, '.') : '-');
 const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();

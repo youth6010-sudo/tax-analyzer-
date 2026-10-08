@@ -32,6 +32,8 @@ export type BondRecipient = {
 export type BondCheckedStep = {
   checked: boolean;
   date: string;
+  /** 배달증명만 — 우편물 반송 */
+  returned?: boolean;
   attachments: BondAttachment[];
 };
 
@@ -47,6 +49,8 @@ export type BondRecord = {
   담당자명: string;
   업체명: string;
   내용증명: BondCheckedStep;
+  /** 우체국 배달증명 — 내용증명 수령 확인 */
+  배달증명: BondCheckedStep;
   회수일정: string;
   /** 회수일정 관련 받은 서류 (분할변제 합의서 등) */
   회수일정첨부: BondAttachment[];
@@ -55,11 +59,11 @@ export type BondRecord = {
   recipient?: BondRecipient;
 };
 
-export type BondCheckedStepKey = '내용증명' | '지급명령';
+export type BondCheckedStepKey = '내용증명' | '배달증명' | '지급명령';
 export type BondAttachmentStepKey = BondCheckedStepKey | '해임통보' | '회수일정';
 
 /** 순서 = 저장 경로의 단계 번호 — 새 단계는 맨 뒤에만 추가 */
-export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '해임통보', '지급명령', '회수일정'];
+export const BOND_ATTACHMENT_STEPS: BondAttachmentStepKey[] = ['내용증명', '해임통보', '지급명령', '회수일정', '배달증명'];
 
 export type BondAttachmentMap = Partial<Record<BondAttachmentStepKey, BondAttachment[]>>;
 
@@ -209,6 +213,8 @@ export type BondNoticeDefaultsLogEntry = {
 /** DB 저장분 — 담당자명·업체명은 미수관리에서 */
 export type BondStoredRecord = {
   내용증명?: { checked: boolean; date: string };
+  /** date = 최종 배달완료일(반송이면 반송일) */
+  배달증명?: { checked: boolean; date: string; returned?: boolean };
   회수일정?: string;
   해임통보?: { date: string; notices?: BondNotice[] };
   지급명령?: { checked: boolean; date: string };
@@ -225,6 +231,7 @@ export function emptyBondRecord(id: string, 담당자명: string, 업체명: str
     담당자명,
     업체명,
     내용증명: { checked: false, date: '', attachments: [] },
+    배달증명: { checked: false, date: '', attachments: [] },
     회수일정: '',
     회수일정첨부: [],
     해임통보: { date: '', attachments: [] },
